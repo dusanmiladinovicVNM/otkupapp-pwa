@@ -95,11 +95,15 @@ def _seq(id_):
     return c if c is not None else 10 ** 12
 
 
+_KLASA_ARAP = {"1": "i", "2": "ii", "3": "iii"}
+
+
 def _klase(r):
-    v = re.sub(r"\s+", "", k(r, "Klasa"))
+    """Skup klasa reda: 'I', 'II', 'I/II'; 'Klasa I' i '1' se svode na 'i' (rucno kucano)."""
+    v = re.sub(r"\s+", "", k(r, "Klasa")).replace("klasa", "")
     if not v:
         return frozenset()
-    return frozenset(x for x in re.split(r"[/+,]", v) if x)
+    return frozenset(_KLASA_ARAP.get(x, x) for x in re.split(r"[/+,;]", v) if x)
 
 
 def _kompat(pk, zk):
@@ -197,6 +201,7 @@ class Dok:
         self.otp = []
         self.ziva = self.zombi = self.hl = False
         self.dodeljen = self.objasnjen = self.klasa_kand = None
+        self.klasa_prijavljena = False
 
     def dodaj(self, r, kl):
         self.redovi.append(r)
@@ -318,7 +323,9 @@ class Analiza:
         self.prj_akt = [p for p in self.prj_svi if p.aktivan]
         self.prj_akt_po_bzn = defaultdict(list)
         for p in self.prj_svi:
-            p.hl = p.vozac in self.hl_stanice
+            # auto-lanac hladnjace: VozacID je stanica-hladnjaca, ili je zbirna tog broja iz lanca (otkup sa
+            # pravim vozacem daje VozacID VOZ-..., a StanicaID hladnjace ostaje samo na otpremnici)
+            p.hl = p.vozac in self.hl_stanice or any(z.hl for z in self.zbr_po_bzn.get(p.bzn, []))
             if p.aktivan and p.bzn:
                 self.prj_akt_po_bzn[p.bzn].append(p)
         niz = sorted((p for p in self.prj_svi if not p.hl), key=lambda p: p.seq)
@@ -428,9 +435,11 @@ class Analiza:
         if len(akt) == 1:
             return "OK", akt[0], akt
         kand = akt
-        for f in (lambda z: _kompat(p.klase, z.klase), lambda z: self._isti_voz(p, z),
-                  lambda z: self._isti_kup(p, z), lambda z: z.kg > 0, lambda z: z.ziva,
-                  lambda z: self.odgovara(p, z)):
+        # Ziva pre vozaca: posle storno-ispravke otpremnice (npr. promenjen VozacID) stara zbirna ostaje
+        # aktivna (ne kaskadira), a nova istog broja nosi novi VozacID. Prijemnica sa starim VozacID tada
+        # pripada novoj zbirni (zastareo vozac), a ne staroj koju vise nijedna otpremnica ne drzi.
+        for f in (lambda z: _kompat(p.klase, z.klase), lambda z: z.ziva, lambda z: self._isti_voz(p, z),
+                  lambda z: self._isti_kup(p, z), lambda z: z.kg > 0, lambda z: self.odgovara(p, z)):
             uzi = [z for z in kand if f(z)]
             if len(uzi) == 1:
                 return "OK", uzi[0], akt
@@ -470,8 +479,8 @@ class Analiza:
             self.kasn_med = max(0, _perc(dd, 0.5))
 
     def _kandidati(self, p, nacin="zbirna"):
-        if p.kand is not None:
-            return p.kand
+        if p.kand is not None and nacin in p.kand:
+            return p.kand[nacin]
         out = []
         for z in self.U_idx.get(self._vk(p), []):
             if z is p.z or not _kompat(p.klase, z.klase):
@@ -495,7 +504,9 @@ class Analiza:
                      0 if sused else 1, abs(dd) if dd is not None else 99, z.seq)
             out.append(Kand(z, m, gd, prolazi, sused, dd, score))
         out.sort(key=lambda x: x.score)
-        p.kand = out
+        if p.kand is None:
+            p.kand = {}
+        p.kand[nacin] = out
         return out
 
     def _prolazni(self, p, nacin="zbirna"):
@@ -577,7 +588,9 @@ class Analiza:
         dop = []
         if self.ima_kup and p.kupac != z.kupac:
             dop.append("i KupacID se razlikuje (%s vs %s)" % (p.kupac_txt, z.kupac_txt))
-        if prefix_ok and not nasl and not drugi_ok:
+        # Vozac prijemnice = stanica iz broja zbirne: verovatno otpremnica sa vozacem druge stanice. Ali ako
+        # prijemnica NE odgovara zbirnoj, a odgovara zivoj zbirnoj svog vozaca bez prijemnice, pogresan je broj.
+        if prefix_ok and not nasl and not drugi_ok and (pz or not kand):
             self.nalaz("PRJ_ZASTAREO_VOZAC", SUMNJA, TPRJ, p.ids,
                        "Prijemnica %s: VozacID %s je stanica iz broja zbirne %s, ali zbirna nosi VozacID %s "
                        "(otpremnica sa vozacem druge stanice?). %s" % (p.ids, p.vozac_txt, z.broj, z.vozac_txt,
@@ -596,6 +609,8 @@ class Analiza:
                                                                  z.vozac_txt))
             if not pz:
                 razl.append("prijemnica ne odgovara zbirnoj: %s" % self._poredi(p, z))
+            elif not nasl and not drugi_ok:
+                razl.append("prijemnica odgovara i ovoj zbirnoj (%s) -- proveriti i VozacID" % self._poredi(p, z))
             ozb = GRESKA if (mirror and not prefix_ok) else SUMNJA
             self._greska(p, "PRJ_ZBIRNA_DRUGE_STANICE", ozb, uvod + "; " + "; ".join(razl + dop))
         elif len(docs) == 1 and pz:
@@ -651,6 +666,14 @@ class Analiza:
     def _var_b(self, z, isti):
         docs = isti
         odg = [self.odgovara(p, z) for p in docs]
+        # Otpremnica iz forme (Klasa I i II pod istim brojem) daje jednu zbirnu sa obe klase; hladnjaca moze
+        # da izda posebnu prijemnicu po klasi. Klase razdvojene, svaka odgovara svom delu zbirne -> legitimno,
+        # i kad postoji druga ziva zbirna iste klase (ona je tada sama bez prijemnice).
+        if all(p.klase for p in docs) and all(odg) and \
+                sum(len(p.klase) for p in docs) == len(frozenset().union(*(p.klase for p in docs))):
+            for p in docs:
+                p.cist_deo = True
+            return
         kl_ok = all(_kompat(p.klase, z.klase) for p in docs)
         S = sum((p.kg for p in docs), Decimal(0))
         G = sum((p.gajbe for p in docs), Decimal(0))
@@ -693,7 +716,10 @@ class Analiza:
                              "Prijemnica %s je druga aktivna prijemnica na zbirnoj %s; %s" % (
                                  p.ids, self._zopis(z), "; ".join(razl)))
         else:
-            for p in docs[1:]:
+            # Nijedna sama ne odgovara: sumnjive su one koje odgovaraju nekoj zivoj zbirnoj bez prijemnice
+            # (i kad je to prijemnica sa nizim seq -- pogresan klik pa tacan unos); inace sve osim prve.
+            sa_kand = [p for p in docs if self._prolazni(p)]
+            for p in (sa_kand if 0 < len(sa_kand) < len(docs) else docs[1:]):
                 self._greska(p, "PRJ_DVE_NA_ZBIRNOJ_ISTA_STANICA", SUMNJA,
                              "Zbirna %s ima %d aktivne prijemnice istog vozaca i kupca (%s); nijedna sama ne "
                              "odgovara, ni zbir (kg %s vs %s, gajbe %s vs %s) -- nejasno" % (
@@ -872,12 +898,33 @@ class Analiza:
                 self._roba(p, z)
 
     def _klasa(self, p, z):
+        z.klasa_prijavljena = True
         pb = parse_broj(z.broj)
         kand = []
         for z2 in self.U_idx.get(self._vk(p), []):
             p2 = parse_broj(z2.broj)
-            if _kompat(p.klase, z2.klase) and z2.klase and pb and p2 and (p2.s, p2.x, p2.dan) == (pb.s, pb.x, pb.dan):
+            if z2.klase and z2.dodeljen is None and pb and p2 and (p2.s, p2.x, p2.dan) == (pb.s, pb.x, pb.dan):
                 kand.append(z2)
+        visak = p.klase - z.klase if (z.klase and p.klase) else frozenset()
+        if z.klase and p.klase > z.klase:
+            # Jedan dokument hladnjace sa Klasom I i II (dva reda, isti BrojZbirne iz jedinog polja forme), a
+            # PWA je Klasu II vodila na svojoj zbirnoj (-2): zbirna Klase II je 'bez prijemnice' samo formalno.
+            sestre = [z2 for z2 in kand if z2.klase <= visak]
+            if sestre and frozenset().union(*(z2.klase for z2 in sestre)) >= visak:
+                for z2 in sestre:
+                    z2.klasa_kand = p
+                deo = "; ".join("Klasa %s: %s kg/%s gajbi vs zbirna %s %s kg/%s gajbi" % (
+                    _kl(zz.klase), _g(p.kg_za(zz.klase)), _g(p.gajbe_za(zz.klase)), zz.broj, _g(zz.kg),
+                    _g(zz.gajbe)) for zz in [z] + sestre)
+                self.nalaz("PRJ_KLASA_RAZLICITA_OD_ZBIRNE", INFO, TPRJ, p.ids,
+                           "Prijemnica %s (jedan dokument, Klase %s) stoji na zbirnoj %s Klase %s; Klasu %s vodi na "
+                           "istoj prijemnici, a njena zbirna je %s (%s)" % (
+                               p.ids, _kl(p.klase), z.broj, _kl(z.klase), _kl(visak),
+                               ", ".join(zz.broj for zz in sestre), deo),
+                           "Uglavnom bez ispravke; pri migraciji vezati red Klase %s na %s" % (
+                               _kl(visak), ", ".join(zz.broj for zz in sestre)))
+                return
+        kand = [z2 for z2 in kand if _kompat(p.klase, z2.klase)]
         if kand:
             kand[0].klasa_kand = p
             pred = "BrojZbirne: %s -> %s (zbirna Klase %s); %s" % (p.bz, kand[0].broj, _kl(kand[0].klase),
@@ -919,7 +966,9 @@ class Analiza:
 
     def _kg(self, p, z):
         zkg, zg = z.kg_za(p.klase), z.gajbe_za(p.klase)
-        m = _manjak(zkg, p.kg) if self.ima_kg else None
+        # Kolicina koja nije broj (tekst u celiji) nije 'manjak 100%': kg se tada ne poredi.
+        kg_broj = all(ima_broj(r, "Kolicina") for r in p.redovi) and any(ima_broj(r, "UkupnoKolicina") for r in z.redovi)
+        m = _manjak(zkg, p.kg) if (self.ima_kg and kg_broj) else None
         razl, tipf = [], None
         if m is not None and (m > self.prag or m < -VISAK_TOL):
             razl.append("%s kg vs zbirna %s kg (%s %s)" % (_g(p.kg), _g(zkg), "manjak" if m > 0 else "visak",
@@ -1024,7 +1073,8 @@ class Analiza:
             if not all(p.klase for p in prj):
                 continue
             for z in self.zbr_po_bzn.get(b, []):
-                if z.aktivan and z.ziva and not z.hl and z.klase and not z.klase <= pk:
+                if z.aktivan and z.ziva and not z.hl and z.klase and not z.klase <= pk \
+                        and not z.klasa_prijavljena:
                     self.nalaz("ZBR_ZIVA_BEZ_PRIJEMNICE", INFO, TZBR, z.ids,
                                "BEZ_PRIJEMNICE_KLASE: zbirna %s ima Klasu %s, prijemnice istog broja (%s) samo %s" % (
                                    z.broj, _kl(z.klase - pk), "; ".join(p.ids for p in prj), _kl(pk)),
@@ -1032,6 +1082,21 @@ class Analiza:
 
     # --- nezavisne provere --------------------------------------------------------------
     def _nenormalizovan(self):
+        # Predikat (spec): sirova vrednost ima spoljni razmak, ILI se posle Trim tacno (velika/mala slova) ne
+        # slaze ni sa jednom zbirnom, a normalizovano se slaze (LookupActiveID/1z1p porede '=' posle Trim).
+        # Prijemnica koja tacno prepisuje i nekanonski broj zbirne nije greska prijemnice. BrojPrijemnice
+        # eksternog kupca je kupcev (moze imati razmak); unutrasnji razmak se trazi samo u obliku x/ddmmyy[-n].
+        tacno = {s(r, "BrojZbirne") for z in self.zbr_svi for r in z.redovi}
+
+        def _los(kol, v):
+            t = v.strip()
+            if v != t:
+                return True
+            if kol == "BrojZbirne":
+                # kanonska prijemnica a nekanonska zbirna: greska je na zbirnoj, ne ovde
+                return t not in tacno and norm_broj(t) in self.zbr_po_bzn and _kanon(t) != t
+            return bool(re.search(r"\s", t)) and parse_broj(t) is not None
+
         for p in self.prj_akt:
             razl, pred = [], []
             for kol in ("BrojZbirne", "BrojPrijemnice"):
@@ -1039,7 +1104,7 @@ class Analiza:
                     v = polje(r, kol)
                     if not isinstance(v, str) or not v.strip():
                         continue
-                    if v != v.strip() or re.search(r"\s", v.strip()) or (kol == "BrojZbirne" and _kanon(v) != v.strip()):
+                    if _los(kol, v):
                         cilj = _kanon(v)
                         if kol == "BrojZbirne" and p.z is not None and _kanon(p.z.broj) == p.z.broj:
                             cilj = p.z.broj
@@ -1127,7 +1192,10 @@ class Analiza:
             razl, pred = [], []
             z = p.z if p.status == "OK" else None
             if p.gajbe <= 0 and z is not None and self.ima_gaj and z.gajbe_za(p.klase) > 0:
-                razl.append("KolAmbalaze prazno/0, a zbirna %s ima %s gajbi" % (z.broj, _g(z.gajbe_za(p.klase))))
+                sirovo = ", ".join(sorted({s(r, "KolAmbalaze") for r in p.redovi if not ima_broj(r, "KolAmbalaze")
+                                           and s(r, "KolAmbalaze")}))
+                razl.append("KolAmbalaze %s, a zbirna %s ima %s gajbi" % (
+                    "'%s' (nije broj)" % sirovo if sirovo else "prazno/0", z.broj, _g(z.gajbe_za(p.klase))))
                 pred.append("KolAmbalaze: 0 -> %s (zbirna)" % _g(z.gajbe_za(p.klase)))
             bez_tipa = [s(r, "PrijemnicaID") for r in p.redovi if n(r, "KolAmbalaze") > 0 and not s(r, "TipAmbalaze")]
             if bez_tipa:
@@ -1184,10 +1252,10 @@ class Analiza:
                 continue
             S = sorted(kand, key=lambda q: (q.kupac != p.kupac, q.seq > p.seq, -q.seq))[0]
             razl = []
+            p_ok = p.z is not None and self._isti_vlasnik(p, p.z) and self.odgovara(p, p.z)
+            zs = [z for z in self.zbr_po_bzn.get(S.bzn, [])]
+            s_ok = any(self.odgovara(S, z) for z in zs)
             if S.bzn != p.bzn:
-                p_ok = p.z is not None and self._isti_vlasnik(p, p.z) and self.odgovara(p, p.z)
-                zs = [z for z in self.zbr_po_bzn.get(S.bzn, [])]
-                s_ok = any(self.odgovara(S, z) for z in zs)
                 if not (p_ok and not s_ok):
                     t = "ispravka %s premestila prijemnicu sa zbirne %s na %s" % (S.ids, S.bz or "''", p.bz or "''")
                     t += "; nova %s svojoj zbirnoj" % ("odgovara" if p_ok else "NE odgovara")
@@ -1203,12 +1271,30 @@ class Analiza:
                     if p.z is not None and len([q for q in p.z.prj if self._isti_vlasnik(q, p.z)]) >= 2:
                         t += "; zbirna %s sada ima vise prijemnica (1 zbirna = 1 prijemnica preskocena)" % p.z.broj
                     razl.append(t)
+            # POGRESNA_ZAMENA (skeptik): kupac, vozac ili datum (> 2 dana) se razlikuju od stornirane. Razlika
+            # koja je ISPRAVKA (nova se slaze sa svojom zbirnom, stara se nije slagala sa svojom) se ne broji:
+            # tako se popravlja PRJ_ZASTAREO_VOZAC, PRJ_KUPAC_RAZLICIT_OD_ZBIRNE i zastareo datum.
+            sz = next((z for z in zs if z.aktivan), zs[0] if zs else None)
+
+            def _popravka(atr):
+                if p.z is None:
+                    return False
+                if atr == "kupac":
+                    return p.kupac == p.z.kupac and (sz is None or S.kupac != sz.kupac)
+                if atr == "vozac":
+                    return p.vozac == p.z.vozac and (sz is None or S.vozac != sz.vozac)
+                if not p.z.datum or not p.datum:
+                    return False
+                nova = (p.datum - p.z.datum).days
+                stara = (S.datum - sz.datum).days if (sz is not None and sz.datum and S.datum) else None
+                return 0 <= nova <= self.prag_dana and (stara is None or not 0 <= stara <= self.prag_dana)
+
             dif = [x for x, b in (("kupac", S.kupac != p.kupac), ("vozac", S.vozac != p.vozac),
-                                  ("datum", bool(S.datum and p.datum and (p.datum - S.datum).days > 2)),
-                                  ("zbirna", S.bzn != p.bzn)) if b]
-            if len(dif) >= 2:
-                razl.append("POGRESNA_ZAMENA: razlikuju se %s (crash-safe pitanje 'ZAMENA?' ima Da kao "
-                            "podrazumevano)" % ", ".join(dif))
+                                  ("datum", bool(S.datum and p.datum and abs((p.datum - S.datum).days) > 2)))
+                   if b and not _popravka(x)]
+            if dif:
+                razl.append("POGRESNA_ZAMENA: razlikuju se %s u odnosu na storniranu %s, a nije popravka prema "
+                            "zbirnoj (crash-safe pitanje 'ZAMENA?' ima Da kao podrazumevano)" % (", ".join(dif), S.ids))
             if razl:
                 self.nalaz("PRJ_ISPRAVKA_NA_DRUGOJ_ZBIRNOJ", SUMNJA, TPRJ, p.ids,
                            "Prijemnica %s (IspravkaOd %s): %s" % (self._popis(p), od, "; ".join(razl)),

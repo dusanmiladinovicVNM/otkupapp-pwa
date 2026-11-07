@@ -160,8 +160,11 @@ class _Pogled:
         otk_akt = [r for r in self.otk if not storno(r)]
         self.otk_akt_po_otp = _po(otk_akt, "OtpremnicaID")
         self.otk_akt_po_b = _po(otk_akt, "BrojZbirne")
+        # BrojZbirne je deo kljuca: red istog dokumenta sa drugim (ili praznim) brojem zbirne je drugi lanac
+        # i mora ga videti svaka provera (inace se gleda samo prvi red dokumenta)
         self.otp_dok = _dokumenti(self.otp_akt, lambda r: (
-            k(r, "BrojOtpremnice") or "#" + k(r, "OtpremnicaID"), k(r, "StanicaID"), k(r, "VozacID"), d(r, "Datum")))
+            k(r, "BrojOtpremnice") or "#" + k(r, "OtpremnicaID"), k(r, "StanicaID"), k(r, "VozacID"), d(r, "Datum"),
+            k(r, "BrojZbirne")))
         self.zbr_dok = _dokumenti(self.zbr_akt, lambda r: (
             k(r, "BrojZbirne") or "#" + k(r, "ZbirnaID"), k(r, "VozacID"), d(r, "Datum")))
         self._seq = None
@@ -314,9 +317,17 @@ def _otp_vozac(pg):
     # pravi vozaci: dosledan obrazac (zbirna bez S) -- legitimno ako C002 ima tog vozaca
     for voz, doks in sorted(pravi.items()):
         otp_ids = [_ids(x, "OtpremnicaID") for x in doks]
+        if pg.vozaci and kljuc(voz) not in pg.vozaci:
+            # lazni pozitiv (a) vazi samo za vozaca koji POSTOJI u tblVozaci; nepoznat ID nije pravi vozac
+            ctx.nalaz(K_VOZAC, SUMNJA, "tblVozaci", voz,
+                      "VozacID %s na %d otpremnica (%s) ne postoji ni u tblVozaci ni u tblStanice." % (
+                          voz, len(doks), _lista(otp_ids)),
+                      "VozacID: %s -> StanicaID otpremnice (par-vozac), isto na njihovim zbirnim i prijemnicama; "
+                      "ili dodati vozaca u tblVozaci ako stvarno postoji." % voz)
+            continue
         ctx.nalaz(K_VOZAC, INFO, "tblVozaci", voz,
-                  "Pravi vozac %s%s na %d otpremnica (%s); zbirne bez S prefiksa -- dosledno." % (
-                      voz, "" if kljuc(voz) in pg.vozaci else " (nema ga u tblVozaci)", len(doks), _lista(otp_ids)),
+                  "Pravi vozac %s na %d otpremnica (%s); zbirne bez S prefiksa -- dosledno." % (
+                      voz, len(doks), _lista(otp_ids)),
                   "Legitimno ako C002 stvarno ima ovog vozaca; inace VozacID -> StanicaID otpremnice.")
     if not ima_zbr:
         return
@@ -371,6 +382,8 @@ def _tura_po_vozacu(pg):
         voz = {k(r, "VozacID") for r in rows if k(r, "VozacID")}
         if len(voz) < 2:
             continue
+        if not any(v != st and v in pg.stanice for v in voz):
+            continue                      # drugi vozac je pravi vozac (VOZ-...): legitimna druga tura, ne P4
         rows = sorted(rows, key=lambda r: _num(s(r, "OtpremnicaID")))
         st_id = s(rows[0], "StanicaID")
         stavke = ["%s %s VozacID %s %s kg" % (s(r, "OtpremnicaID"), s(r, "BrojOtpremnice"), s(r, "VozacID") or "-",
@@ -416,10 +429,15 @@ def _otp_datum(pg):
                 continue
             bdan = p.dan
         if dan is None:
+            B = k(r0, "BrojZbirne")
+            zb = [z for z in pg.zbr_akt_po_b.get(B, []) if d(z, "Datum") is None] if B else []
             ctx.nalaz(K_DATUM, SUMNJA, OTP, oid,
-                      "Otpremnica %s: Datum je prazan ili nije datum ('%s')." % (broj, s(r0, "Datum")),
-                      ("Datum: -> %s (dan iz broja)." % _dmy(bdan)) if bdan else "Upisati Datum.")
-            pokr |= _id_set(dok, "OtpremnicaID")
+                      "Otpremnica %s: Datum je prazan ili nije datum ('%s')%s." % (
+                          broj, s(r0, "Datum"), ("; zbirna %s (%s) ima isti problem" % (
+                              s(zb[0], "BrojZbirne"), _ids(zb, "ZbirnaID"))) if zb else ""),
+                      ("Datum: -> %s (dan iz broja)%s." % (_dmy(bdan), " i na zbirnoj" if zb else ""))
+                      if bdan else "Upisati Datum.")
+            pokr |= _id_set(dok, "OtpremnicaID") | _id_set(zb, "ZbirnaID")
             continue
         if bdan == dan:
             continue
@@ -546,7 +564,10 @@ def _otp_dupli(pg):
         for r in rows:
             konteksti[(k(r, "StanicaID"), d(r, "Datum"))].append(r)
         kl = Counter(k(r, "Klasa") for r in rows)
-        if len(konteksti) < 2 and max(kl.values()) < 2:
+        # Datum koji ne moze da se procita ne pravi poseban kontekst (to prijavljuje OTP_BROJ_DATUM_NESLAGANJE)
+        razl = {(st, dn) for st, dn in konteksti if dn is not None}
+        razl_st = {st for st, _dn in konteksti}
+        if len(razl) < 2 and len(razl_st) < 2 and max(kl.values()) < 2:
             continue                      # Klasa I + II istog dokumenta (isti broj, stanica, dan)
         rows = sorted(rows, key=lambda r: _num(s(r, "OtpremnicaID")))
         pg.pokriveno[K_OTP_DUPLI] |= _id_set(rows, "OtpremnicaID")
@@ -592,7 +613,7 @@ def _zbr_dupli(pg):
         if len(zs) < 2:
             continue
         kl = Counter(c for z in zs for c in _klase(z))
-        dani = {d(z, "Datum") for z in zs}
+        dani = {d(z, "Datum") for z in zs if d(z, "Datum") is not None}
         voz = {k(z, "VozacID") for z in zs}
         if max(kl.values()) < 2 and len(dani) < 2 and len(voz) < 2:
             continue                      # Klasa I + II iste zbirne
@@ -881,10 +902,17 @@ def _otp_bez_zbirne(pg):
         broj = s(r0, "BrojOtpremnice")
         oc = pg.ocek(s(r0, "VozacID"), broj)
         zakt = pg.zbr_akt_po_b.get(kljuc(oc), []) if oc else []
+        # ocekivanu zbirnu vec drzi DRUGA aktivna otpremnica (isti broj, OTP_DUPLI): veza nije "izgubljena"
+        zauzeta = [o for o in pg.otp_akt_po_b.get(kljuc(oc), []) if k(o, "OtpremnicaID") not in
+                   _id_set(dok, "OtpremnicaID")] if zakt else []
         kgo = _kg(dok, "Kolicina")
         opis = "Malina: aktivna otpremnica %s (%s, %s, %s kg) nema BrojZbirne" % (
             broj or "-", s(r0, "StanicaID"), _dmy(dan), kg_txt(kgo))
-        if zakt:
+        if zakt and zauzeta:
+            opis += ("; ocekivana zbirna %s (%s) postoji, ali je vec zbirna otpremnice %s (isti broj otpremnice)" % (
+                oc, _ids(zakt, "ZbirnaID"), _ids(zauzeta, "OtpremnicaID")))
+            zakt = []
+        elif zakt:
             opis += "; ocekivana zbirna %s postoji aktivna (%s) -- veza je izgubljena" % (oc, _ids(zakt, "ZbirnaID"))
         elif oc:
             opis += "; zbirna %s ne postoji (auto-zbirna nije napravljena)" % oc
@@ -895,7 +923,8 @@ def _otp_bez_zbirne(pg):
             predlog = "BrojZbirne: '' -> %s (%s)." % (oc, _ids(zakt, "ZbirnaID"))
         else:
             predlog = "Napraviti zbirnu %s (Datum %s, VozacID %s, kg %s, gajbe %s sa otpremnice) i upisati broj." % (
-                oc or "S+broj otpremnice", _dmy(dan), s(r0, "VozacID") or "-", kg_txt(kgo),
+                ("S + nov broj otpremnice (prvo resiti %s)" % K_OTP_DUPLI) if zauzeta else (oc or "S+broj otpremnice"),
+                _dmy(dan), s(r0, "VozacID") or "-", kg_txt(kgo),
                 kg_txt(_kg(dok, "KolAmbalaze")))
             st = k(r0, "StanicaID")
             kand = []
@@ -912,7 +941,8 @@ def _otp_bez_zbirne(pg):
                 kand.sort(key=lambda x: x[0])
                 predlog += " Pre toga: %s." % "; ".join(
                     "%s (%s kg, na %s sa 2+ prijemnice) je verovatno njena -- prevezati na %s" % (
-                        _ids(pd, "PrijemnicaID"), kg_txt(kgp), s(pd[0], "BrojZbirne"), oc or "novu zbirnu")
+                        _ids(pd, "PrijemnicaID"), kg_txt(kgp), s(pd[0], "BrojZbirne"),
+                        "novu zbirnu" if zauzeta else (oc or "novu zbirnu"))
                     for _x, B, pd, kgp in kand[:3])
         ctx.nalaz(K_BEZ, GRESKA if zakt else SUMNJA, OTP, oid, opis, predlog)
 
@@ -940,13 +970,18 @@ def _hladnjaca_lanac(pg):
             s(r0, "BrojZbirne"), _dmy(d(r0, "Datum")), s(r0, "VozacID") or "-", kg_txt(_kg(dok, "Kolicina")),
             kg_txt(_kg(dok, "KolAmbalaze")),
             ("; ocekivani broj je %s" % oc) if oc and kljuc(oc) != B else "")
-        ctx.nalaz(K_HL, GRESKA, OTP, _ids(dok, "OtpremnicaID"), opis, predlog)
+        # van maline forma upisuje predlozeni broj zbirne na otpremnicu PRE nego sto zbirna postoji
+        # (RefreshBrojZbirneSuggestion -> txtBrojZbirneOtp): zbirna moze jos da ceka rucni unos
+        if not pg.malina:
+            predlog += " Van maline: proveriti da li je zbirna uneta pod drugim brojem ili jos ceka unos."
+        ctx.nalaz(K_HL, GRESKA if pg.malina else SUMNJA, OTP, _ids(dok, "OtpremnicaID"), opis, predlog)
     # (b) aktivna zbirna bez ijedne otpremnice sa tim brojem
     ocekivane = {kljuc(pg.ocek(s(r, "VozacID"), s(r, "BrojOtpremnice"))) for r in pg.otp_akt}
     for B, zs in sorted(pg.zbr_akt_po_b.items()):
         if B in pg.otp_po_b or B in ocekivane:
             continue                      # ima otpremnicu, ili je ocekivana zbirna neke otpremnice (veza pogresna)
-        zs = [z for z in zs if k(z, "SyncSource") != "pwa"]
+        # PWA zbirna vozaca nosi SyncSource=PWA i ClientRecordID (modMasterSync.bas:2648-2676, v2.11.0)
+        zs = [z for z in zs if k(z, "SyncSource") != "pwa" and not k(z, "ClientRecordID")]
         if not zs:
             continue                      # zbirna iz PWA vozaca (VOZ list) nema otpremnicu po dizajnu
         zid = _ids(zs, "ZbirnaID")
@@ -972,6 +1007,25 @@ def _hladnjaca_lanac(pg):
 
 
 # ---------------------------------------------------------------- 10) tura bez prijemnice
+def _pomeri(dan, dd):
+    """dan + dd dana, ili None kad izlazi iz opsega datuma (npr. Datum 31.12.9999)."""
+    try:
+        return dan + timedelta(days=dd)
+    except OverflowError:
+        return None
+
+
+def _klase_preklop(a, b):
+    """Klase se preklapaju; prazna Klasa (stari red bez klase) ne iskljucuje par."""
+    return bool(a & b) or "" in a or "" in b
+
+
+def _kg_klase(zs, pk):
+    """UkupnoKolicina redova zbirne cija se klasa preklapa sa klasom prijemnice (sve kad nijedan)."""
+    rr = [z for z in zs if _klase_preklop(_klase(z), pk)]
+    return _kg(rr or zs, "UkupnoKolicina")
+
+
 def _zbr_tura(pg):
     ctx = pg.ctx
     if not pg.ima(K_TURA, {ZBR: ["ZbirnaID", "Datum", "VozacID", "BrojZbirne", "UkupnoKolicina", "Stornirano"],
@@ -984,35 +1038,55 @@ def _zbr_tura(pg):
             continue
         info[B] = dict(zs=zs, dan=dan, kg=_kg(zs, "UkupnoKolicina"), gaj=_kg(zs, "UkupnoAmbalaze"),
                        klase=frozenset(c for z in zs for c in _klase(z)), voz=k(zs[0], "VozacID"),
-                       p=parse_broj(s(zs[0], "BrojZbirne")), pdok=pg.prijemnice_dok(pg.prj_akt_po_b.get(B, [])))
+                       p=parse_broj(s(zs[0], "BrojZbirne")), pdok=pg.prijemnice_dok(pg.prj_akt_po_b.get(B, [])),
+                       # zbirna cije su SVE otpremnice stornirane nije tura (ZBR_VISI): ne prima prijemnicu
+                       mrtva=bool(pg.otp_po_b.get(B)) and not pg.otp_akt_po_b.get(B))
     z2_po_danu = defaultdict(list)
     for B, i in info.items():
         if len(i["pdok"]) >= 2:
             z2_po_danu[i["dan"]].append(B)
+    # svi parovi (Z0, prijemnica sa Z2); svaka prijemnica se predlaze samo JEDNOJ Z0 (najboljoj)
+    najbolji = {}
     for B0 in sorted(info):
         i0 = info[B0]
-        if i0["pdok"]:
+        if i0["pdok"] or i0["mrtva"]:
             continue
-        kand = []
         for dd in (-1, 0, 1):
-            for B2 in z2_po_danu.get(i0["dan"] + timedelta(days=dd), []):
+            dan2 = _pomeri(i0["dan"], dd)
+            if dan2 is None:
+                continue
+            for B2 in z2_po_danu.get(dan2, []):
                 i2 = info[B2]
-                if not (i0["klase"] & i2["klase"]):
+                if not _klase_preklop(i0["klase"], i2["klase"]):
                     continue              # druga klasa (npr. Klasa II iz PWA puta)
+                p0, p2 = i0["p"], i2["p"]
+                ista = (p0 is not None and p2 is not None and p0.s == p2.s and p0.x == p2.x) or i0["voz"] == i2["voz"]
+                nerazl = ista and abs(i0["kg"] - i2["kg"]) <= _EPS      # ture iste kg: kg ne presudjuje
                 for pd in i2["pdok"]:
+                    pk = frozenset(c for r in pd for c in _klase(r))
+                    if not _klase_preklop(pk, i0["klase"]):
+                        continue          # prijemnica druge klase ne ide na ovu turu
+                    if sum(1 for x in i2["pdok"] if _klase_preklop(frozenset(c for r in x for c in _klase(r)), pk)) < 2:
+                        continue          # Z2 ima samo jednu prijemnicu te klase (npr. Kl I i II pod dva broja)
                     kgp = _kg(pd, "Kolicina")
-                    d0, d2 = abs(kgp - i0["kg"]), abs(kgp - i2["kg"])
+                    d0, d2 = abs(kgp - _kg_klase(i0["zs"], pk)), abs(kgp - _kg_klase(i2["zs"], pk))
                     vozp = k(pd[0], "VozacID")
                     voz_ok = bool(vozp) and vozp == i0["voz"] and vozp != i2["voz"]
-                    if d0 < d2 or voz_ok:
-                        kand.append((not voz_ok, d0, B2, pd, kgp))
-        if not kand:
-            continue
-        kand.sort(key=lambda x: (x[0], x[1], _num(s(x[3][0], "PrijemnicaID"))))
-        _nv, _d0, B2, pd, kgp = kand[0]
+                    if not (d0 < d2 or voz_ok or nerazl):
+                        continue
+                    rang = (not voz_ok, not (d0 < d2 or voz_ok), vozp != i0["voz"], d0,
+                            _num(s(i0["zs"][0], "ZbirnaID")), _num(s(pd[0], "PrijemnicaID")))
+                    kl = (B2, _ids(pd, "PrijemnicaID"))
+                    if kl not in najbolji or rang < najbolji[kl][0]:
+                        najbolji[kl] = (rang, B0, B2, pd, kgp, ista, nerazl)
+    po_z0 = defaultdict(list)
+    for x in najbolji.values():
+        po_z0[x[1]].append(x)
+    for B0 in sorted(po_z0):
+        kand = sorted(po_z0[B0], key=lambda x: x[0])
+        i0 = info[B0]
+        _r, _b0, B2, pd, kgp, ista, nerazl = kand[0]
         i2 = info[B2]
-        p0, p2 = i0["p"], i2["p"]
-        ista = (p0 is not None and p2 is not None and p0.s == p2.s and p0.x == p2.x) or i0["voz"] == i2["voz"]
         z0, z2 = i0["zs"][0], i2["zs"][0]
         opis = ("Zbirna %s (%s, %s, %s kg, %s gajbi) nema prijemnicu, a susedna %s (%s, %s, %s kg) ima %d: %s "
                 "(varijanta %s)" % (
@@ -1029,6 +1103,9 @@ def _zbr_tura(pg):
             _ids(pd, "PrijemnicaID"), s(pd[0], "BrojPrijemnice"), s(pd[0], "BrojZbirne"), s(z0, "BrojZbirne"),
             ("%s (isti)" % vozp) if kljuc(vozp) == i0["voz"] else "%s -> %s" % (vozp or "-", s(z0, "VozacID")),
             kg_txt(kgp), kg_txt(i0["kg"]), kg_txt(gp), "=" if gp == i0["gaj"] else "vs", kg_txt(i0["gaj"]))
+        if nerazl:
+            predlog += " Ture imaju istu kg (%s): kg ne presudjuje koja prijemnica je ove ture -- operater bira." % (
+                kg_txt(i0["kg"]))
         ostali = ["%s (%s kg)" % (_ids(x[3], "PrijemnicaID"), kg_txt(x[4])) for x in kand[1:4]]
         if ostali:
             predlog += " Ostali kandidati: %s." % ", ".join(ostali)

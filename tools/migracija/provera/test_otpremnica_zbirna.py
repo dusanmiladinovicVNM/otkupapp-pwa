@@ -588,5 +588,180 @@ class Otpornost(Baza):
         self.nalazi(t)        # samo bez MODUL_PAO (proverava Baza.nalazi)
 
 
+# ---------------------------------------------------------------- recenzija: napadi na modul
+class Recenzija(Baza):
+    """Slucajevi koje je nezavisni recenzent nasao (pad, lazni pozitiv, propustena varijanta)."""
+
+    def _dve_prijemnice_na_s1(self, t):
+        """Varijanta (b): PRJ-00002 nasledila S1/050726, pa S1/050726-2 (ZBR-00002) ostaje bez prijemnice."""
+        postavi(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00002", BrojZbirne="S1/050726")
+
+    def test_datum_van_opsega_bez_pada(self):
+        """Datum 31.12.9999 na zbirnoj bez prijemnice: dan +1 izlazi iz opsega -- ne sme MODUL_PAO."""
+        t = fixture.kopija(fixture.osnovna())
+        postavi(t, "tblZbirna", "ZbirnaID", "ZBR-00005", Datum="31.12.9999")
+        obrisi(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")
+        self.nalazi(t)                     # Baza.nalazi trazi da nema MODUL_PAO
+
+    def test_prijemnica_predlozena_samo_jednoj_zbirnoj(self):
+        """Dve zbirne bez prijemnice (ST-00001 -2 i ST-00002 -2) iste kg: PRJ-00002 se predlaze samo zbirnoj
+        svoje stanice/vozaca, ne obema."""
+        t = fixture.kopija(fixture.osnovna())
+        self._dve_prijemnice_na_s1(t)
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00003", OtpremnicaID="OTP-00006", BrojOtpremnice="2/050726-2",
+                BrojZbirne="S2/050726-2", Kolicina=49, KolAmbalaze=20)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00003", ZbirnaID="ZBR-00006", BrojZbirne="S2/050726-2",
+                UkupnoKolicina=49, UkupnoAmbalaze=20)
+        postavi(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00003", Kolicina=128)    # pokriva obe ture ST-00002 (P6)
+        self.jedan(self.nalazi(t), oz.K_TURA, "ZBR-00002", SUMNJA)
+
+    def test_mrtva_zbirna_nije_tura(self):
+        """Zbirna cije su sve otpremnice stornirane (ZBR_VISI) ne sme da primi prijemnicu, ni kad joj kg
+        bolje odgovara."""
+        t = fixture.kopija(fixture.osnovna())
+        self._dve_prijemnice_na_s1(t)
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00002", OtpremnicaID="OTP-00006", BrojOtpremnice="1/050726-3",
+                BrojZbirne="S1/050726-3", Kolicina=49.5, Stornirano="Da")
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00002", ZbirnaID="ZBR-00006", BrojZbirne="S1/050726-3",
+                UkupnoKolicina=49.5)
+        nal = self.nalazi(t)
+        self.jedan(nal, oz.K_TURA, "ZBR-00002", SUMNJA)
+        self.jedan(nal, oz.K_VISI, "ZBR-00006", GRESKA)
+
+    def test_jednake_ture_kg_ne_presudjuje(self):
+        """Varijanta (b) kad su obe ture iste kg: nalaz ostaje (SUMNJA), predlog kaze da kg ne presudjuje."""
+        t = fixture.kopija(fixture.osnovna())
+        self._dve_prijemnice_na_s1(t)
+        postavi(t, "tblOtpremnica", "OtpremnicaID", "OTP-00002", Kolicina=100)
+        postavi(t, "tblZbirna", "ZbirnaID", "ZBR-00002", UkupnoKolicina=100)
+        postavi(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00002", Kolicina=99.5)
+        x = self.jedan(self.nalazi(t), oz.K_TURA, "ZBR-00002", SUMNJA)
+        self.assertIn("kg ne presudjuje", x.predlog)
+
+    def test_prazna_klasa_ne_iskljucuje(self):
+        t = fixture.kopija(fixture.osnovna())
+        self._dve_prijemnice_na_s1(t)
+        postavi(t, "tblZbirna", "ZbirnaID", "ZBR-00002", Klasa="")
+        self.jedan(self.nalazi(t), oz.K_TURA, "ZBR-00002", SUMNJA)
+
+    def test_varijanta_b_sledeci_dan(self):
+        """Kao S4/200626-2 umesto S4/210626: prijemnica 06.07 nasledila broj zbirne 05.07."""
+        t = fixture.kopija(fixture.osnovna())
+        postavi(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00004", BrojZbirne="S1/050726-2")
+        x = self.jedan(self.nalazi(t), oz.K_TURA, "ZBR-00004", SUMNJA)
+        self.assertIn("PRJ-00004 (1/060726): BrojZbirne S1/050726-2 -> S1/060726", x.predlog)
+
+    def test_klasa_I_i_II_pod_dva_broja_legitimno(self):
+        """Zbirna sa Kl I i II, prijemnice I i II pod dva broja (rucni unos); sledeca tura jos bez prijemnice:
+        prijemnica Klase II se ne predlaze turi Klase I."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00006", Klasa="II", Kolicina=20,
+                KolAmbalaze=8)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00006", Klasa="II", UkupnoKolicina=20,
+                UkupnoAmbalaze=8)
+        kopiraj(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00004", PrijemnicaID="PRJ-00006", Klasa="II", Kolicina=19.8,
+                KolAmbalaze=8, BrojPrijemnice="1/060726-3")
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00007", BrojOtpremnice="1/060726-2",
+                BrojZbirne="S1/060726-2", Kolicina=22, KolAmbalaze=9)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00007", BrojZbirne="S1/060726-2",
+                UkupnoKolicina=22, UkupnoAmbalaze=9)
+        self.assertEqual(self.sazmi(self.nalazi(t)), [])
+
+    def test_zbirna_sa_jednom_prijemnicom_po_klasi_nije_z2(self):
+        """S1/060726 ima Kl I i Kl II pod dva broja prijemnice (po jedna po klasi); Kl II prijemnica nosi vozaca
+        ST-00002 (zaostao combo, oblast prijemnice). Tura Kl II stanice ST-00002 bez prijemnice nije par: Z2 nema
+        dve prijemnice iste klase."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00006", Klasa="II", Kolicina=20,
+                KolAmbalaze=8)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00006", Klasa="II", UkupnoKolicina=20,
+                UkupnoAmbalaze=8)
+        kopiraj(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00004", PrijemnicaID="PRJ-00006", Klasa="II", Kolicina=19.8,
+                KolAmbalaze=8, BrojPrijemnice="1/060726-3", VozacID="ST-00002")
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00003", OtpremnicaID="OTP-00007", BrojOtpremnice="2/060726",
+                BrojZbirne="S2/060726", Datum=D6, Klasa="II", Kolicina=20, KolAmbalaze=8)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00003", ZbirnaID="ZBR-00007", BrojZbirne="S2/060726", Datum=D6,
+                Klasa="II", UkupnoKolicina=20, UkupnoAmbalaze=8)
+        self.nema(self.nalazi(t), oz.K_TURA)
+
+    def test_prijemnica_druge_klase_ne_ide_na_turu(self):
+        """S1/060726 (Kl I + II) ima dve prijemnice Kl II; tura S1/060726-2 je samo Kl I: prijemnica Kl II joj se
+        ne predlaze, ni kad joj kg odgovara."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00006", Klasa="II", Kolicina=20,
+                KolAmbalaze=8)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00006", Klasa="II", UkupnoKolicina=20,
+                UkupnoAmbalaze=8)
+        for prj, br, kg in (("PRJ-00006", "1/060726-3", 19.8), ("PRJ-00007", "1/060726-4", 9.9)):
+            kopiraj(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00004", PrijemnicaID=prj, Klasa="II", Kolicina=kg,
+                    BrojPrijemnice=br)
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00007", BrojOtpremnice="1/060726-2",
+                BrojZbirne="S1/060726-2", Kolicina=10, KolAmbalaze=4)
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00007", BrojZbirne="S1/060726-2",
+                UkupnoKolicina=10, UkupnoAmbalaze=4)
+        self.nema(self.nalazi(t), oz.K_TURA)
+
+    def test_pravi_vozac_druga_tura_legitimno(self):
+        """Prvu turu stanice ST-00001 vozi pravi vozac VOZ-00001, drugu sama stanica: nije P4."""
+        for malina in ("YES", "NO"):
+            with self.subTest(MALINA_MODE=malina):
+                t = fixture.kopija(fixture.osnovna())
+                config(t, "MALINA_MODE", malina)
+                preimenuj_zbirnu(t, "S1/050726", "1/050726")
+                for ime, kol, v in (("tblOtpremnica", "OtpremnicaID", "OTP-00001"),
+                                    ("tblZbirna", "ZbirnaID", "ZBR-00001"),
+                                    ("tblPrijemnica", "PrijemnicaID", "PRJ-00001"),
+                                    ("tblOtkup", "OtkupID", "OTK-00001"), ("tblOtkup", "OtkupID", "OTK-00002")):
+                    postavi(t, ime, kol, v, VozacID="VOZ-00001")
+                self.assertEqual(self.sazmi(self.nalazi(t)), [(oz.K_VOZAC, INFO, "VOZ-00001")])
+
+    def test_nepoznat_vozac_nije_pravi_vozac(self):
+        """VozacID kog nema ni u tblVozaci ni u tblStanice: SUMNJA, ne INFO 'pravi vozac'."""
+        t = fixture.kopija(fixture.osnovna())
+        preimenuj_zbirnu(t, "S3/060726", "3/060726")
+        for ime, kol, v in (("tblOtpremnica", "OtpremnicaID", "OTP-00005"), ("tblZbirna", "ZbirnaID", "ZBR-00005"),
+                            ("tblPrijemnica", "PrijemnicaID", "PRJ-00005")):
+            postavi(t, ime, kol, v, VozacID="VOZ-00099")
+        x = self.jedan(self.nalazi(t), oz.K_VOZAC, "VOZ-00099", SUMNJA)
+        self.assertIn("OTP-00005", x.opis)
+
+    def test_ocekivana_zbirna_zauzeta_dupli_broj(self):
+        """Druga otpremnica istog broja bez BrojZbirne: nalaz postoji (red se ne gubi u dokumentu prve), ali
+        S1/060726 je zbirna OTP-00004 -- nije 'veza izgubljena'."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00006", BrojZbirne="", Kolicina=20)
+        nal = self.nalazi(t)
+        x = self.jedan(nal, oz.K_BEZ, "OTP-00006", SUMNJA)
+        self.assertNotIn("'' -> S1/060726", x.predlog)
+        self.assertIn(oz.K_OTP_DUPLI, x.predlog)
+        self.jedan(nal, oz.K_OTP_DUPLI, "OTP-00004, OTP-00006", GRESKA)
+
+    def test_otpremnica_na_nepostojecoj_zbirnoj_bez_maline_sumnja(self):
+        """Van maline forma upise predlozen broj zbirne pre nego sto zbirna postoji: SUMNJA, ne GRESKA."""
+        t = fixture.kopija(fixture.osnovna())
+        config(t, "MALINA_MODE", "NO")
+        obrisi(t, "tblZbirna", "ZbirnaID", "ZBR-00005")
+        self.jedan(self.nalazi(t), oz.K_HL, "OTP-00005", SUMNJA)
+
+    def test_neprocitan_datum_nije_drugi_kontekst(self):
+        """Klasa II istog dokumenta sa Datumom koji ne moze da se procita: nije dupli broj (to je DATUM)."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblOtpremnica", "OtpremnicaID", "OTP-00004", OtpremnicaID="OTP-00006", Klasa="II", Kolicina=10,
+                Datum="xx")
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00006", Klasa="II", UkupnoKolicina=10,
+                Datum="xx")
+        nal = self.nalazi(t)
+        self.nema(nal, oz.K_OTP_DUPLI, oz.K_ZBR_DUPLI)
+        self.jedan(nal, oz.K_DATUM, "OTP-00006", SUMNJA)
+
+    def test_pwa_zbirna_bez_kolone_syncsource(self):
+        """Starija sveska bez kolone SyncSource: PWA zbirnu vozaca prepoznaje ClientRecordID."""
+        t = fixture.kopija(fixture.osnovna())
+        kopiraj(t, "tblZbirna", "ZbirnaID", "ZBR-00004", ZbirnaID="ZBR-00006", BrojZbirne="1/060726",
+                VozacID="VOZ-00001", Klasa="I/II", ClientRecordID="c-1")
+        kol = [c for c in fixture.KOLONE["tblZbirna"] if c != "SyncSource"]
+        self.nema(self.nalazi(t, {"tblZbirna": kol}), oz.K_HL)
+
+
 if __name__ == "__main__":
     unittest.main()

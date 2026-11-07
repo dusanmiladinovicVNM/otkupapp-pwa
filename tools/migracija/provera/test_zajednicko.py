@@ -57,6 +57,18 @@ class CistaSveska(unittest.TestCase):
         ctx = pokreni_nad_tabelama(tabele_iz(fixture.osnovna()))
         self.assertEqual([(x.modul, x.kod, x.id, x.opis[:200]) for x in ctx.nalazi], [])
 
+    def test_zbirna_bez_prijemnice_jednom(self):
+        """Prijemnica nasledi broj zbirne prethodne ture: zbirna bez prijemnice se
+        prijavljuje JEDNOM, iako je vide i modul prijemnice i modul zbirne."""
+        t = fixture.kopija(fixture.osnovna())
+        fixture.red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00002")["BrojZbirne"] = "S1/050726"
+        fixture.red(t, "tblPaletaStavka", "PrijemnicaID", "PRJ-00002")["BrojZbirne"] = "S1/050726"
+        ctx = pokreni_nad_tabelama(tabele_iz(t))
+        zbr = [x for x in ctx.nalazi if x.tabela == "tblZbirna" and x.id == "ZBR-00002"]
+        self.assertEqual(len(zbr), 1, [(x.modul, x.kod) for x in zbr])
+        self.assertIn("Isto prijavljuje i otpremnica_zbirna", zbr[0].opis)
+        self.assertTrue(any(x.id == "PRJ-00002" and x.kod.startswith("PRJ_") for x in ctx.nalazi))
+
     def test_pokreni_ne_menja_svesku(self):
         with tempfile.TemporaryDirectory() as dirn:
             p = os.path.join(dirn, "s.xlsx")

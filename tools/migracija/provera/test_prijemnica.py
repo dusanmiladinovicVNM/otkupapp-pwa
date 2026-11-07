@@ -686,6 +686,157 @@ class TestniRedovi(Osnova):
 
 
 # ------------------------------------------------------------------------------------------
+class Recenzija(Osnova):
+    """Slucajevi koje je nasla nezavisna recenzija (lazni pozitivi, propustene varijante, ozbiljnost)."""
+
+    def test_ascii_testovi(self):
+        import os
+        with open(os.path.join(os.path.dirname(__file__), "test_prijemnica.py"), "rb") as f:
+            f.read().decode("ascii")
+
+    def test_negativ_jedan_dokument_klasa_i_ii_a_pwa_zbirna_ii(self):
+        """Hladnjaca vodi Klasu II na istoj prijemnici (dva reda, BrojZbirne Klase I), PWA je Klasi II dala
+        svoju zbirnu -2: zbirna -2 je 'bez prijemnice' samo formalno -> samo INFO, bez SUMNJE."""
+        t = fixture.osnovna()
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726-2", "ST-00003", D6, 30, 12, klasa="II")
+        prijemnica(t, "PRJ-00006", "1/060726-2", "S3/060726", "ST-00003", "29.5", 12, D6, klasa="II")
+        ctx = pokreni(t)
+        self.assertEqual(self.kodovi(ctx), [("PRJ_KLASA_RAZLICITA_OD_ZBIRNE", "PRJ-00005, PRJ-00006", INFO),
+                                            ("ZBR_ZIVA_BEZ_PRIJEMNICE", "ZBR-00006", INFO)])
+
+    def test_klasa_jedina_prijemnica_bez_duplog_info(self):
+        """Klasa II prijemnica na zbirnoj Klase I: jedan nalaz na prijemnici, ne i INFO na istoj zbirnoj."""
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["Klasa"] = "II"
+        ctx = pokreni(t)
+        self.assertEqual(self.kodovi(ctx), [("PRJ_KLASA_RAZLICITA_OD_ZBIRNE", "PRJ-00005", SUMNJA)])
+
+    def test_negativ_odvojene_prijemnice_po_klasi_uz_zivu_zbirnu(self):
+        """Forma: otpremnica Klasa I+II pod istim brojem, hladnjaca posebna prijemnica po klasi. Ziva zbirna
+        Klase II druge ture (-2) bez prijemnice ne sme da 'otme' prijemnicu Klase II."""
+        t = fixture.osnovna()
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726", "ST-00003", D6, 30, 12, klasa="II")
+        prijemnica(t, "PRJ-00006", "1/060726-3", "S3/060726", "ST-00003", "29.7", 12, D6, klasa="II")
+        lanac(t, "OTP-00007", "ZBR-00007", "3/060726-2", "ST-00003", D6, 30, 12, klasa="II")
+        ctx = pokreni(t)
+        self.assertEqual(self.kodovi(ctx), [("ZBR_ZIVA_BEZ_PRIJEMNICE", "ZBR-00007", SUMNJA)])
+        x = self.jedan(ctx, "ZBR_ZIVA_BEZ_PRIJEMNICE", "ZBR-00007", SUMNJA)
+        self.assertNotIn("PRJ-00006", x.opis + x.predlog)
+
+    def test_vozac_stanica_iz_broja_ali_odgovara_svojoj_zbirni(self):
+        """VozacID prijemnice = stanica iz broja zbirne, ali prijemnica NE odgovara toj zbirnoj, a odgovara
+        zivoj zbirnoj svog vozaca bez prijemnice: pogresan je broj zbirne, ne vozac."""
+        t = fixture.osnovna()
+        lanac(t, "OTP-00006", "ZBR-00006", "2/060726", "ST-00002", D6, 60, 24, vozac="ST-00003")
+        lanac(t, "OTP-00007", "ZBR-00007", "2/060726-2", "ST-00002", D6, 40, 16)
+        prijemnica(t, "PRJ-00006", "1/060726-3", "S2/060726", "ST-00002", "39.5", 16, D6)
+        ctx = pokreni(t)
+        x = self.jedan(ctx, "PRJ_ZBIRNA_DRUGE_STANICE", "PRJ-00006", SUMNJA)
+        self.assertIn("BrojZbirne: S2/060726 -> S2/060726-2; kg 39.5 vs zbirna 40, gajbe 16 = 16", x.predlog)
+        self.bez_koda(ctx, "PRJ_ZASTAREO_VOZAC")
+
+    def test_ispravka_vozaca_otpremnice_prijemnica_zaostala(self):
+        """Storno-ispravka otpremnice promenila VozacID, stara zbirna ostala aktivna (ne kaskadira): prijemnica
+        sa starim VozacID pripada novoj (zivoj) zbirni -> zastareo vozac, ne tiho vezivanje na staru."""
+        t = fixture.osnovna()
+        red(t, "tblOtpremnica", "OtpremnicaID", "OTP-00005").update(Stornirano="Da", VozacID="ST-00002")
+        red(t, "tblZbirna", "ZbirnaID", "ZBR-00005")["VozacID"] = "ST-00002"
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["VozacID"] = "ST-00002"
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726", "ST-00003", D6, 90, 36)
+        ctx = pokreni(t)
+        x = self.jedan(ctx, "PRJ_ZASTAREO_VOZAC", "PRJ-00005", GRESKA)
+        self.assertIn("VozacID: ST-00002 -> ST-00003", x.predlog)
+
+    def test_negativ_ispravka_vozaca_otpremnice_prijemnica_nova(self):
+        t = fixture.osnovna()
+        red(t, "tblOtpremnica", "OtpremnicaID", "OTP-00005").update(Stornirano="Da", VozacID="ST-00002")
+        red(t, "tblZbirna", "ZbirnaID", "ZBR-00005")["VozacID"] = "ST-00002"
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726", "ST-00003", D6, 90, 36)
+        self.nista(pokreni(t))
+
+    def test_negativ_ispravka_popravlja_datum_i_zbirnu(self):
+        """Legitimna ispravka koja istovremeno popravlja zastareo datum (prefill) i pogresnu zbirnu."""
+        t = fixture.osnovna()
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726-2", "ST-00003", D6, 60, 24)
+        prijemnica(t, "PRJ-00006", "1/060726-3", "S3/060726", "ST-00003", "59.5", 24, D6 - timedelta(days=5),
+                   Stornirano="Da")
+        prijemnica(t, "PRJ-00007", "1/060726-4", "S3/060726-2", "ST-00003", "59.5", 24, D6,
+                   IspravkaOd="1/060726-3")
+        self.nista(pokreni(t, {"tblPrijemnica": KOL_PRJ_ISPR}))
+
+    def test_negativ_ispravka_popravlja_vozaca(self):
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005").update(Stornirano="Da", VozacID="ST-00002")
+        prijemnica(t, "PRJ-00006", "1/060726-3", "S3/060726", "ST-00003", 89, 36, D6, IspravkaOd="1/060726-2")
+        self.nista(pokreni(t, {"tblPrijemnica": KOL_PRJ_ISPR}))
+
+    def test_negativ_prijemnica_tacno_prepisuje_nekanonsku_zbirnu(self):
+        """Zbirna i prijemnica imaju isti (nekanonski) broj: stari citaoci ih vezuju, greska nije na prijemnici."""
+        t = fixture.osnovna()
+        red(t, "tblZbirna", "ZbirnaID", "ZBR-00005")["BrojZbirne"] = "s3/060726"
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["BrojZbirne"] = "s3/060726"
+        self.bez_koda(pokreni(t), "PRJ_BROJ_ZBIRNE_NENORMALIZOVAN")
+
+    def test_negativ_eksterni_broj_prijemnice_sa_razmakom(self):
+        """Broj eksternog kupca je kupcev ('INV 77/2026'): unutrasnji razmak nije greska."""
+        t = fixture.osnovna()
+        t["tblKupci"].append(dict(KupacID="KUP-00002", Naziv="Drugi kupac", Aktivan="Da"))
+        lanac(t, "OTP-00006", "ZBR-00006", "2/060726", "ST-00002", D6, 60, 24, kupac="KUP-00002")
+        prijemnica(t, "PRJ-00006", "INV 77/2026", "S2/060726", "ST-00002", "59.5", 24, D6, kupac="KUP-00002")
+        self.nista(pokreni(t))
+
+    def test_unutrasnji_razmak_u_broju_zbirne(self):
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["BrojZbirne"] = "S3/ 060726"
+        x = self.jedan(pokreni(t), "PRJ_BROJ_ZBIRNE_NENORMALIZOVAN", "PRJ-00005", GRESKA)
+        self.assertIn("-> 'S3/060726'", x.predlog)
+
+    def test_kolicina_tekst_nije_manjak(self):
+        """Tekst umesto broja u Kolicina nije 'manjak 100%'."""
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["Kolicina"] = "abc"
+        ctx = pokreni(t)
+        self.assertEqual([x.opis for x in ctx.nalazi if x.kod == "MODUL_PAO"], [])
+        self.bez_koda(ctx, "PRJ_KG_GAJBE_VAN_OPSEGA")
+
+    def test_gajbe_tekst_u_opisu(self):
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["KolAmbalaze"] = "x"
+        x = self.jedan(pokreni(t), "PRJ_GAJBE_NULA_ILI_BEZ_TIPA", "PRJ-00005", SUMNJA)
+        self.assertIn("'x' (nije broj)", x.opis)
+
+    def test_negativ_klasa_rucno_kucana(self):
+        """'Klasa I' / '1' su ista klasa kao 'I'."""
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005")["Klasa"] = "Klasa I"
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00004")["Klasa"] = "1"
+        self.nista(pokreni(t))
+
+    def test_dve_nejasno_sumnjiva_ona_sa_kandidatom(self):
+        """Nijedna sama ne odgovara zbirnoj: prijavljuje se prijemnica koja odgovara zivoj zbirnoj bez
+        prijemnice, i kad ima nizi seq (pogresan klik pa tacan unos)."""
+        t = fixture.osnovna()
+        red(t, "tblPrijemnica", "PrijemnicaID", "PRJ-00005").update(Kolicina=Decimal("59.5"), KolAmbalaze=24)
+        lanac(t, "OTP-00006", "ZBR-00006", "3/060726-2", "ST-00003", D6, 60, 24)
+        prijemnica(t, "PRJ-00006", "1/060726-3", "S3/060726", "ST-00003", 80, 36, D6)
+        ctx = pokreni(t)
+        x = self.jedan(ctx, "PRJ_DVE_NA_ZBIRNOJ_ISTA_STANICA", "PRJ-00005", SUMNJA)
+        self.assertIn("S3/060726 -> S3/060726-2", x.predlog)
+        self.assertEqual([y.id for y in nalazi(ctx, "PRJ_DVE_NA_ZBIRNOJ_ISTA_STANICA")], ["PRJ-00005"])
+
+    def test_negativ_hladnjaca_lanac_sa_pravim_vozacem(self):
+        """Auto-lanac hladnjace sa VozacID pravog vozaca (bez S prefiksa): nista."""
+        t = fixture.osnovna()
+        red(t, "tblStanice", "StanicaID", "ST-00003")["JeHladnjaca"] = "Da"
+        for tb in ("tblOtpremnica", "tblZbirna", "tblPrijemnica"):
+            for r in t[tb]:
+                if r.get("BrojZbirne") == "S3/060726":
+                    r.update(VozacID="VOZ-00001", BrojZbirne="3/060726")
+        red(t, "tblOtkup", "OtkupID", "OTK-00006").update(VozacID="VOZ-00001", BrojZbirne="3/060726")
+        self.nista(pokreni(t))
+
+
+# ------------------------------------------------------------------------------------------
 class Performanse(Osnova):
     def test_1000_dokumenata_cisto_i_brzo(self):
         t = fixture.osnovna()
