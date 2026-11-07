@@ -12,7 +12,7 @@ uvek od nule nad celom sveskom — nema delte.
 | `dokumenti.py` | tabele naspram `schema/schema.json`, dokumenti sa više redova |
 | `pregled.py` | Excel pregled (prave Excel tabele sa filterom) |
 | `lanac.py` | lanac OTK → OTP → ZBR → PRJ stare sveske: prijemnica na pogrešnoj zbirnoj (sa predlogom prave) i storno koji nije prešao lanac |
-| `izuzeci.json` | ručne odluke po starom `AmbID`, svaka sa potpisom reda |
+| `izuzeci.json` | ručne odluke, svaka sa potpisom reda: po starom `AmbID` (ambalaža) i po dokumentu (sekcija `dokumenti`: otpremnica, zbirna, prijemnica — MIG-ODL-19/20) |
 | `test_migracija.py` | testovi nad izmišljenom sveskom (CI) |
 
 ## Faza 1 — pregled (samo čita)

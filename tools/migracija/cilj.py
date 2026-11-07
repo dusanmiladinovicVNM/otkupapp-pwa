@@ -126,16 +126,29 @@ def _prepisi_red(src, kolone):
 
 
 def ucitaj_izuzetke_dokumenata(putanja):
-    """Sekcija "dokumenti" iz izuzeci.json: otpremnice kojima se veza NE popravlja
-    (bez_popravke_veze) i koje se prenose kao stornirane (storniraj, uz proveru)."""
+    """Sekcija "dokumenti" iz izuzeci.json, sve uz potpis reda ("provera"):
+      * otpremnica: bez_popravke_veze (MIG-21), storniraj (MIG-ODL-19);
+      * zbirna: storniraj po broju -- "tabela": "tblZbirna", "BrojZbirne" (MIG-ODL-20);
+      * prijemnica: prevezi_prijemnicu -- "PrijemnicaID", nov "BrojZbirne" (MIG-ODL-20)."""
     import json
     if not putanja:
         return []
     with open(putanja, encoding="utf-8") as f:
         lista = json.load(f).get("dokumenti", [])
     for iz in lista:
-        if iz.get("radnja") not in ("bez_popravke_veze", "storniraj") or not tekst(iz.get("OtpremnicaID")) \
-                or (iz.get("radnja") == "storniraj" and not iz.get("provera")):
+        r = iz.get("radnja")
+        if r == "bez_popravke_veze":
+            ok = bool(tekst(iz.get("OtpremnicaID")))
+        elif r == "storniraj" and iz.get("tabela") == "tblZbirna":
+            ok = bool(tekst(iz.get("BrojZbirne"))) and bool(iz.get("provera"))
+        elif r == "storniraj":
+            ok = bool(tekst(iz.get("OtpremnicaID"))) and bool(iz.get("provera"))
+        elif r == "prevezi_prijemnicu":
+            ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(tekst(iz.get("BrojZbirne"))) \
+                and bool(iz.get("provera"))
+        else:
+            ok = False
+        if not ok:
             raise ValueError("izuzeci.json, dokumenti: nepoznat oblik %r" % (iz,))
     return lista
 
@@ -157,9 +170,14 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
 
     _linije_fakture(c, tabele)
     _dokumenti(c, tabele)
-    _storniraj_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"])
+    _kultura_otkupa(c)
+    _prevezi_prijemnice_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "prevezi_prijemnicu"])
+    _storniraj_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"
+                             and iz.get("tabela", "tblOtpremnica") == "tblOtpremnica"])
     _izostavi_stornirane_bez_kolicine(c)
     _clanstvo(c, tabele)
+    _storniraj_zbirne_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"
+                                    and iz.get("tabela") == "tblZbirna"])
     _status_dokumenata(c)
     _popravi_veze(c, {kljuc(iz["OtpremnicaID"]): iz for iz in izuzeci_dok if iz["radnja"] == "bez_popravke_veze"})
     _otpremnice_bez_izvora(c)
@@ -324,6 +342,7 @@ def _clanstvo(c, tabele):
     otp_src = tabela(tabele, "tblOtpremnica")
     zbr_src = tabela(tabele, "tblZbirna")
     otp_ids = {kljuc(z["OtpremnicaID"]): z["OtpremnicaID"] for z in c.tabele["tblOtpremnica"]}
+    otp_akt = {kljuc(z["OtpremnicaID"]) for z in c.tabele["tblOtpremnica"] if not je_storno(_kf(z))}
     if otk_src is not None:
         for r in otk_src.redovi:
             oid, pid = tekst(polje(r, "OtkupID")), tekst(polje(r, "OtpremnicaID"))
@@ -332,6 +351,18 @@ def _clanstvo(c, tabele):
             if kljuc(pid) not in otp_ids:
                 c.nalaz("UPOZORENJE", "OTKUP_POKAZUJE_NA_NEPOSTOJECU_OTPREMNICU", "tblOtkup", oid,
                         "OtpremnicaID='%s' ne postoji -- veza se ne pravi" % pid)
+                continue
+            if je_storno(r) and kljuc(pid) in otp_akt:
+                # MIG-ODL-22: main nikad nema storniran blok u AKTIVNOJ otpremnici (storno
+                # bloka u lancu pravi novu verziju otpremnice; modStorno.StornoOtkup odbija
+                # storno clana), a citaoci ga ne podnose: "U blokovima" ga sabira, a
+                # specifikacija pada ("Izvor otpremnice ... je storniran"). Stara sveska
+                # ga je ostavljala -- ovde ne postaje clan. Knjiga ambalaze ga ionako ne
+                # broji (_otpremnice_po_blokovima). Stornirana otpremnica zadrzava sve
+                # svoje clanove, kao istoriju.
+                c.nalaz("INFO", "STORNIRAN_OTKUP_NIJE_CLAN_AKTIVNE_OTPREMNICE", "tblOtkup", oid,
+                        "otpremnica %s je aktivna -- storniran blok %s %s nije njen clan (MIG-ODL-22)"
+                        % (otp_ids[kljuc(pid)], tekst(polje(r, "BrojDokumenta")), _dan(polje(r, "Datum"))))
                 continue
             c.tabele["tblOtpremnicaIzvori"].append(_izvor(
                 "OPI-", "OtpremnicaIzvorID", c.kanon["tblOtpremnicaIzvori"],
@@ -512,9 +543,7 @@ def _storniraj_po_odluci(c, izuzeci):
             c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_BEZ_DOKUMENTA", "tblOtpremnica", iz["OtpremnicaID"],
                     "izuzeci.json: otpremnice nema u staroj svesci -- odluka se ne primenjuje")
             continue
-        razlike = ["%s: odluka '%s', sveska '%s'" % (k, v, _dan(z.get(k)) if k == "Datum" else tekst(z.get(k)))
-                   for k, v in iz["provera"].items()
-                   if (_dan(z.get(k)) if k == "Datum" else kljuc(z.get(k))) != (v if k == "Datum" else kljuc(v))]
+        razlike = _razlike_potpisa(z, iz["provera"])
         if razlike:
             c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblOtpremnica", z.get("OtpremnicaID"),
                     "storniraj se ne primenjuje -- %s" % "; ".join(razlike))
@@ -523,6 +552,133 @@ def _storniraj_po_odluci(c, izuzeci):
             z["Stornirano"] = "Da"
         c.nalaz("INFO", "OTPREMNICA_STORNIRANA_PO_ODLUCI", "tblOtpremnica", z.get("OtpremnicaID"),
                 "broj %s, %s: %s" % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum")), tekst(iz.get("razlog"))))
+
+
+def _razlike_potpisa(red, provera):
+    """Polja iz "provera" koja se ne slazu sa redom (Datum po danu, ostalo bez
+    obzira na velika slova i spoljne razmake)."""
+    return ["%s: odluka '%s', sveska '%s'" % (k, v, _dan(red.get(k)) if k == "Datum" else tekst(red.get(k)))
+            for k, v in provera.items()
+            if (_dan(red.get(k)) if k == "Datum" else kljuc(red.get(k))) != (v if k == "Datum" else kljuc(v))]
+
+
+def _kultura_otkupa(c):
+    """MIG-ODL-21 (KI-093): KulturaID otkupnog lista je ono sto (VrstaVoca,
+    SortaVoca) daje main resolver modOtkup.RazresiKulturuIzVrsteSorte -- TACNO
+    JEDAN red tblKulture iste vrste i sorte (Trim, bez obzira na velika slova).
+    Stari pisci su je trazili SAMO po vrsti, i desktop (vba-v2.28.4 modOtkup.bas:543)
+    i PWA uvoz (modMasterSync.bas:1583): prvi red vrste, a bez pogotka izmisljen
+    'vrsta-sorta'. Tekst lista je unos operatera i ostaje; menja se samo ID.
+    Bez tacno jednog pogotka KulturaID ostaje kakav je i to je ODLUKA."""
+    zag = c.tabele.get("tblOtkup", [])
+    if not zag or "KulturaID" not in zag[0]:
+        return
+    if not c.tabele.get("tblKulture"):
+        c.nalaz("INFO", "KULTURA_NIJE_PROVERENA", "tblKulture", "",
+                "stara sveska nema sifarnik kultura -- KulturaID listova se prenosi kakav jeste (MIG-ODL-21)")
+        return
+    kult = defaultdict(list)
+    ids = set()
+    for k in c.tabele.get("tblKulture", []):
+        kult[(kljuc(k.get("VrstaVoca")), kljuc(k.get("SortaVoca")))].append(tekst(k.get("KulturaID")))
+        ids.add(kljuc(k.get("KulturaID")))
+    promene, nerazreseno = defaultdict(list), defaultdict(list)
+    for z in zag:
+        pogodci = kult.get((kljuc(z.get("VrstaVoca")), kljuc(z.get("SortaVoca"))), [])
+        staro = tekst(z.get("KulturaID"))
+        if len(pogodci) != 1:
+            nerazreseno[(tekst(z.get("VrstaVoca")), tekst(z.get("SortaVoca")), len(pogodci), staro)].append(z)
+        elif kljuc(staro) != kljuc(pogodci[0]):
+            z["KulturaID"] = pogodci[0]
+            promene[(staro, pogodci[0], tekst(z.get("VrstaVoca")), tekst(z.get("SortaVoca")))].append(z)
+    for (staro, novo, vr, so), redovi in sorted(promene.items()):
+        n_sto = sum(1 for z in redovi if je_storno(_kf(z)))
+        c.nalaz("INFO", "KULTURA_PO_SORTI", "tblOtkup", _prvi_ids(redovi, "OtkupID"),
+                "%d listova %s / %s (od toga stornirano %d): KulturaID %s -> %s (MIG-ODL-21)"
+                % (len(redovi), vr, so or "-", n_sto, staro or "(prazno)", novo))
+    for (vr, so, pog, staro), redovi in sorted(nerazreseno.items()):
+        c.nalaz("ODLUKA", "KULTURA_NE_RAZRESAVA", "tblOtkup", _prvi_ids(redovi, "OtkupID"),
+                "%d listova %s / %s: u tblKulture %d pogodaka za vrstu i sortu -- KulturaID ostaje '%s'%s "
+                "(MIG-ODL-21)" % (len(redovi), vr or "-", so or "-", pog, staro,
+                                  "" if kljuc(staro) in ids else ", a tog ID-ja nema u tblKulture"))
+
+
+def _prvi_ids(redovi, pk, n=5):
+    ids = [tekst(r.get(pk)) for r in redovi]
+    return ", ".join(ids[:n]) + (" ... (+%d)" % (len(ids) - n) if len(ids) > n else "")
+
+
+def _prevezi_prijemnice_po_odluci(c, izuzeci):
+    """MIG-ODL-20: prijemnica koja je nasledila broj zbirne prethodnog unosa
+    (stara forma ga nije praznila) dobija broj prave zbirne -- samo dok stari red
+    izgleda kao u "provera". Nova zbirna mora postojati kao aktivna; vezu
+    (ZbirnaRoditeljID) posle pravi _prijemnica_roditelj, po broju, kupcu i vozacu,
+    kao pisac main-a."""
+    prj = {kljuc(p.get("PrijemnicaID")): p for p in c.tabele.get("tblPrijemnica", [])}
+    aktivne = {kljuc(z.get("BrojZbirne")) for z in c.tabele.get("tblZbirna", []) if not je_storno(_kf(z))}
+    for iz in izuzeci:
+        p = prj.get(kljuc(iz["PrijemnicaID"]))
+        if p is None:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_BEZ_DOKUMENTA", "tblPrijemnica", iz["PrijemnicaID"],
+                    "izuzeci.json: prijemnice nema u staroj svesci -- odluka se ne primenjuje")
+            continue
+        razlike = _razlike_potpisa(p, iz["provera"])
+        if razlike:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblPrijemnica", p.get("PrijemnicaID"),
+                    "prevezi_prijemnicu se ne primenjuje -- %s" % "; ".join(razlike))
+            continue
+        if kljuc(iz["BrojZbirne"]) not in aktivne:
+            c.nalaz("ODLUKA", "PREVEZIVANJE_NA_ZBIRNU_KOJE_NEMA", "tblPrijemnica", p.get("PrijemnicaID"),
+                    "aktivne zbirne %s nema -- prijemnica ostaje na %s" % (iz["BrojZbirne"], p.get("BrojZbirne")))
+            continue
+        staro = tekst(p.get("BrojZbirne"))
+        p["BrojZbirne"] = tekst(iz["BrojZbirne"])
+        c.nalaz("INFO", "PRIJEMNICA_PREVEZANA_PO_ODLUCI", "tblPrijemnica", p.get("PrijemnicaID"),
+                "BrojZbirne %s -> %s: %s" % (staro, p["BrojZbirne"], tekst(iz.get("razlog"))))
+
+
+def _storniraj_zbirne_po_odluci(c, izuzeci):
+    """MIG-ODL-20: zbirna cije su otpremnice stornirane, a ona nije (stari storno
+    nije kaskadirao), prenosi se stornirana -- svi njeni aktivni redovi (red po
+    klasi). Samo kad: potpis vazi za svaki red, svi redovi su ista zbirna (vozac i
+    dan), nijedna aktivna otpremnica nije njen clan (tblZbirnaIzvori) i nijedna
+    aktivna prijemnica ne nosi taj broj (posle prevezivanja prijemnica). Ide posle
+    _clanstvo. Inace odluka ne vazi i stavka je ZA ODLUKU."""
+    for iz in izuzeci:
+        broj_z = tekst(iz["BrojZbirne"])
+        akt = [z for z in c.tabele.get("tblZbirna", [])
+               if kljuc(z.get("BrojZbirne")) == kljuc(broj_z) and not je_storno(_kf(z))]
+        if not akt:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_BEZ_DOKUMENTA", "tblZbirna", broj_z,
+                    "izuzeci.json: aktivne zbirne tog broja nema -- odluka se ne primenjuje")
+            continue
+        razlike = [r for z in akt for r in _razlike_potpisa(z, iz["provera"])]
+        grupe = {(kljuc(z.get("VozacID")), _dan(z.get("Datum"))) for z in akt}
+        # Clanstvo, ne BrojZbirne otpremnice: zaglavlje ga u novoj svesci ne nosi
+        # (DOKUMENTI, prazno), a veza je ista koju je napravio _clanstvo.
+        zid = {kljuc(z.get("ZbirnaID")) for z in akt}
+        otp_st = {kljuc(o.get("OtpremnicaID")): je_storno(_kf(o)) for o in c.tabele.get("tblOtpremnica", [])}
+        otp = sorted({tekst(v.get("OtpremnicaID")) for v in c.tabele.get("tblZbirnaIzvori", [])
+                      if kljuc(v.get("ZbirnaID")) in zid and not otp_st.get(kljuc(v.get("OtpremnicaID")), False)})
+        prj = [p for p in c.tabele.get("tblPrijemnica", [])
+               if kljuc(p.get("BrojZbirne")) == kljuc(broj_z) and not je_storno(_kf(p))]
+        zasto = []
+        if razlike:
+            zasto.append("potpis: " + "; ".join(razlike))
+        if len(grupe) > 1:
+            zasto.append("broj nose %d razlicite zbirne (vozac, dan)" % len(grupe))
+        if otp:
+            zasto.append("aktivna otpremnica: " + ", ".join(otp))
+        if prj:
+            zasto.append("aktivna prijemnica: " + ", ".join(tekst(p.get("PrijemnicaID")) for p in prj))
+        if zasto:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblZbirna", broj_z,
+                    "storniraj se ne primenjuje -- %s" % " | ".join(zasto))
+            continue
+        for z in akt:
+            z["Stornirano"] = "Da"
+        c.nalaz("INFO", "ZBIRNA_STORNIRANA_PO_ODLUCI", "tblZbirna", ", ".join(tekst(z.get("ZbirnaID")) for z in akt),
+                "broj %s, %s: %s" % (broj_z, _dan(akt[0].get("Datum")), tekst(iz.get("razlog"))))
 
 
 def _otpremnice_bez_izvora(c):

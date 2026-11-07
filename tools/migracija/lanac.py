@@ -33,12 +33,12 @@ Alat nista ne menja i nista ne bira umesto operatera: daje spisak sa dokazima.
    tblOtkup.OtpremnicaID, otpremnica -> zbirna po BrojZbirne (cilj._nadji_zbirnu,
    MIG-11), prijemnica -> zbirna po BrojZbirne.
 
-   Napomena za OTP_SA_STORNIRANIM_OTKUPOM: cilj._clanstvo pravi clanstvo iz
-   tblOtkup.OtpremnicaID i za STORNIRAN otkup, pa je u novoj svesci on aktivan
-   clan aktivne otpremnice. main to stanje sam nikad ne pravi (StornoOtkup
-   odbija storno izvora aktivne otpremnice), a cita ga: "U blokovima" ga sabira
-   (VrednostIzvoraPoOtpremnici), a specifikacija pada ("Izvor otpremnice ... je
-   storniran", modPrint). Ovde se samo meri; pravilo prenosa je odluka.
+   Napomena za OTP_SA_STORNIRANIM_OTKUPOM: to je stanje STARE sveske. main ga
+   sam nikad ne pravi (StornoOtkup odbija storno izvora aktivne otpremnice), a
+   ne podnosi ga: "U blokovima" ga sabira (VrednostIzvoraPoOtpremnici), a
+   specifikacija pada ("Izvor otpremnice ... je storniran", modPrint). Zato
+   cilj._clanstvo storniran otkup ne pravi clanom AKTIVNE otpremnice (MIG-ODL-22,
+   INFO STORNIRAN_OTKUP_NIJE_CLAN_AKTIVNE_OTPREMNICE); ovde se meri stara sveska.
 
 Dokument je red, osim kad vise redova nosi isti GeneracijaID i isti poslovni
 broj (stari pisac: red po klasi) -- tada su ti redovi jedan dokument.
