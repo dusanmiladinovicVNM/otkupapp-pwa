@@ -204,11 +204,14 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
             If Not OtkupAktivanPoID(docID) Then
                 StornoRazlog = NijePronadjen(broj)
             ElseIf Len(modDokumenta.OtpremnicaZaOtkup(Trim$(docID))) > 0 Then
-                ' Isti razlog koji pisac dize (modStorno.StornoOtkup), ali PRE
-                ' potvrde. Operateru se imenuje BROJ otpremnice: roditelj je na
-                ' istom otkupnom mestu, pa je broj tu dovoljan da je nadje.
-                StornoRazlog = Poruka("STORNO_ERR_OTK_IZVOR_OTP") & " " & _
-                               OtpremnicaBrojZaID(modDokumenta.OtpremnicaZaOtkup(Trim$(docID)))
+                ' LIST U OTPREMNICI SE STORNIRA POTEZOM U LANCU (LNC-ODL-05): nova
+                ' verzija otpremnice i zbirne u jednoj transakciji. Kapija PRE
+                ' potvrde je plan tog poteza -- isti koji potez ponovo racuna u
+                ' svojoj transakciji (hladnjaca, poslednji izvor, prijemnica bez ID-a).
+                Dim planLnc As Object
+                Set planLnc = modDokumenta.LncPlanLista(Trim$(docID))
+                StornoRazlog = CStr(planLnc("razlog"))
+                If Len(StornoRazlog) = 0 Then StornoRazlog = CStr(planLnc("stornoRazlog"))
             End If
 
         Case STIP_OTPREMNICA
@@ -360,6 +363,15 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ' se ne razresava po broju.
             If Not OtkupAktivanPoID(docID) Then
                 poruka = NijePronadjen(broj)
+                Exit Function
+            End If
+            ' List u otpremnici: potez u lancu (LNC-ODL-05). Poruka imenuje stari
+            ' i nov broj otpremnice i zbirne (LNC-ODL-09).
+            If Len(modDokumenta.OtpremnicaZaOtkup(Trim$(docID))) > 0 Then
+                StornoIzvrsi = modDokumenta.StornoListaULancu_TX(Trim$(docID), razlog, poruka)
+                If Not StornoIzvrsi Then
+                    poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & razlog
+                End If
                 Exit Function
             End If
             ok = StornoOtkup_TX(Trim$(docID))

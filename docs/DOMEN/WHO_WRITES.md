@@ -86,7 +86,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblDoplataStavke`: `modDoplata`
 - `tblKooperanti`: `modKooperant`
 - `tblMagacin`: `modAgroUnos`, `modAgrohemija`
-- `tblOtkupStavke`: `modOtkup`
+- `tblOtkupStavke`: `modDokumenta`, `modOtkup`
 - `tblOtpremnica`: `modDokumenta`, `modStorno`, `modStornoFlow`
 - `tblOtpremnicaIzvori`: `modDokumenta`, `modOtkup`
 - `tblOtpremnicaStavke`: `modDokumenta`
@@ -98,8 +98,8 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblPrijemnicaStavke`: `modDokumenta`, `modStorno`
 - `tblSEFEventLog`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
 - `tblSEFSubmission`: `modSEFService`, `modSEFStatusSync`, `modSEFValidator`
-- `tblStornoVeze`: `modAmbalaza`, `modOtkup`, `modStornoContext`
-- `tblStornoZurnal`: `modOtkup`, `modStorno`
+- `tblStornoVeze`: `modAmbalaza`, `modDokumenta`, `modOtkup`, `modStornoContext`
+- `tblStornoZurnal`: `modDokumenta`, `modOtkup`, `modStorno`
 - `tblUtovarStavke`: `modStorno`, `modUtovar`
 - `tblZbirnaIzvori`: `modDokumenta`, `modMasterSync`
 - `tblZbirnaStavke`: `modDokumenta`, `modMasterSync`

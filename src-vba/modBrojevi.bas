@@ -51,19 +51,38 @@ Public Const BROJ_KTX_TUDJ_DAN As Long = 3       ' kanonski oblik, vlasnik tacan
 ' ============================================================
 ' PUBLIC -- forma prefill
 ' ============================================================
+' BROJ NOVE VERZIJE DOKUMENTA KOJU PRAVI SISTEM (LNC-ODL-17, A9).
+'
+' Zamena verzije u lancu (storno / ispravka lista u izdatoj zbirnoj) pravi novu
+' zbirnu bez operatera, pa prekidac auto-broja -- koji odlucuje o PREDLOGU u formi
+' -- ovde ne vazi: bez broja nova verzija ne bi mogla da nastane. Isti niz
+' (vozac, dan) i isti bump do slobodnog broja kao SuggestNextBroj; bez udaljene
+' provere, kao i ostali automatski tokovi (KR-001, prihvacen rizik).
+' Otpremnica ovaj ulaz ne treba: GenerateBrojOtpremnice prekidac i ne gleda.
+Public Function BrojNoveVerzije(ByVal kind As String, _
+                                ByVal entityID As String, _
+                                ByVal datum As Date) As String
+    BrojNoveVerzije = SuggestNextBroj(kind, entityID, datum, False, True)
+End Function
+
 Public Function SuggestNextBroj(ByVal kind As String, _
                                 ByVal entityID As String, _
                                 ByVal datum As Date, _
-                                Optional ByVal checkRemote As Boolean = True) As String
+                                Optional ByVal checkRemote As Boolean = True, _
+                                Optional ByVal bezPrekidaca As Boolean = False) As String
     Const SRC As String = "SuggestNextBroj"
 
     On Error GoTo EH
 
     ' Toggle: kad je auto-generisanje brojeva iskljuceno (Podesavanja), forma ne
     ' dobija predlog -> operater unosi svoj broj. Default ON (modConfig).
-    If Not IsAutoBrojDokumenta() Then
-        SuggestNextBroj = ""
-        Exit Function
+    ' bezPrekidaca: broj NOVE VERZIJE koju pravi sistem (BrojNoveVerzije) -- tu
+    ' operatera nema, pa prekidac predloga u formi ne vazi (LNC-ODL-17).
+    If Not bezPrekidaca Then
+        If Not IsAutoBrojDokumenta() Then
+            SuggestNextBroj = ""
+            Exit Function
+        End If
     End If
 
     If Len(Trim$(entityID)) = 0 Then

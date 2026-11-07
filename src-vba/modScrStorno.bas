@@ -1186,9 +1186,21 @@ End Function
 '
 ' Varijanta za ISPRAVKU reversa je otisla u 10d: ispravka vise ne stornira u
 ' trenutku klika nego tek pri snimanju zamene, pa nema sta da se potvrdjuje.
+'
+' List u otpremnici (LNC-ODL-05): potvrda nabraja POSLEDICE poteza u lancu --
+' nova verzija otpremnice i zbirne, prijemnice, telefon vozaca, novac -- iz istog
+' plana koji potez izvrsava. Operater ih vidi pre "Da", ne posle.
 Public Function StornoPotvrdaTekst() As String
+    Dim lanac As String
     StornoPotvrdaTekst = modPoruke.Poruka("STORNO_ASK") & " " & _
         modStornoDok.DokumentOpis(mSelTip, mSelBroj, mSelOpcija, mSelDocID) & "?"
+    If mSelTip = STIP_OTKUP And Len(mSelDocID) > 0 Then
+        lanac = modDokumenta.LncPlanOpisZaOtkup(mSelDocID, False)
+        If Len(lanac) > 0 Then
+            StornoPotvrdaTekst = StornoPotvrdaTekst & vbCrLf & vbCrLf & _
+                                 modPoruke.Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & lanac
+        End If
+    End If
 End Function
 
 ' Obican storno: bez framework-a ispravke. Posledice su vec u zoni, pa je
@@ -1223,8 +1235,20 @@ Private Function ObicanStorno() As Boolean
     ' Revers: tekst imenuje i stanicu i dan -- isti KOOP broj, smer i dan legalno
     ' nose reversi dve stanice (REV-IDENT-01 Faza 2b), a ovo je poslednja kapija.
     If MsgBox(StornoPotvrdaTekst(), vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+    ' List u otpremnici ide potezom u lancu (LNC-ODL-05); posle storna to vise ne
+    ' moze da se pita, pa se zna PRE poziva. Uspeh poteza je INFORMACIJA (novi
+    ' brojevi), ne upozorenje (review #471, nalaz 21).
+    Dim uLancu As Boolean
+    If mSelTip = STIP_OTKUP And Len(mSelDocID) > 0 Then
+        uLancu = (Len(modDokumenta.OtpremnicaZaOtkup(Trim$(mSelDocID))) > 0)
+    End If
     If Not modStornoDok.StornoIzvrsi(mSelTip, mSelBroj, opcija, poruka, mSelDocID) Then
         modOtkupUI.ShowToast poruka, True
+        Exit Function
+    End If
+    If uLancu Then
+        MsgBox poruka, vbInformation, APP_NAME
+        ObicanStorno = True
         Exit Function
     End If
     ' Zbirna moze da vrati UPOZORENJE uz uspeh (aktivna prijemnica ostaje vezana
