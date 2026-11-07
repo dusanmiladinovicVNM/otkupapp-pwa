@@ -124,7 +124,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblOtkupStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestBanka`, `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
-- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestStornoCentar`
+- `tblOtpremnicaIzvori`: `modBusinessFlowProTests`, `modGoldenTests`, `modTest`, `modTestStornoCentar`
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTest`, `modTestBanka`
@@ -171,10 +171,10 @@ imenuje.
 - `modStorno`: 1
 - `modStornoFlow`: 3
 - `modStornoZurnal`: 1
-- `modTest`: 1
+- `modTest`: 2
 - `modTestPalete`: 1
 
-Ukupno: 30 poziva u 15 modula.
+Ukupno: 31 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

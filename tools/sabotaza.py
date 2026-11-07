@@ -12213,6 +12213,23 @@ SABOTAZE = {
         "T_Doplata_StornoOdvezujeIsplatu",
         "storno KO odvezuje isplatu (DoplataID prazan), a ne stornira je",
     ),
+    # KI-093: izvestaj KUL1 ne poredi kulturu lista sa resolverom -- list
+    # "S1 teren" sa kulturom "S1" vise nije nalaz.
+    "kul1-ne-poredi-kulturu": (
+        "modIntegritet.bas",
+        "                If StrComp(sada, CStr(res(0)), vbTextCompare) <> 0 Then losi.Add i\n",
+        "                If False Then losi.Add i   ' SABOTAZA: KUL1 ne poredi kulturu\n",
+        "T_KUL1_KulturaListaPoSorti",
+        "KUL1: list 'S1 teren' sa kulturom 'S1' je nalaz, list ciji tekst odgovara kulturi nije",
+    ),
+    # KI-092/093: izvestaj KUL2 ne vidi verziju ciji se tekst sorte razlikuje od prethodne.
+    "kul2-ne-vidi-verziju": (
+        "modIntegritet.bas",
+        "            If StrComp(tekst, prevTekst, vbTextCompare) <> 0 Then\n",
+        "            If False Then   ' SABOTAZA: KUL2 ne vidi verziju\n",
+        "T_KUL1_KulturaListaPoSorti",
+        "KUL2: nova verzija sa drugim tekstom sorte od prethodne je nalaz",
+    ),
 }
 
 
