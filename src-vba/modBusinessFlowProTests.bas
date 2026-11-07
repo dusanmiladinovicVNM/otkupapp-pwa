@@ -336,6 +336,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_IzdataOtpBezZbirne
     Test_LNC_NacrtZbirneUMestu
     Test_LNC_IspravkaKrozUnos
+    Test_LNC_StaraOtpremnicaBezKulture
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -26403,6 +26404,20 @@ Private Function LncPrj(ByVal oznaka As String, ByVal zbrID As String, _
     End If
 End Function
 
+' Zapis STAROG oblika za test: jedina putanja koja ga je pisala je ranija verzija
+' programa, pa ga test pravi upisom u celiju. Red se trazi po ID-u, tacno jedan.
+Private Sub LncPostaviPolje(ByVal tbl As String, ByVal kolonaID As String, _
+                            ByVal id As String, ByVal kolona As String, _
+                            ByVal vrednost As Variant)
+    Dim rows As Collection
+    Set rows = FindRows(tbl, kolonaID, id)
+    If rows.count <> 1 Then
+        Err.Raise vbObjectError + 4416, "LncPostaviPolje", _
+                  tbl & ": " & id & " nije jednoznacan (" & CStr(rows.count) & ")."
+    End If
+    RequireUpdateCell tbl, CLng(rows(1)), kolona, vrednost, "LncPostaviPolje"
+End Sub
+
 Private Function LncOtpPolje(ByVal otpID As String, ByVal kolona As String) As String
     LncOtpPolje = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, kolona)))
 End Function
@@ -27208,6 +27223,96 @@ Private Sub Test_LNC_IspravkaKrozUnos()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' STARA OTPREMNICA BEZ KULTURE NA ZAGLAVLJU (rucna provera operatera 07.11.2026).
+'
+' F8 nad listom 5/250626-13 je pao "Header polje je prazno: KulturaID": njegova
+' otpremnica je iz verzije programa koja kulturu nije pisala na zaglavlje, a
+' potez je zaglavlje nove verzije prepisivao sa stare. Pisac otpremnice ga je
+' odbio, i ceo potez se vratio. Kultura otpremnice MORA biti kultura svakog izvora
+' (OtpRequireIzvorValjan), pa se nova verzija vodi kulturom listova koji u nju
+' ulaze. Kad ih nemaju jednu, plan odbija PRE potvrde i kaze zasto.
+'
+' Lanac je kao u nalazu: izdata otpremnica bez zbirne. Prazno zaglavlje (i prazna
+' kultura lista u drugom delu) pravi se upisom u celiju i vraca se posle poteza i
+' na putu greske, jer drugi testovi citaju te redove.
+' SABOTAZE: lnc-stara-otp-bez-izvodjenja -> "LNC stara otpremnica: potez prolazi i
+' bez kulture na zaglavlju"; lnc-stara-otp-plan-bez-kapije -> "LNC stara
+' otpremnica: plan odbija listove bez jedne kulture pre poteza".
+Private Sub Test_LNC_StaraOtpremnicaBezKulture()
+    Const SRC As String = "Test_LNC_StaraOtpremnicaBezKulture"
+    Dim scenario As String, kulPre As String
+    Dim otkA As String, otkB As String, otp As String, otpNova As String
+    Dim otkC As String, otkD As String, otp2 As String
+    Dim ok As Boolean, g As String, por As String
+    Dim ok2 As Boolean, g2 As String, por2 As String
+    Dim plan As Object, razlogPlana As String
+    Dim vratiOtp As Boolean, vratiOtp2 As Boolean, vratiD As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC13")
+
+    ' --- (a) zaglavlje bez kulture, listovi jedne kulture: potez prolazi
+    otkA = LncOtkup("LNC13A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC13B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC13-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    vratiOtp = True
+    LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, ""
+    kulPre = LncOtpPolje(otp, COL_OTP_KULTURA)
+
+    ok = modDokumenta.StornoListaULancu_TX(otkA, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
+    vratiOtp = False
+
+    AssertEquals "", kulPre, "LNC stara otpremnica: preduslov -- zaglavlje bez kulture"
+    AssertTrue ok, "LNC stara otpremnica: potez prolazi i bez kulture na zaglavlju"
+    AssertEquals "", g, "LNC stara otpremnica: potez ne javlja gresku"
+    AssertTrue Len(otpNova) > 0, "LNC stara otpremnica: nastala je nova verzija otpremnice"
+    If Len(otpNova) > 0 Then
+        AssertEquals TEST_KULTURA_ID, LncOtpPolje(otpNova, COL_OTP_KULTURA), _
+                     "LNC stara otpremnica: nova verzija nosi kulturu svojih listova"
+    End If
+
+    ' --- (b) preostali list bez kulture: plan odbija pre poteza, nista se ne menja
+    otkC = LncOtkup("LNC13C-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkD = LncOtkup("LNC13D-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp2 = LncOtp("LNC13X-" & scenario, Pr3Izvor(otkC, otkD), TEST_TIP_AMB)
+    vratiOtp2 = True
+    LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp2, COL_OTP_KULTURA, ""
+    vratiD = True
+    LncPostaviPolje TBL_OTKUP, COL_OTK_ID, otkD, COL_OTK_KULTURA, ""
+
+    Set plan = modDokumenta.LncPlanLista(otkC)
+    razlogPlana = CStr(plan("razlog"))
+    ok2 = modDokumenta.StornoListaULancu_TX(otkC, g2, por2)
+
+    LncPostaviPolje TBL_OTKUP, COL_OTK_ID, otkD, COL_OTK_KULTURA, TEST_KULTURA_ID
+    vratiD = False
+    LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp2, COL_OTP_KULTURA, TEST_KULTURA_ID
+    vratiOtp2 = False
+
+    AssertTrue InStr(1, razlogPlana, "kultur", vbTextCompare) > 0 And _
+               InStr(1, razlogPlana, OtkPolje(otkD, COL_OTK_BR_DOK), vbTextCompare) > 0, _
+               "LNC stara otpremnica: plan odbija listove bez jedne kulture pre poteza"
+    AssertFalse ok2, "LNC stara otpremnica: potez bez jedne kulture se ne izvrsava"
+    AssertTrue LncOtpPolje(otp2, COL_STORNIRANO) <> "Da", _
+               "LNC stara otpremnica: odbijen potez ne dira otpremnicu"
+    AssertTrue OtkPolje(otkC, COL_STORNIRANO) <> "Da", _
+               "LNC stara otpremnica: odbijen potez ne stornira list"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If vratiOtp Then LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
+    If vratiOtp2 Then LncPostaviPolje TBL_OTPREMNICA, COL_OTP_ID, otp2, COL_OTP_KULTURA, TEST_KULTURA_ID
+    If vratiD Then LncPostaviPolje TBL_OTKUP, COL_OTK_ID, otkD, COL_OTK_KULTURA, TEST_KULTURA_ID
+    On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
 

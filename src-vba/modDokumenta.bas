@@ -3834,6 +3834,19 @@ Public Function LncPlanLista(ByVal otkupID As String) As Object
     ' Nacrt otpremnice ne ulazi u zbirnu (RequireOtpValidanIzvorZbirne).
     If Not CBool(p("otpIzdata")) Then Exit Function
 
+    ' Stara otpremnica bez kulture na zaglavlju (rucna provera 07.11.2026): nova
+    ' verzija se vodi kulturom preostalih listova. Ako je nemaju jednu, potez se
+    ' odbija OVDE, pre potvrde -- inace bi pao tek u transakciji. Ispravka dodaje i
+    ' nov list; njega meri pisac (OtpZaglavljeVerzije) nad stvarnim izvorima.
+    Dim razlogKulture As String
+    If p("otpPreostali").count > 0 Then
+        OtpKulturaVerzije otpID, p("otpPreostali"), razlogKulture
+        If Len(razlogKulture) > 0 Then
+            p("razlog") = razlogKulture
+            Exit Function
+        End If
+    End If
+
     Dim zbrID As String
     zbrID = AktivnaZbirnaZaOtpremnicu(otpID)
     If Len(zbrID) = 0 Then Exit Function
@@ -4230,7 +4243,7 @@ Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
 
     Dim otpNova As String, h As Object, staroOcek As Collection
     If izvori.count > 0 Then
-        Set h = OtpZaglavljeVerzije(otpStara, src)
+        Set h = OtpZaglavljeVerzije(otpStara, src, izvori)
         ' Staro ocekivanje se cita PRE nego sto novo zaglavlje postoji: citalac
         ' stavki je strog nad CELOM tabelom (svako zaglavlje mora imati stavku),
         ' a otpremnica' ih dobija tek u OtpUpisiOcekivanjeVerzije. Isti redosled
@@ -5797,13 +5810,18 @@ End Sub
 ' Jedno telo za F2 "Ispravi" (OtpIspravi) i zamenu verzije u lancu (LNC).
 '
 ' ClientRecordID se NE prenosi (A13): identifikuje eksterni zapis, ne lineage.
-Private Function OtpZaglavljeVerzije(ByVal staraID As String, ByVal src As String) As Object
+' izvori: OtkupID-evi koji ulaze u novu verziju -- iz njih se izvodi kultura kad
+' je zaglavlje stare otpremnice nema (OtpKulturaVerzije).
+Private Function OtpZaglavljeVerzije(ByVal staraID As String, ByVal src As String, _
+                                     ByVal izvori As Collection) As Object
     Dim datum As Date
     Dim stanicaID As String, vozacID As String, kulturaID As String, tipAmb As String
+    Dim razlogKulture As String
     datum = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_DATUM))
     stanicaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_STANICA)))
     vozacID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_VOZAC)))
-    kulturaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_KULTURA)))
+    kulturaID = OtpKulturaVerzije(staraID, izvori, razlogKulture)
+    If Len(razlogKulture) > 0 Then Err.Raise vbObjectError + 1992, src, razlogKulture
     tipAmb = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_TIP_AMB)))
 
     Dim h As Object
@@ -5839,6 +5857,63 @@ Private Function OtpZaglavljeVerzije(ByVal staraID As String, ByVal src As Strin
     h("BrojOtpremnice") = noviBroj
 
     Set OtpZaglavljeVerzije = h
+End Function
+
+' KULTURA NOVE VERZIJE OTPREMNICE (rucna provera operatera 07.11.2026).
+'
+' Kanonsko zaglavlje nosi KulturaID i nova verzija ga nasledjuje. Zaglavlje
+' STAROG oblika (verzija programa koja kulturu nije pisala na otpremnicu) je
+' nema, a OtpNapraviDraft je trazi -- pa su potez u lancu i F2 "Ispravi" nad
+' takvom otpremnicom padali posle storna ("Header polje je prazno: KulturaID"),
+' uz rollback. Kultura otpremnice MORA biti kultura svakog izvora
+' (OtpRequireIzvorValjan), pa se izvodi iz izvora koji ulaze u novu verziju:
+' svi moraju imati istu, nepraznu kulturu. Inace outRazlog kaze zasto: plan
+' poteza ga prikazuje PRE potvrde (LncPlanLista), a pisac ga dize kao gresku.
+'
+' Ne izvodi se iz VrstaVoca/SortaVoca starog zaglavlja: to bi bio drugi izvor
+' istine, koji bi izvor posle mogao da pobije.
+Private Function OtpKulturaVerzije(ByVal staraID As String, ByVal izvori As Collection, _
+                                   ByRef outRazlog As String) As String
+    Const IZLAZ As String = " Lanac se rasturuje rucno: storno zbirne i otpremnice na F8, " & _
+                            "pa nova otpremnica na F2."
+    Dim kultura As String, prva As String, broj As String, k As String
+    Dim i As Long, n As Long
+    outRazlog = ""
+
+    kultura = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_KULTURA)))
+    If Len(kultura) > 0 Then
+        OtpKulturaVerzije = kultura
+        Exit Function
+    End If
+
+    broj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, COL_OTP_BROJ)))
+    If Not izvori Is Nothing Then n = izvori.count
+    If n = 0 Then
+        outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture) i nema " & _
+                    "listova iz kojih bi nova verzija dobila kulturu."
+        Exit Function
+    End If
+
+    For i = 1 To n
+        k = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izvori(i)), COL_OTK_KULTURA)))
+        If Len(k) = 0 Then
+            outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture), a list " & _
+                        Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izvori(i)), _
+                                                   COL_OTK_BR_DOK))) & _
+                        " nema kulturu -- nova verzija otpremnice ne moze da dobije kulturu." & IZLAZ
+            Exit Function
+        End If
+        If Len(prva) = 0 Then
+            prva = k
+        ElseIf StrComp(k, prva, vbTextCompare) <> 0 Then
+            outRazlog = "Otpremnica " & broj & " je starog oblika (zaglavlje bez kulture), a njeni " & _
+                        "listovi imaju razlicite kulture (" & prva & ", " & k & ") -- otpremnica " & _
+                        "nosi jednu kulturu." & IZLAZ
+            Exit Function
+        End If
+    Next i
+
+    OtpKulturaVerzije = prva
 End Function
 
 ' --- core: ispravka izdate -------------------------------------------------
@@ -5884,7 +5959,7 @@ Private Function OtpIspravi(ByVal staraID As String, _
     Set ocekivano = OtpOcekivanjeKolekcija(staraID, SRC)
 
     Dim h As Object
-    Set h = OtpZaglavljeVerzije(staraID, SRC)
+    Set h = OtpZaglavljeVerzije(staraID, SRC, clanovi)
 
     ' Storno stare IDE PRE nego sto nova primi izvore: izvor sme da bude u
     ' tacno jednoj aktivnoj otpremnici (OtpRequireIzvorValjan), pa bi obrnut

@@ -233,6 +233,28 @@ rezu KI-089 (07.11.2026) za obe rute ispravke, ali u Excelu još nije proveren: 
 bez starog lista (`AMBALAZA.md` 6.5). Storno otpremnice i zbirne u potezu ne dira nalog
 kooperanta, pa isti račun važi i u lancu (`Test_LNC_KI089_PotvrdaIspravkeULancu`).
 
+**Ručna provera operatera (07.11.2026).** Potez je prošao na svežem lancu: storno lista
+4/071126-2 je napravio novu verziju otpremnice i zbirne i prevezao prijemnicu. Nad listom
+5/250626-13 je pao sa porukom „Header polje je prazno: KulturaID". Njegova otpremnica je zapis
+**starog oblika**: verzija programa koja ju je napravila nije pisala kulturu na zaglavlje.
+Potez je zaglavlje nove verzije prepisivao sa stare, a pisac otpremnice prazno zaglavlje odbija.
+Transakcija se vratila, pa podaci nisu dirani. Isto je padao i F2 „Ispravi" nad takvom
+otpremnicom.
+
+Pravilo od tada: kultura otpremnice mora biti kultura svakog lista (`OtpRequireIzvorValjan`),
+pa se nova verzija starog zaglavlja vodi **kulturom listova koji u nju ulaze**
+(`OtpKulturaVerzije`, isti za potez i za F2). Kad listovi nemaju jednu, nepraznu kulturu, plan
+odbija **pre potvrde** i imenuje list, a lanac se rasturuje ručno. Kultura se ne izvodi iz
+`VrstaVoca`/`SortaVoca` starog zaglavlja, jer bi to bio drugi izvor istine. Test:
+`Test_LNC_StaraOtpremnicaBezKulture`.
+
+**Neprovereno (zbirna).** Zaglavlje zbirne ne nosi kulturu. Nova verzija traži datum, vozača i
+kupca, a te kolone postoje od prve verzije šeme. Zbirna ipak poredi `VrstaVoca`/`SortaVoca`
+svojih otpremnica (`ZbrRequireIzvorValjan`). Nova verzija otpremnice ih upisuje iz šifarnika
+kultura, dok sestra starog oblika nosi svoj stari tekst. Ako se ta dva teksta razlikuju, potez
+nad zbirnom sa takvom sestrom pada u transakciji (rollback). Bez podataka iz sveske to nije
+izmereno.
+
 **Nije pokriveno testom:** sam poziv potvrde iz `Scr_Save` (odluka se meri kroz
 `Scr_PotvrdaLancaProbaj`, isto telo) i sync posle poteza (`LNC-INV-09` drži konstrukcija:
 preostali listovi i otpremnice ulaze u nove verzije). Oba idu u ručnu proveru.

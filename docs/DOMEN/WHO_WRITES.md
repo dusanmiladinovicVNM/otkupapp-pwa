@@ -158,7 +158,7 @@ tabela kroz jedan ulaz). Stoje ovde da mapa ne izgleda potpunija nego sto
 jeste -- kapija koja precuti sopstvenu granicu je gora od one koja je
 imenuje.
 
-- `modBusinessFlowProTests`: 4
+- `modBusinessFlowProTests`: 5
 - `modDokumentInvariant`: 1
 - `modDokumenta`: 3
 - `modFakturaTests`: 1
@@ -174,7 +174,7 @@ imenuje.
 - `modTest`: 1
 - `modTestPalete`: 1
 
-Ukupno: 30 poziva u 15 modula.
+Ukupno: 31 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

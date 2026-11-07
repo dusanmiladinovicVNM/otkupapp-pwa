@@ -7579,6 +7579,25 @@ SABOTAZE = {
         "Test_LNC_NacrtZbirneUMestu",
         "LNC nacrt zbirne: nacrt ima tacno jedan izvor",
     ),
+    # Stara otpremnica bez kulture na zaglavlju (rucna provera 07.11.2026): nova
+    # verzija ne izvodi kulturu iz listova -- pisac otpremnice odbija prazno
+    # zaglavlje i potez pada posle storna (zatecen oblik nalaza).
+    "lnc-stara-otp-bez-izvodjenja": (
+        "modDokumenta.bas",
+        "    OtpKulturaVerzije = prva\n",
+        "    OtpKulturaVerzije = \"\"   ' SABOTAZA: kultura se ne izvodi iz listova\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: potez prolazi i bez kulture na zaglavlju",
+    ),
+    # Plan ne pita za kulturu stare otpremnice: potez bez jedne kulture se odbija
+    # tek u transakciji, a F8 pre potvrde ne kaze zasto.
+    "lnc-stara-otp-plan-bez-kapije": (
+        "modDokumenta.bas",
+        "        OtpKulturaVerzije otpID, p(\"otpPreostali\"), razlogKulture\n",
+        "        ' SABOTAZA: plan ne pita za kulturu stare otpremnice\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: plan odbija listove bez jedne kulture pre poteza",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (
