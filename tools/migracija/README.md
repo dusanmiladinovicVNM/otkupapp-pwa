@@ -11,6 +11,7 @@ uvek od nule nad celom sveskom — nema delte.
 | `ambalaza.py` | stara knjiga (noge Ulaz/Izlaz) → AMB-10 kretanja, dug kooperanta, salda |
 | `dokumenti.py` | tabele naspram `schema/schema.json`, dokumenti sa više redova |
 | `pregled.py` | Excel pregled (prave Excel tabele sa filterom) |
+| `lanac.py` | lanac OTK → OTP → ZBR → PRJ stare sveske: prijemnica na pogrešnoj zbirnoj (sa predlogom prave) i storno koji nije prešao lanac |
 | `izuzeci.json` | ručne odluke po starom `AmbID`, svaka sa potpisom reda |
 | `test_migracija.py` | testovi nad izmišljenom sveskom (CI) |
 
@@ -53,6 +54,44 @@ Dva režima knjiženja (`--knjizenje`):
 
 Izvorna sveska se ne menja: SHA256 pre i posle čitanja mora biti isti, inače
 alat javi grešku.
+
+## Provera lanca — pre migracije (samo čita)
+
+```bash
+python tools/migracija/migracija.py lanac --izvor "C:/.../stara.xlsm"
+```
+
+Pravi `lanac.xlsx` i `lanac_sazetak.txt` u `Migracija_pregled/` pored izvora
+(nikad u repo). Spisak je ulaz za ispravke u staroj svesci (MIG-ODL-20); alat
+ništa ne menja i ne bira umesto operatera.
+
+- **Prijemnice** — prijemnica koja je nasledila broj zbirne prethodne (greška
+  stare forme): kasniji unos na zbirnoj sa više prijemnica, zbirna na kojoj
+  ostaje prva, **predlog** prave zbirne (bez prijemnice, isti vozač, kupac,
+  vrsta i sorta, ±`--dana` dana, podrazumevano 3, najbliža po kg pa po gajbama),
+  pouzdanost i signali (vozač ≠ vozač zbirne, prefiks broja ≠ stanica, gajbe se
+  slažu).
+- **ZbirneBezPrijemnice** — svaka aktivna zbirna bez aktivne prijemnice; roba
+  mora negde da ode, pa je svaka alarm. Kolona *PredlozenaZa* kaže koja
+  prijemnica joj verovatno pripada.
+- **Nalazi** — sve, sa težinom i pravilom:
+
+| Pravilo | Šta znači |
+|---|---|
+| `ZBR_VISE_PRIJEMNICA` / `ZBR_BEZ_PRIJEMNICE` | par koji ostavlja nasleđen broj zbirne |
+| `PRJ_VOZAC_NIJE_VOZAC_ZBIRNE` | druga stanica — migracija takvoj prijemnici ne nađe roditelja |
+| `PRJ_ZBIRNA_STORNIRANA` / `PRJ_ZBIRNA_NIJE_NADJENA` | prijemnica bez aktivne zbirne |
+| `OTK_U_STORNIRANOJ_OTPREMNICI` / `_ZBIRNOJ`, `OTK_PRIJEMNICA_STORNIRANA` | aktivan otkup, storno iznad njega |
+| `OTP_SA_STORNIRANIM_OTKUPOM` | aktivna otpremnica sa storniranim blokom — migracija ga prenosi kao aktivnog člana (`MIGRACIJA_LEGACY.md`, Otvoreno) |
+| `OTP_U_STORNIRANOJ_ZBIRNOJ`, `OTP_PRIJEMNICA_STORNIRANA` | aktivna otpremnica, storno iznad nje |
+| `ZBR_SVE_OTPREMNICE_STORNIRANE` | zbirna kojoj su sve otpremnice stornirane — kandidat za storno; PAŽNJA ako ima aktivnu prijemnicu |
+| `ZBR_SAMO_STORNIRANE_PRIJEMNICE` | zbirna kojoj su sve prijemnice stornirane |
+| `ZBR_SA_STORNIRANOM_OTPREMNICOM`, `ZBR_SA_STORNIRANIM_OTKUPOM`, `ZBR_BEZ_OTPREMNICE` | PROVERI — može biti ispravno |
+
+Veze su iste kao u migraciji: otkup → otpremnica po `tblOtkup.OtpremnicaID`,
+otpremnica → zbirna po `BrojZbirne` (`cilj._nadji_zbirnu`), prijemnica → zbirna
+po `BrojZbirne` (aktivna pre stornirane; više zbirnih istog broja razrešava
+vozač + kupac).
 
 ## Faza 2 — nova sveska
 
