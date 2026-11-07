@@ -80,6 +80,12 @@ A13 već drži za otpremnicu (S3c).
 > S6.** F8 i posle S6 nudi `DUPLI` i `PONIŠTENJE`. `IspravkaZbirne_TX`, po ogledalu
 > `IspravkaOtpremnice_TX`, je svoj rez **posle** S6 i KI-025/026 — tada je
 > prijemnica jedan dokument sa kanonskom vezom, pa je prevezivanje dece mali posao.
+>
+> **Pre-flight 06.11.2026 (`LNC-*`, `docs/DOMEN/STORNO_U_LANCU.md`):** zamena se
+> pokreće sa **izvora** — storno ili ispravka otkupnog lista u izdatoj otpremnici i
+> zbirnoj, jedan potez: nova verzija otpremnice i zbirne, prijemnice prevezane po ID-u.
+> F8 nad zbirnom i dalje nudi samo `DUPLI` / `PONIŠTENJE`. U kodu od PR #471
+> (`modDokumenta.StornoListaULancu_TX` / `IspravkaListaULancu_TX`), NEVERIFIKOVANO u Excelu.
 
 **ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
 operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu
@@ -150,7 +156,7 @@ Plan i dokaz: `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.55, „Korak 7" (ko
 
 **ZBR-OWN-01 — da li je zbirna interni hladnjački tok je činjenica zbirne, upisana
 pri nastanku (review #442, P1-b; odluka operatera 25.10.2026).** `tblZbirna.KupacHladnjaca`
-(`Da`/`Ne`, poslednja kolona kanona) piše **samo pisac zbirne**
+(`Da`/`Ne`, 26. kolona kanona) piše **samo pisac zbirne**
 (`BuildZbirnaHeaderRowData` pri nastanku, izmena kupca u nacrtu), po pravilu
 `IsHladnjacaKupac(kupac)` u tom trenutku. PONIŠTENJE zbirne po njoj odlučuje sme li da
 stornira prijemnicu i palete (`modStornoFlow.ZbirnaOwnsExternalChain`). Do review-a se
@@ -436,6 +442,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
 | Funkcionalne bele zone i product roadmap | `docs/DOMEN/FUNKCIONALNE_BELE_ZONE_I_ROADMAP.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
+| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..20`, `LNC-INV-01..11`) | `docs/DOMEN/STORNO_U_LANCU.md` — **u kodu (PR #471); BFP zelen 07.11.2026 (3195/3195), dokaz zelen za `lnc-stara-otp-*` i `ki089-*`; dokaz ostalih `lnc-*`/`odl40-*`, Compile i rucna provera cekaju** |
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |

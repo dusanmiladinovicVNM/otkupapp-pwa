@@ -1190,6 +1190,12 @@ Public Const SV_MODE_DUPLI As String = "DUPLI_FANTOM"
 Public Const SV_MODE_PONISTENJE As String = "PONISTENJE_BEZ_ZAMENE"
 Public Const SV_MODE_RESI_KASNIJE As String = "RESI_KASNIJE"
 
+' LNC-ODL-20: jedan potez u lancu (storno / ispravka otkupnog lista u izdatoj
+' otpremnici i zbirnoj) pise RED PO PARU (list, otpremnica, zbirna). Svi redovi
+' poteza nose ParentDocType = LANAC; red lista je KOREN (ParentDocID prazan), a
+' redovi otpremnice i zbirne nose ParentDocID = CorrectionID korena.
+Public Const SV_PARENT_LANAC As String = "LANAC"
+
 ' Statusi correction context-a
 Public Const SV_STATUS_PENDING As String = "PENDING"
 Public Const SV_STATUS_COMPLETED As String = "COMPLETED"

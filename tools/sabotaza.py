@@ -1073,10 +1073,13 @@ SABOTAZE = {
     ),
     # Kapija A13 pada: blok IZDATE otpremnice se ispravlja u mestu, pa izdat papir
     # vise ne opisuje robu koju nosi.
+    # Review #471, nalaz 19: stara zamena je IZDATO slala u granu "nepoznat status",
+    # pa je ispravka i dalje bila odbijena i tvrdnja nije mogla da padne. Sabotaza
+    # sada gasi bas dodelu razloga za izdatog roditelja.
     "ispravka-bloka-izdata-prolazi": (
         "modOtkup.bas",
-        "        If stat = UCase$(IZDATO_IZDATO) Or stat = UCase$(IZDATO_PROSLEDJENO) Then\n",
-        "        If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
+        "            If Not uLancu Then\n",
+        "            If False Then   ' SABOTAZA: izdata otpremnica pusta ispravku\n",
         "Test_OTK_IspravkaBlokaUNacrtu",
         "Ispravka bloka: izdata otpremnica odbija ispravku",
     ),
@@ -7440,6 +7443,212 @@ SABOTAZE = {
         "            If False Then   ' SABOTAZA: negativan fizicki saldo je OK\n",
         "Test_Amb_StornoNePraviMinus",
         "STORNO: dokument cija je ambalaza otisla dalje se NE stornira (AMB-INV-07)",
+    ),
+    # AMB-10-ODL-40: kraj odlozenog merenja ne meri AMB-INV-07 -- zamena verzije
+    # lanca koja NE vrati pokrice ostavi realan nalog u minusu, tiho.
+    "odl40-zavrsi-bez-inv07": (
+        "modAmbalaza.bas",
+        "    RequireSaldoNaloga nalozi, sourceName\n",
+        "    ' SABOTAZA: posle zamene se AMB-INV-07 ne meri\n",
+        "Test_AMB_ODL40_BezPokricaPadaNaKraju",
+        "ODL-40: zamena bez pokrica pada na AMB-INV-07 posle cele zamene",
+    ),
+    # AMB-10-ODL-40: kontra-stav u zameni meri odmah, kao van zamene -- potez lanca
+    # pada na medjukoraku (vozac je gajbe vec predao), iako je posle-stanje tacno.
+    "odl40-kontra-meri-odmah": (
+        "modAmbalaza.bas",
+        "    If AmbOdlozenoOtvorenoZa(tx) Then\n",
+        "    If False Then   ' SABOTAZA: kontra-stav meri odmah i u zameni\n",
+        "Test_AMB_ODL40_MeriPosleZamene",
+        "ODL-40: u zameni kontra-stav ne meri odmah (merenje je odlozeno)",
+    ),
+    # LNC-ODL-02: prijemnica ostaje na STARU zbirnu -- posle poteza je siroce u
+    # Oporavku, a hladnjacki "Ponovi auto-lanac" bi pravio drugu.
+    "lnc-prijemnica-ostaje-na-staroj": (
+        "modDokumenta.bas",
+        "            LncPreveziPrijemnicu CStr(p(\"prijemnice\")(k)), zbrNova, CStr(rez(\"zbrNovaBroj\")), src\n",
+        "            ' SABOTAZA: prijemnica ostaje na staroj zbirni\n",
+        "Test_LNC_StornoListaUIzdatojZbirnoj",
+        "LNC: prijemnica je prevezana na novu verziju zbirne (ZbirnaRoditeljID)",
+    ),
+    # H2 / A15: sestre ne ulaze u novu zbirnu -- netaknuta otpremnica ostaje van
+    # aktivne zbirne, i sledeci sync joj pravi auto-zbirnu.
+    "lnc-sestre-ispadaju": (
+        "modDokumenta.bas",
+        "        izvZ.Add CStr(p(\"zbrSestre\")(k))\n",
+        "        ' SABOTAZA: sestre ne ulaze u novu zbirnu\n",
+        "Test_LNC_SestrePrezivljavaju",
+        "LNC sestre: nova zbirna nosi i netaknutu otpremnicu",
+    ),
+    # LNC-INV-07: prijemnica sa labelom zbirne a bez ID-a se tiho preskace -- posle
+    # poteza ostaje vezana brojem za storniranu zbirnu.
+    "lnc-prijemnica-po-labeli-tiho": (
+        "modDokumenta.bas",
+        "            ElseIf Len(rod) = 0 And Len(brojZbirne) > 0 And _\n",
+        "            ElseIf False And _\n",
+        "Test_LNC_PrijemnicaBezIDaOdbijena",
+        "LNC: prijemnica bez ZbirnaRoditeljID zaustavlja potez",
+    ),
+    # LNC-ODL-07: kapija poslednjeg izvora ugasena -- zbirna se stornira bez
+    # naslednika, a aktivna prijemnica ostaje bez roditelja.
+    "lnc-poslednji-izvor-bez-kapije": (
+        "modDokumenta.bas",
+        "    If ostaje = 0 And p(\"prijemnice\").count > 0 Then\n",
+        "    If False Then   ' SABOTAZA: poslednji izvor bez kapije\n",
+        "Test_LNC_PoslednjiIzvor",
+        "LNC poslednji izvor: potez sa aktivnom prijemnicom je odbijen",
+    ),
+    # LNC-ODL-12: ispravljen list ne ulazi u novu verziju otpremnice -- ostaje
+    # slobodan, a sledeci sync mu pravi svoju otpremnicu (LNC-INV-09).
+    "lnc-ispravka-bez-novog-lista": (
+        "modDokumenta.bas",
+        "    If Len(noviOtkupID) > 0 Then izvori.Add noviOtkupID\n",
+        "    ' SABOTAZA: ispravljen list ne ulazi u novu otpremnicu\n",
+        "Test_LNC_IspravkaListaULancu",
+        "LNC ispravka: nova otpremnica nosi ispravljen list",
+    ),
+    # LNC-ODL-10: kapija promene stanice/kulture/ambalaze cuti -- odbijanje stize
+    # tek iz dubine pisca, bez poruke koja operateru kaze sta da uradi.
+    "lnc-ispravka-menja-lanac-tiho": (
+        "modDokumenta.bas",
+        "            If StrComp(novo, staro, vbTextCompare) <> 0 Then\n",
+        "            If False Then   ' SABOTAZA: promena ambalaze bez kapije\n",
+        "Test_LNC_IspravkaMenjaAmbalazuOdbijena",
+        "LNC ispravka: odbijanje imenuje tip ambalaze i upucuje na storno",
+    ),
+    # LNC-ODL-18: undo ne pita za potez u lancu -- vracen list ozivi van svake
+    # otpremnice (izgubljen blok; kod ispravke dupli zbir).
+    "lnc-undo-vraca-deo-poteza": (
+        "modStornoZurnal.bas",
+        "    If Len(raz) = 0 Then raz = LancaRazlog(opID)\n",
+        "    ' SABOTAZA: undo ne pita za potez u lancu\n",
+        "Test_LNC_UndoPotezaOdbijen",
+        "LNC undo: storno lista iz poteza u lancu se ne vraca",
+    ),
+    # LNC-ODL-05: F8 storno lista u otpremnici ide obicnim stornom -- jezgro ga
+    # odbija kao izvor aktivne otpremnice, i operater ostaje na rucnom putu.
+    "lnc-f8-obican-storno": (
+        "modStornoDok.bas",
+        "            If Len(modDokumenta.OtpremnicaZaOtkup(Trim$(docID))) > 0 Then\n",
+        "            If False Then   ' SABOTAZA: list u lancu ide obicnim stornom\n",
+        "Test_LNC_F8StornoListaULancu",
+        "LNC F8: F8 storno je napravio novu verziju zbirne",
+    ),
+    # LNC-ODL-11: potvrda ispravke u lancu ne zna za posledice -- snimanje bi
+    # promenilo otpremnicu i zbirnu bez pitanja.
+    "lnc-f1-bez-potvrde": (
+        "modScrDokumenti.bas",
+        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)\n",
+        "    opis = \"\"   ' SABOTAZA: ispravka u lancu bez potvrde\n",
+        "Test_LNC_F1IspravkaULancu",
+        "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama",
+    ),
+    # ZBR-OWN-01: nova verzija zbirne preracunava KupacHladnjaca iz danasnjeg
+    # configa umesto da nasledi oznaku nastanka (review #471, nalaz 25).
+    "lnc-kupac-hladnjaca-preracun": (
+        "modDokumenta.bas",
+        "        RequireUpdateCell TBL_ZBIRNA, rNova, COL_ZBR_KUPAC_HLADNJACA, _\n",
+        "        If False Then RequireUpdateCell TBL_ZBIRNA, rNova, COL_ZBR_KUPAC_HLADNJACA, _\n",
+        "Test_LNC_StornoListaUIzdatojZbirnoj",
+        "LNC: nova zbirna nasledjuje KupacHladnjaca (ZBR-OWN-01)",
+    ),
+    # AMB-10-ODL-40: zaostalo odlaganje zatvorene transakcije se ne zamenjuje --
+    # svaki sledeci potez u lancu meri kontra-stav odmah (review #471, nalaz 24).
+    "odl40-zaostalo-ne-zamenjuje": (
+        "modAmbalaza.bas",
+        "        LogWarn sourceName, \"AMB-10-ODL-40: zaostalo odlaganje zatvorene transakcije je odbaceno.\"\n",
+        "        Exit Sub   ' SABOTAZA: zaostalo stanje se ne zamenjuje\n",
+        "Test_AMB_ODL40_CommitBezZavrsetkaOdbijen",
+        "ODL-40: zaostalo odlaganje vracene transakcije ne blokira sledecu",
+    ),
+    # LNC-ODL-12: ruta ispravke ne prepoznaje list u izdatoj otpremnici -- F1
+    # snimanje ide u IspravkaOtkupa_TX, koji ga odbija (review #471, nalaz 18).
+    "lnc-unos-ruta-bez-lanca": (
+        "modOtkupUnos.bas",
+        "        If modDokumenta.OtpremnicaJeIzdata(otpID) Then\n",
+        "        If False Then   ' SABOTAZA: ispravka ne ide u potez u lancu\n",
+        "Test_LNC_IspravkaKrozUnos",
+        "LNC unos: ispravka lista u izdatoj otpremnici prolazi kroz unos",
+    ),
+    # LNC-ODL-13: u nacrtu zbirne otpremnica' ne ulazi u clanstvo -- izdata
+    # otpremnica ostaje van svake zbirne (review #471, nalaz 26).
+    "lnc-nacrt-zbirne-bez-nove": (
+        "modDokumenta.bas",
+        "            ZbrUpisiClanstvo zbrStara, otpNova, src\n",
+        "            ' SABOTAZA: otpremnica' ne ulazi u nacrt zbirne\n",
+        "Test_LNC_NacrtZbirneUMestu",
+        "LNC nacrt zbirne: nacrt ima tacno jedan izvor",
+    ),
+    # Stara otpremnica bez kulture na zaglavlju (rucna provera 07.11.2026): nova
+    # verzija ne izvodi kulturu iz listova -- pisac otpremnice odbija prazno
+    # zaglavlje i potez pada posle storna (zatecen oblik nalaza).
+    "lnc-stara-otp-bez-izvodjenja": (
+        "modDokumenta.bas",
+        "    OtpKulturaVerzije = prva\n",
+        "    OtpKulturaVerzije = \"\"   ' SABOTAZA: kultura se ne izvodi iz listova\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: potez prolazi i bez kulture na zaglavlju",
+    ),
+    # Plan ne pita za kulturu stare otpremnice: potez bez jedne kulture se odbija
+    # tek u transakciji, a F8 pre potvrde ne kaze zasto.
+    "lnc-stara-otp-plan-bez-kapije": (
+        "modDokumenta.bas",
+        "        OtpKulturaVerzije otpID, mereni, razlogKulture\n",
+        "        ' SABOTAZA: plan ne pita za kulturu stare otpremnice\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: plan odbija listove bez jedne kulture pre poteza",
+    ),
+    # F2 "Ispravi" ne prosledjuje izvore: stara otpremnica bez kulture opet pada.
+    "lnc-stara-otp-f2-bez-izvora": (
+        "modDokumenta.bas",
+        "    Set h = OtpZaglavljeVerzije(staraID, SRC, clanovi)\n",
+        "    Set h = OtpZaglavljeVerzije(staraID, SRC, New Collection)   ' SABOTAZA: F2 bez izvora\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: F2 Ispravi prolazi i bez kulture na zaglavlju",
+    ),
+    # Razlicite kulture listova se ne prijavljuju: plan pusti, a potez pada tek u
+    # transakciji (OtpRequireIzvorValjan) bez razloga pre potvrde.
+    "lnc-stara-otp-mesane-kulture-tiho": (
+        "modDokumenta.bas",
+        "        ElseIf StrComp(k, prva, vbTextCompare) <> 0 Then\n",
+        "        ElseIf False Then   ' SABOTAZA: razlicite kulture se ne prijavljuju\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: plan imenuje listove razlicitih kultura",
+    ),
+    # Plan ispravke meri samo preostale listove: F1 otvara formu, a snimanje pada.
+    "lnc-stara-otp-ispravka-bez-lista": (
+        "modDokumenta.bas",
+        "    If zaIspravku Then mereni.Add otkupID\n",
+        "    ' SABOTAZA: ispravka ne meri list koji se ispravlja\n",
+        "Test_LNC_StaraOtpremnicaBezKulture",
+        "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
+    ),
+    # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
+    # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
+    "ki089-ekran-meri-sa-starim-listom": (
+        "modOtkupUnos.bas",
+        "        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke, ispravljaOtkupID)\n",
+        "        ambDeficit = modOtkup.OtkupDeficitKooperanta(h, stavke)   ' SABOTAZA: KI-089 sa starim listom\n",
+        "Test_OTK_KI089_PotvrdaIspravkeKaoPisac",
+        "KI089 ispravka: pitanje imenuje manjak koji meri pisac",
+    ),
+    # KI-089: citac salda prima dokument koji treba da izostavi, ali ga ne
+    # izostavlja -- ekran poteza u lancu opet pita za manjak sa starim listom.
+    "ki089-citac-ne-izostavlja": (
+        "modAmbalaza.bas",
+        "    If Len(bezID) = 0 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: KI-089 citac ne izostavlja dokument\n",
+        "Test_LNC_KI089_PotvrdaIspravkeULancu",
+        "KI089 lanac: pitanje imenuje manjak koji meri pisac",
+    ),
+    # AMB-10-ODL-40: commit ne pita za otvoreno odlaganje -- zaboravljen zavrsetak
+    # tiho commit-uje storno bez AMB-INV-07/09/16.
+    "odl40-commit-bez-kapije": (
+        "clsTransaction.cls",
+        "    If modAmbalaza.AmbOdlozenoOtvorenoZa(Me) Then\n",
+        "    If False Then   ' SABOTAZA: commit bez zavrsetka odlaganja\n",
+        "Test_AMB_ODL40_CommitBezZavrsetkaOdbijen",
+        "ODL-40: commit sa otvorenim odlaganjem je odbijen",
     ),
     # Ledger-storno ponovo vezuje dokument sam: tada AKTIVAN otkup moze da dobije
     # anuliran ambalazni efekat bez ijedne izmene zaglavlja.

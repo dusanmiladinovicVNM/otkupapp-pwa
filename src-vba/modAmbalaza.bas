@@ -41,6 +41,24 @@ Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
 ' commit-ovao. Tvrdo gejtovan test rezimom; modTest.ResetSeamova ga gasi.
 Private mIspravkaPadPreCommit As Boolean
 
+' AMB-10-ODL-40 (LNC-ODL-15): ODLOZENO MERENJE U ZAMENI VERZIJE LANCA.
+'
+' Potez koji u JEDNOJ transakciji stornira izdatu otpremnicu i izda njenu novu
+' verziju ne sme da padne na medjukoraku: kontra-stav stare (Vozac -> Stanica, N)
+' vozacu oduzima gajbe koje je vec predao kupcu, a nova verzija (N - k) ih vraca
+' tek posle. Dok je odlaganje otvoreno ZA TU transakciju, kontra-stav skuplja
+' naloge i originale umesto da meri; AmbOdloziInvarijanteZavrsi meri AMB-INV-07,
+' -16 i -09 nad svima njima, posle cele zamene.
+'
+' Vezano za OBJEKAT transakcije, ne za "tekuci" upis: druga transakcija (npr.
+' ugnjezdeni CreateCorrectionContext) meri kao i do sada. Zaboravljen zavrsetak
+' ne prolazi tiho -- clsTransaction.CommitTx odbija commit dok je odlaganje
+' otvoreno za nju (AmbOdlozenoOtvorenoZa).
+Private Const AMB_ERR_ODLOZENO As Long = vbObjectError + 4479
+Private mOdlTx As clsTransaction
+Private mOdlNalozi As Object
+Private mOdlOriginali As Collection
+
 ' ============================================================
 ' Helpers
 ' ============================================================
@@ -590,6 +608,20 @@ Private Function RedDoticeKnjigu(ByRef data As Variant, ByVal i As Long, _
     Next j
 End Function
 
+' RED IZOSTAVLJENOG DOKUMENTA (KI-089, AmbSaldoNaloga bez dokumenta). Prazan
+' bezID znaci "nista se ne izostavlja". Poredi se identitet dokumenta (tip + ID),
+' ne StornoOd: kontra-stav nosi isti identitet kao original, pa izlazi zajedno
+' sa njim.
+Private Function RedDokumentaIzostavljen(ByRef data As Variant, ByVal i As Long, _
+                                         ByRef kol As Object, _
+                                         ByVal bezTip As String, _
+                                         ByVal bezID As String) As Boolean
+    If Len(bezID) = 0 Then Exit Function
+    RedDokumentaIzostavljen = _
+        (StrComp(AmbText(data(i, kol(COL_AMB_DOK_TIP))), bezTip, vbTextCompare) = 0) And _
+        (StrComp(AmbText(data(i, kol(COL_AMB_DOK_ID))), bezID, vbTextCompare) = 0)
+End Function
+
 ' PRAZAN RED NIJE RED. Prazna Excel tabela ima jedan prazan red u DataBodyRange,
 ' pa bi ga svaka kapija inace prijavila kao kvar na praznoj knjizi. Meri se po SVIM
 ' kolonama koje knjiga uopste cita -- nijedno polje nije popunjeno.
@@ -840,8 +872,19 @@ End Function
 ' NEMA "On Error -> vrati 0". Nekadasnji GetStanicaAmbSaldo je tako radio i to je
 ' fail-open koji ovde ne sme da postoji: na ovaj broj se oslanja kapija deficita,
 ' pa bi progutana greska proizvela upis BEZ pokrica -- tj. negativan saldo.
+'
+' BEZ JEDNOG DOKUMENTA (KI-089): bezDokTip + bezDokID izostavljaju SVE redove
+' tog dokumenta -- originale i kontra-stavove. To je tacno saldo koji transakcija
+' vidi POSLE storna tog dokumenta: StornirajAmbalazuDokumenta kontrira svaki
+' aktivan original, pa je posle storna neto svih redova dokumenta nula. Ekran
+' ispravke time meri manjak onako kako ce ga meriti pisac (posle storna starog
+' dokumenta, u istoj transakciji), a ne nad stanjem u kome stari jos stoji.
+' Oba prazna = obican saldo. Samo jedno od dva = greska: pola identiteta bi
+' tiho iskljucilo pogresne redove ili nijedan.
 Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
-                               ByVal tipAmb As String) As Double
+                               ByVal tipAmb As String, _
+                               Optional ByVal bezDokTip As String = "", _
+                               Optional ByVal bezDokID As String = "") As Double
     Const SRC As String = "modAmbalaza.AmbSaldoNaloga"
 
     Dim p As String
@@ -851,6 +894,14 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
     If Len(Trim$(tipAmb)) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
                   "Saldo se vodi PO TIPU ambalaze -- tip je obavezan."
+    End If
+
+    Dim bezTip As String, bezID As String
+    bezTip = Trim$(bezDokTip)
+    bezID = Trim$(bezDokID)
+    If (Len(bezTip) = 0) <> (Len(bezID) = 0) Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, SRC, _
+                  "Saldo bez dokumenta trazi i tip i ID dokumenta (KI-089)."
     End If
 
     RequireKnjigaSchema SRC
@@ -874,7 +925,7 @@ Public Function AmbSaldoNaloga(ByVal tip As String, ByVal id As String, _
 
     Dim i As Long, saldo As Double
     For i = 1 To UBound(data, 1)
-        If RedDoticeKnjigu(data, i, kol) Then
+        If RedDoticeKnjigu(data, i, kol) And Not RedDokumentaIzostavljen(data, i, kol, bezTip, bezID) Then
             If StrComp(AmbText(data(i, cTipA)), Trim$(tipAmb), vbTextCompare) = 0 Then
                 If IstiNalog(AmbText(data(i, cNaTip)), AmbText(data(i, cNaID)), tip, id) Then
                     saldo = saldo + CDbl(data(i, cKol))
@@ -1377,13 +1428,19 @@ End Function
 ' GRANICA (SpoljniSvet) nema fizicko stanje -- ona je izvor i ponor opticaja
 ' (6.3) -- pa prenos IZ nje nikad nije u manjku. Za svaki realan nalog deficit je
 ' obican racun, i javan je zato sto UI sme da ga PRIKAZE pre upisa.
+'
+' bezDokTip/bezDokID (KI-089): manjak kakav ce pisac izmeriti POSLE storna tog
+' dokumenta u istoj transakciji -- ekran ispravke. Pisac ga ne prosledjuje: on
+' meri nad stanjem u kome je storno vec upisan.
 Public Function AmbDeficitZaPrenos(ByVal odTip As String, ByVal odID As String, _
                                    ByVal tipAmb As String, _
-                                   ByVal kolicina As Double) As Double
+                                   ByVal kolicina As Double, _
+                                   Optional ByVal bezDokTip As String = "", _
+                                   Optional ByVal bezDokID As String = "") As Double
     If Not modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, odTip) Then Exit Function
 
     Dim saldo As Double
-    saldo = AmbSaldoNaloga(odTip, odID, tipAmb)
+    saldo = AmbSaldoNaloga(odTip, odID, tipAmb, bezDokTip, bezDokID)
     If kolicina > saldo Then AmbDeficitZaPrenos = kolicina - saldo
 End Function
 
@@ -2654,6 +2711,15 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
                        Trim$(dokTip), Trim$(dokID), CStr(r(8)), CStr(r(0)), SRC
     Next r
 
+    ' AMB-10-ODL-40: u zameni verzije lanca se NE meri ovde nego posle cele zamene
+    ' (AmbOdloziInvarijanteZavrsi), nad istim nalozima i originalima. Kontra-stav
+    ' je vec upisan, pa rollback i dalje povlaci sve.
+    If AmbOdlozenoOtvorenoZa(tx) Then
+        AmbOdloziPrikupi nalozi, originali
+        StornirajAmbalazuDokumenta = originali.count
+        Exit Function
+    End If
+
     ' DVE INVARIJANTE NAD POSLE-STANJEM.
     '
     ' Kontra-stav ide direktno kroz UpisiRedKnjige, pa ZAOBILAZI sve sto stoji u
@@ -2665,25 +2731,10 @@ Public Function StornirajAmbalazuDokumenta(ByVal tx As clsTransaction, _
     '
     ' Mere se POSTOJECIM citaocima nad upisanim stanjem, ne drugom kopijom pravila
     ' o znaku -- druga kopija bi se razisla sa prvom.
-    Dim k As Variant, nl As Variant
-    Dim saldo As Double
 
-    ' AMB-INV-07: realan nalog ne sme da ostane u minusu. GRANICA (SpoljniSvet)
-    ' je izuzeta po konstrukciji -- ona nema fizicko stanje (6.3), pa nije u
-    ' klasi REALAN i petlja je i ne vidi.
-    For Each k In nalozi.Keys
-        nl = nalozi(k)
-        If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, CStr(nl(0))) Then
-            saldo = AmbSaldoNaloga(CStr(nl(0)), CStr(nl(1)), CStr(nl(2)))
-            If saldo < 0 Then
-                Err.Raise AMB_ERR_STORNO, SRC, _
-                          "AMB-INV-07: storno bi ostavio saldo " & CStr(saldo) & " na " & _
-                          CStr(nl(0)) & " '" & CStr(nl(1)) & "' za '" & CStr(nl(2)) & _
-                          "' -- ta ambalaza je posle ovog dokumenta otisla dalje, pa " & _
-                          "se dokument ne moze stornirati bez njenog vracanja."
-            End If
-        End If
-    Next k
+    ' AMB-INV-07: realan nalog ne sme da ostane u minusu (jedno telo, deli ga
+    ' odlozeno merenje -- RequireSaldoNaloga).
+    RequireSaldoNaloga nalozi, SRC
 
     ' AMB-INV-16: storno koji stanici ODUZIMA prazne (storno nabavke, povrata,
     ' prenosa na stanicu) ne sme da ostavi kasnija izdavanja bez pokrica.
@@ -2785,6 +2836,120 @@ Private Sub RequireObavezeNaloga(ByVal nalozi As Object, ByVal SRC As String)
             End If
         End If
     Next k
+End Sub
+
+' AMB-INV-07 NAD NALOZIMA: realan nalog ne sme da ostane u minusu. GRANICA
+' (SpoljniSvet) je izuzeta po konstrukciji -- ona nema fizicko stanje (6.3), pa
+' nije u klasi REALAN i petlja je i ne vidi. Jedno telo za storno i za kraj
+' odlozenog merenja (AMB-10-ODL-40).
+Private Sub RequireSaldoNaloga(ByVal nalozi As Object, ByVal SRC As String)
+    Dim k As Variant, nl As Variant
+    Dim saldo As Double
+    For Each k In nalozi.Keys
+        nl = nalozi(k)
+        If modAmbalazaUgovor.AmbNalogUKlasi(AMB_KLASA_REALAN, CStr(nl(0))) Then
+            saldo = AmbSaldoNaloga(CStr(nl(0)), CStr(nl(1)), CStr(nl(2)))
+            If saldo < 0 Then
+                Err.Raise AMB_ERR_STORNO, SRC, _
+                          "AMB-INV-07: storno bi ostavio saldo " & CStr(saldo) & " na " & _
+                          CStr(nl(0)) & " '" & CStr(nl(1)) & "' za '" & CStr(nl(2)) & _
+                          "' -- ta ambalaza je posle ovog dokumenta otisla dalje, pa " & _
+                          "se dokument ne moze stornirati bez njenog vracanja."
+            End If
+        End If
+    Next k
+End Sub
+
+' ============================================================
+' ODLOZENO MERENJE U ZAMENI VERZIJE LANCA (AMB-10-ODL-40, LNC-ODL-15)
+' ============================================================
+'
+' Par Pocni / Zavrsi omota potez koji u ISTOJ transakciji stornira izdat dokument
+' i izda njegovu novu verziju. Izmedju njih StornirajAmbalazuDokumenta za tu
+' transakciju upisuje kontra-stav, a naloge i originale samo PRIKUPI. Zavrsi meri
+' AMB-INV-07, -16 i -09 nad svima njima, nad upisanim stanjem -- dakle i sa nogama
+' nove verzije. Pravila se ne menjaju; menja se samo trenutak merenja unutar
+' jedne transakcije, isto kao odloziObavezu kod ispravke otkupa.
+'
+' Ugovor:
+'   - Pocni trazi aktivnu transakciju koja snima tblAmbalaza (AMB-INV-08);
+'   - drugo odlaganje za istu transakciju je greska; za DRUGU AKTIVNU takodje.
+'     Zaostalo stanje transakcije koja je vec zatvorena (rollback bez Otkazi)
+'     je mrtvo i zamenjuje se;
+'   - Zavrsi cisti stanje PRE merenja, pa pad merenja ne ostavlja odlaganje
+'     otvoreno -- pozivalac ionako radi rollback;
+'   - zaboravljen Zavrsi: CommitTx odbija commit (AmbOdlozenoOtvorenoZa).
+Public Sub AmbOdloziInvarijantePocni(ByVal tx As clsTransaction, ByVal sourceName As String)
+    If tx Is Nothing Then
+        Err.Raise AMB_ERR_ODLOZENO, sourceName, _
+                  "Odlozeno merenje ambalaze trazi aktivnu transakciju (AMB-10-ODL-40)."
+    End If
+    If Not tx.ImaSnapshot(TBL_AMBALAZA) Then
+        Err.Raise AMB_ERR_ODLOZENO, sourceName, _
+                  "Odlozeno merenje ambalaze: transakcija ne snima " & TBL_AMBALAZA & _
+                  ", pa kontra-stav ne bi bio vracen rollback-om (AMB-INV-08)."
+    End If
+    If Not mOdlTx Is Nothing Then
+        If mOdlTx Is tx Then
+            Err.Raise AMB_ERR_ODLOZENO, sourceName, _
+                      "Odlozeno merenje ambalaze je vec otvoreno za ovu transakciju."
+        End If
+        If mOdlTx.ImaSnapshot(TBL_AMBALAZA) Then
+            Err.Raise AMB_ERR_ODLOZENO, sourceName, _
+                      "Odlozeno merenje ambalaze je otvoreno za drugu aktivnu transakciju."
+        End If
+        LogWarn sourceName, "AMB-10-ODL-40: zaostalo odlaganje zatvorene transakcije je odbaceno."
+    End If
+    Set mOdlTx = tx
+    Set mOdlNalozi = CreateObject("Scripting.Dictionary")
+    Set mOdlOriginali = New Collection
+End Sub
+
+Public Sub AmbOdloziInvarijanteZavrsi(ByVal tx As clsTransaction, ByVal sourceName As String)
+    If Not AmbOdlozenoOtvorenoZa(tx) Then
+        Err.Raise AMB_ERR_ODLOZENO, sourceName, _
+                  "Odlozeno merenje ambalaze nije otvoreno za ovu transakciju (AMB-10-ODL-40)."
+    End If
+
+    Dim nalozi As Object, originali As Collection
+    Set nalozi = mOdlNalozi
+    Set originali = mOdlOriginali
+    AmbOdloziOcisti
+
+    RequireSaldoNaloga nalozi, sourceName
+    RequirePrazneStorna originali, sourceName
+    RequireObavezeNaloga nalozi, sourceName
+End Sub
+
+' Za EH pozivaoca: ugasi SVOJE odlaganje bez merenja (rollback sledi). Tudje se
+' ne dira.
+Public Sub AmbOdloziInvarijanteOtkazi(ByVal tx As clsTransaction)
+    If tx Is Nothing Then Exit Sub
+    If mOdlTx Is tx Then AmbOdloziOcisti
+End Sub
+
+' Citalac za clsTransaction.CommitTx. Ne dize gresku i nema On Error: zove se iz
+' commit-a, gde bi tudja greska zamenila poslovnu.
+Public Function AmbOdlozenoOtvorenoZa(ByVal tx As clsTransaction) As Boolean
+    If mOdlTx Is Nothing Then Exit Function
+    If tx Is Nothing Then Exit Function
+    AmbOdlozenoOtvorenoZa = (mOdlTx Is tx)
+End Function
+
+Private Sub AmbOdloziPrikupi(ByVal nalozi As Object, ByVal originali As Collection)
+    Dim k As Variant, r As Variant
+    For Each k In nalozi.Keys
+        If Not mOdlNalozi.Exists(k) Then mOdlNalozi.Add k, nalozi(k)
+    Next k
+    For Each r In originali
+        mOdlOriginali.Add r
+    Next r
+End Sub
+
+Private Sub AmbOdloziOcisti()
+    Set mOdlTx = Nothing
+    Set mOdlNalozi = Nothing
+    Set mOdlOriginali = Nothing
 End Sub
 
 ' KRAJ ISPRAVKE: AMB-INV-09 nad svim nalozima starog dokumenta, POSLE zamene.
