@@ -7623,6 +7623,39 @@ SABOTAZE = {
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
     ),
+    # Otpremnica neuskladjena sa listovima (rucna provera 08.11.2026, LNC-ODL-21):
+    # kg otpremnice se ne porede, pa potez tiho menja prijavljenu kolicinu.
+    "lnc-neuskladjena-otp-tiho": (
+        "modDokumenta.bas",
+        "        otpDeo = LncRazlikeTekst(ocek, pov, \" kg\", False, \"otpremnici\", \"zbir listova\")\n",
+        "        otpDeo = \"\"   ' SABOTAZA: kg otpremnice bez upozorenja\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena otpremnica: potvrda pocinje upozorenjem sa obe kolicine",
+    ),
+    # Gajbe otpremnice se ne porede: razlika u gajbama (i u knjizi ambalaze) tiho.
+    "lnc-neuskladjena-otp-bez-gajbi": (
+        "modDokumenta.bas",
+        "        s = LncRazlikeTekst(ocekAmb, povAmb, \" gajbi\", True, \"otpremnici\", \"zbir listova\")\n",
+        "        s = \"\"   ' SABOTAZA: gajbe otpremnice se ne porede\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena otpremnica: razlika u gajbama se takodje prijavljuje",
+    ),
+    # Zbirna se ne poredi sa svojim otpremnicama: zbirna' tiho menja kolicinu.
+    "lnc-neuskladjena-zbr-tiho": (
+        "modDokumenta.bas",
+        "            zbrDeo = LncRazlikeTekst(zOcek, zPov, \" kg\", False, \"zbirnoj\", \"zbir izvora\")\n",
+        "            zbrDeo = \"\"   ' SABOTAZA: zbirna bez upozorenja\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena zbirna: potvrda upozorava i na zbirnoj",
+    ),
+    # Gajbe zbirne se ne porede: zbirna' tiho menja broj gajbi.
+    "lnc-neuskladjena-zbr-bez-gajbi": (
+        "modDokumenta.bas",
+        "            s = LncRazlikeTekst(zOcekAmb, zPovAmb, \" gajbi\", True, \"zbirnoj\", \"zbir izvora\")\n",
+        "            s = \"\"   ' SABOTAZA: gajbe zbirne se ne porede\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena zbirna: razlika u gajbama zbirne se prijavljuje",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

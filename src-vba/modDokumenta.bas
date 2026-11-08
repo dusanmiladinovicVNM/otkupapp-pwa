@@ -37,6 +37,10 @@ Public Const ZBR_RES_UNIQUE As String = "UNIQUE"
 Public Const ZBR_RES_OWNER_MISMATCH As String = "OWNER_MISMATCH"
 Public Const ZBR_RES_AMBIGUOUS As String = "CURRENT_AMBIGUOUS"
 
+' LNC-ODL-21: upozorenje o promeni kolicine pocinje OVIM prefiksom. Po njemu
+' dijalozi potvrde (F8, F1) biraju "Ne" kao podrazumevano (LncTekstImaUpozorenje).
+Private Const LNC_UPOZORENJE As String = "PAZNJA:"
+
 ' Razlog odbijanja novog unosa. Kod, ne poruka: modDokumenta je sloj podataka i
 ' ne nosi korisnicki tekst (prevod je u modDokUnos.ZbirnaGatePoruka).
 Public Const ZBR_GATE_INTEGRITET As String = "INTEGRITET"
@@ -3857,6 +3861,7 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         End If
     End If
 
+
     Dim zbrID As String
     zbrID = AktivnaZbirnaZaOtpremnicu(otpID)
     If Len(zbrID) = 0 Then Exit Function
@@ -3934,12 +3939,16 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
         Exit Function
     End If
 
+    ' LNC-ODL-21: upozorenje o promeni kolicine ide na VRH posledica.
+    m = LncNapomenaKolicine(p, zaIspravku)
+    If Len(m) > 0 Then m = m & vbCrLf & vbCrLf
+
     If Not CBool(p("otpIzdata")) Then
-        m = "List izlazi iz nacrta otpremnice " & p("otpBroj") & " (bez novog broja)."
+        m = m & "List izlazi iz nacrta otpremnice " & p("otpBroj") & " (bez novog broja)."
     ElseIf p("otpPreostali").count > 0 Or zaIspravku Then
-        m = "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
+        m = m & "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
     Else
-        m = "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
+        m = m & "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
     End If
 
     If Len(CStr(p("zbrID"))) > 0 Then
@@ -4007,6 +4016,10 @@ Public Function StornoListaULancu_TX(ByVal otkupID As String, _
 
     Set p = LncPlanLista(otkupID)
     LncRequirePlan p, SRC
+    ' LNC-ODL-21: upozorenje se meri PRE izmena (stari dokumenti), a u log ide tek
+    ' posle commit-a -- vracen potez nije promenio nijednu kolicinu.
+    Dim napomenaKol As String
+    napomenaKol = LncNapomenaKolicine(p, False)
 
     LncRasturi p, tx, SRC
 
@@ -4025,6 +4038,7 @@ Public Function StornoListaULancu_TX(ByVal otkupID As String, _
 
     outPoruka = LncPoruka(p, rez)
     LogInfo SRC, outPoruka
+    If Len(napomenaKol) > 0 Then LogWarn SRC, "LNC-ODL-21, potvrdjeno: " & Replace(napomenaKol, vbCrLf, " | ")
     StornoListaULancu_TX = True
     Exit Function
 
@@ -4039,7 +4053,8 @@ End Function
 ' Isti potez kao storno, samo sto list ne pada bez naslednika: jezgro ispravke
 ' (modOtkup.IspravkaOtkupaUTransakciji) u ISTOJ transakciji stornira stari i
 ' upise nov list (trag, PUT A za novac, prijava preplate), a otpremnica' nosi nov
-' list umesto starog. Ocekivanje otpremnice' = staro - stari + novi, po klasi.
+' list umesto starog. Otpremnica' nosi zbir svojih listova; to je "staro - stari
+' + novi" samo za uskladjenu staru otpremnicu (LNC-ODL-21, LncNapomenaKolicine).
 '
 ' Vraca OtkupID novog lista; "" = nista nije promenjeno, razlog u outGreska.
 ' outErrNum nosi broj greske (AMB_ERR_POTVRDA_DEFICITA je PITANJE operateru, isti
@@ -4080,6 +4095,9 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
 
     Set p = LncPlanLista(stariOtkupID, True)
     LncRequirePlan p, SRC, False
+    ' LNC-ODL-21: upozorenje se meri PRE izmena, a u log ide tek posle commit-a.
+    Dim napomenaKol As String
+    napomenaKol = LncNapomenaKolicine(p, True)
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
                   "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
@@ -4109,6 +4127,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     outPoruka = LncPoruka(p, rez, _
                           Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, noviID, COL_OTK_BR_DOK))))
     LogInfo SRC, outPoruka
+    If Len(napomenaKol) > 0 Then LogWarn SRC, "LNC-ODL-21, potvrdjeno: " & Replace(napomenaKol, vbCrLf, " | ")
     IspravkaListaULancu_TX = noviID
     Exit Function
 
@@ -4331,8 +4350,10 @@ Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
 End Function
 
 ' Ocekivanje nove verzije izdate otpremnice (LNC-ODL-03): kolicina i gajbe po
-' klasi su zbir preostalih izvora. Stara je bila izdata, a izdavanje je dokazalo
-' ocekivano = povezano po klasi, pa je to tacno "staro - list (+ novi list)".
+' klasi su zbir preostalih izvora -- jedino sto izdata verzija sme da nosi
+' (OtpRequireJednakost). To je "staro - list (+ novi list)" samo kad je stara bila
+' uskladjena sa svojim listovima; otpremnica starog oblika ne mora da bude, pa
+' operater razliku vidi u potvrdi (LNC-ODL-21, LncNapomenaKolicine).
 ' PredlogCena klase se prenosi sa stare -- nju izvori ne nose.
 ' staro: ocekivanje STARE verzije (OtpOcekivanjeKolekcija), procitano pre nego sto
 ' je novo zaglavlje nastalo -- v. LncSastavi.
@@ -6126,6 +6147,24 @@ End Sub
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
                                 ByVal ocek As Object, ByVal pov As Object, _
                                 ByVal polje As String, ByVal src As String)
+    Dim klasa As String, o As Double, p As Double
+    If OtpPrvaRazlika(ocek, pov, klasa, o, p) Then
+        Err.Raise vbObjectError + 1324, src, _
+                  "Otpremnica " & otpremnicaID & " nije spremna za izdavanje: " & _
+                  polje & ", klasa " & klasa & " -- ocekivano " & Fmt2Zbr(o) & _
+                  ", povezano " & Fmt2Zbr(p) & ", preostalo " & Fmt2Zbr(o - p) & "."
+    End If
+End Sub
+
+' PRAVILO "OCEKIVANO = POVEZANO" IMA JEDNO TELO: sve klase (unija obe strane) u
+' kojima se razlikuju, svaka kao Array(klasa, ocekivano, povezano). Zovu ga
+' izdavanje (OtpRequireJednakost, preko OtpPrvaRazlika) i upozorenje poteza u
+' lancu (LncNapomenaKolicine). Prazna kolekcija = jednako u svakoj klasi.
+Private Function OtpRazlike(ByVal ocek As Object, ByVal pov As Object) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    Set OtpRazlike = c
+
     Dim sve As Object
     Set sve = CreateObject("Scripting.Dictionary")
 
@@ -6141,14 +6180,142 @@ Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
     For Each k In sve.Keys
         o = OtpBroj(ocek, CStr(k))
         p = OtpBroj(pov, CStr(k))
-        If Abs(o - p) > 0.0001 Then
-            Err.Raise vbObjectError + 1324, src, _
-                      "Otpremnica " & otpremnicaID & " nije spremna za izdavanje: " & _
-                      polje & ", klasa " & CStr(k) & " -- ocekivano " & Fmt2Zbr(o) & _
-                      ", povezano " & Fmt2Zbr(p) & ", preostalo " & Fmt2Zbr(o - p) & "."
-        End If
+        If Abs(o - p) > 0.0001 Then c.Add Array(CStr(k), o, p)
     Next k
+End Function
+
+' Prva razlika (izdavanje javlja jednu). False = jednako u svakoj klasi.
+Private Function OtpPrvaRazlika(ByVal ocek As Object, ByVal pov As Object, _
+                                ByRef outKlasa As String, ByRef outO As Double, _
+                                ByRef outP As Double) As Boolean
+    Dim r As Collection, x As Variant
+    Set r = OtpRazlike(ocek, pov)
+    If r.count = 0 Then Exit Function
+    x = r(1)
+    outKlasa = CStr(x(0))
+    outO = CDbl(x(1))
+    outP = CDbl(x(2))
+    OtpPrvaRazlika = True
+End Function
+
+' Razlike jedne mere kao tekst: "klasa I: na otpremnici 679.50 kg, zbir listova
+' 649.10 kg (30.40 kg vise)". Gajbe su cele. "" = nema razlike.
+Private Function LncRazlikeTekst(ByVal ocek As Object, ByVal pov As Object, _
+                                 ByVal jed As String, ByVal celi As Boolean, _
+                                 ByVal naDok As String, ByVal zbirOpis As String) As String
+    Dim r As Collection, x As Variant, s As String, d As Double
+    Set r = OtpRazlike(ocek, pov)
+    For Each x In r
+        d = CDbl(x(1)) - CDbl(x(2))
+        If Len(s) > 0 Then s = s & "; "
+        s = s & "klasa " & CStr(x(0)) & ": na " & naDok & " " & LncFmt(CDbl(x(1)), celi) & jed & _
+                ", " & zbirOpis & " " & LncFmt(CDbl(x(2)), celi) & jed & " (" & _
+                LncFmt(Abs(d), celi) & jed & IIf(d > 0, " vise", " manje") & ")"
+    Next x
+    LncRazlikeTekst = s
+End Function
+
+Private Function LncFmt(ByVal v As Double, ByVal celi As Boolean) As String
+    If celi Then
+        LncFmt = Format$(v, "0")
+    Else
+        LncFmt = Fmt2Zbr(v)
+    End If
+End Function
+
+' UPOZORENJE O PROMENI KOLICINE (rucna provera operatera 08.11.2026, LNC-ODL-21).
+'
+' LNC-ODL-03 izvodi ocekivanje nove verzije kao "staro - list (+ novi list)", a
+' OtpUpisiOcekivanjeVerzije ga racuna kao ZBIR listova nove verzije; zbirna' je
+' isto tako zbir svojih otpremnica (CreateZbirna). To je isto samo dok je stari
+' dokument uskladjen sa svojim izvorima -- sto izdavanje danas i trazi
+' (OtpRequireJednakost, ZbrRequireJednakost). Dokument starog oblika to ne mora
+' da bude: 5/060726 je nosila 679,5 kg uz listove od 649,1, pa je ispravka lista
+' za +1 kg dala novu verziju od 650,1. Izdata verzija ne sme da nosi nista osim
+' zbira izvora, pa se razlika ne moze preneti: operater je vidi PRE poteza i
+' odlucuje Da/Ne (ne odbijanje). Sve razlike, po klasi, za kg i gajbe, i za
+' otpremnicu i za izdatu zbirnu koja dobija novu verziju. "" = nema razlike.
+Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Boolean) As String
+    Const SRC As String = "LncNapomenaKolicine"
+    Dim ocek As Object, ocekAmb As Object
+    Dim pov As Object, povAmb As Object, povBruto As Object, povBrutoPun As Object
+    Dim zOcek As Object, zOcekAmb As Object, zPov As Object, zPovAmb As Object
+    Dim otpDeo As String, zbrDeo As String, s As String, m As String
+
+    If Not CBool(p("otpIzdata")) Then Exit Function
+
+    ' Listovi stare otpremnice (pre poteza): osnov i za otpremnicu i za zbirnu.
+    OtpUcitajPovezano CStr(p("otpID")), pov, povAmb, povBruto, povBrutoPun, SRC
+
+    ' --- otpremnica: nova verzija nastaje kad ostaje bar jedan list (ili ispravka)
+    If p("otpPreostali").count > 0 Or zaIspravku Then
+        OtpUcitajOcekivano CStr(p("otpID")), ocek, ocekAmb, SRC
+        otpDeo = LncRazlikeTekst(ocek, pov, " kg", False, "otpremnici", "zbir listova")
+        s = LncRazlikeTekst(ocekAmb, povAmb, " gajbi", True, "otpremnici", "zbir listova")
+        If Len(s) > 0 Then
+            If Len(otpDeo) > 0 Then otpDeo = otpDeo & "; "
+            otpDeo = otpDeo & s
+        End If
+    End If
+
+    ' --- izdata zbirna: nova verzija nastaje kad ostaje bar jedna otpremnica.
+    ' Zbirna' = ostale otpremnice + otpremnica' (zbir listova), pa se stara zbirna
+    ' poredi sa ZBIROM IZVORA: stavke ostalih otpremnica + listovi ove otpremnice.
+    ' To je tacno neto promena zbirne -- razlika otpremnice koju zbirna vec nosi
+    ' (ili ne nosi) racuna se sama, bez posebne recenice.
+    If Len(CStr(p("zbrID"))) > 0 And CBool(p("zbrIzdata")) Then
+        If p("zbrSestre").count > 0 Or p("otpPreostali").count > 0 Or zaIspravku Then
+            Dim sestre As Collection, k As Long
+            Set sestre = New Collection
+            For k = 1 To p("zbrSestre").count
+                sestre.Add CStr(p("zbrSestre")(k))
+            Next k
+            ZbrUcitajOcekivano CStr(p("zbrID")), zOcek, zOcekAmb, SRC
+            ZbrUcitajPovezano CStr(p("zbrID")), sestre, zPov, zPovAmb, SRC
+            LncDodajPoKlasi zPov, pov
+            LncDodajPoKlasi zPovAmb, povAmb
+            zbrDeo = LncRazlikeTekst(zOcek, zPov, " kg", False, "zbirnoj", "zbir izvora")
+            s = LncRazlikeTekst(zOcekAmb, zPovAmb, " gajbi", True, "zbirnoj", "zbir izvora")
+            If Len(s) > 0 Then
+                If Len(zbrDeo) > 0 Then zbrDeo = zbrDeo & "; "
+                zbrDeo = zbrDeo & s
+            End If
+        End If
+    End If
+
+    If Len(otpDeo) = 0 And Len(zbrDeo) = 0 Then Exit Function
+
+    m = LNC_UPOZORENJE & " potez menja prijavljene kolicine."
+    If Len(otpDeo) > 0 Then
+        m = m & vbCrLf & "- Otpremnica " & p("otpBroj") & " se ne slaze sa svojim listovima (pre poteza) -- " & _
+            otpDeo & ". Nova verzija otpremnice nosi zbir svojih listova" & _
+            IIf(zaIspravku, " (sa ispravljenim listom)", " (bez storniranog lista)") & _
+            ", a ne kolicinu sa otpremnice."
+    End If
+    If Len(zbrDeo) > 0 Then
+        m = m & vbCrLf & "- Zbirna " & p("zbrBroj") & " se ne slaze sa zbirom svojih izvora (ostale " & _
+            "otpremnice i listovi ove otpremnice, pre poteza) -- " & zbrDeo & _
+            ". Nova verzija zbirne nosi taj zbir" & _
+            IIf(zaIspravku, " (sa ispravljenim listom)", " (bez storniranog lista)") & "."
+    End If
+    m = m & vbCrLf & "Bruto se uvek racuna iz listova. Nastavi samo ako su zbirovi tacni."
+    LncNapomenaKolicine = m
+End Function
+
+' cilj(klasa) += izvor(klasa), za svaku klasu izvora.
+Private Sub LncDodajPoKlasi(ByVal cilj As Object, ByVal izvor As Object)
+    Dim kl As Variant
+    For Each kl In izvor.Keys
+        cilj(CStr(kl)) = OtpBroj(cilj, CStr(kl)) + OtpBroj(izvor, CStr(kl))
+    Next kl
 End Sub
+
+' Da li tekst potvrde nosi upozorenje o promeni kolicine (LNC-ODL-21). Dijalozi
+' potvrde tada nude "Ne" kao podrazumevano, kao svaka rizicna potvrda u
+' projektu (vbExclamation + vbDefaultButton2).
+Public Function LncTekstImaUpozorenje(ByVal tekst As String) As Boolean
+    LncTekstImaUpozorenje = (InStr(1, tekst, LNC_UPOZORENJE, vbBinaryCompare) > 0)
+End Function
 
 Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
                                               ByVal otpremnicaID As String, _
