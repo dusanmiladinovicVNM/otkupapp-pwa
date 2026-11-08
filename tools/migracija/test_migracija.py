@@ -1380,6 +1380,12 @@ class MigOdl20PoOdluci(SaNovomSveskom):
         zbr = [iz for iz in lista if iz["radnja"] == "storniraj" and iz.get("tabela") == "tblZbirna"]
         self.assertEqual((len(prev), len(zbr)), (8, 4))
         self.assertTrue(all(iz["provera"].get("BrojZbirne") for iz in prev + zbr))
+        # MIG-ODL-23: 2 tipfelera sorte, 2 vozaca prijemnice, 1 storno prijemnice
+        self.assertEqual(Counter(iz["radnja"] + ":" + iz.get("tabela", "") for iz in lista
+                                 if iz["radnja"] in ("ispravi_sortu", "ispravi_prijemnicu")
+                                 or iz.get("tabela") == "tblPrijemnica"),
+                         Counter({"ispravi_sortu:tblOtkup": 2, "ispravi_prijemnicu:": 2,
+                                  "storniraj:tblPrijemnica": 1}))
 
 class MigOdl22StorniranBlok(SaNovomSveskom):
     def clanovi(self, c):
@@ -1421,6 +1427,90 @@ class MigOdl21OtpremnicaDveKulture(SaNovomSveskom):
                 r[kol.index("OtpremnicaID")] = "OTP-1"
         c = self.sagradi(dodatno=d)
         self.assertNotIn("OTPREMNICA_LISTOVI_VISE_KULTURA", [x["pravilo"] for x in c.nalazi])
+
+
+class MigOdl23IspravkeIzvora(SaNovomSveskom):
+    KUL_MEEKER = (KUL_KOL, KULTURE[1] + [["KUL-4", "Malina", "Meeker"], ["KUL-6", "Malina", "Meeker teren"]])
+
+    def sorta(self, ocekivano=2):
+        d = otkup_sa_kulturom({"OTK-1": ("Malina", "Mekker", "KUL-1"), "OTK-2": ("Malina", "Willamette", "KUL-1"),
+                               "OTK-3": ("Malina", "Mekker", "KUL-1")})
+        kol, redovi = d["tblOtkup"]
+        for r in redovi:
+            if r[0] == "OTK-3":
+                r[kol.index("StanicaID")] = "S2"
+        d["tblKulture"] = self.KUL_MEEKER
+        iz = {"radnja": "ispravi_sortu", "tabela": "tblOtkup", "VrstaVoca": "Malina", "SortaVoca": "Mekker",
+              "po_stanici": {"S1": "Meeker"}, "ostale": "Meeker teren", "ocekivano": ocekivano, "razlog": "test"}
+        return d, iz
+
+    def otkup(self, c, oid):
+        return next(z for z in c.tabele["tblOtkup"] if z["OtkupID"] == oid)
+
+    def test_tipfeler_sorte_po_stanici(self):
+        d, iz = self.sorta()
+        c = self.sagradi(dodatno=d, izuzeci_dok=[iz])
+        o1, o3 = self.otkup(c, "OTK-1"), self.otkup(c, "OTK-3")
+        self.assertEqual((o1["SortaVoca"], o1["KulturaID"]), ("Meeker", "KUL-4"))
+        self.assertEqual((o3["SortaVoca"], o3["KulturaID"]), ("Meeker teren", "KUL-6"))
+        self.assertNotIn("KULTURA_NE_RAZRESAVA", [n["pravilo"] for n in c.nalazi])
+        # stara sveska (pozivaocu) ostaje kakva jeste
+        self.assertEqual(tekst(polje(tabela(self.tabele, "tblOtkup").redovi[0], "SortaVoca")), "Mekker")
+
+    def test_tipfeler_drugi_broj_listova_ne_vazi(self):
+        d, iz = self.sorta(ocekivano=3)
+        c = self.sagradi(dodatno=d, izuzeci_dok=[iz])
+        self.assertEqual(self.otkup(c, "OTK-1")["SortaVoca"], "Mekker")
+        self.assertIn("KULTURA_NE_RAZRESAVA", [n["pravilo"] for n in c.nalazi])
+
+    def amb_prj3(self, vozac):
+        amb = normalno() + [noga(20, D3, 6, "Ulaz", "C1", "Kupac", vozac, "PRJ-3", "Prijemnica")]
+        d = izmeni("tblPrijemnica", novi=[dict(
+            PrijemnicaID="PRJ-3", Datum=D3, KupacID="C1", VozacID=vozac, BrojPrijemnice="402",
+            BrojZbirne="301", Klasa="I", Kolicina=49, Cena=60, KolAmbalaze=6)])
+        d["tblVozaci"] = (["VozacID", "Ime", "Prezime"], [["D1", "Vlada", "Vozac"], ["D9", "Pogresan", "Vozac"]])
+        return amb, d
+
+    IZ_VOZAC = {"PrijemnicaID": "PRJ-3", "radnja": "ispravi_prijemnicu", "VozacID": "D1",
+                "provera": {"BrojZbirne": "301", "VozacID": "D9"}, "razlog": "test"}
+
+    def test_vozac_prijemnice_i_njenih_nogu(self):
+        amb, d = self.amb_prj3("D9")
+        c = self.sagradi(amb=amb, dodatno=d, izuzeci_dok=[self.IZ_VOZAC])
+        p = next(x for x in c.tabele["tblPrijemnica"] if x["PrijemnicaID"] == "PRJ-3")
+        self.assertEqual((p["VozacID"], p["ZbirnaRoditeljID"]), ("D1", "ZBR-1"))
+        self.assertEqual({n.vozac for n in c.amb.noge if n.dok_id == "PRJ-3"}, {"D1"})
+
+    def test_bez_odluke_vozac_ostaje(self):
+        amb, d = self.amb_prj3("D9")
+        c = self.sagradi(amb=amb, dodatno=d)
+        self.assertEqual({n.vozac for n in c.amb.noge if n.dok_id == "PRJ-3"}, {"D9"})
+        self.assertIn(("PRIJEMNICA_BEZ_JEDNOZNACNE_ZBIRNE", "PRJ-3"), self.nalazi(c, "UPOZORENJE"))
+
+    def test_storniraj_prijemnicu_i_noge(self):
+        amb, d = self.amb_prj3("D1")
+        iz = {"tabela": "tblPrijemnica", "PrijemnicaID": "PRJ-3", "radnja": "storniraj",
+              "provera": {"BrojZbirne": "301"}, "razlog": "test"}
+        c = self.sagradi(amb=amb, dodatno=d, izuzeci_dok=[iz])
+        p = next(x for x in c.tabele["tblPrijemnica"] if x["PrijemnicaID"] == "PRJ-3")
+        self.assertEqual(p["Stornirano"], "Da")
+        self.assertTrue(all(n.storno for n in c.amb.noge if n.dok_id == "PRJ-3"))
+        self.assertIn(("PRIJEMNICA_STORNIRANA_PO_ODLUCI", "PRJ-3"), self.nalazi(c, "INFO"))
+
+    def test_storniraj_prijemnicu_na_paleti_ne_vazi(self):
+        iz = {"tabela": "tblPrijemnica", "PrijemnicaID": "PRJ-1", "radnja": "storniraj",
+              "provera": {"BrojZbirne": "301"}, "razlog": "test"}
+        c = self.sagradi(izuzeci_dok=[iz])
+        p = next(x for x in c.tabele["tblPrijemnica"] if x["PrijemnicaID"] == "PRJ-1")
+        self.assertNotEqual(p["Stornirano"], "Da")
+        n = [x for x in c.nalazi if x["pravilo"] == "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE"]
+        self.assertTrue(n and "tblPaletaStavka" in n[0]["opis"], n)
+
+    def test_dva_prolaza_isti_rezultat(self):
+        d, iz = self.sorta()
+        self.sagradi(dodatno=d, izuzeci_dok=[iz])
+        c2 = cilj.izgradi(self.tabele, dokumenti.ucitaj_kanon(), izuzeci_dok=[iz])
+        self.assertEqual(self.otkup(c2, "OTK-1")["KulturaID"], "KUL-4")
 
 
 if __name__ == "__main__":

@@ -129,7 +129,9 @@ def ucitaj_izuzetke_dokumenata(putanja):
     """Sekcija "dokumenti" iz izuzeci.json, sve uz potpis reda ("provera"):
       * otpremnica: bez_popravke_veze (MIG-21), storniraj (MIG-ODL-19);
       * zbirna: storniraj po broju -- "tabela": "tblZbirna", "BrojZbirne" (MIG-ODL-20);
-      * prijemnica: prevezi_prijemnicu -- "PrijemnicaID", nov "BrojZbirne" (MIG-ODL-20)."""
+      * prijemnica: prevezi_prijemnicu -- "PrijemnicaID", nov "BrojZbirne" (MIG-ODL-20);
+        ispravi_prijemnicu -- nov "VozacID"; storniraj -- "tabela": "tblPrijemnica" (MIG-ODL-23);
+      * otkup: ispravi_sortu -- tipfeler sorte po stanici, uz ocekivan broj listova (MIG-ODL-23)."""
     import json
     if not putanja:
         return []
@@ -141,11 +143,20 @@ def ucitaj_izuzetke_dokumenata(putanja):
             ok = bool(tekst(iz.get("OtpremnicaID")))
         elif r == "storniraj" and iz.get("tabela") == "tblZbirna":
             ok = bool(tekst(iz.get("BrojZbirne"))) and bool(iz.get("provera"))
+        elif r == "storniraj" and iz.get("tabela") == "tblPrijemnica":
+            ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(iz.get("provera"))
         elif r == "storniraj":
             ok = bool(tekst(iz.get("OtpremnicaID"))) and bool(iz.get("provera"))
         elif r == "prevezi_prijemnicu":
             ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(tekst(iz.get("BrojZbirne"))) \
                 and bool(iz.get("provera"))
+        elif r == "ispravi_prijemnicu":
+            ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(tekst(iz.get("VozacID"))) \
+                and bool(iz.get("provera"))
+        elif r == "ispravi_sortu":
+            ok = iz.get("tabela") == "tblOtkup" and bool(tekst(iz.get("VrstaVoca"))) \
+                and bool(tekst(iz.get("SortaVoca"))) and bool(tekst(iz.get("ostale"))) \
+                and isinstance(iz.get("po_stanici", {}), dict) and isinstance(iz.get("ocekivano"), int)
         else:
             ok = False
         if not ok:
@@ -168,12 +179,19 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
         if t is not None and t.redovi:
             c.nalaz("INFO", "NE_PRENOSI_SE", ime, "", "%d red. -- %s" % (len(t.redovi), razlog))
 
+    if any(iz["radnja"] in ("ispravi_sortu", "ispravi_prijemnicu")
+           or (iz["radnja"] == "storniraj" and iz.get("tabela") == "tblPrijemnica") for iz in izuzeci_dok):
+        # Ispravke izvora rade nad KOPIJOM procitane sveske: pozivalac (i drugi
+        # prolaz nad istim tabelama) vidi staru svesku kakva jeste.
+        tabele = _kopija_izvora(tabele, ("tblOtkup", "tblPrijemnica", "tblAmbalaza"))
+    _ispravke_izvora(c, tabele, izuzeci_dok)
     _linije_fakture(c, tabele)
     _dokumenti(c, tabele)
     _kultura_otkupa(c)
     _prevezi_prijemnice_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "prevezi_prijemnicu"])
     _storniraj_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"
-                             and iz.get("tabela", "tblOtpremnica") == "tblOtpremnica"])
+                             and iz.get("tabela", "tblOtpremnica") == "tblOtpremnica"
+                             and iz.get("OtpremnicaID")])
     _izostavi_stornirane_bez_kolicine(c)
     _clanstvo(c, tabele)
     _storniraj_zbirne_po_odluci(c, [iz for iz in izuzeci_dok if iz["radnja"] == "storniraj"
@@ -552,6 +570,119 @@ def _storniraj_po_odluci(c, izuzeci):
             z["Stornirano"] = "Da"
         c.nalaz("INFO", "OTPREMNICA_STORNIRANA_PO_ODLUCI", "tblOtpremnica", z.get("OtpremnicaID"),
                 "broj %s, %s: %s" % (z.get("BrojOtpremnice", ""), _dan(z.get("Datum")), tekst(iz.get("razlog"))))
+
+
+def _kopija_izvora(tabele, imena):
+    import copy
+    out = dict(tabele)
+    for ime in imena:
+        t = out.get(ime.casefold())
+        if t is not None:
+            k = copy.copy(t)
+            k.redovi = [dict(r) for r in t.redovi]
+            out[ime.casefold()] = k
+    return out
+
+
+def _ispravke_izvora(c, tabele, izuzeci):
+    """MIG-ODL-23: ispravke unosa koje se primenjuju na STARU svesku U MEMORIJI,
+    pre prevoda (fajl se ne menja) -- jer od njih zavisi i knjiga ambalaze, koja
+    se prevodi iz starih nogu:
+      * ispravi_sortu: tipfeler sorte otkupnog lista (npr. "Mekker"), nova sorta po
+        stanici; samo kad je broj takvih listova tacno "ocekivano" i nova sorta
+        postoji u sifarniku za tu vrstu. Kultura se posle razresava po sorti
+        (MIG-ODL-21).
+      * ispravi_prijemnicu: VozacID prijemnice (zaostao vozac u staroj formi) -- i na
+        prijemnici i na njenim nogama ambalaze, da gajbe predje na pravog vozaca.
+      * storniraj prijemnicu: prijemnica i njene noge ambalaze se storniraju, kao sto
+        bi uradio stari storno; ne kad je na aktivnoj paleti ili fakturi.
+    Svaka uz potpis reda; inace ODLUKA i nista se ne menja."""
+    otk = tabela(tabele, "tblOtkup")
+    prj = tabela(tabele, "tblPrijemnica")
+    amb = tabela(tabele, "tblAmbalaza")
+    voz = {kljuc(v.get("VozacID")) for v in c.tabele.get("tblVozaci", [])}
+    kult = {(kljuc(k.get("VrstaVoca")), kljuc(k.get("SortaVoca"))) for k in c.tabele.get("tblKulture", [])}
+
+    def noge(pid):
+        return [r for r in (amb.redovi if amb is not None else [])
+                if kljuc(polje(r, "DokumentTip")) == "prijemnica" and kljuc(polje(r, "DokumentID")) == kljuc(pid)]
+
+    def red_prijemnice(iz):
+        redovi = [r for r in (prj.redovi if prj is not None else [])
+                  if kljuc(polje(r, "PrijemnicaID")) == kljuc(iz["PrijemnicaID"])]
+        if len(redovi) != 1:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_BEZ_DOKUMENTA", "tblPrijemnica", iz["PrijemnicaID"],
+                    "izuzeci.json: u staroj svesci %d redova sa tim ID-jem -- odluka se ne primenjuje" % len(redovi))
+            return None
+        razlike = _razlike_potpisa({k: polje(redovi[0], k) for k in iz["provera"]}, iz["provera"])
+        if razlike:
+            c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblPrijemnica", iz["PrijemnicaID"],
+                    "%s se ne primenjuje -- %s" % (iz["radnja"], "; ".join(razlike)))
+            return None
+        return redovi[0]
+
+    for iz in izuzeci:
+        if iz["radnja"] == "ispravi_sortu":
+            redovi = [r for r in (otk.redovi if otk is not None else [])
+                      if kljuc(polje(r, "VrstaVoca")) == kljuc(iz["VrstaVoca"])
+                      and kljuc(polje(r, "SortaVoca")) == kljuc(iz["SortaVoca"])]
+            nove = set(iz.get("po_stanici", {}).values()) | {iz["ostale"]}
+            fali = [x for x in sorted(nove) if (kljuc(iz["VrstaVoca"]), kljuc(x)) not in kult]
+            if len(redovi) != iz["ocekivano"] or fali:
+                c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblOtkup",
+                        "%s / %s" % (iz["VrstaVoca"], iz["SortaVoca"]),
+                        "ispravi_sortu se ne primenjuje -- listova %d, odluka ocekuje %d%s" % (
+                            len(redovi), iz["ocekivano"],
+                            "; u sifarniku nema sorte: " + ", ".join(fali) if fali else ""))
+                continue
+            po_st = {kljuc(k): v for k, v in iz.get("po_stanici", {}).items()}
+            for r in redovi:
+                staro = tekst(polje(r, "SortaVoca"))
+                novo = po_st.get(kljuc(polje(r, "StanicaID")), iz["ostale"])
+                r["sortavoca"] = novo
+                c.nalaz("INFO", "SORTA_ISPRAVLJENA_PO_ODLUCI", "tblOtkup", tekst(polje(r, "OtkupID")),
+                        "stanica %s: SortaVoca '%s' -> '%s' (%s)" % (
+                            tekst(polje(r, "StanicaID")), staro, novo, tekst(iz.get("razlog"))))
+        elif iz["radnja"] == "ispravi_prijemnicu":
+            r = red_prijemnice(iz)
+            if r is None:
+                continue
+            if kljuc(iz["VozacID"]) not in voz:
+                c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblPrijemnica", iz["PrijemnicaID"],
+                        "ispravi_prijemnicu se ne primenjuje -- vozaca %s nema u tblVozaci" % iz["VozacID"])
+                continue
+            staro = tekst(polje(r, "VozacID"))
+            r["vozacid"] = tekst(iz["VozacID"])
+            n = 0
+            for a in noge(iz["PrijemnicaID"]):
+                if kljuc(polje(a, "VozacID")) == kljuc(staro):
+                    a["vozacid"] = tekst(iz["VozacID"])
+                    n += 1
+            c.nalaz("INFO", "PRIJEMNICA_VOZAC_ISPRAVLJEN_PO_ODLUCI", "tblPrijemnica", iz["PrijemnicaID"],
+                    "VozacID %s -> %s, i na %d nog. ambalaze (%s)" % (staro, iz["VozacID"], n, tekst(iz.get("razlog"))))
+        elif iz["radnja"] == "storniraj" and iz.get("tabela") == "tblPrijemnica":
+            r = red_prijemnice(iz)
+            if r is None:
+                continue
+            pid = kljuc(iz["PrijemnicaID"])
+            vezani = []
+            for ime in ("tblPaletaStavka", "tblFakturaStavke"):
+                t = tabela(tabele, ime)
+                vezani += ["%s %s" % (ime, tekst(polje(x, t.kolone[0])))
+                           for x in (t.redovi if t is not None else [])
+                           if kljuc(polje(x, "PrijemnicaID")) == pid and not je_storno(x)]
+            if vezani:
+                c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblPrijemnica", iz["PrijemnicaID"],
+                        "storniraj se ne primenjuje -- aktivno vezano: " + ", ".join(vezani))
+                continue
+            r["stornirano"] = "Da"
+            nn = noge(iz["PrijemnicaID"])
+            for a in nn:
+                a["stornirano"] = "Da"
+            c.nalaz("INFO", "PRIJEMNICA_STORNIRANA_PO_ODLUCI", "tblPrijemnica", iz["PrijemnicaID"],
+                    "broj %s, zbirna %s, i %d nog. ambalaze (%s)" % (
+                        tekst(polje(r, "BrojPrijemnice")), tekst(polje(r, "BrojZbirne")), len(nn),
+                        tekst(iz.get("razlog"))))
 
 
 def _razlike_potpisa(red, provera):
