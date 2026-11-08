@@ -337,6 +337,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_NacrtZbirneUMestu
     Test_LNC_IspravkaKrozUnos
     Test_LNC_StaraOtpremnicaBezKulture
+    Test_LNC_OtpremnicaNeuskladjenaSaListovima
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -7451,7 +7452,7 @@ End Function
 
 ' Sinteticka izmena jedne celije (fault injection) -- test modul pise uz povrat.
 Private Sub S6K4Postavi(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
-                        ByVal col As String, ByVal vrednost As String)
+                        ByVal col As String, ByVal vrednost As Variant)
     Dim rows As Collection
     Set rows = FindRows(tbl, idCol, id)
     If rows Is Nothing Then Exit Sub
@@ -27377,6 +27378,81 @@ EH:
     If vratiOtp4 Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp4, COL_OTP_KULTURA, TEST_KULTURA_ID
     If vratiOtp3 Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp3, COL_OTP_KULTURA, TEST_KULTURA_ID
     If vratiE Then S6K4Postavi TBL_OTKUP, COL_OTK_ID, otkE, COL_OTK_KULTURA, TEST_KULTURA_ID
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' OTPREMNICA KOJA SE NE SLAZE SA SVOJIM LISTOVIMA (rucna provera operatera
+' 08.11.2026).
+'
+' Ispravka lista 5/250626-13 za +1 kg dala je novu verziju otpremnice od 650,1 kg
+' umesto 680,5: stara 5/060726 je nosila 679,5 kg, a njeni listovi 649,1.
+' OtpUpisiOcekivanjeVerzije pise zbir listova -- jedino sto izdata verzija sme da
+' nosi (OtpRequireJednakost) -- pa je razlika od 30,4 kg nestala tiho. LNC-ODL-03
+' je pretpostavio uskladjenu otpremnicu; neuskladjena se sada odbija u planu, PRE
+' potvrde, sa brojevima, i za storno i za ispravku.
+'
+' Neuskladjenost se pravi upisom u celiju stavke izdate otpremnice (S6K4Postavi)
+' i vraca se posle merenja i na putu greske. Lanac kao u nalazu: bez zbirne.
+' SABOTAZE: lnc-neuskladjena-otp-tiho -> "LNC neuskladjena otpremnica: plan
+' odbija i navodi obe kolicine"; lnc-neuskladjena-otp-bez-gajbi -> "LNC
+' neuskladjena otpremnica: razlika u gajbama se takodje prijavljuje".
+Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
+    Const SRC As String = "Test_LNC_OtpremnicaNeuskladjenaSaListovima"
+    Dim scenario As String
+    Dim otkA As String, otkB As String, otp As String
+    Dim plan As Object, razStorno As String, razIspr As String, razGajbe As String
+    Dim ok As Boolean, g As String, por As String
+    Dim vratiKg As Boolean, vratiGajbe As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC14")
+    otkA = LncOtkup("LNC14A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC14B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNC14-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+
+    ' --- kg: na otpremnici 330, zbir listova 300
+    vratiKg = True
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOLICINA, 330#
+    Set plan = modDokumenta.LncPlanLista(otkA)
+    razStorno = CStr(plan("razlog"))
+    Set plan = modDokumenta.LncPlanLista(otkA, True)
+    razIspr = CStr(plan("razlog"))
+    ok = modDokumenta.StornoListaULancu_TX(otkA, g, por)
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOLICINA, 300#
+    vratiKg = False
+
+    ' --- gajbe: na otpremnici 5, zbir listova 0
+    vratiGajbe = True
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOL_AMB, 5#
+    Set plan = modDokumenta.LncPlanLista(otkA)
+    razGajbe = CStr(plan("razlog"))
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOL_AMB, 0#
+    vratiGajbe = False
+
+    AssertTrue InStr(1, razStorno, "330.00", vbBinaryCompare) > 0 And _
+               InStr(1, razStorno, "300.00", vbBinaryCompare) > 0, _
+               "LNC neuskladjena otpremnica: plan odbija i navodi obe kolicine"
+    AssertTrue Len(razIspr) > 0, "LNC neuskladjena otpremnica: i ispravka se odbija pre potvrde"
+    AssertFalse ok, "LNC neuskladjena otpremnica: potez se ne izvrsava"
+    AssertTrue LncOtpPolje(otp, COL_STORNIRANO) <> "Da", _
+               "LNC neuskladjena otpremnica: odbijen potez ne dira otpremnicu"
+    AssertTrue OtkPolje(otkA, COL_STORNIRANO) <> "Da", _
+               "LNC neuskladjena otpremnica: odbijen potez ne stornira list"
+    AssertTrue InStr(1, razGajbe, "gajbi", vbTextCompare) > 0, _
+               "LNC neuskladjena otpremnica: razlika u gajbama se takodje prijavljuje"
+    Set plan = modDokumenta.LncPlanLista(otkB)
+    AssertEquals "", CStr(plan("razlog")), _
+                 "LNC neuskladjena otpremnica: uskladjena otpremnica prolazi kapiju"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If vratiKg Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOLICINA, 300#
+    If vratiGajbe Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOL_AMB, 0#
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

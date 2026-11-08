@@ -7623,6 +7623,23 @@ SABOTAZE = {
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
     ),
+    # Otpremnica neuskladjena sa listovima (rucna provera 08.11.2026): plan ne
+    # pita, pa potez tiho menja prijavljenu kolicinu (zatecen oblik nalaza).
+    "lnc-neuskladjena-otp-tiho": (
+        "modDokumenta.bas",
+        "        razlogKolicine = OtpNeuskladjenaSaListovima(otpID, CStr(p(\"otpBroj\")))\n",
+        "        razlogKolicine = \"\"   ' SABOTAZA: neuskladjena otpremnica prolazi\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena otpremnica: plan odbija i navodi obe kolicine",
+    ),
+    # Kapija gleda samo kilograme: razlika u gajbama prolazi tiho.
+    "lnc-neuskladjena-otp-bez-gajbi": (
+        "modDokumenta.bas",
+        "    ElseIf OtpPrvaRazlika(ocekAmb, povAmb, klasa, o, p) Then\n",
+        "    ElseIf False Then   ' SABOTAZA: gajbe se ne porede\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena otpremnica: razlika u gajbama se takodje prijavljuje",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

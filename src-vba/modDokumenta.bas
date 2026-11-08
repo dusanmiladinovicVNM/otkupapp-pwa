@@ -3857,6 +3857,18 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         End If
     End If
 
+    ' Nova verzija nosi zbir svojih listova (LNC-ODL-03 vazi samo nad uskladjenom
+    ' otpremnicom). Stara koja se sa listovima ne slaze bi tiho promenila
+    ' prijavljenu kolicinu -- odbija se OVDE, pre potvrde, sa brojevima.
+    Dim razlogKolicine As String
+    If mereni.count > 0 Then
+        razlogKolicine = OtpNeuskladjenaSaListovima(otpID, CStr(p("otpBroj")))
+        If Len(razlogKolicine) > 0 Then
+            p("razlog") = razlogKolicine
+            Exit Function
+        End If
+    End If
+
     Dim zbrID As String
     zbrID = AktivnaZbirnaZaOtpremnicu(otpID)
     If Len(zbrID) = 0 Then Exit Function
@@ -6126,6 +6138,21 @@ End Sub
 Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
                                 ByVal ocek As Object, ByVal pov As Object, _
                                 ByVal polje As String, ByVal src As String)
+    Dim klasa As String, o As Double, p As Double
+    If OtpPrvaRazlika(ocek, pov, klasa, o, p) Then
+        Err.Raise vbObjectError + 1324, src, _
+                  "Otpremnica " & otpremnicaID & " nije spremna za izdavanje: " & _
+                  polje & ", klasa " & klasa & " -- ocekivano " & Fmt2Zbr(o) & _
+                  ", povezano " & Fmt2Zbr(p) & ", preostalo " & Fmt2Zbr(o - p) & "."
+    End If
+End Sub
+
+' PRAVILO "OCEKIVANO = POVEZANO" IMA JEDNO TELO: prva klasa (unija klasa obe
+' strane) u kojoj se razlikuju. Zovu ga izdavanje (OtpRequireJednakost) i kapija
+' poteza u lancu (OtpNeuskladjenaSaListovima). False = jednako u svakoj klasi.
+Private Function OtpPrvaRazlika(ByVal ocek As Object, ByVal pov As Object, _
+                                ByRef outKlasa As String, ByRef outO As Double, _
+                                ByRef outP As Double) As Boolean
     Dim sve As Object
     Set sve = CreateObject("Scripting.Dictionary")
 
@@ -6137,18 +6164,53 @@ Private Sub OtpRequireJednakost(ByVal otpremnicaID As String, _
         sve(CStr(k)) = True
     Next k
 
-    Dim o As Double, p As Double
     For Each k In sve.Keys
-        o = OtpBroj(ocek, CStr(k))
-        p = OtpBroj(pov, CStr(k))
-        If Abs(o - p) > 0.0001 Then
-            Err.Raise vbObjectError + 1324, src, _
-                      "Otpremnica " & otpremnicaID & " nije spremna za izdavanje: " & _
-                      polje & ", klasa " & CStr(k) & " -- ocekivano " & Fmt2Zbr(o) & _
-                      ", povezano " & Fmt2Zbr(p) & ", preostalo " & Fmt2Zbr(o - p) & "."
+        outO = OtpBroj(ocek, CStr(k))
+        outP = OtpBroj(pov, CStr(k))
+        If Abs(outO - outP) > 0.0001 Then
+            outKlasa = CStr(k)
+            OtpPrvaRazlika = True
+            Exit Function
         End If
     Next k
-End Sub
+End Function
+
+' OTPREMNICA KOJA SE NE SLAZE SA SVOJIM LISTOVIMA (rucna provera operatera
+' 08.11.2026).
+'
+' LNC-ODL-03 izvodi ocekivanje nove verzije kao "staro - list (+ novi list)", a
+' OtpUpisiOcekivanjeVerzije ga racuna kao ZBIR listova nove verzije. To je isto
+' samo dok je stara otpremnica uskladjena (ocekivano = povezano po klasi, za kg i
+' gajbe), sto izdavanje danas i trazi. Otpremnica starog oblika to ne mora da
+' bude: 5/060726 je nosila 679,5 kg uz listove od 649,1, pa je ispravka lista za
+' +1 kg dala novu verziju od 650,1 -- 30,4 kg je nestalo bez ijedne reci. Izdata
+' verzija ne sme da nosi nista osim zbira listova (OtpRequireJednakost), pa se
+' razlika ne moze preneti: operater mora da je vidi PRE poteza. "" = uskladjena.
+Private Function OtpNeuskladjenaSaListovima(ByVal otpID As String, _
+                                            ByVal broj As String) As String
+    Const SRC As String = "OtpNeuskladjenaSaListovima"
+    Dim ocek As Object, ocekAmb As Object
+    Dim pov As Object, povAmb As Object, povBruto As Object, povBrutoPun As Object
+    Dim klasa As String, o As Double, p As Double, jed As String
+
+    OtpUcitajOcekivano otpID, ocek, ocekAmb, SRC
+    OtpUcitajPovezano otpID, pov, povAmb, povBruto, povBrutoPun, SRC
+
+    If OtpPrvaRazlika(ocek, pov, klasa, o, p) Then
+        jed = " kg"
+    ElseIf OtpPrvaRazlika(ocekAmb, povAmb, klasa, o, p) Then
+        jed = " gajbi"
+    Else
+        Exit Function
+    End If
+
+    OtpNeuskladjenaSaListovima = "Otpremnica " & broj & " se ne slaze sa svojim listovima " & _
+        "(klasa " & klasa & "): na otpremnici " & Fmt2Zbr(o) & jed & ", zbir listova " & _
+        Fmt2Zbr(p) & jed & ". Nova verzija mora da nosi zbir listova, pa bi potez " & _
+        "promenio prijavljenu kolicinu za " & Fmt2Zbr(o - p) & jed & ". Proveri listove " & _
+        "ove otpremnice, pa lanac rasturi rucno: storno otpremnice na F8 (pre nje " & _
+        "zbirne, ako je ima), pa nova otpremnica na F2."
+End Function
 
 Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _
                                               ByVal otpremnicaID As String, _

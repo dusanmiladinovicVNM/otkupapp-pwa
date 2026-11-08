@@ -38,7 +38,7 @@ zapisuje kako, i šta je operater odlučio tamo gde pravilo ćuti.
 |---|---|---|
 | **`LNC-ODL-01`** | Storno i ispravka lista u lancu su **jedan potez i jedna transakcija**: list, nova verzija otpremnice, nova verzija zbirne i prevezivanje prijemnica — sve ili ništa | A13 „Redosled sam po sebi nije dovoljan — cela korekcija je JEDNA transakcija"; ZBR-KANON-03 |
 | **`LNC-ODL-02`** | Aktivne prijemnice stare zbirne se **prevezuju** na novu zbirnu. Količine, stavke, `PrijemnicaID`, palete i faktura se **ne diraju** | A13 „propagacija staje pred prvom nezavisnom činjenicom": prijemnica je kupčevo merenje. H1 „prijemnica se ne dira" = ne menja se njena količina; veza ide na aktivnu verziju, inače prijemnica postaje siroče |
-| **`LNC-ODL-03`** | Očekivanje nove otpremnice se **izvodi**: staro − list (+ novi list kod ispravke), po klasi, za kg i gajbe | Stara je bila izdata, a izdavanje je dokazalo očekivano = povezano po klasi (`OtpIzdaj`, `modDokumenta.bas:4923`). Umanjenje za jedan poznat list nije „izjednačavanje" koje je S3b-2a odbio |
+| **`LNC-ODL-03`** | Očekivanje nove otpremnice se **izvodi**: staro − list (+ novi list kod ispravke), po klasi, za kg i gajbe | Stara je bila izdata, a izdavanje je dokazalo očekivano = povezano po klasi (`OtpIzdaj`, `modDokumenta.bas:4923`). Umanjenje za jedan poznat list nije „izjednačavanje" koje je S3b-2a odbio. **Dopuna 08.11.2026:** premisa važi samo za usklađenu otpremnicu. Otpremnica starog oblika može da nosi očekivanje različito od zbira svojih listova, a nova izdata verzija sme da nosi samo zbir; zato plan takvu otpremnicu odbija pre potvrde (`OtpNeuskladjenaSaListovima`, KI-094) |
 | **`LNC-ODL-04`** | Novac kao i danas: storno odvezuje (`ResetNovacOtkupLink`, virman postaje slobodan avans); ispravka prenosi na nov list i prijavljuje preplatu (PUT A) | `ODLUKA_NOVAC_PRI_STORNU.md` (A + D suženo); bez novog koda za novac |
 | **`LNC-ODL-05`** | Ulaz za storno: **F8 nad listom**. Umesto današnjeg odbijanja nudi radnju sa uvidom posledica pre potvrde | F8 već ima obrazac „prvo vidi posledice, pa odluči" (`GradiUvid`, `modStornoImpact`) |
 | **`LNC-ODL-06`** | Obim prvog reza: **storno + ispravka** lista u lancu. Premeštanje lista na drugu otpremnicu je naredni rez, istom mehanikom | — |
@@ -251,6 +251,14 @@ F1 „Ispravi blok") meri i list koji se ispravlja, jer nov list nosi njegovu ku
 `VrstaVoca`/`SortaVoca` starog zaglavlja, jer bi to bio drugi izvor istine. Test:
 `Test_LNC_StaraOtpremnicaBezKulture` (F8, F2 „Ispravi", list bez kulture, listovi dve kulture);
 `KI-091`.
+
+**Ručna provera operatera (08.11.2026).** Ispravka lista 5/250626-13 za +1 kg dala je novu verziju
+otpremnice od 650,1 kg umesto 680,5. Stara 5/060726 je nosila 679,5 kg, a njeni listovi 649,1 (gajbe
+su se slagale). `OtpUpisiOcekivanjeVerzije` piše zbir listova nove verzije, što je jedino što izdata
+verzija sme da nosi (`OtpRequireJednakost`). Razlika od 30,4 kg je zato nestala tiho. Od tada plan
+poredi staru otpremnicu sa njenim listovima, po klasi, za kg i gajbe, istim telom pravila kao izdavanje
+(`OtpPrvaRazlika`). Kad se ne slažu, F8 i F1 odbijaju **pre potvrde** i navode obe količine. Test:
+`Test_LNC_OtpremnicaNeuskladjenaSaListovima`; `KI-094`.
 
 **Otvoreno, neizmereno (`KI-092`).** Nova verzija otpremnice upisuje `VrstaVoca`/`SortaVoca`
 iz šifarnika kultura, a ne prepisuje tekst starog zaglavlja. Kad je zbirna izdata, nova verzija
