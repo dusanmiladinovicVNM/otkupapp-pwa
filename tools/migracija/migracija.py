@@ -234,6 +234,68 @@ def komanda_proba(a):
     return 0
 
 
+def komanda_lanac(a):
+    """Lanac OTK -> OTP -> ZBR -> PRJ stare sveske (lanac.py) -- SAMO CITA.
+
+    Spisak za ispravke u staroj svesci pre migracije: prijemnica na pogresnoj
+    zbirnoj (sa predlogom prave) i aktivan dokument vezan za storniran.
+    """
+    import lanac
+    izvor = os.path.abspath(a.izvor)
+    if not os.path.isfile(izvor):
+        print("GRESKA: izvorna sveska ne postoji: %s" % izvor, file=sys.stderr)
+        return 2
+    izlaz = _izlazni_folder(izvor, a.izlaz, "lanac")
+    if _u_repou(izlaz):
+        print("GRESKA: izlaz je unutar git repoa (%s) -- izaberi folder van repoa." % izlaz,
+              file=sys.stderr)
+        return 2
+    print("Citam: %s" % izvor)
+    sha_pre = sha256_fajla(izvor)
+    try:
+        tabele = procitaj_svesku(izvor)
+    except (GreskaCitanja, OSError) as e:
+        print("GRESKA citanja: %s" % e, file=sys.stderr)
+        return 2
+    if dokumenti.oblik_dokumenata(tabele) != "STARI":
+        print("GRESKA: sveska je u kanonskom obliku (zaglavlje + stavke). lanac cita STARI model "
+              "(tblOtkup.OtpremnicaID, BrojZbirne); za novu svesku je Integritet u aplikaciji.",
+              file=sys.stderr)
+        return 2
+    lc = lanac.Lanac(tabele, dana=a.dana).proveri()
+    sha_posle = sha256_fajla(izvor)
+
+    saz = [("Izvor", os.path.basename(izvor)), ("Izvor SHA256", sha_pre),
+           ("Izvor nepromenjen posle citanja", "DA" if sha_pre == sha_posle else "NE -- PROVERI"),
+           ("Predlog zbirne: +- dana", a.dana), ("", "")] + lanac.sazetak(lc) + [("", "")] + \
+        [("Legenda: " + k, v) for k, v in lanac.LEGENDA]
+    os.makedirs(izlaz, exist_ok=True)
+    sv = pregled.Sveska()
+    sv.dodaj_list("Sazetak", ["Stavka", "Vrednost"], saz, sirine=[60, 70])
+    sv.dodaj_list("Prijemnice", lanac.KOLONE_PRIJEMNICA, lanac.redovi_prijemnica(lc),
+                  sirine=[16, 14, 16, 12, 12, 10, 8, 16, 12, 10, 8, 30, 16, 14, 12, 12, 10, 8, 10, 8, 70, 60],
+                  tabela="Prijemnice")
+    sv.dodaj_list("ZbirneBezPrijemnice", lanac.KOLONE_BEZ, lanac.redovi_bez(lc),
+                  sirine=[14, 16, 12, 12, 12, 18, 10, 8, 30, 20, 20], tabela="ZbirneBezPrijemnice")
+    sv.dodaj_list("Nalazi", lanac.KOLONE_NALAZI, lanac.redovi_nalaza(lc),
+                  sirine=[10, 34, 10, 14, 16, 12, 110, 40], tabela="Nalazi")
+    xlsx = os.path.join(izlaz, "lanac.xlsx")
+    sv.snimi(xlsx)
+    with open(os.path.join(izlaz, "lanac_sazetak.txt"), "w", encoding="utf-8") as f:
+        for k, v in saz:
+            f.write(("%-60s %s" % (k, v)).rstrip() + "\n")
+        f.write("\nPrijemnice na pogresnoj zbirnoj:\n")
+        for r in lanac.redovi_prijemnica(lc):
+            f.write("%s %s: sada %s -> predlog %s  [%s]\n" % (r[1], r[2], r[7], r[12] or "-", r[0]))
+        f.write("\nNalazi:\n")
+        for r in lanac.redovi_nalaza(lc):
+            f.write("%s %s %s %s\n" % (r[0], r[1], r[3], r[6]))
+    for k, v in saz:
+        print(("%-60s %s" % (k, v)).rstrip())
+    print("\nIzvestaj: %s" % xlsx)
+    return 0 if sha_pre == sha_posle else 2
+
+
 def komanda_upis(a):
     """FAZA 2, korak 2: upis u NOVU svesku preko Excela (Windows + Excel + pywin32).
 
@@ -350,6 +412,11 @@ def main(argv=None):
     pu.add_argument("--knjizenje", choices=(ambalaza.ISPRAVNO, ambalaza.VERNO), default=ambalaza.ISPRAVNO)
     pu.add_argument("--prihvatam-odluke", action="store_true",
                     help="procitao sam ODLUKA nalaze probe i prihvatam podrazumevana pravila")
+    pl = sub.add_parser("lanac", help="lanac OTK-OTP-ZBR-PRJ stare sveske: pogresna zbirna na "
+                                      "prijemnici, storno koji nije presao lanac (samo cita)")
+    pl.add_argument("--izvor", required=True, help="stara .xlsm sveska")
+    pl.add_argument("--izlaz", help="folder za izvestaj (podrazumevano: pored izvora)")
+    pl.add_argument("--dana", type=int, default=3, help="predlog zbirne: +- dana od datuma prijemnice")
     pp = sub.add_parser("pregled", help="napravi Excel pregled iz stare sveske (samo cita)")
     pp.add_argument("--izvor", required=True, help="stara .xlsm sveska")
     pp.add_argument("--izlaz", help="folder za pregled (podrazumevano: pored izvora)")
@@ -365,6 +432,8 @@ def main(argv=None):
         return komanda_upis(a)
     if a.komanda == "proba":
         return komanda_proba(a)
+    if a.komanda == "lanac":
+        return komanda_lanac(a)
     if a.komanda == "pregled":
         return komanda_pregled(a)
     p.print_help()

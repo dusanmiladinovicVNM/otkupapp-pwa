@@ -459,6 +459,7 @@ Public Sub RunAllTests()
     RunOne 347
     RunOne 348
     RunOne 349
+    RunOne 350
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1118,6 +1119,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 347: TestName = "T_Gotovina_NajviseNaIzboru"
         Case 348: TestName = "T_Doplata_KarticaZbirnoPoObracunu"
         Case 349: TestName = "T_Doplata_BrojeviBezSlova"
+        Case 350: TestName = "T_KUL1_KulturaListaPoSorti"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1475,6 +1477,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 347: T_Gotovina_NajviseNaIzboru
         Case 348: T_Doplata_KarticaZbirnoPoObracunu
         Case 349: T_Doplata_BrojeviBezSlova
+        Case 350: T_KUL1_KulturaListaPoSorti
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -30875,6 +30878,139 @@ EH:
     On Error GoTo 0
     Err.Raise errNum, "T_Doplata_BrojeviBezSlova", errDesc
 End Sub
+
+' ============================================================
+' 350. KI-093: KULTURA LISTA SE NE SLAZE SA SORTOM -- NALAZ KUL1 I KUL2.
+' ============================================================
+' Stari PWA uvoz je kulturu trazio samo po vrsti, pa list "S1 teren" nosi
+' kulturu "S1" (operater izmerio na 5/240626-8). Pisac takav list danas ne
+' prima (RequireKulturaSeSlaze), pa test pravi ispravne listove kroz pisca i u
+' transakciji im podmece stari oblik. Izvestaj samo cita.
+' SABOTAZE: kul1-ne-poredi-kulturu, kul2-ne-vidi-verziju.
+Private Sub T_KUL1_KulturaListaPoSorti()
+    Dim b As String, vr As String, kS As String, kT As String, kA As String
+    Dim oA As String, oB As String, oC As String, oD As String
+    Dim o1 As String, o2 As String, g As String
+    Dim tx As clsTransaction, errNum As Long, errDesc As String
+    Dim r As Variant, i As Long
+
+    On Error GoTo EH
+    b = DopJedinstven()
+    vr = "KULV-" & b
+    kS = DopKultura(vr, "S1")
+    kT = DopKultura(vr, "S1 teren")
+    kA = DopKooperant(b & "-KUL")
+    oA = DopOtkup(kA, FX_STANICA, kS, vr, "S1", 10, 0)
+    oB = DopOtkup(kA, FX_STANICA, kT, vr, "S1 teren", 12, 0)
+    oC = DopOtkup(kA, FX_STANICA, kT, vr, "S1 teren", 5, 0)
+    oD = DopOtkup(kA, FX_STANICA, kS, vr, "S1", 7, 0)
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ' Stari PWA uvoz: kultura po vrsti, prva kultura vrste.
+    Kul1Postavi TBL_OTKUP, COL_OTK_ID, oB, COL_OTK_KULTURA, kS
+    r = modIntegritet.KulturaListaOdstupanjaRedovi()
+    i = Kul1Red(r, 1, oB)
+    AssertEq CStr(i > 0) & "|" & CStr(Kul1Red(r, 1, oA) > 0), CStr(True) & "|" & CStr(False), _
+             "KUL1: list 'S1 teren' sa kulturom 'S1' je nalaz, list ciji tekst odgovara kulturi nije"
+    AssertEq CStr(r(i, 9)) & "|" & CStr(r(i, 10)) & "|" & CStr(r(i, 4)), kS & "|" & kT & "|AKTIVAN", _
+             "KUL1: sadasnja i ispravna kultura po resolveru, aktivan list"
+    AssertEq NalazSadrzi(modIntegritet.GetIntegritetRows(), "KUL1", oB), True, _
+             "KUL1 je u integritetu (RunAllChecks)"
+
+    ' Otpremnica od dva lista iste (pogresne) kulture: posle ispravke dve kulture.
+    o1 = Kul1Otpremnica(oA, oB, g)
+    AssertEq (Len(o1) > 0), True, "preduslov: otpremnica od dva lista iste kulture: " & g
+    r = modIntegritet.KulturaListaOdstupanjaRedovi()
+    i = Kul1Red(r, 1, oB)
+    AssertEq CStr(r(i, 11)) & "|" & CStr(r(i, 13)) & "|" & CStr(r(i, 17)), o1 & "|" & kS & "|DA", _
+             "KUL1: otpremnica lista, kultura zaglavlja i da bi posle ispravke imala listove dve kulture"
+
+    ' Storniran list sa istim kvarom je nalaz; tekst bez tacno jedne kulture takodje.
+    Kul1Postavi TBL_OTKUP, COL_OTK_ID, oC, COL_OTK_KULTURA, kS
+    Kul1Postavi TBL_OTKUP, COL_OTK_ID, oC, COL_OTK_STORNIRANO, "Da"
+    Kul1Postavi TBL_OTKUP, COL_OTK_ID, oD, COL_OTK_SORTA, "S1 nepoznata"
+    r = modIntegritet.KulturaListaOdstupanjaRedovi()
+    AssertEq CStr(Kul1Red(r, 1, oC) > 0) & "|" & CStr(Kul1Red(r, 1, oD) > 0), _
+             CStr(True) & "|" & CStr(True), _
+             "KUL1: storniran list i list cija se sorta ne razresava su nalazi"
+    AssertEq CStr(r(Kul1Red(r, 1, oC), 4)) & "|" & Left$(CStr(r(Kul1Red(r, 1, oD), 10)), 15), _
+             "STORNIRAN|NE RAZRESAVA SE", _
+             "KUL1: status storniranog lista i 'ne razresava se' za nepoznatu sortu"
+
+    ' Verzija: stara otpremnica (tekst starog oblika) stornirana, nova od istog
+    ' lista nosi tekst iz sifarnika po kulturi lista -- KI-092.
+    Kul1Postavi TBL_OTPREMNICA, COL_OTP_ID, o1, COL_OTP_SORTA, "S1 teren"
+    Kul1Postavi TBL_OTPREMNICA, COL_OTP_ID, o1, COL_STORNIRANO, "Da"
+    o2 = Kul1Otpremnica(oB, "", g)
+    AssertEq (Len(o2) > 0), True, "preduslov: nova verzija od istog lista: " & g
+    Kul1Postavi TBL_OTPREMNICA, COL_OTP_ID, o2, COL_TRACE_ISPRAVKA_OD_ID, o1
+    r = modIntegritet.KulturaVerzijeRedovi()
+    i = Kul1Red(r, 2, o2)
+    AssertEq (i > 0), True, "KUL2: nova verzija sa drugim tekstom sorte od prethodne je nalaz"
+    AssertEq CStr(r(i, 1)) & "|" & CStr(r(i, 6)) & "|" & CStr(r(i, 9)), TBL_OTPREMNICA & "|" & o1 & "|DA", _
+             "KUL2: prethodna verzija i list KI-093 u lancu"
+
+    tx.RollbackTx
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "T_KUL1_KulturaListaPoSorti", errDesc
+End Sub
+
+' Indeks reda u 2D nalazu ciji je stupac kol jednak id, ili 0.
+Private Function Kul1Red(ByVal r As Variant, ByVal kol As Long, ByVal id As String) As Long
+    Dim i As Long
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, kol)), id, vbTextCompare) = 0 Then
+            Kul1Red = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Podmetanje starog oblika u testu: jedna celija jednog reda, unutar transakcije.
+Private Sub Kul1Postavi(ByVal tbl As String, ByVal idCol As String, ByVal id As String, _
+                        ByVal kol As String, ByVal vrednost As Variant)
+    Dim rows As Collection
+    Set rows = FindRows(tbl, idCol, id)
+    If rows Is Nothing Then Err.Raise vbObjectError + 9409, "modTest.Kul1Postavi", tbl & " " & id
+    If rows.count <> 1 Then Err.Raise vbObjectError + 9409, "modTest.Kul1Postavi", tbl & " " & id
+    RequireUpdateCell tbl, rows(1), kol, vrednost, "modTest.Kul1Postavi"
+End Sub
+
+' Otpremnica od jednog ili dva lista -- isti pisac i zaglavlje kao lanac
+' (CreateOtpremnicaIzIzvora_TX), zaglavlje po prvom listu, vozac FX_VOZAC kao
+' u testovima otpremnice (14825). Ne VozacOgledaloZaStanicu: van maline fixture
+' ogledalo nema (prvi Excel prolaz testa 350: "Header polje je prazno: VozacID"),
+' a Ensure bi ga upisao u tblVozaci mimo snimka transakcije.
+Private Function Kul1Otpremnica(ByVal prvi As String, ByVal drugi As String, ByRef outG As String) As String
+    Dim h As Object, izvori As Collection, stanica As String, datum As Date
+    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_STANICA))
+    datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_DATUM))
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = stanica
+    h("VozacID") = FX_VOZAC
+    h("KulturaID") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_KULTURA))
+    h("TipAmbalaze") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_TIP_AMB))
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(stanica, datum)
+    Set izvori = New Collection
+    izvori.Add prvi
+    If Len(drugi) > 0 Then izvori.Add drugi
+    Kul1Otpremnica = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, outG)
+End Function
 
 ' Redovi specifikacije po natpisu: UKUPNO ZA ISPLATU (vrednost u koloni 10) i
 ' naslov rekapitulacije (prvi red podataka je dva reda ispod).

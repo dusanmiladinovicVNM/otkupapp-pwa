@@ -3,7 +3,7 @@
     "Rucne odluke za pojedinacne redove stare tblAmbalaza, po starom AmbID-ju.",
     "Svaka odluka vazi SAMO dok red izgleda tacno kao u 'provera'; ako se red promeni,",
     "alat ga vraca ZA ODLUKU (IZUZETAK_POTPIS_SE_NE_SLAZE) umesto da primeni staru odluku.",
-    "radnja: izuzmi | kretanje | za_odluku. Sekcija 'dokumenti': otpremnice kojima alat NE popravlja vezu (bez_popravke_veze, MIG-21) i koje prenosi kao stornirane (storniraj, uz proveru potpisa).",
+    "radnja: izuzmi | kretanje | za_odluku. Sekcija 'dokumenti', svaka odluka uz potpis reda ('provera'): otpremnice kojima alat NE popravlja vezu (bez_popravke_veze, MIG-21) i koje prenosi kao stornirane (storniraj, MIG-ODL-19); zbirne koje prenosi kao stornirane (storniraj, tabela tblZbirna, po BrojZbirne) i prijemnice kojima ispravlja broj zbirne (prevezi_prijemnicu) -- MIG-ODL-20; ispravke unosa koje se primenjuju na staru svesku u memoriji pre prevoda: ispravi_sortu (tipfeler sorte po stanici), ispravi_prijemnicu (vozac), storniraj prijemnicu -- MIG-ODL-23.",
     "Izvor odluka: MIG-19.11 (OMUlaz) i MIG-19.12 (AMB-00700), grana chore/import-migration-tools. OMUlaz bez izvora -> NABAVKA: odluka operatera 28.10.2026."
   ],
   "izuzeci": [
@@ -67,6 +67,124 @@
       "radnja": "storniraj",
       "provera": {"BrojOtpremnice": "2/050726", "Datum": "2026-07-05", "StanicaID": "ST-00002"},
       "razlog": "Nema blokova ni prijemnice, zbirna S2/050726 je stornirana -- prenosi se kao stornirana (MIG-ODL-19, odluka operatera 03.11.2026)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00177",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S5/180626-2",
+      "provera": {"BrojZbirne": "S5/180626"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00185",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S4/120626",
+      "provera": {"BrojZbirne": "S4/100626"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00195",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S4/210626",
+      "provera": {"BrojZbirne": "S4/200626-2"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00280",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S5/240626-2",
+      "provera": {"BrojZbirne": "S5/240626"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00313",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S8/250626",
+      "provera": {"BrojZbirne": "S5/250626-2"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00520",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S8/010726",
+      "provera": {"BrojZbirne": "S5/010726-2"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00549",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S4/020726-2",
+      "provera": {"BrojZbirne": "S4/020726"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00584",
+      "radnja": "prevezi_prijemnicu",
+      "BrojZbirne": "S2/030726",
+      "provera": {"BrojZbirne": "S3/030726"},
+      "razlog": "Nasledjen broj zbirne prethodnog unosa (stara forma nije praznila polje); pogresan je kasniji unos -- rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "tabela": "tblZbirna",
+      "BrojZbirne": "S3/220626",
+      "radnja": "storniraj",
+      "provera": {"BrojZbirne": "S3/220626"},
+      "razlog": "Otpremnice su joj stornirane, a ona nije (stari storno nije kaskadirao) -- prenosi se stornirana, rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "tabela": "tblZbirna",
+      "BrojZbirne": "S3/220626-2",
+      "radnja": "storniraj",
+      "provera": {"BrojZbirne": "S3/220626-2"},
+      "razlog": "Otpremnice su joj stornirane, a ona nije (stari storno nije kaskadirao) -- prenosi se stornirana, rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "tabela": "tblZbirna",
+      "BrojZbirne": "S5/210626",
+      "radnja": "storniraj",
+      "provera": {"BrojZbirne": "S5/210626"},
+      "razlog": "Otpremnice su joj stornirane, a ona nije (stari storno nije kaskadirao) -- prenosi se stornirana, rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "tabela": "tblZbirna",
+      "BrojZbirne": "S5/130626",
+      "radnja": "storniraj",
+      "provera": {"BrojZbirne": "S5/130626"},
+      "razlog": "Otpremnice su joj stornirane, a ona nije (stari storno nije kaskadirao) -- prenosi se stornirana, rucni spisak operatera 07.11.2026 (MIG-ODL-20)."
+    },
+    {
+      "radnja": "ispravi_sortu",
+      "tabela": "tblOtkup",
+      "VrstaVoca": "Malina",
+      "SortaVoca": "Mekker",
+      "po_stanici": {"ST-00001": "Meeker"},
+      "ostale": "Meeker teren",
+      "ocekivano": 5,
+      "razlog": "Tipfeler sorte; stanica 1 = Meeker, ostale stanice = Meeker teren (odluka operatera 08.11.2026, MIG-ODL-23)."
+    },
+    {
+      "radnja": "ispravi_sortu",
+      "tabela": "tblOtkup",
+      "VrstaVoca": "Malina",
+      "SortaVoca": "Miker",
+      "po_stanici": {"ST-00001": "Meeker"},
+      "ostale": "Meeker teren",
+      "ocekivano": 1,
+      "razlog": "Tipfeler sorte; stanica 1 = Meeker, ostale stanice = Meeker teren (odluka operatera 08.11.2026, MIG-ODL-23)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00749",
+      "radnja": "ispravi_prijemnicu",
+      "VozacID": "ST-00008",
+      "provera": {"BrojZbirne": "S8/100726", "VozacID": "ST-00005"},
+      "razlog": "Zamena storniranih PRJ-00745/746 za S8/100726 (ST-00008), uneta posle PRJ-00747/748 stanice 5: zbirna tacna, vozac zaostao (MIG-ODL-23)."
+    },
+    {
+      "PrijemnicaID": "PRJ-00908",
+      "radnja": "ispravi_prijemnicu",
+      "VozacID": "ST-00003",
+      "provera": {"BrojZbirne": "S3/260726-2", "VozacID": "ST-00006"},
+      "razlog": "Uneta stanica 6, treba 3 -- zbirna S3/260726-2 (odluka operatera 08.11.2026, MIG-ODL-23)."
     }
   ]
 }

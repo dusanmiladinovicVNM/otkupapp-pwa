@@ -22,6 +22,13 @@ Private Const INTEGRITET_SHEET As String = "INTEGRITET_PROVERE"
 Private Const PRAG_MANJAK_PCT As Double = 10#   ' manjak% iznad ovoga = "za proveru"
 Private Const PRAG_VISAK_PCT As Double = 5#     ' visak do ovoga se NE prijavljuje
 
+' KUL1/KUL2 (KI-093): status lista u nalazu i broj kolona bloka.
+Private Const KUL_AKTIVAN As String = "AKTIVAN"
+Private Const KUL_STORNIRAN As String = "STORNIRAN"
+Private Const KUL_NE_RAZRESAVA As String = "NE RAZRESAVA SE"
+Private Const KUL1_KOLONA As Long = 21
+Private Const KUL2_KOLONA As Long = 9
+
 Private m_ws As Worksheet
 Private m_row As Long
 Private m_summary As String
@@ -113,6 +120,417 @@ Private Sub RunAllChecks()
     Chk_A5_PreradaKg
     Chk_DOP1_OsnovicaDoplate
     Chk_GOT1_GotovinaPrekoOsnovice
+    Chk_KUL1_KulturaLista
+    Chk_KUL2_VerzijaDrugaSorta
+End Sub
+
+' ============================================================
+' CHECK KUL1 / KUL2: KULTURA OTKUPNOG LISTA (KI-093)
+' ============================================================
+' Stari PWA uvoz (modMasterSync.ImportRowToTblOtkup pre S4.1f) je kulturu trazio
+' SAMO po vrsti: list "Malina / Willamette teren" je dobio prvu kulturu maline.
+' Tekst sorte je tacan, KulturaID nije. Ovde se samo PRIKAZUJE: "tacna kultura"
+' je modOtkup.RazresiKulturuIzVrsteSorte, isti resolver koji koriste ekran i
+' uvoz -- drugo tumacenje se ovde ne pravi. Ispravka ide kroz pre-flight, ne
+' odavde.
+Private Sub Chk_KUL1_KulturaLista()
+    On Error GoTo EH
+    Dim rows As Variant
+    rows = KulturaListaOdstupanjaRedovi()
+    WriteBlock "KUL1", "Otkupni list: KulturaID se ne slaze sa (VrstaVoca, SortaVoca) -- KI-093", _
+               Array("OtkupID", "Broj", "Datum", "Status", "StanicaID", "KooperantID", _
+                     "VrstaVoca", "SortaVoca", "KulturaSada", "KulturaIspravna", _
+                     "OtpremnicaID", "BrojOtp", "OtpKulturaID", "OtpVrstaSorta", "OtpStatus", _
+                     "OtpPosleIspravke", "ViseKultura", "ZbirnaID", "BrojZbirne", _
+                     "ZbrVrstaSorta", "Prijemnice"), rows
+    WriteKulturaZbir rows
+    Exit Sub
+EH:
+    WriteErr "KUL1", Err.description
+End Sub
+
+' Verzije otpremnice i zbirne (IspravkaOdID) ciji se tekst vrste/sorte razlikuje
+' od prethodne verzije -- KI-092: nova verzija pise tekst iz sifarnika po
+' kulturi listova, a stara je nosila tekst starog oblika.
+Private Sub Chk_KUL2_VerzijaDrugaSorta()
+    On Error GoTo EH
+    WriteBlock "KUL2", "Verzija otpremnice/zbirne sa drugim tekstom sorte od prethodne -- KI-092/093", _
+               Array("Tabela", "ID", "Broj", "Status", "VrstaSorta", "PrethodnaID", _
+                     "PrethodniBroj", "PrethodnaVrstaSorta", "ListKI093"), _
+               KulturaVerzijeRedovi()
+    Exit Sub
+EH:
+    WriteErr "KUL2", Err.description
+End Sub
+
+' KI-093 -- otkupni listovi (aktivni I stornirani) ciji KulturaID nije ono sto
+' (VrstaVoca, SortaVoca) daje modOtkup.RazresiKulturuIzVrsteSorte. SAMO CITA.
+'
+' Za svaki list: aktivna otpremnica u kojoj je (zaglavlje, status), da li bi
+' posle ispravke imala listove RAZLICITIH kultura i sta bi bilo sa zaglavljem,
+' njena aktivna zbirna i aktivne prijemnice te zbirne. Clanstvo se cita istim
+' strogim citacima kao kod pisaca (AktivnoClanstvoOtpremnica/Zbirni), a tek kad
+' postoji bar jedan nalaz.
+'
+' 2D(1..n, 1..KUL1_KOLONA), kolone kao zaglavlje bloka KUL1; Empty kad nema.
+' Kolona 10 je ispravan KulturaID, ili KUL_NE_RAZRESAVA uz poruku resolvera
+' (nula ili vise pogodaka -- ista greska za resolver).
+Public Function KulturaListaOdstupanjaRedovi() As Variant
+    Const SRC As String = "modIntegritet.KulturaListaOdstupanjaRedovi"
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim cId As Long, cBr As Long, cDat As Long, cSta As Long, cKoop As Long
+    Dim cVr As Long, cSo As Long, cKul As Long, cSto As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_OTKUP, COL_OTK_SORTA, SRC)
+    cKul = RequireColumnIndex(TBL_OTKUP, COL_OTK_KULTURA, SRC)
+    cSto = RequireColumnIndex(TBL_OTKUP, COL_OTK_STORNIRANO, SRC)
+
+    ' 1) Kultura svakog lista posle ispravke; resolver se pita jednom po paru.
+    Dim memo As Object: Set memo = CreateObject("Scripting.Dictionary")
+    memo.CompareMode = vbTextCompare
+    Dim posle As Object: Set posle = CreateObject("Scripting.Dictionary")
+    posle.CompareMode = vbTextCompare
+    Dim storniran As Object: Set storniran = CreateObject("Scripting.Dictionary")
+    storniran.CompareMode = vbTextCompare
+    Dim losi As Collection: Set losi = New Collection
+
+    Dim i As Long, oid As String, vr As String, so As String, sada As String
+    Dim kv As String, res As Variant, ispr As String, greska As String
+    For i = 1 To UBound(d, 1)
+        oid = Trim$(NzToText(d(i, cId)))
+        If Len(oid) > 0 Then
+            vr = Trim$(NzToText(d(i, cVr)))
+            so = Trim$(NzToText(d(i, cSo)))
+            kv = vr & "|" & so
+            If Not memo.Exists(kv) Then
+                greska = ""
+                ispr = modOtkup.RazresiKulturuIzVrsteSorte(vr, so, greska)
+                memo.Add kv, Array(ispr, greska)
+            End If
+            res = memo(kv)
+            sada = Trim$(NzToText(d(i, cKul)))
+            storniran(oid) = (StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) = 0)
+            If Len(CStr(res(1))) > 0 Then
+                posle(oid) = sada
+                losi.Add i
+            Else
+                posle(oid) = CStr(res(0))
+                If StrComp(sada, CStr(res(0)), vbTextCompare) <> 0 Then losi.Add i
+            End If
+        End If
+    Next i
+    If losi.count = 0 Then Exit Function
+
+    ' 2) Lanac: aktivno clanstvo i zaglavlja.
+    Dim otpPoOtk As Object, zbrPoOtp As Object
+    Set otpPoOtk = modDokumenta.AktivnoClanstvoOtpremnica()
+    Set zbrPoOtp = modDokumenta.AktivnoClanstvoZbirni()
+
+    Dim clanovi As Object: Set clanovi = CreateObject("Scripting.Dictionary")
+    clanovi.CompareMode = vbTextCompare
+    Dim kk As Variant, o As String
+    For Each kk In otpPoOtk.keys
+        o = CStr(otpPoOtk(kk))
+        If clanovi.Exists(o) Then
+            clanovi(o) = clanovi(o) & "|" & CStr(kk)
+        Else
+            clanovi.Add o, CStr(kk)
+        End If
+    Next kk
+
+    Dim dOtp As Variant, dZbr As Variant, otpRed As Object, zbrRed As Object
+    dOtp = GetTableData(TBL_OTPREMNICA)
+    dZbr = GetTableData(TBL_ZBIRNA)
+    Set otpRed = KulRedPoID(dOtp, TBL_OTPREMNICA, COL_OTP_ID)
+    Set zbrRed = KulRedPoID(dZbr, TBL_ZBIRNA, COL_ZBR_ID)
+
+    Dim cOBr As Long, cOKul As Long, cOVr As Long, cOSo As Long, cOIzd As Long
+    Dim cZBr As Long, cZVr As Long, cZSo As Long
+    If IsArray(dOtp) Then
+        cOBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+        cOKul = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KULTURA, SRC)
+        cOVr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
+        cOSo = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_SORTA, SRC)
+        cOIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
+    End If
+    If IsArray(dZbr) Then
+        cZBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+        cZVr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA, SRC)
+        cZSo = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_SORTA, SRC)
+    End If
+    Dim prjPoZbr As Object
+    Set prjPoZbr = KulPrijemnicePoZbirni()
+
+    ' 3) Redovi nalaza.
+    Dim outC As Collection: Set outC = New Collection
+    Dim it As Variant, otpID As String, zbrID As String, j As Long
+    Dim oBroj As String, oKult As String, oVS As String, oSt As String
+    Dim posleTxt As String, vise As String, zBroj As String, zVS As String, prj As String
+    Dim kult As Object, cl As Variant, m As Long, jedna As String
+    For Each it In losi
+        i = CLng(it)
+        oid = Trim$(NzToText(d(i, cId)))
+        res = memo(Trim$(NzToText(d(i, cVr))) & "|" & Trim$(NzToText(d(i, cSo))))
+        If Len(CStr(res(1))) > 0 Then
+            ispr = KUL_NE_RAZRESAVA & ": " & CStr(res(1))
+        Else
+            ispr = CStr(res(0))
+        End If
+
+        otpID = "": oBroj = "": oKult = "": oVS = "": oSt = ""
+        posleTxt = "": vise = "": zbrID = "": zBroj = "": zVS = "": prj = ""
+        If otpPoOtk.Exists(UCase$(oid)) Then otpID = CStr(otpPoOtk(UCase$(oid)))
+        If Len(otpID) > 0 And otpRed.Exists(otpID) Then
+            j = CLng(otpRed(otpID))
+            oBroj = Trim$(NzToText(dOtp(j, cOBr)))
+            oKult = Trim$(NzToText(dOtp(j, cOKul)))
+            oVS = Trim$(NzToText(dOtp(j, cOVr))) & " / " & Trim$(NzToText(dOtp(j, cOSo)))
+            oSt = Trim$(NzToText(dOtp(j, cOIzd)))
+
+            ' kulture aktivnih listova te otpremnice posle ispravke
+            Set kult = CreateObject("Scripting.Dictionary")
+            kult.CompareMode = vbTextCompare
+            If clanovi.Exists(otpID) Then
+                cl = Split(CStr(clanovi(otpID)), "|")
+                For m = LBound(cl) To UBound(cl)
+                    If storniran.Exists(CStr(cl(m))) Then
+                        If Not storniran(CStr(cl(m))) Then
+                            If Not kult.Exists(CStr(posle(CStr(cl(m))))) Then kult.Add CStr(posle(CStr(cl(m)))), True
+                        End If
+                    End If
+                Next m
+            End If
+            If kult.count > 1 Then
+                vise = "DA"
+                posleTxt = "listovi: " & Join(kult.keys, ", ")
+            Else
+                vise = "NE"
+                jedna = ""
+                If kult.count = 1 Then jedna = CStr(kult.keys()(0))
+                If Len(oKult) = 0 Then
+                    posleTxt = "zaglavlje prazno (stari oblik); listovi " & jedna
+                ElseIf StrComp(oKult, jedna, vbTextCompare) <> 0 Then
+                    posleTxt = "zaglavlje " & oKult & " -> " & jedna
+                Else
+                    posleTxt = "zaglavlje ostaje " & oKult
+                End If
+            End If
+
+            If zbrPoOtp.Exists(UCase$(otpID)) Then zbrID = CStr(zbrPoOtp(UCase$(otpID)))
+            If Len(zbrID) > 0 And zbrRed.Exists(zbrID) Then
+                j = CLng(zbrRed(zbrID))
+                zBroj = Trim$(NzToText(dZbr(j, cZBr)))
+                zVS = Trim$(NzToText(dZbr(j, cZVr))) & " / " & Trim$(NzToText(dZbr(j, cZSo)))
+            End If
+            If Len(zbrID) > 0 And prjPoZbr.Exists(zbrID) Then prj = CStr(prjPoZbr(zbrID))
+        End If
+
+        outC.Add Array(oid, Trim$(NzToText(d(i, cBr))), d(i, cDat), _
+                       IIf(storniran(oid), KUL_STORNIRAN, KUL_AKTIVAN), _
+                       Trim$(NzToText(d(i, cSta))), Trim$(NzToText(d(i, cKoop))), _
+                       Trim$(NzToText(d(i, cVr))), Trim$(NzToText(d(i, cSo))), _
+                       Trim$(NzToText(d(i, cKul))), ispr, otpID, oBroj, oKult, oVS, oSt, _
+                       posleTxt, vise, zbrID, zBroj, zVS, prj)
+    Next it
+
+    KulturaListaOdstupanjaRedovi = CollToArray(outC, KUL1_KOLONA)
+End Function
+
+' KI-092/093 -- verzije otpremnice i zbirne ciji se tekst vrste/sorte razlikuje
+' od prethodne verzije. Prethodna verzija je IspravkaOdID; zbirna bez te kolone
+' (pre PR #471) trazi je po broju IspravkaOd medju storniranim zbirnama, i to
+' samo kad je pogodak tacno jedan. ListKI093: DA kad je u lancu verzije bar
+' jedan list iz KUL1. 2D(1..n, 1..KUL2_KOLONA); Empty kad nema. SAMO CITA.
+Public Function KulturaVerzijeRedovi() As Variant
+    Dim losi As Object: Set losi = CreateObject("Scripting.Dictionary")
+    losi.CompareMode = vbTextCompare
+    Dim kul1 As Variant, i As Long
+    kul1 = KulturaListaOdstupanjaRedovi()
+    If IsArray(kul1) Then
+        For i = 1 To UBound(kul1, 1)
+            losi(CStr(kul1(i, 1))) = True
+        Next i
+    End If
+
+    Dim outC As Collection: Set outC = New Collection
+    KulVerzijeTabele outC, TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_VRSTA, COL_OTP_SORTA, losi
+    KulVerzijeTabele outC, TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_VRSTA, COL_ZBR_SORTA, losi
+    KulturaVerzijeRedovi = CollToArray(outC, KUL2_KOLONA)
+End Function
+
+Private Sub KulVerzijeTabele(ByVal outC As Collection, ByVal tbl As String, ByVal colId As String, _
+                             ByVal colBr As String, ByVal colVr As String, ByVal colSo As String, _
+                             ByVal losi As Object)
+    Const SRC As String = "modIntegritet.KulVerzijeTabele"
+    Dim d As Variant
+    d = GetTableData(tbl)
+    If Not IsArray(d) Then Exit Sub
+
+    Dim cId As Long, cBr As Long, cVr As Long, cSo As Long, cSto As Long, cOdID As Long, cOd As Long
+    cId = RequireColumnIndex(tbl, colId, SRC)
+    cBr = RequireColumnIndex(tbl, colBr, SRC)
+    cVr = RequireColumnIndex(tbl, colVr, SRC)
+    cSo = RequireColumnIndex(tbl, colSo, SRC)
+    cSto = RequireColumnIndex(tbl, COL_STORNIRANO, SRC)
+    cOdID = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD_ID)
+    cOd = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD)
+    If cOdID = 0 And cOd = 0 Then Exit Sub
+
+    Dim poID As Object
+    Set poID = KulRedPoID(d, tbl, colId)
+
+    Dim i As Long, j As Long, k As Long, prevID As String, prevBr As String, pogodaka As Long
+    Dim tekst As String, prevTekst As String
+    For i = 1 To UBound(d, 1)
+        j = 0
+        prevID = ""
+        If cOdID > 0 Then prevID = Trim$(NzToText(d(i, cOdID)))
+        If Len(prevID) > 0 Then
+            If poID.Exists(prevID) Then j = CLng(poID(prevID))
+        ElseIf cOdID = 0 Then
+            ' zbirna pre PR #471: prethodna samo po broju, tacno jedan storniran pogodak
+            prevBr = Trim$(NzToText(d(i, cOd)))
+            If Len(prevBr) > 0 Then
+                pogodaka = 0
+                For k = 1 To UBound(d, 1)
+                    If k <> i Then
+                        If StrComp(Trim$(NzToText(d(k, cBr))), prevBr, vbTextCompare) = 0 And _
+                           StrComp(Trim$(NzToText(d(k, cSto))), "Da", vbTextCompare) = 0 Then
+                            pogodaka = pogodaka + 1
+                            j = k
+                        End If
+                    End If
+                Next k
+                If pogodaka <> 1 Then j = 0
+            End If
+        End If
+        If j > 0 Then
+            tekst = Trim$(NzToText(d(i, cVr))) & " / " & Trim$(NzToText(d(i, cSo)))
+            prevTekst = Trim$(NzToText(d(j, cVr))) & " / " & Trim$(NzToText(d(j, cSo)))
+            If StrComp(tekst, prevTekst, vbTextCompare) <> 0 Then
+                outC.Add Array(tbl, Trim$(NzToText(d(i, cId))), Trim$(NzToText(d(i, cBr))), _
+                               IIf(StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) = 0, _
+                                   KUL_STORNIRAN, KUL_AKTIVAN), _
+                               tekst, Trim$(NzToText(d(j, cId))), Trim$(NzToText(d(j, cBr))), prevTekst, _
+                               KulListKI093(tbl, Trim$(NzToText(d(i, cId))), losi))
+            End If
+        End If
+    Next i
+End Sub
+
+' Da li je u lancu verzije bar jedan list iz KUL1: otpremnica -> njeni izvori;
+' zbirna -> njene otpremnice -> njihovi izvori. Strogi citaci clanstva; njihov pad
+' je tekst u koloni (jedna losa verzija ne skriva ostale), ne pad bloka.
+Private Function KulListKI093(ByVal tbl As String, ByVal id As String, ByVal losi As Object) As String
+    Dim otpremnice As Collection, izv As Collection, a As Long, b As Long
+    On Error GoTo EH
+    Set otpremnice = New Collection
+    If tbl = TBL_ZBIRNA Then
+        Set otpremnice = modDokumenta.IzvoriZbirne(id)
+    Else
+        otpremnice.Add id
+    End If
+    For a = 1 To otpremnice.count
+        Set izv = modDokumenta.IzvoriOtpremnice(CStr(otpremnice(a)))
+        For b = 1 To izv.count
+            If losi.Exists(CStr(izv(b))) Then
+                KulListKI093 = "DA"
+                Exit Function
+            End If
+        Next b
+    Next a
+    KulListKI093 = "NE"
+    Exit Function
+EH:
+    KulListKI093 = "? " & Err.description
+End Function
+
+' UCase-neosetljiva mapa ID -> indeks reda (prvi pogodak).
+Private Function KulRedPoID(ByVal d As Variant, ByVal tbl As String, ByVal colId As String) As Object
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set KulRedPoID = res
+    If Not IsArray(d) Then Exit Function
+    Dim c As Long, i As Long, id As String
+    c = RequireColumnIndex(tbl, colId, "modIntegritet.KulRedPoID")
+    For i = 1 To UBound(d, 1)
+        id = Trim$(NzToText(d(i, c)))
+        If Len(id) > 0 Then
+            If Not res.Exists(id) Then res.Add id, i
+        End If
+    Next i
+End Function
+
+' ZbirnaID (kanonski roditelj, ZbirnaRoditeljID) -> "broj (vrsta / sorta); ..."
+' aktivnih prijemnica.
+Private Function KulPrijemnicePoZbirni() As Object
+    Const SRC As String = "modIntegritet.KulPrijemnicePoZbirni"
+    Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set KulPrijemnicePoZbirni = res
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    Dim cRod As Long, cBr As Long, cVr As Long, cSo As Long, cSto As Long, i As Long
+    Dim rod As String, opis As String
+    cRod = RequireColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, SRC)
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    cSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+    cSto = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+    For i = 1 To UBound(d, 1)
+        rod = Trim$(NzToText(d(i, cRod)))
+        If Len(rod) > 0 And StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then
+            opis = Trim$(NzToText(d(i, cBr))) & " (" & Trim$(NzToText(d(i, cVr))) & " / " & _
+                   Trim$(NzToText(d(i, cSo))) & ")"
+            If res.Exists(rod) Then
+                res(rod) = res(rod) & "; " & opis
+            Else
+                res.Add rod, opis
+            End If
+        End If
+    Next i
+End Function
+
+' Zbir po (sadasnji -> ispravan) KulturaID, samo na sheet: zbir nije nov nalaz,
+' pa se ne broji u m_totalIssues.
+Private Sub WriteKulturaZbir(ByVal rows As Variant)
+    If Not m_toSheet Then Exit Sub
+    If Not IsArray(rows) Then Exit Sub
+
+    Dim zbir As Object: Set zbir = CreateObject("Scripting.Dictionary")
+    zbir.CompareMode = vbTextCompare
+    Dim i As Long, kl As String, v As Variant
+    For i = 1 To UBound(rows, 1)
+        kl = CStr(rows(i, 9)) & " -> " & CStr(rows(i, 10))
+        If Not zbir.Exists(kl) Then zbir.Add kl, Array(0&, 0&)
+        v = zbir(kl)
+        If CStr(rows(i, 4)) = KUL_STORNIRAN Then
+            v(1) = v(1) + 1
+        Else
+            v(0) = v(0) + 1
+        End If
+        zbir(kl) = v
+    Next i
+
+    m_row = m_row - 1    ' odmah ispod bloka KUL1, pre njegovog praznog separatora
+    WriteLine "    Zbir po (sadasnji -> ispravan) KulturaID:", True
+    Dim kk As Variant
+    For Each kk In zbir.keys
+        v = zbir(kk)
+        WriteLine "      " & CStr(kk) & ": " & CStr(v(0) + v(1)) & " (aktivnih " & CStr(v(0)) & _
+                  ", storniranih " & CStr(v(1)) & ")", False
+    Next kk
+    m_row = m_row + 1
 End Sub
 
 ' ============================================================
@@ -1552,7 +1970,7 @@ End Sub
 
 Private Sub FinishIntegritetSheet()
     On Error Resume Next
-    m_ws.columns("A:I").AutoFit   ' C4 sada ima 9 kolona
+    m_ws.columns("A:U").AutoFit   ' C4 ima 9 kolona, KUL1 21
     m_ws.Activate
     On Error GoTo 0
 End Sub

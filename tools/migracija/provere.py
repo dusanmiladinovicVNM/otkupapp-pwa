@@ -35,7 +35,31 @@ def proveri(c):
     _hladnjaca(c)
     _ambalaza(c)
     _otpremnice_preostalo(c)
+    _otpremnice_vise_kultura(c)
     return c.nalazi
+
+
+def _otpremnice_vise_kultura(c):
+    """Posle MIG-ODL-21 listovi nose kulturu po sorti, pa stara otpremnica moze
+    imati aktivne listove DVE kulture (Willamette i Willamette teren u istoj
+    isporuci). Nova sveska je cita, ali potez u lancu (F8/F1) i F2 "Ispravi" nad
+    njom prolaze samo kad listovi nove verzije imaju jednu kulturu (KI-091,
+    modDokumenta.OtpKulturaVerzije) -- spisak, da operater zna unapred."""
+    kult = {kljuc(z.get("OtkupID")): tekst(z.get("KulturaID")) for z in c.tabele.get("tblOtkup", [])
+            if not je_storno(_kf(z))}
+    po_otp = defaultdict(lambda: defaultdict(int))
+    for v in c.tabele.get("tblOtpremnicaIzvori", []):
+        o = kljuc(v.get("OtkupID"))
+        if o in kult:
+            po_otp[kljuc(v.get("OtpremnicaID"))][kult[o]] += 1
+    for z in c.tabele.get("tblOtpremnica", []):
+        k = po_otp.get(kljuc(z.get("OtpremnicaID")), {})
+        if je_storno(_kf(z)) or len(k) < 2:
+            continue
+        c.nalaz(UPOZORENJE, "OTPREMNICA_LISTOVI_VISE_KULTURA", "tblOtpremnica", z.get("OtpremnicaID"),
+                "broj %s: aktivni listovi %s -- potez u lancu i F2 'Ispravi' prolaze samo kad listovi nove "
+                "verzije imaju jednu kulturu (KI-091)" % (
+                    z.get("BrojOtpremnice", ""), ", ".join("%s x%d" % (kk or "(prazno)", n) for kk, n in sorted(k.items()))))
 
 
 def _ceo_broj(d):
