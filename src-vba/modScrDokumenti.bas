@@ -1252,7 +1252,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                           Poruka("OTKUI_ASK_STORNO2") & vbCrLf & vbCrLf & _
                           Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & opisLnc, _
-                          vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+                          IIf(modDokumenta.LncTekstImaUpozorenje(opisLnc), _
+                              vbExclamation + vbYesNo + vbDefaultButton2, _
+                              vbQuestion + vbYesNo), APP_NAME) = vbNo Then Exit Function
                 If modStornoDok.StornoIzvrsi(modStornoDok.STIP_OTKUP, broj, "", porLnc, otkupID) Then
                     Scr_ResetCache
                     RowAction = True
@@ -1664,7 +1666,12 @@ Private Function PotvrdiIspravkuULancu(ByVal otkupID As String) As Boolean
         mPotvrdaLancaTest = txt
         Exit Function
     End If
-    PotvrdiIspravkuULancu = (MsgBox(txt, vbQuestion + vbYesNo, APP_NAME) = vbYes)
+    ' LNC-ODL-21: sa upozorenjem o promeni kolicine "Ne" je podrazumevano.
+    If modDokumenta.LncTekstImaUpozorenje(opis) Then
+        PotvrdiIspravkuULancu = (MsgBox(txt, vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
+    Else
+        PotvrdiIspravkuULancu = (MsgBox(txt, vbQuestion + vbYesNo, APP_NAME) = vbYes)
+    End If
     Exit Function
 EH:
     PotvrdiIspravkuULancu = False

@@ -1234,7 +1234,13 @@ Private Function ObicanStorno() As Boolean
 
     ' Revers: tekst imenuje i stanicu i dan -- isti KOOP broj, smer i dan legalno
     ' nose reversi dve stanice (REV-IDENT-01 Faza 2b), a ovo je poslednja kapija.
-    If MsgBox(StornoPotvrdaTekst(), vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+    ' LNC-ODL-21: potvrda sa upozorenjem o promeni kolicine nudi "Ne" kao
+    ' podrazumevano (obrazac rizicnih potvrda u projektu).
+    Dim txtPotvrde As String, stilPotvrde As VbMsgBoxStyle
+    txtPotvrde = StornoPotvrdaTekst()
+    stilPotvrde = vbQuestion + vbYesNo
+    If modDokumenta.LncTekstImaUpozorenje(txtPotvrde) Then stilPotvrde = vbExclamation + vbYesNo + vbDefaultButton2
+    If MsgBox(txtPotvrde, stilPotvrde, APP_NAME) = vbNo Then Exit Function
     ' List u otpremnici ide potezom u lancu (LNC-ODL-05); posle storna to vise ne
     ' moze da se pita, pa se zna PRE poziva. Uspeh poteza je INFORMACIJA (novi
     ' brojevi), ne upozorenje (review #471, nalaz 21).
