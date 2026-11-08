@@ -262,8 +262,9 @@ poredi staru otpremnicu sa njenim listovima, po klasi, za kg i gajbe, istim telo
 `PAZNJA:` sa svim razlikama, po klasi, za kg i gajbe („klasa I: na otpremnici 679.50 kg, zbir listova
 649.10 kg (30.40 kg vise)"), a operater bira Da/Ne (`LNC-ODL-21`, odluka operatera 08.11.2026; dijalog tada
 nudi „Ne" kao podrazumevano). Isto važi za **izdatu zbirnu**: nova verzija je zbir otpremnica, pa se stara
-zbirna poredi sa svojim otpremnicama, a razlika otpremnice se najavljuje i na njoj (review KI-094: isti kvar
-jedan nivo iznad, ranije nevidljiv i za `LNC-INV-06`). Posle „Da" nova verzija nosi zbir izvora, a upozorenje
+zbirna poredi sa **zbirom svojih izvora** — stavke ostalih otpremnica plus listovi ove otpremnice — što je tačno
+neto promena zbirne (review KI-094: isti kvar jedan nivo iznad, ranije nevidljiv i za `LNC-INV-06`; zbirna
+koja se sa listovima slaže ne dobija upozorenje ni kad se otpremnica ne slaže). Posle „Da" nova verzija nosi zbir izvora, a upozorenje
 ide u log posle commit-a. Test: `Test_LNC_OtpremnicaNeuskladjenaSaListovima`; `KI-094`.
 
 **Otvoreno, neizmereno (`KI-092`).** Nova verzija otpremnice upisuje `VrstaVoca`/`SortaVoca`

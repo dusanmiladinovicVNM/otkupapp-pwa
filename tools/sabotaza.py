@@ -7643,10 +7643,18 @@ SABOTAZE = {
     # Zbirna se ne poredi sa svojim otpremnicama: zbirna' tiho menja kolicinu.
     "lnc-neuskladjena-zbr-tiho": (
         "modDokumenta.bas",
-        "            zbrDeo = LncRazlikeTekst(ocek, pov, \" kg\", False, \"zbirnoj\", \"zbir otpremnica\")\n",
+        "            zbrDeo = LncRazlikeTekst(zOcek, zPov, \" kg\", False, \"zbirnoj\", \"zbir izvora\")\n",
         "            zbrDeo = \"\"   ' SABOTAZA: zbirna bez upozorenja\n",
         "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
         "LNC neuskladjena zbirna: potvrda upozorava i na zbirnoj",
+    ),
+    # Gajbe zbirne se ne porede: zbirna' tiho menja broj gajbi.
+    "lnc-neuskladjena-zbr-bez-gajbi": (
+        "modDokumenta.bas",
+        "            s = LncRazlikeTekst(zOcekAmb, zPovAmb, \" gajbi\", True, \"zbirnoj\", \"zbir izvora\")\n",
+        "            s = \"\"   ' SABOTAZA: gajbe zbirne se ne porede\n",
+        "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
+        "LNC neuskladjena zbirna: razlika u gajbama zbirne se prijavljuje",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.

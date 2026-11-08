@@ -27398,7 +27398,8 @@ End Sub
 ' pocinje upozorenjem sa obe kolicine"; lnc-neuskladjena-otp-bez-gajbi -> "LNC
 ' neuskladjena otpremnica: razlika u gajbama se takodje prijavljuje";
 ' lnc-neuskladjena-zbr-tiho -> "LNC neuskladjena zbirna: potvrda upozorava i na
-' zbirnoj".
+' zbirnoj"; lnc-neuskladjena-zbr-bez-gajbi -> "LNC neuskladjena zbirna: razlika u
+' gajbama zbirne se prijavljuje".
 Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     Const SRC As String = "Test_LNC_OtpremnicaNeuskladjenaSaListovima"
     Dim scenario As String
@@ -27407,9 +27408,10 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     Dim otkE As String, otkF As String, otp3 As String, zbr3 As String, zbrBroj As String
     Dim plan As Object, razStorno As String
     Dim opis As String, opisIspr As String, opisOba As String, opisGajbe As String
-    Dim opisUsklad As String, opisZbrOtp As String, opisZbr As String
+    Dim opisUsklad As String, opisZbrOtp As String, opisZbrNula As String
+    Dim opisZbr As String, opisZbrGajbe As String
     Dim ok As Boolean, g As String, por As String, kolNova As Double
-    Dim v1 As Boolean, v2k As Boolean, v2g As Boolean, v3o As Boolean, v3z As Boolean
+    Dim v1 As Boolean, v2k As Boolean, v2g As Boolean, v3o As Boolean, v3z As Boolean, v3g As Boolean
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -27451,7 +27453,10 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     v2g = False
     opisUsklad = modDokumenta.LncPlanOpisZaOtkup(otkC)
 
-    ' --- (3) izdata zbirna: razlika otpremnice prelazi na nju; zbirna sama neuskladjena
+    ' --- (3) izdata zbirna, poredjena sa zbirom izvora (ostale otpremnice + listovi):
+    '     (a) zbirna nosi neuskladjenu otpremnicu (oblik nalaza): obe razlike;
+    '     (b) zbirna se slaze sa listovima, a otpremnica ne: zbirna bez neto promene;
+    '     (c) otpremnica uskladjena, zbirna ne; (d) gajbe zbirne.
     otkE = LncOtkup("LNC14E-" & scenario, 200#, 0#, TEST_TIP_AMB)
     otkF = LncOtkup("LNC14F-" & scenario, 100#, 0#, TEST_TIP_AMB)
     otp3 = LncOtp("LNC14Z-" & scenario, Pr3Izvor(otkE, otkF), TEST_TIP_AMB)
@@ -27459,7 +27464,12 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     zbrBroj = LncZbrPolje(zbr3, COL_ZBR_BROJ)
     v3o = True
     S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp3, COL_OPS_KOLICINA, 330#
+    v3z = True
+    S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOLICINA, 330#
     opisZbrOtp = modDokumenta.LncPlanOpisZaOtkup(otkE)
+    S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOLICINA, 300#
+    v3z = False
+    opisZbrNula = modDokumenta.LncPlanOpisZaOtkup(otkE)
     S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp3, COL_OPS_KOLICINA, 300#
     v3o = False
     v3z = True
@@ -27467,6 +27477,11 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     opisZbr = modDokumenta.LncPlanOpisZaOtkup(otkE)
     S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOLICINA, 300#
     v3z = False
+    v3g = True
+    S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOL_AMB, 4#
+    opisZbrGajbe = modDokumenta.LncPlanOpisZaOtkup(otkE)
+    S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOL_AMB, 0#
+    v3g = False
 
     AssertEquals "", razStorno, "LNC neuskladjena otpremnica: potez se ne odbija"
     AssertTrue Left$(opis, Len("PAZNJA:")) = "PAZNJA:" And _
@@ -27487,10 +27502,17 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
     AssertTrue modDokumenta.LncTekstImaUpozorenje(opis) And _
                Not modDokumenta.LncTekstImaUpozorenje(opisUsklad), _
                "LNC neuskladjena otpremnica: dijalog prepoznaje upozorenje"
-    AssertTrue InStr(1, opisZbrOtp, "prelazi i na zbirnu " & zbrBroj, vbBinaryCompare) > 0, _
-               "LNC neuskladjena otpremnica: razlika se najavljuje i na zbirnoj"
-    AssertTrue InStr(1, opisZbr, "na zbirnoj 310.00 kg, zbir otpremnica 300.00 kg", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, opisZbrOtp, "na otpremnici 330.00 kg", vbBinaryCompare) > 0 And _
+               InStr(1, opisZbrOtp, "Zbirna " & zbrBroj, vbBinaryCompare) > 0 And _
+               InStr(1, opisZbrOtp, "na zbirnoj 330.00 kg, zbir izvora 300.00 kg", vbBinaryCompare) > 0, _
+               "LNC neuskladjena zbirna: razlika otpremnice se vidi i na zbirnoj"
+    AssertTrue InStr(1, opisZbrNula, "na otpremnici 330.00 kg", vbBinaryCompare) > 0 And _
+               InStr(1, opisZbrNula, "- Zbirna", vbBinaryCompare) = 0, _
+               "LNC neuskladjena zbirna: zbirna bez neto promene nema upozorenje"
+    AssertTrue InStr(1, opisZbr, "na zbirnoj 310.00 kg, zbir izvora 300.00 kg", vbBinaryCompare) > 0, _
                "LNC neuskladjena zbirna: potvrda upozorava i na zbirnoj"
+    AssertTrue InStr(1, opisZbrGajbe, "na zbirnoj 4 gajbi, zbir izvora 0 gajbi", vbBinaryCompare) > 0, _
+               "LNC neuskladjena zbirna: razlika u gajbama zbirne se prijavljuje"
     Exit Sub
 
 EH:
@@ -27502,6 +27524,7 @@ EH:
     If v2g Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp2, COL_OPS_KOL_AMB, 0#
     If v3o Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp3, COL_OPS_KOLICINA, 300#
     If v3z Then S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOLICINA, 300#
+    If v3g Then S6K4Postavi TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr3, COL_ZBS_KOL_AMB, 0#
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
