@@ -3753,6 +3753,8 @@ End Function
 '   razlog -- "" kad potez sme; inace ZASTO ne sme, citljivo operateru;
 '   zaIspravku -- plan za ispravku: kapija kulture stare otpremnice meri i list
 '                 koji se ispravlja (nov list nosi njegovu kulturu)
+'   kolicinaNapomena -- upozorenje za potvrdu (LNC-ODL-21): stara otpremnica se
+'                     ne slaze sa listovima, a nova verzija nosi zbir listova
 '   stornoRazlog -- samo za STORNO: poslednji izvor uz aktivnu prijemnicu
 '                   (LNC-ODL-07). Ispravka list zamenjuje, pa za nju ne vazi.
 Public Function LncPlanLista(ByVal otkupID As String, _
@@ -3778,6 +3780,7 @@ Public Function LncPlanLista(ByVal otkupID As String, _
     p.Add "zbrSaPWA", False
     p.Add "razlog", ""
     p.Add "stornoRazlog", ""
+    p.Add "kolicinaNapomena", ""
 
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then
@@ -3858,15 +3861,11 @@ Public Function LncPlanLista(ByVal otkupID As String, _
     End If
 
     ' Nova verzija nosi zbir svojih listova (LNC-ODL-03 vazi samo nad uskladjenom
-    ' otpremnicom). Stara koja se sa listovima ne slaze bi tiho promenila
-    ' prijavljenu kolicinu -- odbija se OVDE, pre potvrde, sa brojevima.
-    Dim razlogKolicine As String
+    ' otpremnicom). Stara koja se sa listovima ne slaze promenila bi prijavljenu
+    ' kolicinu -- to NIJE odbijanje nego upozorenje u potvrdi (LNC-ODL-21, odluka
+    ' operatera 08.11.2026): operater bira Da/Ne, sa obe kolicine pred sobom.
     If mereni.count > 0 Then
-        razlogKolicine = OtpNeuskladjenaSaListovima(otpID, CStr(p("otpBroj")))
-        If Len(razlogKolicine) > 0 Then
-            p("razlog") = razlogKolicine
-            Exit Function
-        End If
+        p("kolicinaNapomena") = OtpNeuskladjenaSaListovima(otpID, CStr(p("otpBroj")))
     End If
 
     Dim zbrID As String
@@ -3946,12 +3945,16 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
         Exit Function
     End If
 
+    If Len(CStr(p("kolicinaNapomena"))) > 0 Then
+        m = CStr(p("kolicinaNapomena")) & vbCrLf & vbCrLf
+    End If
+
     If Not CBool(p("otpIzdata")) Then
-        m = "List izlazi iz nacrta otpremnice " & p("otpBroj") & " (bez novog broja)."
+        m = m & "List izlazi iz nacrta otpremnice " & p("otpBroj") & " (bez novog broja)."
     ElseIf p("otpPreostali").count > 0 Or zaIspravku Then
-        m = "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
+        m = m & "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
     Else
-        m = "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
+        m = m & "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
     End If
 
     If Len(CStr(p("zbrID"))) > 0 Then
@@ -4019,6 +4022,8 @@ Public Function StornoListaULancu_TX(ByVal otkupID As String, _
 
     Set p = LncPlanLista(otkupID)
     LncRequirePlan p, SRC
+    ' LNC-ODL-21: operater je potvrdio promenu kolicine -- trag u logu.
+    If Len(CStr(p("kolicinaNapomena"))) > 0 Then LogWarn SRC, CStr(p("kolicinaNapomena"))
 
     LncRasturi p, tx, SRC
 
@@ -4092,6 +4097,8 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
 
     Set p = LncPlanLista(stariOtkupID, True)
     LncRequirePlan p, SRC, False
+    ' LNC-ODL-21: operater je potvrdio promenu kolicine -- trag u logu.
+    If Len(CStr(p("kolicinaNapomena"))) > 0 Then LogWarn SRC, CStr(p("kolicinaNapomena"))
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
                   "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
@@ -6185,7 +6192,8 @@ End Function
 ' bude: 5/060726 je nosila 679,5 kg uz listove od 649,1, pa je ispravka lista za
 ' +1 kg dala novu verziju od 650,1 -- 30,4 kg je nestalo bez ijedne reci. Izdata
 ' verzija ne sme da nosi nista osim zbira listova (OtpRequireJednakost), pa se
-' razlika ne moze preneti: operater mora da je vidi PRE poteza. "" = uskladjena.
+' razlika ne moze preneti: operater mora da je vidi PRE poteza i da odluci
+' (LNC-ODL-21: upozorenje u potvrdi Da/Ne, ne odbijanje). "" = uskladjena.
 Private Function OtpNeuskladjenaSaListovima(ByVal otpID As String, _
                                             ByVal broj As String) As String
     Const SRC As String = "OtpNeuskladjenaSaListovima"
@@ -6204,12 +6212,10 @@ Private Function OtpNeuskladjenaSaListovima(ByVal otpID As String, _
         Exit Function
     End If
 
-    OtpNeuskladjenaSaListovima = "Otpremnica " & broj & " se ne slaze sa svojim listovima " & _
-        "(klasa " & klasa & "): na otpremnici " & Fmt2Zbr(o) & jed & ", zbir listova " & _
-        Fmt2Zbr(p) & jed & ". Nova verzija mora da nosi zbir listova, pa bi potez " & _
-        "promenio prijavljenu kolicinu za " & Fmt2Zbr(o - p) & jed & ". Proveri listove " & _
-        "ove otpremnice, pa lanac rasturi rucno: storno otpremnice na F8 (pre nje " & _
-        "zbirne, ako je ima), pa nova otpremnica na F2."
+    OtpNeuskladjenaSaListovima = "PAZNJA: otpremnica " & broj & " se ne slaze sa svojim " & _
+        "listovima (klasa " & klasa & "): na otpremnici " & Fmt2Zbr(o) & jed & ", zbir listova " & _
+        Fmt2Zbr(p) & jed & ". Nova verzija nosi zbir listova, pa razlika od " & _
+        Fmt2Zbr(o - p) & jed & " NE prelazi na nju. Nastavi samo ako je zbir listova tacan."
 End Function
 
 Private Function BuildOtpremnicaStavkaRowData(ByVal stavkaID As String, _

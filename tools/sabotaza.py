@@ -7623,14 +7623,14 @@ SABOTAZE = {
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
     ),
-    # Otpremnica neuskladjena sa listovima (rucna provera 08.11.2026): plan ne
-    # pita, pa potez tiho menja prijavljenu kolicinu (zatecen oblik nalaza).
+    # Otpremnica neuskladjena sa listovima (rucna provera 08.11.2026, LNC-ODL-21):
+    # plan ne upozorava, pa potez tiho menja prijavljenu kolicinu (zatecen oblik).
     "lnc-neuskladjena-otp-tiho": (
         "modDokumenta.bas",
-        "        razlogKolicine = OtpNeuskladjenaSaListovima(otpID, CStr(p(\"otpBroj\")))\n",
-        "        razlogKolicine = \"\"   ' SABOTAZA: neuskladjena otpremnica prolazi\n",
+        "        p(\"kolicinaNapomena\") = OtpNeuskladjenaSaListovima(otpID, CStr(p(\"otpBroj\")))\n",
+        "        p(\"kolicinaNapomena\") = \"\"   ' SABOTAZA: bez upozorenja\n",
         "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
-        "LNC neuskladjena otpremnica: plan odbija i navodi obe kolicine",
+        "LNC neuskladjena otpremnica: potvrda upozorava i navodi obe kolicine",
     ),
     # Kapija gleda samo kilograme: razlika u gajbama prolazi tiho.
     "lnc-neuskladjena-otp-bez-gajbi": (

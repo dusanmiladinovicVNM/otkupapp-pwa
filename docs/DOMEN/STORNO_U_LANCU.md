@@ -38,7 +38,7 @@ zapisuje kako, i šta je operater odlučio tamo gde pravilo ćuti.
 |---|---|---|
 | **`LNC-ODL-01`** | Storno i ispravka lista u lancu su **jedan potez i jedna transakcija**: list, nova verzija otpremnice, nova verzija zbirne i prevezivanje prijemnica — sve ili ništa | A13 „Redosled sam po sebi nije dovoljan — cela korekcija je JEDNA transakcija"; ZBR-KANON-03 |
 | **`LNC-ODL-02`** | Aktivne prijemnice stare zbirne se **prevezuju** na novu zbirnu. Količine, stavke, `PrijemnicaID`, palete i faktura se **ne diraju** | A13 „propagacija staje pred prvom nezavisnom činjenicom": prijemnica je kupčevo merenje. H1 „prijemnica se ne dira" = ne menja se njena količina; veza ide na aktivnu verziju, inače prijemnica postaje siroče |
-| **`LNC-ODL-03`** | Očekivanje nove otpremnice se **izvodi**: staro − list (+ novi list kod ispravke), po klasi, za kg i gajbe | Stara je bila izdata, a izdavanje je dokazalo očekivano = povezano po klasi (`OtpIzdaj`, `modDokumenta.bas:4923`). Umanjenje za jedan poznat list nije „izjednačavanje" koje je S3b-2a odbio. **Dopuna 08.11.2026:** premisa važi samo za usklađenu otpremnicu. Otpremnica starog oblika može da nosi očekivanje različito od zbira svojih listova, a nova izdata verzija sme da nosi samo zbir; zato plan takvu otpremnicu odbija pre potvrde (`OtpNeuskladjenaSaListovima`, KI-094) |
+| **`LNC-ODL-03`** | Očekivanje nove otpremnice se **izvodi**: staro − list (+ novi list kod ispravke), po klasi, za kg i gajbe | Stara je bila izdata, a izdavanje je dokazalo očekivano = povezano po klasi (`OtpIzdaj`, `modDokumenta.bas:4923`). Umanjenje za jedan poznat list nije „izjednačavanje" koje je S3b-2a odbio. **Dopuna 08.11.2026:** premisa važi samo za usklađenu otpremnicu. Otpremnica starog oblika može da nosi očekivanje različito od zbira svojih listova, a nova izdata verzija sme da nosi samo zbir; zato potvrda takvog poteza počinje upozorenjem (`LNC-ODL-21`, KI-094) |
 | **`LNC-ODL-04`** | Novac kao i danas: storno odvezuje (`ResetNovacOtkupLink`, virman postaje slobodan avans); ispravka prenosi na nov list i prijavljuje preplatu (PUT A) | `ODLUKA_NOVAC_PRI_STORNU.md` (A + D suženo); bez novog koda za novac |
 | **`LNC-ODL-05`** | Ulaz za storno: **F8 nad listom**. Umesto današnjeg odbijanja nudi radnju sa uvidom posledica pre potvrde | F8 već ima obrazac „prvo vidi posledice, pa odluči" (`GradiUvid`, `modStornoImpact`) |
 | **`LNC-ODL-06`** | Obim prvog reza: **storno + ispravka** lista u lancu. Premeštanje lista na drugu otpremnicu je naredni rez, istom mehanikom | — |
@@ -56,6 +56,7 @@ zapisuje kako, i šta je operater odlučio tamo gde pravilo ćuti.
 | **`LNC-ODL-18`** | **Poništavanje storna (UNDO) se odbija** za storno lista koji je deo poteza u lancu. Greška se ispravlja novim potezom, ne vraćanjem dela | Žurnal pamti samo otkup i novac (`modStornoZurnal.PkColForTable`, `:326`); otpremnicu i zbirnu ne. Vraćen stari list bi stajao van svake otpremnice: izgubljen blok, nova malina auto-otpremnica, a kod ispravke dupli zbir |
 | **`LNC-ODL-19`** | Zbirna sa vozačevog PWA: potez **prolazi**, a poruka kaže da telefon prikazuje stari broj zbirne. Upis novog broja na telefon je poseban rez | Povratni upis u VOZ sheet ide jednom, pri uvozu (`modMasterSync.WriteBackVOZSyncStatus`); ponovno slanje stare zbirne ostaje duplikat (`ZbirnaPoClientRecordID`), ne pravi novu |
 | **`LNC-ODL-20`** | Korekcija = **red po paru u `tblStornoVeze`** (list, otpremnica, zbirna — svaki svoj `CorrectionID`), vezani **zajedničkim korenom**: svi redovi poteza nose `ParentDocType = LANAC`; red lista je koren (`ParentDocID` prazan), a redovi otpremnice i zbirne nose `ParentDocID` = `CorrectionID` korena. Dokument nosi `CorrectionID` svog para | `tblStornoVeze` drži jedan par po ključu (`CreateCorrectionContext`), a S9 istoriju čita par po par (`SLED-ODL-03`). **Precizira A13:** „isti CorrectionID" znači „isti koren korekcije" |
+| **`LNC-ODL-21`** | Stara otpremnica koja se **ne slaže sa svojim listovima** (očekivano ≠ zbir listova po klasi, za kg ili gajbe) se **ne odbija**: potvrda poteza (Da/Ne na F8 i F1) počinje upozorenjem sa obe količine, a posle „Da" nova verzija nosi zbir listova; potez upisuje upozorenje u log | Odluka operatera 08.11.2026 (KI-094). Izdata verzija sme da nosi samo zbir listova (`OtpRequireJednakost`), pa razlika ne može da se prenese; operater odlučuje da li je zbir tačan |
 
 Izvedeno iz postojećih pravila, bez nove odluke:
 
@@ -160,7 +161,7 @@ sweep-a i proveravaju se u planu reza.
 
 | Osa | Status | Dokaz |
 |---|---|---|
-| **DOMAIN** | **PROVEN** | ZBR-KANON-03, A13, A14, A15, H1/H2, D1 §10 t. 3; odluke `LNC-ODL-01..20`; matrica §4 |
+| **DOMAIN** | **PROVEN** | ZBR-KANON-03, A13, A14, A15, H1/H2, D1 §10 t. 3; odluke `LNC-ODL-01..21`; matrica §4 |
 | **IDENTITY** | **PROVEN uz uslov** | `OtkupID` putuje od reda F8 do pisca (`modStornoDok.bas:204`, `:358`), od F1 kroz `mIspravkaOtkupID`; otpremnica i zbirna iz kanonskog članstva (`OtpremnicaZaOtkup`, `AktivnaZbirnaZaOtpremnicu`). **Uslov:** prijemnice po `ZbirnaRoditeljID`, ne po labeli (`LNC-INV-07`); trag po ID-u (`LNC-ODL-16`, `-20`) |
 | **CARDINALITY** | **PROVEN** | list ∈ 0..1 aktivna otpremnica (`OtpRequireIzvorValjan`); otpremnica ∈ 0..1 aktivna zbirna (`AktivnoClanstvoPoKanonu`, dva = greška); nacrt otpremnice ∉ zbirna (`:2154`); **zbirna → 0..N prijemnica** van hladnjače — S9 sonda nad C002: 5 od 894 zbirnih ima dve (PR #469, merenje 5); hladnjača tačno 1 |
 | **INVARIANTS/OWNER** | **PROVEN** | `LNC-INV-01..11`, svaka sa vlasnikom (§2); `AMB-10-ODL-40` u `AMBALAZA.md` |
@@ -257,8 +258,10 @@ otpremnice od 650,1 kg umesto 680,5. Stara 5/060726 je nosila 679,5 kg, a njeni 
 su se slagale). `OtpUpisiOcekivanjeVerzije` piše zbir listova nove verzije, što je jedino što izdata
 verzija sme da nosi (`OtpRequireJednakost`). Razlika od 30,4 kg je zato nestala tiho. Od tada plan
 poredi staru otpremnicu sa njenim listovima, po klasi, za kg i gajbe, istim telom pravila kao izdavanje
-(`OtpPrvaRazlika`). Kad se ne slažu, F8 i F1 odbijaju **pre potvrde** i navode obe količine. Test:
-`Test_LNC_OtpremnicaNeuskladjenaSaListovima`; `KI-094`.
+(`OtpPrvaRazlika`). Kad se ne slažu, potez se **ne odbija**: potvrda na F8 i F1 počinje upozorenjem
+(„PAZNJA: ... na otpremnici 679.50 kg, zbir listova 649.10 kg ... razlika NE prelazi na nju"), a operater
+bira Da/Ne (`LNC-ODL-21`, odluka operatera 08.11.2026). Posle „Da" nova verzija nosi zbir listova, a
+upozorenje ide u log. Test: `Test_LNC_OtpremnicaNeuskladjenaSaListovima`; `KI-094`.
 
 **Otvoreno, neizmereno (`KI-092`).** Nova verzija otpremnice upisuje `VrstaVoca`/`SortaVoca`
 iz šifarnika kultura, a ne prepisuje tekst starog zaglavlja. Kad je zbirna izdata, nova verzija
