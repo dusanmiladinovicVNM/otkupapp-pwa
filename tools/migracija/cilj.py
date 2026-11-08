@@ -130,7 +130,7 @@ def ucitaj_izuzetke_dokumenata(putanja):
       * otpremnica: bez_popravke_veze (MIG-21), storniraj (MIG-ODL-19);
       * zbirna: storniraj po broju -- "tabela": "tblZbirna", "BrojZbirne" (MIG-ODL-20);
       * prijemnica: prevezi_prijemnicu -- "PrijemnicaID", nov "BrojZbirne" (MIG-ODL-20);
-        ispravi_prijemnicu -- nov "VozacID"; storniraj -- "tabela": "tblPrijemnica" (MIG-ODL-23);
+        ispravi_prijemnicu -- nov "VozacID" (MIG-ODL-23); prijemnicu migracija ne stornira;
       * otkup: ispravi_sortu -- tipfeler sorte po stanici, uz ocekivan broj listova (MIG-ODL-23)."""
     import json
     if not putanja:
@@ -143,10 +143,9 @@ def ucitaj_izuzetke_dokumenata(putanja):
             ok = bool(tekst(iz.get("OtpremnicaID")))
         elif r == "storniraj" and iz.get("tabela") == "tblZbirna":
             ok = bool(tekst(iz.get("BrojZbirne"))) and bool(iz.get("provera"))
-        elif r == "storniraj" and iz.get("tabela") == "tblPrijemnica":
-            ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(iz.get("provera"))
         elif r == "storniraj":
-            ok = bool(tekst(iz.get("OtpremnicaID"))) and bool(iz.get("provera"))
+            ok = iz.get("tabela", "tblOtpremnica") == "tblOtpremnica" \
+                and bool(tekst(iz.get("OtpremnicaID"))) and bool(iz.get("provera"))
         elif r == "prevezi_prijemnicu":
             ok = bool(tekst(iz.get("PrijemnicaID"))) and bool(tekst(iz.get("BrojZbirne"))) \
                 and bool(iz.get("provera"))
@@ -179,8 +178,7 @@ def izgradi(tabele, kanon, izuzeci=(), knjizenje=ambalaza.ISPRAVNO, izuzeci_dok=
         if t is not None and t.redovi:
             c.nalaz("INFO", "NE_PRENOSI_SE", ime, "", "%d red. -- %s" % (len(t.redovi), razlog))
 
-    if any(iz["radnja"] in ("ispravi_sortu", "ispravi_prijemnicu")
-           or (iz["radnja"] == "storniraj" and iz.get("tabela") == "tblPrijemnica") for iz in izuzeci_dok):
+    if any(iz["radnja"] in ("ispravi_sortu", "ispravi_prijemnicu") for iz in izuzeci_dok):
         # Ispravke izvora rade nad KOPIJOM procitane sveske: pozivalac (i drugi
         # prolaz nad istim tabelama) vidi staru svesku kakva jeste.
         tabele = _kopija_izvora(tabele, ("tblOtkup", "tblPrijemnica", "tblAmbalaza"))
@@ -594,9 +592,9 @@ def _ispravke_izvora(c, tabele, izuzeci):
         (MIG-ODL-21).
       * ispravi_prijemnicu: VozacID prijemnice (zaostao vozac u staroj formi) -- i na
         prijemnici i na njenim nogama ambalaze, da gajbe predje na pravog vozaca.
-      * storniraj prijemnicu: prijemnica i njene noge ambalaze se storniraju, kao sto
-        bi uradio stari storno; ne kad je na aktivnoj paleti ili fakturi.
-    Svaka uz potpis reda; inace ODLUKA i nista se ne menja."""
+    Svaka uz potpis reda; inace ODLUKA i nista se ne menja. Prijemnicu migracija ne
+    stornira (operater 08.11.2026): ona je kupceva cinjenica, i na storniranoj zbirnoj
+    se prenosi aktivna (PRJ-00830)."""
     otk = tabela(tabele, "tblOtkup")
     prj = tabela(tabele, "tblPrijemnica")
     amb = tabela(tabele, "tblAmbalaza")
@@ -660,29 +658,6 @@ def _ispravke_izvora(c, tabele, izuzeci):
                     n += 1
             c.nalaz("INFO", "PRIJEMNICA_VOZAC_ISPRAVLJEN_PO_ODLUCI", "tblPrijemnica", iz["PrijemnicaID"],
                     "VozacID %s -> %s, i na %d nog. ambalaze (%s)" % (staro, iz["VozacID"], n, tekst(iz.get("razlog"))))
-        elif iz["radnja"] == "storniraj" and iz.get("tabela") == "tblPrijemnica":
-            r = red_prijemnice(iz)
-            if r is None:
-                continue
-            pid = kljuc(iz["PrijemnicaID"])
-            vezani = []
-            for ime in ("tblPaletaStavka", "tblFakturaStavke"):
-                t = tabela(tabele, ime)
-                vezani += ["%s %s" % (ime, tekst(polje(x, t.kolone[0])))
-                           for x in (t.redovi if t is not None else [])
-                           if kljuc(polje(x, "PrijemnicaID")) == pid and not je_storno(x)]
-            if vezani:
-                c.nalaz("ODLUKA", "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE", "tblPrijemnica", iz["PrijemnicaID"],
-                        "storniraj se ne primenjuje -- aktivno vezano: " + ", ".join(vezani))
-                continue
-            r["stornirano"] = "Da"
-            nn = noge(iz["PrijemnicaID"])
-            for a in nn:
-                a["stornirano"] = "Da"
-            c.nalaz("INFO", "PRIJEMNICA_STORNIRANA_PO_ODLUCI", "tblPrijemnica", iz["PrijemnicaID"],
-                    "broj %s, zbirna %s, i %d nog. ambalaze (%s)" % (
-                        tekst(polje(r, "BrojPrijemnice")), tekst(polje(r, "BrojZbirne")), len(nn),
-                        tekst(iz.get("razlog"))))
 
 
 def _razlike_potpisa(red, provera):

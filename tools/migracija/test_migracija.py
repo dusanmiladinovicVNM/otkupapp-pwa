@@ -1380,12 +1380,12 @@ class MigOdl20PoOdluci(SaNovomSveskom):
         zbr = [iz for iz in lista if iz["radnja"] == "storniraj" and iz.get("tabela") == "tblZbirna"]
         self.assertEqual((len(prev), len(zbr)), (8, 4))
         self.assertTrue(all(iz["provera"].get("BrojZbirne") for iz in prev + zbr))
-        # MIG-ODL-23: 2 tipfelera sorte, 2 vozaca prijemnice, 1 storno prijemnice
+        # MIG-ODL-23: 2 tipfelera sorte, 2 vozaca prijemnice; PRJ-00830 se NE stornira
         self.assertEqual(Counter(iz["radnja"] + ":" + iz.get("tabela", "") for iz in lista
                                  if iz["radnja"] in ("ispravi_sortu", "ispravi_prijemnicu")
                                  or iz.get("tabela") == "tblPrijemnica"),
-                         Counter({"ispravi_sortu:tblOtkup": 2, "ispravi_prijemnicu:": 2,
-                                  "storniraj:tblPrijemnica": 1}))
+                         Counter({"ispravi_sortu:tblOtkup": 2, "ispravi_prijemnicu:": 2}))
+        self.assertFalse([iz for iz in lista if iz.get("PrijemnicaID") == "PRJ-00830"])
 
 class MigOdl22StorniranBlok(SaNovomSveskom):
     def clanovi(self, c):
@@ -1487,24 +1487,27 @@ class MigOdl23IspravkeIzvora(SaNovomSveskom):
         self.assertEqual({n.vozac for n in c.amb.noge if n.dok_id == "PRJ-3"}, {"D9"})
         self.assertIn(("PRIJEMNICA_BEZ_JEDNOZNACNE_ZBIRNE", "PRJ-3"), self.nalazi(c, "UPOZORENJE"))
 
-    def test_storniraj_prijemnicu_i_noge(self):
-        amb, d = self.amb_prj3("D1")
-        iz = {"tabela": "tblPrijemnica", "PrijemnicaID": "PRJ-3", "radnja": "storniraj",
-              "provera": {"BrojZbirne": "301"}, "razlog": "test"}
-        c = self.sagradi(amb=amb, dodatno=d, izuzeci_dok=[iz])
-        p = next(x for x in c.tabele["tblPrijemnica"] if x["PrijemnicaID"] == "PRJ-3")
-        self.assertEqual(p["Stornirano"], "Da")
-        self.assertTrue(all(n.storno for n in c.amb.noge if n.dok_id == "PRJ-3"))
-        self.assertIn(("PRIJEMNICA_STORNIRANA_PO_ODLUCI", "PRJ-3"), self.nalazi(c, "INFO"))
-
-    def test_storniraj_prijemnicu_na_paleti_ne_vazi(self):
-        iz = {"tabela": "tblPrijemnica", "PrijemnicaID": "PRJ-1", "radnja": "storniraj",
-              "provera": {"BrojZbirne": "301"}, "razlog": "test"}
-        c = self.sagradi(izuzeci_dok=[iz])
+    def test_prijemnica_na_storniranoj_zbirni_ostaje_aktivna(self):
+        """PRJ-00830 (operater 08.11.2026: "nikako ne stornirati"): zbirna i otpremnica
+        stornirane, prijemnica se prenosi AKTIVNA sa svojim nogama. Labela BrojZbirne
+        ostaje na storniranoj zbirni, ZbirnaRoditeljID prazan (pisac vezuje samo za
+        aktivnu) -- u aplikaciji je to siroce "zbirna stornirana" u Oporavku."""
+        d = izmeni("tblZbirna", {"ZBR-1": {"Stornirano": "Da"}})
+        d.update(izmeni("tblOtpremnica", {"OTP-1": {"Stornirano": "Da"}}))
+        c = self.sagradi(dodatno=d)
         p = next(x for x in c.tabele["tblPrijemnica"] if x["PrijemnicaID"] == "PRJ-1")
-        self.assertNotEqual(p["Stornirano"], "Da")
-        n = [x for x in c.nalazi if x["pravilo"] == "IZUZETAK_DOKUMENTA_POTPIS_SE_NE_SLAZE"]
-        self.assertTrue(n and "tblPaletaStavka" in n[0]["opis"], n)
+        self.assertEqual((p["Stornirano"], p["BrojZbirne"], p["ZbirnaRoditeljID"]), ("", "301", ""))
+        self.assertFalse(any(n.storno for n in c.amb.noge if n.dok_id == "PRJ-1"))
+        self.assertIn(("PRIJEMNICA_BEZ_JEDNOZNACNE_ZBIRNE", "PRJ-1"), self.nalazi(c, "UPOZORENJE"))
+
+    def test_storno_prijemnice_nije_radnja(self):
+        import json
+        put = os.path.join(self.dir.name, "iz.json")
+        with open(put, "w", encoding="utf-8") as f:
+            json.dump({"dokumenti": [{"tabela": "tblPrijemnica", "PrijemnicaID": "PRJ-3", "radnja": "storniraj",
+                                      "OtpremnicaID": "OTP-1", "provera": {"BrojZbirne": "301"}}]}, f)
+        with self.assertRaises(ValueError):
+            cilj.ucitaj_izuzetke_dokumenata(put)
 
     def test_dva_prolaza_isti_rezultat(self):
         d, iz = self.sorta()

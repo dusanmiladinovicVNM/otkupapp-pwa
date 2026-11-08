@@ -185,13 +185,6 @@
       "VozacID": "ST-00003",
       "provera": {"BrojZbirne": "S3/260726-2", "VozacID": "ST-00006"},
       "razlog": "Uneta stanica 6, treba 3 -- zbirna S3/260726-2 (odluka operatera 08.11.2026, MIG-ODL-23)."
-    },
-    {
-      "tabela": "tblPrijemnica",
-      "PrijemnicaID": "PRJ-00830",
-      "radnja": "storniraj",
-      "provera": {"BrojZbirne": "S2/150726-2"},
-      "razlog": "Zbirna ZBR-00844 i otpremnica OTP-00844 su stornirane, a blokova za tu otpremnicu nema -- prijemnica se prenosi stornirana (odluka operatera 08.11.2026, MIG-ODL-23)."
     }
   ]
 }
