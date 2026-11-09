@@ -309,7 +309,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 
 > **Status: PRE-FLIGHT 08.11.2026 — odluke operatera zapisane (08. i 09.11.2026). U kodu (deo (a)):
 > a1 — T21 crven nad starim kodom, potvrđeno u Excelu 09.11.2026 (BFP RunID 20261109212916-2353,
-> 18 padova, svi u T21 (a)/(b)); a2 — kapija `LNC-ODL-37` (`LncNedovrsenKontekstRazlog`), NEVERIFIKOVANO.**
+> 18 padova, svi u T21 (a)/(b)); a2 — kapija `LNC-ODL-37` (`LncNedovrsenKontekstRazlog`, granice u
+> `Test_LNC_NedovrsenKontekstGranice`); a3 — trag upozorenja `LNC-ODL-38`
+> (`modStornoContext.DopisiPorukuKonteksta`, T23). a2 i a3 NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
 > je naredni rez, istom mehanikom"). Važi sve iz §1–§9 osim onoga što ovaj odeljak izričito
@@ -499,7 +501,7 @@ početku.
 `lncb-kapija-samo-u-tx` → T9 (tvrdnja pre potvrde) · `lncb-dodaj-bez-datuma` → T9 ·
 `lncb-dete-bez-korena` → T5 · `lncb-prijemnica-ostaje-na-staroj` → T6 · `lncb-y-po-labeli` → T6 · `lncb-x-iz-drugog-tela` → T5 ·
 `lncb-poslednji-izvadi-bez-kapije` → T7 · `lncb-ne-upisuje-na-ne` → T18 ·
-`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-*` (jedanaest: zbirna, otpremnica, prijemnica nevidljiva, samo PENDING, prijemnica u svakom statusu, aktivna prijemnica, bez broja, stari MANUAL, prijemnica bez roda, prijemnica bez OldDocID, nepoznata prijemnica) → T21 i granice · `lncb-trag-bez-upozorenja` → T23.
+`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-*` (jedanaest: zbirna, otpremnica, prijemnica nevidljiva, samo PENDING, prijemnica u svakom statusu, aktivna prijemnica, bez broja, stari MANUAL, prijemnica bez roda, prijemnica bez OldDocID, nepoznata prijemnica) → T21 i granice · `lncb-trag-storno-bez-upozorenja`, `-ispravka-bez-upozorenja`, `-prepisuje-opis`, `-uvek` → T23 (`Test_LNC_UpozorenjeUTragu`).
 
 **FALSE-GREEN pravila:** nijedan test ne tvrdi `AMB-INV-09` ni `-16` (ovde prazne); članstvo se
 ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri nad

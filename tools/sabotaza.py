@@ -7756,6 +7756,38 @@ SABOTAZE = {
         "Test_LNC_NedovrsenKontekstGranice",
         "LNC21G (g): kontekst koji ne moze da se proveri odbija i imenuje svoj red",
     ),
+    # LNC-ODL-38 (T23): potvrdjeno upozorenje storna u lancu ostaje samo u logu.
+    "lncb-trag-storno-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (storno)\n",
+        "    ' SABOTAZA: storno bez upozorenja u tragu\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (a): trag storna nosi potvrdjeno upozorenje",
+    ),
+    # Isto za ispravku u lancu (koren pravi modOtkup, ne LncKontekstKoren).
+    "lncb-trag-ispravka-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (ispravka)\n",
+        "    ' SABOTAZA: ispravka bez upozorenja u tragu\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (b): trag ispravke nosi potvrdjeno upozorenje",
+    ),
+    # Dodatak prepisuje opis poteza umesto da ide iza njega.
+    "lncb-trag-prepisuje-opis": (
+        "modStornoContext.bas",
+        "    novo = IIf(Len(staro) > 0, staro & \" | \", \"\") & dodatak\n",
+        "    novo = dodatak   ' SABOTAZA: dodatak brise opis\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (a): trag zadrzava opis poteza",
+    ),
+    # Trag dobija "upozorenje" i kad ga nije bilo.
+    "lncb-trag-uvek": (
+        "modDokumenta.bas",
+        "    If Len(napomena) = 0 Then Exit Sub\n",
+        "    ' SABOTAZA: upozorenje se pise i kad ga nema\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (c): bez upozorenja trag je samo opis poteza",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

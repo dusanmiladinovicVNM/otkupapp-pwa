@@ -341,6 +341,8 @@ Public Sub RunBusinessFlowProSuite()
     ' LNC-ODL-37 / KI-095: nedovrsen kontekst nad zbirnom odbija potez (T21)
     Test_LNC_NedovrsenKontekstOdbija
     Test_LNC_NedovrsenKontekstGranice
+    ' LNC-ODL-38: potvrdjeno upozorenje je trajan trag poteza (T23)
+    Test_LNC_UpozorenjeUTragu
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -28089,6 +28091,86 @@ EH:
     On Error Resume Next
     LncOdbaciKontekste cidC, cidD, cidE1, cidE2
     LncOdbaciKontekste cidF, cidE2m, cidE3, cidG
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T23 (LNC-ODL-38): potvrdjeno upozorenje je TRAJAN trag poteza. Posle poteza nad
+' otpremnicom koja se ne slaze sa listovima (sinteticki stari oblik: ocekivanje
+' 330 uz zbir listova 300, obrazac Test_LNC_OtpremnicaNeuskladjenaSaListovima),
+' Message korenskog reda tblStornoVeze nosi tekst upozorenja I opis poteza.
+' (a) storno lista u lancu, (b) ispravka lista u lancu (koren pravi modOtkup),
+' (c) kontrola: uskladjen potez -- Message je samo opis, bez upozorenja.
+Private Sub Test_LNC_UpozorenjeUTragu()
+    Const SRC As String = "Test_LNC_UpozorenjeUTragu"
+    Const UPOZ As String = "Potvrdjeno upozorenje:"
+    Dim scenario As String, h As Object
+    Dim otkA As String, otkB As String, otpA As String, cidA As String, msgA As String
+    Dim otkC As String, otkD As String, otpC As String, otkCn As String, cidC As String, msgC As String
+    Dim otkE As String, otkF As String, otpE As String, cidE As String, msgE As String
+    Dim ok As Boolean, g As String, u As String, por As String, en As Long
+    Dim vA As Boolean, vC As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC23")
+
+    ' ---- (a) storno lista uz neuskladjenu otpremnicu ----
+    otkA = LncOtkup("LNC23A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNC23B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpA = LncOtp("LNC23A-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    vA = True
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpA, COL_OPS_KOLICINA, 330#
+    ok = modDokumenta.StornoListaULancu_TX(otkA, g, por)
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpA, COL_OPS_KOLICINA, 300#
+    vA = False
+    cidA = OtkPolje(otkA, COL_TRACE_CORRECTION_ID)
+    If Len(cidA) > 0 Then msgA = modStornoContext.GetCorrectionField(cidA, COL_SV_MESSAGE)
+    AssertTrue ok And Len(cidA) > 0, "LNC23 (a): preduslov -- storno lista u lancu je proknjizen"
+    AssertTrue InStr(1, msgA, UPOZ, vbBinaryCompare) > 0 And _
+               InStr(1, msgA, "PAZNJA", vbBinaryCompare) > 0, _
+               "LNC23 (a): trag storna nosi potvrdjeno upozorenje"
+    AssertTrue InStr(1, msgA, "Otkupni list u lancu", vbBinaryCompare) > 0, _
+               "LNC23 (a): trag zadrzava opis poteza"
+
+    ' ---- (b) ispravka lista uz neuskladjenu otpremnicu ----
+    otkC = LncOtkup("LNC23C-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkD = LncOtkup("LNC23D-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpC = LncOtp("LNC23C-" & scenario, Pr3Izvor(otkC, otkD), TEST_TIP_AMB)
+    vC = True
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpC, COL_OPS_KOLICINA, 330#
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-LNC23Cn-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB
+    otkCn = modDokumenta.IspravkaListaULancu_TX(otkC, h, OtkStavke(190#, 50#, 0#, 0#, 0#, 0#), _
+                                                g, u, -1, en, por)
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpC, COL_OPS_KOLICINA, 300#
+    vC = False
+    If Len(otkCn) > 0 Then cidC = OtkPolje(otkCn, COL_TRACE_CORRECTION_ID)
+    If Len(cidC) > 0 Then msgC = modStornoContext.GetCorrectionField(cidC, COL_SV_MESSAGE)
+    AssertTrue Len(otkCn) > 0 And Len(cidC) > 0, _
+               "LNC23 (b): preduslov -- ispravka lista u lancu je proknjizena"
+    AssertTrue InStr(1, msgC, UPOZ, vbBinaryCompare) > 0, _
+               "LNC23 (b): trag ispravke nosi potvrdjeno upozorenje"
+
+    ' ---- (c) kontrola: uskladjen potez nema upozorenje u tragu ----
+    otkE = LncOtkup("LNC23E-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkF = LncOtkup("LNC23F-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpE = LncOtp("LNC23E-" & scenario, Pr3Izvor(otkE, otkF), TEST_TIP_AMB)
+    ok = modDokumenta.StornoListaULancu_TX(otkE, g, por)
+    cidE = OtkPolje(otkE, COL_TRACE_CORRECTION_ID)
+    If Len(cidE) > 0 Then msgE = modStornoContext.GetCorrectionField(cidE, COL_SV_MESSAGE)
+    AssertTrue ok And Len(cidE) > 0 And InStr(1, msgE, "Otkupni list u lancu", vbBinaryCompare) > 0, _
+               "LNC23 (c): preduslov -- uskladjen potez je proknjizen sa opisom"
+    AssertTrue InStr(1, msgE, UPOZ, vbBinaryCompare) = 0, _
+               "LNC23 (c): bez upozorenja trag je samo opis poteza"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If vA Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpA, COL_OPS_KOLICINA, 300#
+    If vC Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpC, COL_OPS_KOLICINA, 300#
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
