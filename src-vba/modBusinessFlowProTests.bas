@@ -338,6 +338,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_IspravkaKrozUnos
     Test_LNC_StaraOtpremnicaBezKulture
     Test_LNC_OtpremnicaNeuskladjenaSaListovima
+    ' LNC-ODL-37 / KI-095: nedovrsen kontekst nad zbirnom odbija potez (T21)
+    Test_LNC_NedovrsenKontekstOdbija
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -27723,6 +27725,152 @@ EH:
     SetTestMode prevMode
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
+End Sub
+
+' T21 (STORNO_U_LANCU.md 10.8, LNC-ODL-37, KI-095): potez u lancu ne sme da
+' zameni zbirnu nad kojom stoji NEDOVRSEN kontekst (red tblStornoVeze sa
+' NeedsRecovery = Da). Kontekste prave PRODUKCIONI ulazi F8
+' (RunPrijemnicaCorrection ISPRAVKA, RunZbirnaCorrection / RunPrijemnicaCorrection
+' RESI_KASNIJE), a gasi ih Oporavak "Odbaci" (OdbaciIspravkuCore) -- normal
+' production state, ne fixture redovi.
+'
+' (a) KI-095, put (1): ispravka prijemnice je zapoceta (stara stornirana, zamena
+'     nije uneta), pa storno JEDINOG lista. Danas stornirana prijemnica ne ulazi
+'     u LNC-ODL-07, zbirna pada bez naslednika i zamena vise nema roditelja.
+'     Ocekivano: plan odbija pre potvrde i imenuje kontekst; nista se ne menja.
+' (b) "Resi kasnije" nad zbirnom, pa storno lista koji ima naslednika.
+'     Ocekivano: odbijanje sa imenom podsetnika (i za ispravku -- isti plan);
+'     posle "Odbaci" isti potez prolazi.
+' (c) KONTROLA: "Resi kasnije" nad AKTIVNOM prijemnicom ne smeta -- PrijemnicaID
+'     se ne menja i prevezuje se po ID-u (LNC-INV-07).
+'
+' Prijemnice su bez gajbi, pa ambalaza sama ne odbija nijedan potez: test meri
+' SAMO kapiju konteksta (obrazac Test_LNC_PoslednjiIzvor). Pre popravke (a) i
+' (b) padaju po imenu; (c) je zelen i pre i posle.
+Private Sub Test_LNC_NedovrsenKontekstOdbija()
+    Const SRC As String = "Test_LNC_NedovrsenKontekstOdbija"
+    Const ODBIJEN As String = "Potez nije moguc:"
+    Dim scenario As String, tipT As String
+    Dim otkA As String, otpA As String, zbrA As String, prjA As String, cidA As String
+    Dim otkB1 As String, otkB2 As String, otpB As String, zbrB As String, prjB As String
+    Dim cidB As String
+    Dim otkC1 As String, otkC2 As String, otpC As String, zbrC As String, prjC As String
+    Dim cidC As String, zbrNovaC As String
+    Dim r As Object, opis As String, opisIspr As String
+    Dim ok As Boolean, g As String, por As String
+    Dim okPosle As Boolean, gPosle As String, odbacen As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC21")
+    tipT = LncTipAmb(scenario, 30#)
+
+    ' ---- (a) nedovrsena ispravka prijemnice + storno jedinog lista ----
+    otkA = LncOtkup("LNC21A-" & scenario, 100#, 10#, tipT)
+    otpA = LncOtp("LNC21A-" & scenario, Pr3Izvor(otkA, ""), tipT)
+    zbrA = LncZbr("LNC21A-" & scenario, Pr3Izvor(otpA, ""))
+    prjA = LncPrj("LNC21A-" & scenario, zbrA, 100#, 0, tipT)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjA, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjA))
+    cidA = CStr(r("correctionID"))
+    AssertTrue CBool(r("success")) And Len(cidA) > 0, _
+               "LNC21 (a): preduslov -- F8 ispravka prijemnice je zapoceta (" & CStr(r("message")) & ")"
+    AssertEquals "Da", LncPrjPolje(prjA, COL_STORNIRANO), _
+                 "LNC21 (a): preduslov -- stara prijemnica je stornirana, zamena ceka"
+    AssertEquals SV_STATUS_PENDING, modStornoContext.GetCorrectionField(cidA, COL_SV_STATUS), _
+                 "LNC21 (a): preduslov -- kontekst ispravke prijemnice je nedovrsen"
+    ' Osnov veze kapije (10.6, nemereno do sada): stornirana prijemnica zadrzava
+    ' ZbirnaRoditeljID, pa se nedovrsena ispravka nalazi po ID-u zbirne.
+    AssertEquals zbrA, LncPrjPolje(prjA, COL_DETE_ZBIRNA_ROD), _
+                 "LNC21 (a): stornirana prijemnica zadrzava ZbirnaRoditeljID"
+
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkA)
+    ok = modDokumenta.StornoListaULancu_TX(otkA, g, por)
+
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And InStr(1, opis, cidA, vbTextCompare) > 0, _
+               "LNC21 (a): plan odbija PRE potvrde i imenuje nedovrsenu ispravku prijemnice"
+    AssertFalse ok, "LNC21 (a): storno jedinog lista uz nedovrsenu ispravku prijemnice je odbijen"
+    AssertTrue InStr(1, g, cidA, vbTextCompare) > 0, _
+               "LNC21 (a): odbijenica pisca imenuje isti kontekst"
+    AssertTrue OtkPolje(otkA, COL_STORNIRANO) <> "Da", "LNC21 (a): list ostaje aktivan"
+    AssertTrue LncOtpPolje(otpA, COL_STORNIRANO) <> "Da", "LNC21 (a): otpremnica ostaje aktivna"
+    AssertTrue LncZbrPolje(zbrA, COL_STORNIRANO) <> "Da", _
+               "LNC21 (a): zbirna ostaje aktivna -- zamena prijemnice ima roditelja (KI-095)"
+    AssertEquals SV_STATUS_PENDING, modStornoContext.GetCorrectionField(cidA, COL_SV_STATUS), _
+                 "LNC21 (a): ispravka prijemnice ostaje nedovrsena (potez je ne zatvara)"
+
+    ' ---- (b) "Resi kasnije" nad zbirnom + potez sa naslednikom ----
+    otkB1 = LncOtkup("LNC21B1-" & scenario, 100#, 5#, tipT)
+    otkB2 = LncOtkup("LNC21B2-" & scenario, 50#, 5#, tipT)
+    otpB = LncOtp("LNC21B-" & scenario, Pr3Izvor(otkB1, otkB2), tipT)
+    zbrB = LncZbr("LNC21B-" & scenario, Pr3Izvor(otpB, ""))
+    prjB = LncPrj("LNC21B-" & scenario, zbrB, 150#, 0, tipT)
+    Set r = modStornoFlow.RunZbirnaCorrection(LncZbrPolje(zbrB, COL_ZBR_BROJ), _
+                SV_MODE_RESI_KASNIJE, True, zbrB)
+    cidB = CStr(r("correctionID"))
+    AssertTrue CBool(r("success")) And Len(cidB) > 0, _
+               "LNC21 (b): preduslov -- F8 'Resi kasnije' nad zbirnom (" & CStr(r("message")) & ")"
+
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkB2)
+    opisIspr = modDokumenta.LncPlanOpisZaOtkup(otkB1, True)
+    ok = modDokumenta.StornoListaULancu_TX(otkB2, g, por)
+
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And InStr(1, opis, cidB, vbTextCompare) > 0, _
+               "LNC21 (b): plan odbija PRE potvrde i imenuje podsetnik nad zbirnom"
+    AssertTrue Left$(opisIspr, Len(ODBIJEN)) = ODBIJEN And InStr(1, opisIspr, cidB, vbTextCompare) > 0, _
+               "LNC21 (b): isti plan odbija i ispravku lista u toj zbirnoj"
+    AssertFalse ok, "LNC21 (b): storno lista uz podsetnik nad zbirnom je odbijen"
+    AssertTrue InStr(1, g, cidB, vbTextCompare) > 0, _
+               "LNC21 (b): odbijenica pisca imenuje podsetnik"
+    AssertTrue OtkPolje(otkB2, COL_STORNIRANO) <> "Da", "LNC21 (b): list ostaje aktivan"
+    AssertTrue LncZbrPolje(zbrB, COL_STORNIRANO) <> "Da", "LNC21 (b): zbirna ostaje aktivna"
+    AssertEquals zbrB, LncPrjPolje(prjB, COL_DETE_ZBIRNA_ROD), _
+                 "LNC21 (b): prijemnica ostaje na svojoj zbirni"
+
+    ' Odbijanje nije trajno: posle "Odbaci" u Oporavku isti potez prolazi.
+    odbacen = modScrOporavak.OdbaciIspravkuCore(cidB)
+    okPosle = modDokumenta.StornoListaULancu_TX(otkB2, gPosle, por)
+    AssertTrue odbacen, "LNC21 (b): Oporavak odbacuje podsetnik nad zbirnom"
+    AssertTrue okPosle, "LNC21 (b): posle 'Odbaci' potez prolazi (" & gPosle & ")"
+
+    ' ---- (c) KONTROLA: "Resi kasnije" nad aktivnom prijemnicom ne smeta ----
+    otkC1 = LncOtkup("LNC21C1-" & scenario, 100#, 5#, tipT)
+    otkC2 = LncOtkup("LNC21C2-" & scenario, 50#, 5#, tipT)
+    otpC = LncOtp("LNC21C-" & scenario, Pr3Izvor(otkC1, otkC2), tipT)
+    zbrC = LncZbr("LNC21C-" & scenario, Pr3Izvor(otpC, ""))
+    prjC = LncPrj("LNC21C-" & scenario, zbrC, 150#, 0, tipT)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjC, COL_PRJ_BROJ), _
+                SV_MODE_RESI_KASNIJE, True, False, S6K4Ident(prjC))
+    cidC = CStr(r("correctionID"))
+    AssertTrue CBool(r("success")) And Len(cidC) > 0, _
+               "LNC21 (c): preduslov -- F8 'Resi kasnije' nad prijemnicom (" & CStr(r("message")) & ")"
+
+    ok = modDokumenta.StornoListaULancu_TX(otkC2, g, por)
+    zbrNovaC = LncZbrPolje(zbrC, COL_TRACE_ZAMENJEN_SA_ID)
+    AssertTrue ok, "LNC21 (c): podsetnik nad AKTIVNOM prijemnicom ne smeta potezu (" & g & ")"
+    AssertTrue Len(zbrNovaC) > 0 And LncPrjPolje(prjC, COL_DETE_ZBIRNA_ROD) = zbrNovaC, _
+               "LNC21 (c): prijemnica sa podsetnikom je prevezana na novu zbirnu po ID-u"
+    AssertEquals SV_STATUS_PENDING, modStornoContext.GetCorrectionField(cidC, COL_SV_STATUS), _
+                 "LNC21 (c): podsetnik nad prijemnicom ostaje (PrijemnicaID se ne menja)"
+
+    LncOdbaciKontekste cidA, cidC
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    LncOdbaciKontekste cidA, cidC
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Ciscenje posle T21: konteksti koje je test ostavio nedovrsene gase se istim
+' putem kao u Oporavku, da ne ostanu u listi Nedovrseno za ostatak suite-a.
+Private Sub LncOdbaciKontekste(ByVal cid1 As String, ByVal cid2 As String)
+    On Error Resume Next
+    If Len(cid1) > 0 Then modScrOporavak.OdbaciIspravkuCore cid1
+    If Len(cid2) > 0 Then modScrOporavak.OdbaciIspravkuCore cid2
 End Sub
 
 ' UNDO NAD APPEND-ONLY KNJIGOM SE ODBIJA (AMB-10-ODL-19).
