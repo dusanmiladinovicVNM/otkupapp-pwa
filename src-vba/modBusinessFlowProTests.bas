@@ -28178,26 +28178,34 @@ EH:
 End Sub
 
 ' T22 (LNC-ODL-24): zbirna sa AKTIVNOM prijemnicom -- potvrda SVAKOG poteza u lancu
-' pocinje oznakom PAZNJA i kaze sta ce nositi nova verzija zbirne (X) i prijemnice
-' (Y), za kg i gajbe. Lanac: listovi A 200 kg / 10 gajbi i B 100 / 5, zbirna, i
-' prijemnica od 290 kg / 15 gajbi (kupac je izmerio manje). Normal production state.
+' pocinje oznakom PAZNJA i kaze sta ce nositi nova zbirna (X) i prijemnice (Y), za kg
+' i gajbe. Lanac: listovi A 200 kg / 10 gajbi i B 100 / 5, zbirna, prijemnica od
+' 290 kg / 15 gajbi (kupac je izmerio manje). Normal production state, osim (f).
 ' (a) storno B (F8, F1 "Storno" -- isti opis): X = 200 kg / 10, sada 300 / 15.
 ' (b) ispravka B na 150 kg / 8 sa novim stavkama: X = 350 / 18; bez njih "+ ispravljen
-'     list". (c) F1 "Ispravi blok" kroz seam sa poljima forme: isti X kao (b).
-' (d) TACNOST (FALSE-GREEN brana): ispravka u lancu bez gajbi se proknjizi, i X iz
-'     traga (LNC-ODL-38) je zbir stavki zbirne' posle commit-a.
+'     list". (c) F1 "Ispravi blok" PRAVIM putem: Scr_Save sa poljima forme (potvrda u
+'     test rezimu belezi i kaze "Ne", pa se nista ne upisuje).
+' (d) TACNOST (FALSE-GREEN brana): zbirna sa SESTROM, ispravka bez gajbi se
+'     proknjizi, i X iz traga (LNC-ODL-38) je zbir stavki zbirne' posle commit-a.
 ' (e) KONTROLA: zbirna bez prijemnice -- nema upozorenja.
+' (f) neslaganje LNC-ODL-21 (sinteticki stari oblik, ocekivanje 330) + prijemnica:
+'     JEDNA oznaka PAZNJA, na pocetku, a deo o prijemnici POSLE dela o otpremnici.
+' (g) granica dijaloga (MsgBox ~1024): opis se skracuje na kraju, pitanje ostaje.
 Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
     Const SRC As String = "Test_LNC_UpozorenjePrijemniceSviPotezi"
     Const PAZ As String = "PAZNJA:"
     Dim scenario As String, tipT As String, h As Object
     Dim otkA As String, otkB As String, otp As String, zbr As String, prj As String
-    Dim otkC As String, otkD As String, otp2 As String, zbr2 As String, prj2 As String
+    Dim otkC As String, otkD As String, otkS As String, otp2 As String, otpS As String
+    Dim zbr2 As String, prj2 As String
     Dim otkE As String, otkF As String, otp3 As String, zbr3 As String
-    Dim otkDn As String, zbrNova As String, cid As String, msg As String
-    Dim opis As String, opisIspr As String, opisBez As String, opisKontr As String, txtF1 As String
-    Dim nove As Collection, st As Object, polja As Object
-    Dim g As String, u As String, por As String, en As Long, prevMode As Boolean, modMenjan As Boolean
+    Dim otkG As String, otkH As String, otp4 As String, zbr4 As String, prj4 As String
+    Dim otkDn As String, zbrNova As String, cid As String, msg As String, spec As String
+    Dim opis As String, opisIspr As String, opisBez As String, opisKontr As String
+    Dim opisF As String, txtSave As String, resSave As String, dug As String, poKl As Object
+    Dim nove As Collection, st As Object, pf As Object
+    Dim g As String, u As String, por As String, en As Long
+    Dim prevMode As Boolean, modMenjan As Boolean, ispravkaOtvorena As Boolean, v4 As Boolean
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -28213,15 +28221,14 @@ Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
     opis = modDokumenta.LncPlanOpisZaOtkup(otkB)
     AssertTrue Left$(opis, Len(PAZ)) = PAZ And InStr(1, opis, "aktivnu prijemnicu", vbBinaryCompare) > 0, _
                "LNC22 (a): storno uz prijemnicu pocinje upozorenjem"
-    AssertTrue InStr(1, opis, "nosi 200.00 kg (sada 300.00 kg)", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, opis, "Nova zbirna: 200.00 kg (sada 300.00)", vbBinaryCompare) > 0, _
                "LNC22 (a): upozorenje nosi X (nova zbirna) i sadasnju zbirnu"
     AssertTrue InStr(1, opis, LncPrjPolje(prj, COL_PRJ_BROJ) & " 290.00 kg", vbBinaryCompare) > 0 And _
                InStr(1, opis, "ukupno 290.00 kg", vbBinaryCompare) > 0, _
                "LNC22 (a): upozorenje nosi prijemnicu i Y"
-    AssertTrue InStr(1, opis, "razlika zbirna - prijemnice -90.00 kg", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, opis, "ukupno 290.00 kg, razlika -90.00 kg", vbBinaryCompare) > 0, _
                "LNC22 (a): upozorenje nosi razliku kg"
-    AssertTrue InStr(1, opis, "Gajbe: nova verzija zbirne 10 (sada 15), prijemnice 15, razlika -5", _
-                     vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, opis, "gajbe 10 (sada 15), prijemnice 15, razlika -5", vbBinaryCompare) > 0, _
                "LNC22 (a): upozorenje nosi red za gajbe"
 
     ' ---- (b) ispravka B na 150 kg / 8 gajbi ----
@@ -28234,36 +28241,65 @@ Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
     opisIspr = modDokumenta.LncPlanOpisZaOtkup(otkB, True, nove)
     opisBez = modDokumenta.LncPlanOpisZaOtkup(otkB, True)
     AssertTrue Left$(opisIspr, Len(PAZ)) = PAZ And _
-               InStr(1, opisIspr, "nosi 350.00 kg (sada 300.00 kg)", vbBinaryCompare) > 0 And _
-               InStr(1, opisIspr, "nova verzija zbirne 18 (sada 15)", vbBinaryCompare) > 0, _
+               InStr(1, opisIspr, "Nova zbirna: 350.00 kg (sada 300.00)", vbBinaryCompare) > 0 And _
+               InStr(1, opisIspr, "gajbe 18 (sada 15)", vbBinaryCompare) > 0, _
                "LNC22 (b): ispravka racuna X sa novim listom"
-    AssertTrue InStr(1, opisBez, "nosi 200.00 kg + ispravljen list", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, opisBez, "Nova zbirna: 200.00 kg + ispravljen list", vbBinaryCompare) > 0, _
                "LNC22 (b): ispravka bez novih stavki kaze X bez njih"
 
-    ' ---- (c) F1 "Ispravi blok": seam sa poljima forme, isti put kao Scr_Save ----
+    ' ---- (c) F1 "Ispravi blok": potvrda iz polja (seam), pa pravim putem (Scr_Save) ----
+    Dim polja As Object, txtSeam As String
     Set polja = CreateObject("Scripting.Dictionary")
     polja("kolicinaI") = 150#
     polja("cenaI") = 50#
-    polja("kolAmb") = 8
+    polja("kolAmb") = 8&
     polja("dveKlase") = False
     prevMode = IsTestMode()
     modMenjan = True
     SetTestMode True
     modScrDokumenti.Scr_PotvrdaLancaTestReset
     modScrDokumenti.Scr_PotvrdaLancaProbaj otkB, polja
-    txtF1 = modScrDokumenti.Scr_PotvrdaLancaTest()
+    txtSeam = modScrDokumenti.Scr_PotvrdaLancaTest()
     modScrDokumenti.Scr_PotvrdaLancaTestReset
+    modScrDokumenti.OtvoriIspravkuBloka otkB, spec
+    ispravkaOtvorena = True
+    Set pf = OtkEkranParam(TEST_PREFIX & "-OTK-LNC22Bn-" & scenario)
+    pf("rezim") = "OTKUP"
+    pf("tipAmb") = tipT
+    pf("kolicinaI") = 150#
+    pf("cenaI") = 50#
+    pf("kolAmb") = 8&
+    resSave = modScrDokumenti.Scr_Save(pf)
+    txtSave = modScrDokumenti.Scr_PotvrdaLancaTest()
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    modScrDokumenti.Scr_IspravkaOtkazi
+    ispravkaOtvorena = False
     SetTestMode prevMode
     modMenjan = False
-    AssertTrue InStr(1, txtF1, "nosi 350.00 kg (sada 300.00 kg)", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, txtSeam, "Nova zbirna: 350.00 kg (sada 300.00)", vbBinaryCompare) > 0, _
                "LNC22 (c): F1 potvrda racuna X iz polja forme"
+    AssertTrue InStr(1, txtSave, "Nova zbirna: 350.00 kg (sada 300.00)", vbBinaryCompare) > 0, _
+               "LNC22 (c): F1 Sacuvaj salje polja forme u potvrdu"
+    AssertTrue OtkPolje(otkB, COL_STORNIRANO) <> "Da", _
+               "LNC22 (c): Ne na potvrdi ne upisuje nista"
 
-    ' ---- (d) tacnost: ispravka bez gajbi se proknjizi, X = zbirna' ----
+    ' ---- (d) tacnost: zbirna sa sestrom, ispravka bez gajbi, X = zbirna' ----
     otkC = LncOtkup("LNC22C-" & scenario, 200#, 0#, tipT)
     otkD = LncOtkup("LNC22D-" & scenario, 100#, 0#, tipT)
+    otkS = LncOtkup("LNC22S-" & scenario, 50#, 0#, tipT)
     otp2 = LncOtp("LNC22X-" & scenario, Pr3Izvor(otkC, otkD), tipT)
-    zbr2 = LncZbr("LNC22X-" & scenario, Pr3Izvor(otp2, ""))
-    prj2 = LncPrj("LNC22X-" & scenario, zbr2, 300#, 0, tipT)
+    otpS = LncOtp("LNC22S-" & scenario, Pr3Izvor(otkS, ""), tipT)
+    zbr2 = LncZbr("LNC22X-" & scenario, Pr3Izvor(otp2, otpS))
+    prj2 = LncPrj("LNC22X-" & scenario, zbr2, 350#, 0, tipT)
+    Set nove = New Collection
+    Set st = CreateObject("Scripting.Dictionary")
+    st("Klasa") = KLASA_I
+    st("Kolicina") = 150#
+    st("KolAmbalaze") = 0#
+    nove.Add st
+    AssertTrue InStr(1, modDokumenta.LncPlanOpisZaOtkup(otkD, True, nove), _
+                     "Nova zbirna: 400.00 kg (sada 350.00)", vbBinaryCompare) > 0, _
+               "LNC22 (d): plan racuna X sa sestrom"
     Set h = OtkHeader(TEST_PREFIX & "-OTK-LNC22Dn-" & scenario)
     h("TipAmbalaze") = tipT
     otkDn = modDokumenta.IspravkaListaULancu_TX(otkD, h, OtkStavke(150#, 50#, 0#, 0#, 0#, 0#), _
@@ -28274,11 +28310,10 @@ Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
     AssertTrue Len(otkDn) > 0 And Len(zbrNova) > 0, _
                "LNC22 (d): preduslov -- ispravka u lancu uz prijemnicu je proknjizena"
     If Len(zbrNova) > 0 Then
-        Dim poKl As Object
         Set poKl = modDokumenta.ZbirnaPoKlasi(zbrNova)
-        AssertDoubleNear 350#, CDbl(poKl(KLASA_I)(0)), 0.001, "LNC22 (d): nova zbirna nosi 350 kg"
+        AssertDoubleNear 400#, CDbl(poKl(KLASA_I)(0)), 0.001, "LNC22 (d): nova zbirna nosi 400 kg"
     End If
-    AssertTrue InStr(1, msg, "nosi 350.00 kg (sada 300.00 kg)", vbBinaryCompare) > 0, _
+    AssertTrue InStr(1, msg, "Nova zbirna: 400.00 kg (sada 350.00)", vbBinaryCompare) > 0, _
                "LNC22 (d): X iz potvrde je zbir nove zbirne posle commit-a"
 
     ' ---- (e) kontrola: zbirna bez prijemnice ----
@@ -28290,14 +28325,39 @@ Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
     AssertTrue Len(opisKontr) > 0 And Left$(opisKontr, Len(PAZ)) <> PAZ And _
                InStr(1, opisKontr, "aktivnu prijemnicu", vbBinaryCompare) = 0, _
                "LNC22 (e): bez prijemnice nema upozorenja"
+
+    ' ---- (f) neslaganje LNC-ODL-21 + prijemnica: jedna oznaka, redosled ----
+    otkG = LncOtkup("LNC22G-" & scenario, 200#, 0#, tipT)
+    otkH = LncOtkup("LNC22H-" & scenario, 100#, 0#, tipT)
+    otp4 = LncOtp("LNC22W-" & scenario, Pr3Izvor(otkG, otkH), tipT)
+    zbr4 = LncZbr("LNC22W-" & scenario, Pr3Izvor(otp4, ""))
+    prj4 = LncPrj("LNC22W-" & scenario, zbr4, 300#, 0, tipT)
+    v4 = True
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp4, COL_OPS_KOLICINA, 330#
+    opisF = modDokumenta.LncPlanOpisZaOtkup(otkH)
+    S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp4, COL_OPS_KOLICINA, 300#
+    v4 = False
+    AssertTrue Left$(opisF, Len(PAZ)) = PAZ And InStr(2, opisF, PAZ, vbBinaryCompare) = 0 And _
+               InStr(1, opisF, "se ne slaze sa svojim listovima", vbBinaryCompare) > 0 And _
+               InStr(1, opisF, "se ne slaze sa svojim listovima", vbBinaryCompare) < _
+               InStr(1, opisF, "ima aktivnu prijemnicu", vbBinaryCompare), _
+               "LNC22 (f): jedna oznaka PAZNJA, prijemnica posle neslaganja otpremnice"
+
+    ' ---- (g) granica dijaloga ----
+    dug = modDokumenta.LncDijalogTekst("UVOD" & vbCrLf, String$(2000, "x"), "PITANJE?")
+    AssertTrue Len(dug) <= 1024 And Right$(dug, Len("PITANJE?")) = "PITANJE?" And _
+               Left$(dug, 4) = "UVOD" And InStr(1, dug, "(skraceno", vbBinaryCompare) > 0, _
+               "LNC22 (g): dijalog ostaje ispod granice MsgBox-a, pitanje se vidi"
     Exit Sub
 
 EH:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
+    If ispravkaOtvorena Then modScrDokumenti.Scr_IspravkaOtkazi
     modScrDokumenti.Scr_PotvrdaLancaTestReset
     If modMenjan Then SetTestMode prevMode
+    If v4 Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp4, COL_OPS_KOLICINA, 300#
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

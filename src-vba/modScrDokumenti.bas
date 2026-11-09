@@ -1249,9 +1249,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
             Dim opisLnc As String, porLnc As String
             opisLnc = modDokumenta.LncPlanOpisZaOtkup(otkupID, False)
             If Len(opisLnc) > 0 Then
-                If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
+                If MsgBox(modDokumenta.LncDijalogTekst(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                           Poruka("OTKUI_ASK_STORNO2") & vbCrLf & vbCrLf & _
-                          Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & opisLnc, _
+                          Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf, opisLnc), _
                           IIf(modDokumenta.LncTekstImaUpozorenje(opisLnc), _
                               vbExclamation + vbYesNo + vbDefaultButton2, _
                               vbQuestion + vbYesNo), APP_NAME) = vbNo Then Exit Function
@@ -1665,8 +1665,8 @@ Private Function PotvrdiIspravkuULancu(ByVal otkupID As String, _
         PotvrdiIspravkuULancu = True
         Exit Function
     End If
-    txt = Poruka("OTKUI_ASK_ISPRAVKA_LANAC") & vbCrLf & vbCrLf & opis & vbCrLf & vbCrLf & _
-          Poruka("OTKUI_ASK_ISPRAVKA_LANAC_2")
+    txt = modDokumenta.LncDijalogTekst(Poruka("OTKUI_ASK_ISPRAVKA_LANAC") & vbCrLf & vbCrLf, _
+                                       opis, Poruka("OTKUI_ASK_ISPRAVKA_LANAC_2"))
     If IsTestMode() Then
         mPotvrdaLancaTest = txt
         Exit Function
@@ -1694,8 +1694,9 @@ End Sub
 
 ' TEST SEAM: ista odluka koju Scr_Save pita pre upisa ispravke -- bez forme.
 ' Tvrdo gejtovan; u test rezimu potvrda belezi i odgovara "Ne". `polja` je
-' recnik u obliku polja forme (kolicinaI, kolAmb, ...): sa njim potvrda ide istim
-' putem kao Scr_Save (LNC-ODL-24, X sa novim listom).
+' recnik unosa (kolicinaI, kolAmb, ...) u obliku POSLE modOtkupUnos.OtkupValidiraj
+' -- Scr_Save salje bas taj (bruto je tada vec preracunat u neto). Sam put kroz
+' Scr_Save meri T22 (c) preko Scr_Save, ne ovaj seam.
 Public Function Scr_PotvrdaLancaProbaj(ByVal otkupID As String, _
                                        Optional ByVal polja As Object = Nothing) As Boolean
     If Not IsTestMode() Then Exit Function

@@ -1197,8 +1197,8 @@ Public Function StornoPotvrdaTekst() As String
     If mSelTip = STIP_OTKUP And Len(mSelDocID) > 0 Then
         lanac = modDokumenta.LncPlanOpisZaOtkup(mSelDocID, False)
         If Len(lanac) > 0 Then
-            StornoPotvrdaTekst = StornoPotvrdaTekst & vbCrLf & vbCrLf & _
-                                 modPoruke.Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf & lanac
+            StornoPotvrdaTekst = modDokumenta.LncDijalogTekst(StornoPotvrdaTekst & vbCrLf & vbCrLf & _
+                                 modPoruke.Poruka("STORNO_LANAC_POSLEDICE") & vbCrLf, lanac)
         End If
     End If
 End Function
