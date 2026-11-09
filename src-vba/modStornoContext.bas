@@ -141,14 +141,20 @@ Public Function DopisiPorukuKonteksta(ByVal correctionID As String, _
                                       ByVal dodatak As String) As Boolean
     Const SRC As String = MOD_NAME & ".DopisiPorukuKonteksta"
     Dim tx As clsTransaction, rowIdx As Long, staro As String, novo As String
+    Dim cMsg As Long, d As Variant
     On Error GoTo EH
 
     If Len(Trim$(dodatak)) = 0 Then
         DopisiPorukuKonteksta = True
         Exit Function
     End If
+    ' Opis se cita iz ISTOG reda koji se pise (RequireCorrectionRow bira poslednji
+    ' red ID-a, LookupValue prvi), i to glasno: neuspelo citanje vraca False umesto
+    ' da tihi "" obrise opis.
     rowIdx = RequireCorrectionRow(correctionID, SRC)
-    staro = GetCorrectionField(correctionID, COL_SV_MESSAGE)
+    cMsg = RequireColumnIndex(TBL_STORNO_VEZE, COL_SV_MESSAGE, SRC)
+    d = GetTableData(TBL_STORNO_VEZE)
+    staro = Trim$(NzToText(d(rowIdx, cMsg)))
     novo = IIf(Len(staro) > 0, staro & " | ", "") & dodatak
 
     Set tx = New clsTransaction
