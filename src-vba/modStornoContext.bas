@@ -227,9 +227,13 @@ EH:
 End Function
 
 ' Kolekcija Dictionary-ja za sve redove kojima treba recovery (NeedsRecovery=Da).
-' Svaki dict nosi kljuceve: id, mode, status, oldDocType, oldBroj, newBroj,
-' parentBroj, message, recoveryAction, createdAt.
-Public Function GetPendingCorrections() As Collection
+' Svaki dict nosi kljuceve: id, mode, status, oldDocType, oldDocID, oldBroj,
+' newBroj, parentBroj, message, recoveryAction, createdAt.
+'
+' outGreska: prazno kad je citanje uspelo. Kapija koja na ovom spisku odlucuje
+' (LNC-ODL-37) ga cita fail-closed -- delimican spisak posle greske nije "nema
+' nicega". Ostali pozivaoci ga ne prosledjuju i ponasaju se kao do sada.
+Public Function GetPendingCorrections(Optional ByRef outGreska As String) As Collection
     Const SRC As String = MOD_NAME & ".GetPendingCorrections"
     Dim result As New Collection
     Set GetPendingCorrections = result
@@ -242,18 +246,24 @@ Public Function GetPendingCorrections() As Collection
 
     Dim cId As Long, cMode As Long, cStatus As Long, cNeeds As Long
     Dim cOldT As Long, cOldB As Long, cNewB As Long, cParB As Long, cMsg As Long
-    Dim cRec As Long, cCreated As Long
+    Dim cRec As Long, cCreated As Long, cOldD As Long
     cId = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_ID)
     cMode = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_MODE)
     cStatus = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_STATUS)
     cNeeds = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_NEEDS_RECOVERY)
     cOldT = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_OLD_DOCTYPE)
+    cOldD = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_OLD_DOCID)
     cOldB = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_OLD_BROJ)
     cNewB = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_NEW_BROJ)
     cParB = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_PARENT_BROJ)
     cMsg = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_MESSAGE)
     cRec = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_RECOVERY_ACTION)
     cCreated = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_CREATED_AT)
+    ' Bez ovih kolona spisak nije potpun: kapija koja ga cita fail-closed mora to
+    ' da zna (ostali pozivaoci dobijaju prazan spisak, kao do sada).
+    If cNeeds = 0 Or cId = 0 Or cOldD = 0 Then
+        outGreska = "tblStornoVeze nema kolonu NeedsRecovery, CorrectionID ili OldDocID"
+    End If
     If cNeeds = 0 Or cId = 0 Then Exit Function
 
     Dim i As Long
@@ -264,6 +274,7 @@ Public Function GetPendingCorrections() As Collection
             d("mode") = TxCell(data, i, cMode)
             d("status") = TxCell(data, i, cStatus)
             d("oldDocType") = TxCell(data, i, cOldT)
+            d("oldDocID") = TxCell(data, i, cOldD)
             d("oldBroj") = TxCell(data, i, cOldB)
             d("newBroj") = TxCell(data, i, cNewB)
             d("parentBroj") = TxCell(data, i, cParB)
@@ -275,6 +286,7 @@ Public Function GetPendingCorrections() As Collection
     Next i
     Exit Function
 EH:
+    outGreska = "[" & Err.Number & "] " & Err.description
     LogErr SRC
 End Function
 

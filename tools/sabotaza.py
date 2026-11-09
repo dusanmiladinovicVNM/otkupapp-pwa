@@ -7656,6 +7656,43 @@ SABOTAZE = {
         "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
         "LNC neuskladjena zbirna: razlika u gajbama zbirne se prijavljuje",
     ),
+    # LNC-ODL-37 / KI-095 (T21): kapija nedovrsenog konteksta. Zbirna se ne meri:
+    # potez zamenjuje zbirnu nad kojom stoji "Resi kasnije", a podsetnik posle
+    # poteza pokazuje na storniranu verziju.
+    "lncb-pending-zbirna-bez-kapije": (
+        "modDokumenta.bas",
+        "    razlogKtx = LncNedovrsenKontekstRazlog(\"\", \"\", zbrID, CStr(p(\"zbrBroj\")))\n",
+        "    razlogKtx = \"\"   ' SABOTAZA: zbirna bez kapije konteksta\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (b): plan odbija PRE potvrde i imenuje podsetnik nad zbirnom",
+    ),
+    # Nedovrsena ispravka prijemnice se ne vidi (stara je stornirana): storno
+    # jedinog lista obara zbirnu, a zamena ostaje bez roditelja (KI-095, put 1).
+    "lncb-pending-prijemnica-nevidljiva": (
+        "modDokumenta.bas",
+        "                If LncPrijemnicaCekaIspravku(oldID, zbrID) Then\n",
+        "                If False Then   ' SABOTAZA: nedovrsena ispravka prijemnice se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (a): plan odbija PRE potvrde i imenuje nedovrsenu ispravku prijemnice",
+    ),
+    # Kapija gleda samo Status = PENDING: podsetnik u MANUAL_REQUIRED (ili pao
+    # FAILED) vise ne odbija, iako i dalje ceka u Oporavku (NeedsRecovery = Da).
+    "lncb-pending-samo-pending": (
+        "modDokumenta.bas",
+        "               StrComp(oldID, zbrID, vbTextCompare) = 0 Then\n",
+        "               StrComp(oldID, zbrID, vbTextCompare) = 0 And CStr(d(\"status\")) = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (b): podsetnik u MANUAL_REQUIRED i dalje odbija",
+    ),
+    # Kapija ne gleda da li je prijemnica stornirana: pala ispravka nad AKTIVNOM
+    # prijemnicom (koja se prevezuje po ID-u) pogresno odbija potez.
+    "lncb-pending-aktivna-prijemnica": (
+        "modDokumenta.bas",
+        "                                         COL_STORNIRANO)))) <> \"DA\" Then Exit Function\n",
+        "                                         COL_STORNIRANO)))) = \"NIKAD\" Then Exit Function   ' SABOTAZA: i aktivna prijemnica ceka\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (c2): pala ispravka nad AKTIVNOM prijemnicom ne smeta potezu",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

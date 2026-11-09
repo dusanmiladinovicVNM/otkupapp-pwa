@@ -307,7 +307,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 
 ## 10) Dodaj blok / Izvadi blok u izdatoj otpremnici (`LNC-ODL-22..38`, `LNC-INV-12..21`)
 
-> **Status: PRE-FLIGHT 08.11.2026 — odluke operatera zapisane (08. i 09.11.2026), koda nema.**
+> **Status: PRE-FLIGHT 08.11.2026 — odluke operatera zapisane (08. i 09.11.2026). U kodu (deo (a)):
+> a1 — T21 crven nad starim kodom, potvrđeno u Excelu 09.11.2026 (BFP RunID 20261109212916-2353,
+> 18 padova, svi u T21 (a)/(b)); a2 — kapija `LNC-ODL-37` (`LncNedovrsenKontekstRazlog`), NEVERIFIKOVANO.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
 > je naredni rez, istom mehanikom"). Važi sve iz §1–§9 osim onoga što ovaj odeljak izričito
@@ -497,7 +499,7 @@ početku.
 `lncb-kapija-samo-u-tx` → T9 (tvrdnja pre potvrde) · `lncb-dodaj-bez-datuma` → T9 ·
 `lncb-dete-bez-korena` → T5 · `lncb-prijemnica-ostaje-na-staroj` → T6 · `lncb-y-po-labeli` → T6 · `lncb-x-iz-drugog-tela` → T5 ·
 `lncb-poslednji-izvadi-bez-kapije` → T7 · `lncb-ne-upisuje-na-ne` → T18 ·
-`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-tiho` → T21 · `lncb-trag-bez-upozorenja` → T23.
+`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-zbirna-bez-kapije`, `lncb-pending-prijemnica-nevidljiva`, `lncb-pending-samo-pending`, `lncb-pending-aktivna-prijemnica` → T21 · `lncb-trag-bez-upozorenja` → T23.
 
 **FALSE-GREEN pravila:** nijedan test ne tvrdi `AMB-INV-09` ni `-16` (ovde prazne); članstvo se
 ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri nad
