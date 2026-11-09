@@ -302,6 +302,24 @@ Private Function OtkStavkaDTO(ByVal klasa As String, ByVal kol As Double, _
     Set OtkStavkaDTO = s
 End Function
 
+' Stavke lista iz polja forme -- JEDNO telo za upis (OtkupUpisi) i za potvrdu
+' ispravke u lancu, koja iz njih racuna sta ce nositi nova verzija zbirne
+' (LNC-ODL-24). Dva tela bi mogla da se razidju: potvrda bi tada imenovala jedan
+' broj, a pisac upisao drugi.
+Public Function OtkupStavkeIzForme(ByVal p As Object) As Collection
+    Dim stavke As Collection
+    Set stavke = New Collection
+    If D(p, "kolicinaI") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "cenaI"), _
+                                L(p, "kolAmb"), D(p, "brutoKgI"))
+    End If
+    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
+        stavke.Add OtkStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "cenaII"), _
+                                L(p, "kolAmbII"), D(p, "brutoKgII"))
+    End If
+    Set OtkupStavkeIzForme = stavke
+End Function
+
 '------------------------------------------------------------- UPIS
 ' Upisuje otkup i radi sve sto ide uz njega. Vraca OtkupID (ili spojene ID-eve
 ' obe klase); prazno znaci da upis nije uspeo. U "poruke" se skupljaju
@@ -350,15 +368,7 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String, _
     h.Add "KolAmbIzdata", L(p, "kolAmbIzdata")
 
     Dim stavke As Collection
-    Set stavke = New Collection
-    If D(p, "kolicinaI") > 0 Then
-        stavke.Add OtkStavkaDTO(KLASA_I, D(p, "kolicinaI"), D(p, "cenaI"), _
-                                L(p, "kolAmb"), D(p, "brutoKgI"))
-    End If
-    If B(p, "dveKlase") And D(p, "kolicinaII") > 0 Then
-        stavke.Add OtkStavkaDTO(KLASA_II, D(p, "kolicinaII"), D(p, "cenaII"), _
-                                L(p, "kolAmbII"), D(p, "brutoKgII"))
-    End If
+    Set stavke = OtkupStavkeIzForme(p)
 
     Dim greska As String, upozorenje As String
     Dim ambErrNum As Long, ambDeficit As Double

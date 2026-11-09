@@ -7538,7 +7538,7 @@ SABOTAZE = {
     # promenilo otpremnicu i zbirnu bez pitanja.
     "lnc-f1-bez-potvrde": (
         "modScrDokumenti.bas",
-        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)\n",
+        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True, nove)\n",
         "    opis = \"\"   ' SABOTAZA: ispravka u lancu bez potvrde\n",
         "Test_LNC_F1IspravkaULancu",
         "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama",
@@ -7787,6 +7787,57 @@ SABOTAZE = {
         "    ' SABOTAZA: upozorenje se pise i kad ga nema\n",
         "Test_LNC_UpozorenjeUTragu",
         "LNC23 (c): bez upozorenja trag je samo opis poteza",
+    ),
+    # LNC-ODL-24 (T22): upozorenje o aktivnoj prijemnici izostaje -- operater
+    # potvrdjuje promenu zbirne koju je kupac vec izmerio, bez ijedne reci.
+    "lncb-upozorenje-samo-novi": (
+        "modDokumenta.bas",
+        "    prjDeo = LncNapomenaPrijemnice(p, zaIspravku, noveStavke)\n",
+        "    prjDeo = \"\"   ' SABOTAZA: bez upozorenja o prijemnici\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (a): storno uz prijemnicu pocinje upozorenjem",
+    ),
+    # X ne racuna listove otpremnice': potvrda imenuje drugi broj od pisca.
+    "lncb-x-bez-preostalih": (
+        "modDokumenta.bas",
+        "    LncZbirListova p(\"otpPreostali\"), lKg, lAmb\n",
+        "    lKg = 0   ' SABOTAZA: X bez listova otpremnice'\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (a): upozorenje nosi X (nova zbirna) i sadasnju zbirnu",
+    ),
+    # X ispravke ne ukljucuje nov list.
+    "lncb-x-bez-novog-lista": (
+        "modDokumenta.bas",
+        "            xKg = xKg + CDbl(st(\"Kolicina\"))\n",
+        "            ' SABOTAZA: X bez novog lista\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (b): ispravka racuna X sa novim listom",
+    ),
+    # Transakcija ispravke racuna upozorenje bez novih stavki: trag (LNC-ODL-38)
+    # nosi drugi X od zbirne' koju je upisala.
+    "lncb-tx-ispravka-bez-stavki": (
+        "modDokumenta.bas",
+        "    napomenaKol = LncNapomenaKolicine(p, True, stavke)\n",
+        "    napomenaKol = LncNapomenaKolicine(p, True)   ' SABOTAZA: TX bez novih stavki\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (d): X iz potvrde je zbir nove zbirne posle commit-a",
+    ),
+    # F1 potvrda ispravke ne vidi polja forme: X bez novog lista.
+    "lncb-f1-bez-polja": (
+        "modScrDokumenti.bas",
+        "    If Not polja Is Nothing Then Set nove = modOtkupUnos.OtkupStavkeIzForme(polja)\n",
+        "    ' SABOTAZA: F1 potvrda bez polja forme\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (c): F1 potvrda racuna X iz polja forme",
+    ),
+    # Upozorenje o prijemnici i kad prijemnice nema: "Ne" postaje podrazumevano
+    # na svakom potezu, a operater nauci da ga preskace.
+    "lncb-upozorenje-bez-prijemnice": (
+        "modDokumenta.bas",
+        "    If p(\"prijemnice\").count = 0 Then Exit Function\n",
+        "    ' SABOTAZA: upozorenje i bez prijemnice\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (e): bez prijemnice nema upozorenja",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.

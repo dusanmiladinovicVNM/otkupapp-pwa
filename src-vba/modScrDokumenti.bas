@@ -1652,10 +1652,15 @@ End Function
 ' izdatoj otpremnici (nema sta da se potvrdi), ili je operater rekao "Da".
 ' Posledice dolaze iz ISTOG plana koji potez izvrsava. Greska je "Ne": bez
 ' potvrde nema upisa koji dira lanac (fail-closed).
-Private Function PotvrdiIspravkuULancu(ByVal otkupID As String) As Boolean
-    Dim opis As String, txt As String
+Private Function PotvrdiIspravkuULancu(ByVal otkupID As String, _
+                                       Optional ByVal polja As Object = Nothing) As Boolean
+    Dim opis As String, txt As String, nove As Collection
     On Error GoTo EH
-    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)
+    ' LNC-ODL-24: sa poljima forme potvrda zna i nov list, pa kaze tacno sta ce
+    ' nositi nova verzija zbirne -- iz istog tela iz kog pise upis
+    ' (modOtkupUnos.OtkupStavkeIzForme). Bez polja (test seam) X ide bez njega.
+    If Not polja Is Nothing Then Set nove = modOtkupUnos.OtkupStavkeIzForme(polja)
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True, nove)
     If Len(opis) = 0 Then
         PotvrdiIspravkuULancu = True
         Exit Function
@@ -1666,7 +1671,7 @@ Private Function PotvrdiIspravkuULancu(ByVal otkupID As String) As Boolean
         mPotvrdaLancaTest = txt
         Exit Function
     End If
-    ' LNC-ODL-21: sa upozorenjem o promeni kolicine "Ne" je podrazumevano.
+    ' LNC-ODL-21/24: uz upozorenje (kolicine, aktivna prijemnica) "Ne" je podrazumevano.
     If modDokumenta.LncTekstImaUpozorenje(opis) Then
         PotvrdiIspravkuULancu = (MsgBox(txt, vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
     Else
@@ -1688,10 +1693,13 @@ Public Sub Scr_PotvrdaLancaTestReset()
 End Sub
 
 ' TEST SEAM: ista odluka koju Scr_Save pita pre upisa ispravke -- bez forme.
-' Tvrdo gejtovan; u test rezimu potvrda belezi i odgovara "Ne".
-Public Function Scr_PotvrdaLancaProbaj(ByVal otkupID As String) As Boolean
+' Tvrdo gejtovan; u test rezimu potvrda belezi i odgovara "Ne". `polja` je
+' recnik u obliku polja forme (kolicinaI, kolAmb, ...): sa njim potvrda ide istim
+' putem kao Scr_Save (LNC-ODL-24, X sa novim listom).
+Public Function Scr_PotvrdaLancaProbaj(ByVal otkupID As String, _
+                                       Optional ByVal polja As Object = Nothing) As Boolean
     If Not IsTestMode() Then Exit Function
-    Scr_PotvrdaLancaProbaj = PotvrdiIspravkuULancu(otkupID)
+    Scr_PotvrdaLancaProbaj = PotvrdiIspravkuULancu(otkupID, polja)
 End Function
 
 Private Function PotvrdiPrekoracenje(ByVal kgI As Double, ByVal kgII As Double) As Boolean
@@ -1878,7 +1886,7 @@ Public Function Scr_Save(ByVal polja As Object) As String
     ' vidi posledice pre upisa. "Ne" = nista se ne upisuje, forma ostaje (isti
     ' ishod kao "Ne" na prekoracenju).
     If Len(ispravkaID) > 0 Then
-        If Not PotvrdiIspravkuULancu(ispravkaID) Then
+        If Not PotvrdiIspravkuULancu(ispravkaID, p) Then
             Scr_Save = " "
             Exit Function
         End If
