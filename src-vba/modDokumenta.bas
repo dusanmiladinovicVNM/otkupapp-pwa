@@ -3759,6 +3759,8 @@ End Function
 '                 koji se ispravlja (nov list nosi njegovu kulturu)
 '   stornoRazlog -- samo za STORNO: poslednji izvor uz aktivnu prijemnicu
 '                   (LNC-ODL-07). Ispravka list zamenjuje, pa za nju ne vazi.
+' Nedovrsen kontekst nad otpremnicom ili zbirnom (LNC-ODL-37, KI-095) je razlog,
+' za storno i za ispravku podjednako.
 Public Function LncPlanLista(ByVal otkupID As String, _
                              Optional ByVal zaIspravku As Boolean = False) As Object
     Const SRC As String = "LncPlanLista"
@@ -3830,6 +3832,14 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         Exit Function
     End If
 
+    ' LNC-ODL-37: potez ne zamenjuje otpremnicu nad kojom stoji nedovrsen kontekst.
+    Dim razlogKtx As String
+    razlogKtx = LncNedovrsenKontekstRazlog(otpID, CStr(p("otpBroj")), "", "")
+    If Len(razlogKtx) > 0 Then
+        p("razlog") = razlogKtx
+        Exit Function
+    End If
+
     Dim clanovi As Collection, k As Long
     Set clanovi = OtpClanovi(otpID, SRC)
     For k = 1 To clanovi.count
@@ -3882,6 +3892,14 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         Exit Function
     End If
 
+    ' LNC-ODL-37 (KI-095): ni zbirnu nad kojom stoji nedovrsen kontekst, ni zbirnu
+    ' cija je ispravka prijemnice zapoceta a nije zavrsena.
+    razlogKtx = LncNedovrsenKontekstRazlog("", "", zbrID, CStr(p("zbrBroj")))
+    If Len(razlogKtx) > 0 Then
+        p("razlog") = razlogKtx
+        Exit Function
+    End If
+
     Dim izv As Collection
     If CBool(p("zbrIzdata")) Then
         Set izv = IzvoriZbirne(zbrID)
@@ -3918,6 +3936,88 @@ Public Function LncPlanLista(ByVal otkupID As String, _
                       "prijemnica ostala bez roditelja -- lanac se ponistava na F8 " & _
                       "nad zbirnom (PONISTENJE)."
     End If
+End Function
+
+' LNC-ODL-37 (KI-095): potez u lancu ne zamenjuje otpremnicu ni zbirnu nad kojom
+' stoji NEDOVRSEN kontekst (tblStornoVeze, NeedsRecovery = Da): F8 "Resi kasnije",
+' PONISTENJE / DUPLI koji je pao ili ceka rucno. Posle poteza bi taj podsetnik
+' pokazivao na storniranu verziju, a Oporavak bi nudio samo "Odbaci".
+'
+' Isto za NEDOVRSENU ISPRAVKU PRIJEMNICE te zbirne: F8 "Ispravi" odmah stornira
+' staru prijemnicu, pa je LncPrijemniceZbirne ne vidi i LNC-ODL-07 ne bi zaustavio
+' storno poslednjeg izvora -- zamena bi ostala bez zbirne (ZBR_PARENT_NEMA).
+'
+' Kapija gleda NeedsRecovery, ne Status: MANUAL_REQUIRED i FAILED cekaju isto kao
+' PENDING. Podsetnik ili pala ispravka nad AKTIVNOM prijemnicom ne smeta --
+' PrijemnicaID se ne menja i prevezuje se po ID-u (LNC-INV-07).
+'
+' Fail-closed: spisak koji ne moze da se procita odbija potez. Zove se dvaput iz
+' plana: jednom za otpremnicu, jednom za zbirnu (drugi par je prazan).
+' "" = nema prepreke.
+Private Function LncNedovrsenKontekstRazlog(ByVal otpID As String, ByVal otpBroj As String, _
+                                            ByVal zbrID As String, ByVal zbrBroj As String) As String
+    Const SAVET As String = ". Prvo ga resi ili odbaci (ekran Oporavak, lista Nedovrseno)."
+    Dim c As Collection, d As Object, k As Long, greska As String
+    Dim tip As String, oldID As String
+
+    Set c = modStornoContext.GetPendingCorrections(greska)
+    If Len(greska) > 0 Or c Is Nothing Then
+        LncNedovrsenKontekstRazlog = "Nedovrseni konteksti (tblStornoVeze) ne mogu da se " & _
+            "procitaju, pa se potez odbija: " & greska
+        Exit Function
+    End If
+
+    For k = 1 To c.count
+        Set d = c(k)
+        tip = CStr(d("oldDocType"))
+        oldID = CStr(d("oldDocID"))
+        If Len(otpID) > 0 Then
+            If StrComp(tip, FLOW_DOC_OTPREMNICA, vbTextCompare) = 0 And _
+               StrComp(oldID, otpID, vbTextCompare) = 0 Then
+                LncNedovrsenKontekstRazlog = "Nad otpremnicom " & otpBroj & _
+                    " stoji nedovrsen kontekst " & LncKontekstOpis(d) & SAVET
+                Exit Function
+            End If
+        End If
+        If Len(zbrID) > 0 Then
+            If StrComp(tip, FLOW_DOC_ZBIRNA, vbTextCompare) = 0 And _
+               StrComp(oldID, zbrID, vbTextCompare) = 0 Then
+                LncNedovrsenKontekstRazlog = "Nad zbirnom " & zbrBroj & _
+                    " stoji nedovrsen kontekst " & LncKontekstOpis(d) & SAVET
+                Exit Function
+            End If
+            If StrComp(tip, FLOW_DOC_PRIJEMNICA, vbTextCompare) = 0 And _
+               StrComp(CStr(d("mode")), SV_MODE_ISPRAVKA, vbTextCompare) = 0 Then
+                If LncPrijemnicaCekaIspravku(oldID, zbrID) Then
+                    LncNedovrsenKontekstRazlog = "Ispravka prijemnice " & CStr(d("oldBroj")) & _
+                        " (zbirna " & zbrBroj & ") nije zavrsena " & LncKontekstOpis(d) & _
+                        ": stara prijemnica je stornirana. Zavrsi ispravku u F4 (nova " & _
+                        "prijemnica) ili je odbaci (ekran Oporavak) -- inace bi zamena " & _
+                        "ostala bez zbirne."
+                    Exit Function
+                End If
+            End If
+        End If
+    Next k
+End Function
+
+' "(COR-000123, RESI_KASNIJE, PENDING)" -- identitet konteksta za odbijenicu; po
+' njemu ga operater nalazi u Oporavku.
+Private Function LncKontekstOpis(ByVal d As Object) As String
+    LncKontekstOpis = "(" & CStr(d("id")) & ", " & CStr(d("mode")) & ", " & _
+                      CStr(d("status")) & ")"
+End Function
+
+' Prijemnica ceka zamenu: STORNIRANA je (ispravka ju je oborila), a i dalje nosi
+' ZbirnaRoditeljID ove zbirne (storno je ne razvezuje -- T21 to meri). Aktivna
+' prijemnica ne ceka nista: pala ispravka je ostavila nju samu.
+Private Function LncPrijemnicaCekaIspravku(ByVal prjID As String, ByVal zbrID As String) As Boolean
+    If Len(prjID) = 0 Then Exit Function
+    If UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, _
+                                         COL_STORNIRANO)))) <> "DA" Then Exit Function
+    LncPrijemnicaCekaIspravku = (StrComp(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, _
+                                     COL_PRJ_ID, prjID, COL_DETE_ZBIRNA_ROD))), _
+                                     zbrID, vbTextCompare) = 0)
 End Function
 
 ' POSLEDICE POTEZA ZA POTVRDU (LNC-ODL-05 na F8, LNC-ODL-11 u F1) -- iz ISTOG
