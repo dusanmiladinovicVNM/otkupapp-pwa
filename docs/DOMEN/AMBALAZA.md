@@ -3202,6 +3202,12 @@ sabotaže `odl40-zavrsi-bez-inv07`, `odl40-kontra-meri-odmah`, `odl40-commit-bez
 sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. **NEVERIFIKOVANO u Excelu**
 (web sesija).
 
+**Proširenje (pre-flight 08.11.2026, `STORNO_U_LANCU.md` §10, `LNC-ODL-31`).** Isto važi za
+„Dodaj blok" i „Izvadi blok" nad izdatom otpremnicom: to je ista zamena verzije u jednoj
+transakciji, samo bez lista. Neto po nalozima: „Izvadi k" — stanica +k, vozač −k; „Dodaj k" —
+stanica −k, vozač +k; kooperant i kupac 0 (`LNC-INV-17`). Premeštanje A → B su **dve**
+transakcije, pa se međustanje posle „Izvadi" meri i može da odbije (`LNC-ODL-23`). Koda još nema.
+
 ### 6.15 Cena — posteno
 
 Najveci redizajn jedne tabele u refaktoru: cetiri funkcije salda, tri izvestaja +
