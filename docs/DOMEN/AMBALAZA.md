@@ -3204,8 +3204,9 @@ sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. **NEVERIFIKOVANO 
 
 **Proširenje (pre-flight 08.11.2026, `STORNO_U_LANCU.md` §10, `LNC-ODL-31`).** Isto važi za
 „Dodaj blok" i „Izvadi blok" nad izdatom otpremnicom: to je ista zamena verzije u jednoj
-transakciji, samo bez lista. Neto po nalozima: „Izvadi k" — stanica +k, vozač −k; „Dodaj k" —
-stanica −k, vozač +k; kooperant i kupac 0 (`LNC-INV-17`). Premeštanje A → B su **dve**
+transakciji, samo bez lista. Neto po nalozima, za otpremnicu usklađenu sa listovima: „Izvadi k" —
+stanica +k, vozač −k; „Dodaj k" — stanica −k, vozač +k; kooperant i kupac 0 (`LNC-INV-17`);
+neusklađena pomera i razliku između knjiženih gajbi i zbira listova (`LNC-ODL-21`). Premeštanje A → B su **dve**
 transakcije, pa se međustanje posle „Izvadi" meri i može da odbije (`LNC-ODL-23`). Koda još nema.
 
 ### 6.15 Cena — posteno
