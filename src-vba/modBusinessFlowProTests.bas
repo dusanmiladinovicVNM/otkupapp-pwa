@@ -340,6 +340,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_OtpremnicaNeuskladjenaSaListovima
     ' LNC-ODL-37 / KI-095: nedovrsen kontekst nad zbirnom odbija potez (T21)
     Test_LNC_NedovrsenKontekstOdbija
+    Test_LNC_NedovrsenKontekstGranice
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -27917,6 +27918,135 @@ EH:
     modStorno.StornoPrijemnicePadniTest False
     If modMenjan Then SetTestMode prevMode
     LncOdbaciKontekste cidA, cidB, cidC, cidD
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' GRANICE kapije LNC-ODL-37 (T21, nastavak). Ovde su SINTETICKI i STARI oblici
+' podataka -- svaki imenovan kao takav (fault injection / synthetic anomaly), pa se
+' iz njih ne izvodi poslovna invarijanta; mere samo da kapija ne pusta ni ne odbija
+' vise nego sto LNC-ODL-37 kaze. Gajbi nema (0), pa ambalaza ne mesa svoj razlog.
+'
+' (c3) PENDING ispravka nad AKTIVNOM prijemnicom (sinteticki: storno se nije desio,
+'      a FailCorrectionContext nije uspeo) -- prijemnica se prevezuje po ID-u, potez
+'      prolazi. Meri proveru "prijemnica je stornirana".
+' (d)  zamena VEC UNETA, palete nisu prevezane: MANUAL_REQUIRED (sinteticki prelaz
+'      kroz MarkCorrectionManual -- produkcija ga pravi u PreveziPaleteIspravke).
+'      Potez prolazi i zamena se prevezuje. Meri proveru "Status = PENDING".
+' (e1) kontekst nad OTPREMNICOM (sinteticki: F8 ga danas ne pravi) odbija.
+' (e2) kontekst nad zbirnom STAROG oblika, bez OldDocID-a, odbija po broju.
+' (f)  prijemnica STAROG oblika, bez ZbirnaRoditeljID-a, ceka ispravku: nalazi se po
+'      BrojZbirne i storno jedinog lista se odbija (KI-095 nad starim podacima).
+Private Sub Test_LNC_NedovrsenKontekstGranice()
+    Const SRC As String = "Test_LNC_NedovrsenKontekstGranice"
+    Const ODBIJEN As String = "Potez nije moguc:"
+    Dim scenario As String, tipT As String
+    Dim otkC1 As String, otkC2 As String, otpC As String, zbrC As String, prjC As String, cidC As String
+    Dim otkD1 As String, otkD2 As String, otpD As String, zbrD As String, prjD As String
+    Dim prjD2 As String, cidD As String, zbrNovaD As String
+    Dim otkE1 As String, otpE1 As String, cidE1 As String
+    Dim otkE2a As String, otkE2b As String, otpE2 As String, zbrE2 As String, cidE2 As String
+    Dim otkF As String, otpF As String, zbrF As String, prjF As String, cidF As String
+    Dim r As Object, opis As String, ok As Boolean, g As String, por As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNC21G")
+    tipT = TEST_TIP_AMB
+
+    ' ---- (c3) PENDING ispravka nad AKTIVNOM prijemnicom ----
+    otkC1 = LncOtkup("LNC21GC1-" & scenario, 100#, 0#, tipT)
+    otkC2 = LncOtkup("LNC21GC2-" & scenario, 50#, 0#, tipT)
+    otpC = LncOtp("LNC21GC-" & scenario, Pr3Izvor(otkC1, otkC2), tipT)
+    zbrC = LncZbr("LNC21GC-" & scenario, Pr3Izvor(otpC, ""))
+    prjC = LncPrj("LNC21GC-" & scenario, zbrC, 150#, 0, tipT)
+    cidC = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_PRIJEMNICA, prjC, _
+               LncPrjPolje(prjC, COL_PRJ_BROJ), FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , _
+               LncZbrPolje(zbrC, COL_ZBR_BROJ), "LNC21G: sinteticka ispravka bez storna")
+    AssertTrue Len(cidC) > 0 And LncPrjPolje(prjC, COL_STORNIRANO) <> "Da", _
+               "LNC21G (c3): preduslov -- PENDING ispravka, prijemnica aktivna"
+    ok = modDokumenta.StornoListaULancu_TX(otkC2, g, por)
+    AssertTrue ok And Len(g) = 0, _
+               "LNC21G (c3): ispravka nad AKTIVNOM prijemnicom ne zaustavlja potez"
+
+    ' ---- (d) zamena vec uneta, palete nisu prevezane (MANUAL_REQUIRED) ----
+    otkD1 = LncOtkup("LNC21GD1-" & scenario, 100#, 0#, tipT)
+    otkD2 = LncOtkup("LNC21GD2-" & scenario, 50#, 0#, tipT)
+    otpD = LncOtp("LNC21GD-" & scenario, Pr3Izvor(otkD1, otkD2), tipT)
+    zbrD = LncZbr("LNC21GD-" & scenario, Pr3Izvor(otpD, ""))
+    prjD = LncPrj("LNC21GD-" & scenario, zbrD, 150#, 0, tipT)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjD, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjD))
+    cidD = CStr(r("correctionID"))
+    prjD2 = LncPrj("LNC21GD2-" & scenario, zbrD, 150#, 0, tipT)
+    AssertTrue modStornoContext.MarkCorrectionManual(cidD, "LNC21G test", _
+                   "LNC21G: zamena uneta, palete nisu prevezane (sinteticki)"), _
+               "LNC21G (d): preduslov -- ispravka prebacena u MANUAL_REQUIRED"
+    AssertTrue CBool(r("success")) And LncPrjPolje(prjD, COL_STORNIRANO) = "Da" And _
+               LncPrjPolje(prjD2, COL_DETE_ZBIRNA_ROD) = zbrD, _
+               "LNC21G (d): preduslov -- stara stornirana, zamena aktivna na zbirni"
+    ok = modDokumenta.StornoListaULancu_TX(otkD2, g, por)
+    zbrNovaD = LncZbrPolje(zbrD, COL_TRACE_ZAMENJEN_SA_ID)
+    AssertTrue ok And Len(g) = 0, _
+               "LNC21G (d): zamena vec uneta (MANUAL_REQUIRED) ne zaustavlja potez"
+    AssertTrue Len(zbrNovaD) > 0 And LncPrjPolje(prjD2, COL_DETE_ZBIRNA_ROD) = zbrNovaD, _
+               "LNC21G (d): zamena je prevezana na novu zbirnu po ID-u"
+
+    ' ---- (e1) kontekst nad otpremnicom (sinteticki) ----
+    otkE1 = LncOtkup("LNC21GE1-" & scenario, 100#, 0#, tipT)
+    otpE1 = LncOtp("LNC21GE1-" & scenario, Pr3Izvor(otkE1, ""), tipT)
+    cidE1 = modStornoContext.CreateCorrectionContext(SV_MODE_RESI_KASNIJE, FLOW_DOC_OTPREMNICA, _
+                otpE1, LncOtpPolje(otpE1, COL_OTP_BROJ), , , , , , , _
+                "LNC21G: sinteticki kontekst nad otpremnicom")
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkE1)
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And Len(cidE1) > 0 And _
+               InStr(1, opis, cidE1, vbTextCompare) > 0, _
+               "LNC21G (e1): kontekst nad otpremnicom odbija potez pre potvrde"
+
+    ' ---- (e2) kontekst nad zbirnom starog oblika: bez OldDocID-a ----
+    otkE2a = LncOtkup("LNC21GE2A-" & scenario, 100#, 0#, tipT)
+    otkE2b = LncOtkup("LNC21GE2B-" & scenario, 50#, 0#, tipT)
+    otpE2 = LncOtp("LNC21GE2-" & scenario, Pr3Izvor(otkE2a, otkE2b), tipT)
+    zbrE2 = LncZbr("LNC21GE2-" & scenario, Pr3Izvor(otpE2, ""))
+    cidE2 = modStornoContext.CreateCorrectionContext(SV_MODE_RESI_KASNIJE, FLOW_DOC_ZBIRNA, "", _
+                LncZbrPolje(zbrE2, COL_ZBR_BROJ), , , , , , , _
+                "LNC21G: sinteticki red starog oblika, bez OldDocID")
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkE2b)
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And Len(cidE2) > 0 And _
+               InStr(1, opis, cidE2, vbTextCompare) > 0, _
+               "LNC21G (e2): kontekst starog oblika (bez OldDocID) odbija po broju"
+
+    ' ---- (f) prijemnica starog oblika (bez ZbirnaRoditeljID) ceka ispravku ----
+    otkF = LncOtkup("LNC21GF-" & scenario, 100#, 0#, tipT)
+    otpF = LncOtp("LNC21GF-" & scenario, Pr3Izvor(otkF, ""), tipT)
+    zbrF = LncZbr("LNC21GF-" & scenario, Pr3Izvor(otpF, ""))
+    prjF = LncPrj("LNC21GF-" & scenario, zbrF, 100#, 0, tipT)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjF, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjF))
+    cidF = CStr(r("correctionID"))
+    ' Sinteticki: stari oblik -- veza samo po broju. Brise se POSLE storna, jer bi
+    ' aktivna prijemnica bez ID-a sama oborila plan (LncPrijemniceZbirne).
+    RequireUpdateCell TBL_PRIJEMNICA, CLng(FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjF)(1)), _
+                      COL_DETE_ZBIRNA_ROD, "", SRC
+    AssertTrue CBool(r("success")) And LncPrjPolje(prjF, COL_STORNIRANO) = "Da" And _
+               Len(LncPrjPolje(prjF, COL_DETE_ZBIRNA_ROD)) = 0, _
+               "LNC21G (f): preduslov -- stornirana prijemnica bez ZbirnaRoditeljID ceka zamenu"
+    ok = modDokumenta.StornoListaULancu_TX(otkF, g, por)
+    AssertTrue Not ok And Len(cidF) > 0 And InStr(1, g, cidF, vbTextCompare) > 0, _
+               "LNC21G (f): prijemnica bez ZbirnaRoditeljID se nalazi po broju zbirne"
+    AssertTrue LncZbrPolje(zbrF, COL_STORNIRANO) <> "Da", _
+               "LNC21G (f): zbirna ostaje aktivna"
+
+    LncOdbaciKontekste cidC, cidD, cidE1, cidE2
+    LncOdbaciKontekste cidF, "", "", ""
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    LncOdbaciKontekste cidC, cidD, cidE1, cidE2
+    LncOdbaciKontekste cidF, "", "", ""
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
