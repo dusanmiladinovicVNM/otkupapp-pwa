@@ -27745,7 +27745,9 @@ End Sub
 ' (c) KONTROLA: "Resi kasnije" nad AKTIVNOM prijemnicom ne smeta -- PrijemnicaID
 '     se ne menja i prevezuje se po ID-u (LNC-INV-07).
 ' (c2) KONTROLA: PALA ispravka (FAILED) nad prijemnicom koja je ostala AKTIVNA ne
-'     smeta -- kapija gleda da li je prijemnica stornirana, ne samo mod reda.
+'     smeta. Zajednicka kontrola: prolazi i zbog filtera statusa (za prijemnicu
+'     samo PENDING) i zbog provere "stornirana" -- crveni je tek izmena koja skine
+'     oba. Svaki filter posebno meri Test_LNC_NedovrsenKontekstGranice ((c3), (d)).
 '
 ' Granice kapije koje test drzi: kapija gleda NeedsRecovery = Da, ne samo Status =
 ' PENDING ((b) ponavlja odbijanje posle prelaza u MANUAL_REQUIRED); odbijenica nosi
@@ -27882,8 +27884,7 @@ Private Sub Test_LNC_NedovrsenKontekstOdbija()
     ' Seam modStorno.StornoPrijemnicePadniTest obara storno stare prijemnice
     ' (fault injection, obrazac Test_S6K4_PadPosleSvihUpisaVracaSve): produkcioni
     ' RunPrijemnicaCorrection tada ostavlja FAILED red (NeedsRecovery = Da), a
-    ' prijemnica ostaje AKTIVNA. Kapija koja ne gleda da li je prijemnica
-    ' stornirana bi ovde pogresno odbila potez.
+    ' prijemnica ostaje AKTIVNA. Zajednicka kontrola (v. zaglavlje testa).
     otkD1 = LncOtkup("LNC21D1-" & scenario, 100#, 5#, tipT)
     otkD2 = LncOtkup("LNC21D2-" & scenario, 50#, 5#, tipT)
     otpD = LncOtp("LNC21D-" & scenario, Pr3Izvor(otkD1, otkD2), tipT)
@@ -27934,7 +27935,12 @@ End Sub
 '      kroz MarkCorrectionManual -- produkcija ga pravi u PreveziPaleteIspravke).
 '      Potez prolazi i zamena se prevezuje. Meri proveru "Status = PENDING".
 ' (e1) kontekst nad OTPREMNICOM (sinteticki: F8 ga danas ne pravi) odbija.
-' (e2) kontekst nad zbirnom STAROG oblika, bez OldDocID-a, odbija po broju.
+' (e2) kontekst nad zbirnom STAROG oblika, bez OldDocID-a, odbija po broju, i to
+'      odbijenica kaze; (e2b) stari MANUAL_REQUIRED istog broja NE odbija (uvek je
+'      upisan posle storna svoje zbirne, pa po broju pogadja tudju).
+' (e3) ispravka prijemnice STAROG oblika, bez OldDocID-a, odbija po ParentBroj.
+' (g)  ispravka prijemnice koja ne moze da se proveri (prijemnice nema) odbija
+'      potez i imenuje SVOJ red, da ga operater nadje u Oporavku.
 ' (f)  prijemnica STAROG oblika, bez ZbirnaRoditeljID-a, ceka ispravku: nalazi se po
 '      BrojZbirne i storno jedinog lista se odbija (KI-095 nad starim podacima).
 Private Sub Test_LNC_NedovrsenKontekstGranice()
@@ -27946,6 +27952,7 @@ Private Sub Test_LNC_NedovrsenKontekstGranice()
     Dim prjD2 As String, cidD As String, zbrNovaD As String
     Dim otkE1 As String, otpE1 As String, cidE1 As String
     Dim otkE2a As String, otkE2b As String, otpE2 As String, zbrE2 As String, cidE2 As String
+    Dim cidE2m As String, cidE3 As String, cidG As String
     Dim otkF As String, otpF As String, zbrF As String, prjF As String, cidF As String
     Dim r As Object, opis As String, ok As Boolean, g As String, por As String
     Dim errNum As Long, errDesc As String
@@ -28015,6 +28022,41 @@ Private Sub Test_LNC_NedovrsenKontekstGranice()
     AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And Len(cidE2) > 0 And _
                InStr(1, opis, cidE2, vbTextCompare) > 0, _
                "LNC21G (e2): kontekst starog oblika (bez OldDocID) odbija po broju"
+    AssertTrue InStr(1, opis, "po BROJU", vbBinaryCompare) > 0, _
+               "LNC21G (e2): odbijenica kaze da je red poklopljen po broju"
+    modScrOporavak.OdbaciIspravkuCore cidE2
+
+    ' ---- (e2b) stari MANUAL_REQUIRED istog broja ne odbija ----
+    cidE2m = modStornoContext.CreateCorrectionContext(SV_MODE_DUPLI, FLOW_DOC_ZBIRNA, "", _
+                 LncZbrPolje(zbrE2, COL_ZBR_BROJ), , , , , , , _
+                 "LNC21G: sinteticki stari MANUAL, upisan posle storna svoje zbirne")
+    AssertTrue modStornoContext.MarkCorrectionManual(cidE2m, "LNC21G test", "LNC21G: stari MANUAL"), _
+               "LNC21G (e2b): preduslov -- stari red bez OldDocID u MANUAL_REQUIRED"
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkE2b)
+    AssertTrue Left$(opis, Len(ODBIJEN)) <> ODBIJEN, _
+               "LNC21G (e2b): stari MANUAL red (posle storna) ne odbija po broju"
+    modScrOporavak.OdbaciIspravkuCore cidE2m
+
+    ' ---- (e3) ispravka prijemnice starog oblika: bez OldDocID-a ----
+    cidE3 = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_PRIJEMNICA, "", _
+                "LNC21G-PRJ-STARI", FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , _
+                LncZbrPolje(zbrE2, COL_ZBR_BROJ), "LNC21G: sinteticka ispravka bez OldDocID")
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkE2b)
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And Len(cidE3) > 0 And _
+               InStr(1, opis, cidE3, vbTextCompare) > 0, _
+               "LNC21G (e3): ispravka prijemnice starog oblika (bez OldDocID) odbija po ParentBroj"
+    modScrOporavak.OdbaciIspravkuCore cidE3
+
+    ' ---- (g) ispravka koja ne moze da se proveri: prijemnice nema ----
+    ' Odbija SVAKI potez nad izdatom zbirnom dok postoji, pa se gasi odmah.
+    cidG = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_PRIJEMNICA, _
+               "PRJ-NEPOSTOJI-" & scenario, "LNC21G-PRJ-NEPOSTOJI", FLOW_DOC_PRIJEMNICA, , , _
+               FLOW_DOC_ZBIRNA, , "", "LNC21G: sinteticka ispravka nepostojece prijemnice")
+    opis = modDokumenta.LncPlanOpisZaOtkup(otkE2b)
+    modScrOporavak.OdbaciIspravkuCore cidG
+    AssertTrue Left$(opis, Len(ODBIJEN)) = ODBIJEN And Len(cidG) > 0 And _
+               InStr(1, opis, cidG, vbTextCompare) > 0, _
+               "LNC21G (g): kontekst koji ne moze da se proveri odbija i imenuje svoj red"
 
     ' ---- (f) prijemnica starog oblika (bez ZbirnaRoditeljID) ceka ispravku ----
     otkF = LncOtkup("LNC21GF-" & scenario, 100#, 0#, tipT)
@@ -28038,7 +28080,7 @@ Private Sub Test_LNC_NedovrsenKontekstGranice()
                "LNC21G (f): zbirna ostaje aktivna"
 
     LncOdbaciKontekste cidC, cidD, cidE1, cidE2
-    LncOdbaciKontekste cidF, "", "", ""
+    LncOdbaciKontekste cidF, cidE2m, cidE3, cidG
     Exit Sub
 
 EH:
@@ -28046,7 +28088,7 @@ EH:
     errDesc = Err.description
     On Error Resume Next
     LncOdbaciKontekste cidC, cidD, cidE1, cidE2
-    LncOdbaciKontekste cidF, "", "", ""
+    LncOdbaciKontekste cidF, cidE2m, cidE3, cidG
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

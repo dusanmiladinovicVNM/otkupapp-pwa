@@ -7687,8 +7687,8 @@ SABOTAZE = {
     # (ili pao FAILED) vise ne odbija, iako i dalje ceka u Oporavku.
     "lncb-pending-samo-pending": (
         "modDokumenta.bas",
-        "                If LncKontekstPogadja(oldID, oldBroj, zbrID, zbrBroj) Then\n",
-        "                If LncKontekstPogadja(oldID, oldBroj, zbrID, zbrBroj) And CStr(d(\"status\")) = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
+        "                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) Then\n",
+        "                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) And stKtx = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
         "Test_LNC_NedovrsenKontekstOdbija",
         "LNC21 (b): podsetnik u MANUAL_REQUIRED i dalje odbija",
     ),
@@ -7697,7 +7697,7 @@ SABOTAZE = {
     # operatera u F4, gde bi napravio duplu prijemnicu.
     "lncb-pending-prijemnica-svaki-status": (
         "modDokumenta.bas",
-        "                   StrComp(CStr(d(\"status\")), SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
+        "                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
         "                   True Then   ' SABOTAZA: ispravka prijemnice u svakom statusu\n",
         "Test_LNC_NedovrsenKontekstGranice",
         "LNC21G (d): zamena vec uneta (MANUAL_REQUIRED) ne zaustavlja potez",
@@ -7728,6 +7728,33 @@ SABOTAZE = {
         "                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj) And False   ' SABOTAZA: prijemnica bez roda se ne vidi\n",
         "Test_LNC_NedovrsenKontekstGranice",
         "LNC21G (f): prijemnica bez ZbirnaRoditeljID se nalazi po broju zbirne",
+    ),
+    # Ispravka prijemnice STAROG oblika (red bez OldDocID-a) se tiho pusta umesto
+    # da se poredi po ParentBroj.
+    "lncb-pending-prijemnica-bez-id": (
+        "modDokumenta.bas",
+        "            LncPrijemnicaCekaIspravku = BrojJednak(parentBroj, zbrBroj)\n",
+        "            LncPrijemnicaCekaIspravku = False   ' SABOTAZA: red ispravke bez OldDocID se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e3): ispravka prijemnice starog oblika (bez OldDocID) odbija po ParentBroj",
+    ),
+    # Stari MANUAL_REQUIRED (uvek upisan POSLE storna svoje zbirne) po broju
+    # pogadja tudju, zivu zbirnu istog broja i pogresno odbija potez.
+    "lncb-pending-stari-manual": (
+        "modDokumenta.bas",
+        "        If StrComp(stKtx, SV_STATUS_MANUAL, vbTextCompare) = 0 Then Exit Function\n",
+        "        ' SABOTAZA: i stari MANUAL red odbija po broju\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e2b): stari MANUAL red (posle storna) ne odbija po broju",
+    ),
+    # Ispravka prijemnice koja ne moze da se proveri (prijemnice nema) se tiho
+    # pusta umesto da odbije potez i imenuje svoj red.
+    "lncb-pending-prijemnica-nepoznata": (
+        "modDokumenta.bas",
+        "    If FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjID).count <> 1 Then\n",
+        "    If False Then   ' SABOTAZA: nepoznata prijemnica se tiho pusta\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (g): kontekst koji ne moze da se proveri odbija i imenuje svoj red",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.

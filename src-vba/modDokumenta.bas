@@ -3957,7 +3957,9 @@ End Function
 '
 ' Stari oblik podataka se ne pusta tiho: red bez OldDocID-a i prijemnica bez
 ' ZbirnaRoditeljID-a se porede po broju, a poklapanje ODBIJA (fail-closed, isti
-' smer kao LncPrijemniceZbirne). Spisak koji ne moze da se procita odbija potez.
+' smer kao LncPrijemniceZbirne) i odbijenica kaze da je poklopljeno po broju.
+' Spisak koji ne moze da se procita, i red koji ne moze da se proveri, odbija
+' potez -- odbijenica tada imenuje TAJ red, da ga operater nadje u Oporavku.
 '
 ' Plan je zove dvaput nad ISTIM spiskom: jednom za otpremnicu, jednom za zbirnu
 ' (drugi par je prazan). "" = nema prepreke.
@@ -3966,7 +3968,10 @@ Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal
                                             ByVal zbrID As String, ByVal zbrBroj As String) As String
     Const SRC As String = "LncNedovrsenKontekstRazlog"
     Const SAVET As String = ". Prvo ga resi ili odbaci (ekran Oporavak, lista Nedovrseno)."
+    Const PO_BROJU As String = " (stari red bez OldDocID, poklopljen po BROJU -- proveri " & _
+                               "ciji je dokument pre nego sto ga odbacis)"
     Dim d As Object, k As Long, tip As String, oldID As String, oldBroj As String
+    Dim stKtx As String, poBroju As Boolean
     On Error GoTo EH
 
     If Len(greska) > 0 Or konteksti Is Nothing Then
@@ -3980,23 +3985,26 @@ Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal
         tip = CStr(d("oldDocType"))
         oldID = CStr(d("oldDocID"))
         oldBroj = CStr(d("oldBroj"))
+        stKtx = CStr(d("status"))
         If Len(otpID) > 0 And StrComp(tip, FLOW_DOC_OTPREMNICA, vbTextCompare) = 0 Then
-            If LncKontekstPogadja(oldID, oldBroj, otpID, otpBroj) Then
+            If LncKontekstPogadja(oldID, oldBroj, stKtx, otpID, otpBroj, poBroju) Then
                 LncNedovrsenKontekstRazlog = "Nad otpremnicom " & otpBroj & _
-                    " stoji nedovrsen kontekst " & LncKontekstOpis(d) & SAVET
+                    " stoji nedovrsen kontekst " & LncKontekstOpis(d) & _
+                    IIf(poBroju, PO_BROJU, "") & SAVET
                 Exit Function
             End If
         End If
         If Len(zbrID) > 0 Then
             If StrComp(tip, FLOW_DOC_ZBIRNA, vbTextCompare) = 0 Then
-                If LncKontekstPogadja(oldID, oldBroj, zbrID, zbrBroj) Then
+                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) Then
                     LncNedovrsenKontekstRazlog = "Nad zbirnom " & zbrBroj & _
-                        " stoji nedovrsen kontekst " & LncKontekstOpis(d) & SAVET
+                        " stoji nedovrsen kontekst " & LncKontekstOpis(d) & _
+                        IIf(poBroju, PO_BROJU, "") & SAVET
                     Exit Function
                 End If
             ElseIf StrComp(tip, FLOW_DOC_PRIJEMNICA, vbTextCompare) = 0 And _
                    StrComp(CStr(d("mode")), SV_MODE_ISPRAVKA, vbTextCompare) = 0 And _
-                   StrComp(CStr(d("status")), SV_STATUS_PENDING, vbTextCompare) = 0 Then
+                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then
                 If LncPrijemnicaCekaIspravku(oldID, CStr(d("parentBroj")), zbrID, zbrBroj, SRC) Then
                     LncNedovrsenKontekstRazlog = "Ispravka prijemnice " & oldBroj & _
                         " (zbirna " & zbrBroj & ") nije zavrsena " & LncKontekstOpis(d) & _
@@ -4012,17 +4020,33 @@ Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal
 EH:
     LncNedovrsenKontekstRazlog = "Nedovrseni konteksti ne mogu da se provere, pa se potez " & _
         "odbija: [" & Err.Number & "] " & Err.description
+    If Not d Is Nothing Then
+        LncNedovrsenKontekstRazlog = LncNedovrsenKontekstRazlog & " -- kontekst " & _
+                                     LncKontekstOpis(d) & SAVET
+    End If
+    LogErr SRC, LncNedovrsenKontekstRazlog
 End Function
 
-' Red konteksta pogadja dokument po ID-u. Red STAROG oblika (bez OldDocID-a; zbirni
-' konteksti su ga dobili tek od S4-2a) pogadja po broju -- poklapanje odbija potez
-' (fail-closed; broj nije identitet, pa sudar brojeva odbija vise, nikad manje).
+' Red konteksta pogadja dokument po ID-u. Red STAROG oblika, bez OldDocID-a, pogadja
+' po broju -- poklapanje odbija potez (fail-closed; broj nije identitet, pa sudar
+' brojeva odbija vise, nikad manje) i javlja se kroz poBroju. Takve redove su pisali
+' zbirni modovi pre bdc1b586 (05.08.2026), a "Resi kasnije" nad dvosmislenim brojem
+' do S4-2a; danasnji pisci uvek nose ID.
+'
+' Izuzetak: stari MANUAL_REQUIRED je uvek upisan POSLE storna svoje zbirne
+' (bdc1b586^, DUPLI: StornoZbirnaIDetach_TX pa MarkCorrectionManual), pa njegov
+' dokument nije aktivan i ne moze biti ovaj -- po broju bi pogodio tudju zbirnu.
 Private Function LncKontekstPogadja(ByVal oldID As String, ByVal oldBroj As String, _
-                                    ByVal docID As String, ByVal docBroj As String) As Boolean
+                                    ByVal stKtx As String, _
+                                    ByVal docID As String, ByVal docBroj As String, _
+                                    ByRef poBroju As Boolean) As Boolean
+    poBroju = False
     If Len(oldID) > 0 Then
         LncKontekstPogadja = (StrComp(oldID, docID, vbTextCompare) = 0)
     ElseIf Len(oldBroj) > 0 And Len(docBroj) > 0 Then
+        If StrComp(stKtx, SV_STATUS_MANUAL, vbTextCompare) = 0 Then Exit Function
         LncKontekstPogadja = BrojJednak(oldBroj, docBroj)
+        poBroju = LncKontekstPogadja
     End If
 End Function
 

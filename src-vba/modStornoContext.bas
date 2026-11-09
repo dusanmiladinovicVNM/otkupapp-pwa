@@ -262,9 +262,10 @@ Public Function GetPendingCorrections(Optional ByRef outGreska As String) As Col
     cCreated = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_CREATED_AT)
     ' Bez ovih kolona spisak nije potpun: kapija koja ga cita fail-closed mora to
     ' da zna (ostali pozivaoci dobijaju prazan spisak, kao do sada).
-    If cNeeds = 0 Or cId = 0 Or cOldD = 0 Or cOldT = 0 Or cMode = 0 Or cStatus = 0 Then
+    If cNeeds = 0 Or cId = 0 Or cOldD = 0 Or cOldT = 0 Or cMode = 0 Or cStatus = 0 Or _
+       cOldB = 0 Or cParB = 0 Then
         outGreska = "tblStornoVeze nema kolonu NeedsRecovery, CorrectionID, OldDocID, " & _
-                    "OldDocType, Mode ili Status"
+                    "OldDocType, Mode, Status, OldBroj ili ParentBroj"
     End If
     If cNeeds = 0 Or cId = 0 Then Exit Function
 
