@@ -237,6 +237,7 @@ Public Function GetPendingCorrections(Optional ByRef outGreska As String) As Col
     Const SRC As String = MOD_NAME & ".GetPendingCorrections"
     Dim result As New Collection
     Set GetPendingCorrections = result
+    outGreska = ""
 
     On Error GoTo EH
     If GetTable(TBL_STORNO_VEZE) Is Nothing Then Exit Function
@@ -261,8 +262,9 @@ Public Function GetPendingCorrections(Optional ByRef outGreska As String) As Col
     cCreated = GetColumnIndex(TBL_STORNO_VEZE, COL_SV_CREATED_AT)
     ' Bez ovih kolona spisak nije potpun: kapija koja ga cita fail-closed mora to
     ' da zna (ostali pozivaoci dobijaju prazan spisak, kao do sada).
-    If cNeeds = 0 Or cId = 0 Or cOldD = 0 Then
-        outGreska = "tblStornoVeze nema kolonu NeedsRecovery, CorrectionID ili OldDocID"
+    If cNeeds = 0 Or cId = 0 Or cOldD = 0 Or cOldT = 0 Or cMode = 0 Or cStatus = 0 Then
+        outGreska = "tblStornoVeze nema kolonu NeedsRecovery, CorrectionID, OldDocID, " & _
+                    "OldDocType, Mode ili Status"
     End If
     If cNeeds = 0 Or cId = 0 Then Exit Function
 

@@ -7661,37 +7661,73 @@ SABOTAZE = {
     # poteza pokazuje na storniranu verziju.
     "lncb-pending-zbirna-bez-kapije": (
         "modDokumenta.bas",
-        "    razlogKtx = LncNedovrsenKontekstRazlog(\"\", \"\", zbrID, CStr(p(\"zbrBroj\")))\n",
+        "    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, \"\", \"\", zbrID, CStr(p(\"zbrBroj\")))\n",
         "    razlogKtx = \"\"   ' SABOTAZA: zbirna bez kapije konteksta\n",
         "Test_LNC_NedovrsenKontekstOdbija",
         "LNC21 (b): plan odbija PRE potvrde i imenuje podsetnik nad zbirnom",
+    ),
+    # Otpremnica se ne meri: kontekst nad otpremnicom ne zaustavlja potez.
+    "lncb-pending-otpremnica-bez-kapije": (
+        "modDokumenta.bas",
+        "    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, otpID, CStr(p(\"otpBroj\")), \"\", \"\")\n",
+        "    razlogKtx = \"\"   ' SABOTAZA: otpremnica bez kapije konteksta\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e1): kontekst nad otpremnicom odbija potez pre potvrde",
     ),
     # Nedovrsena ispravka prijemnice se ne vidi (stara je stornirana): storno
     # jedinog lista obara zbirnu, a zamena ostaje bez roditelja (KI-095, put 1).
     "lncb-pending-prijemnica-nevidljiva": (
         "modDokumenta.bas",
-        "                If LncPrijemnicaCekaIspravku(oldID, zbrID) Then\n",
+        "                If LncPrijemnicaCekaIspravku(oldID, CStr(d(\"parentBroj\")), zbrID, zbrBroj, SRC) Then\n",
         "                If False Then   ' SABOTAZA: nedovrsena ispravka prijemnice se ne vidi\n",
         "Test_LNC_NedovrsenKontekstOdbija",
         "LNC21 (a): plan odbija PRE potvrde i imenuje nedovrsenu ispravku prijemnice",
     ),
-    # Kapija gleda samo Status = PENDING: podsetnik u MANUAL_REQUIRED (ili pao
-    # FAILED) vise ne odbija, iako i dalje ceka u Oporavku (NeedsRecovery = Da).
+    # Kapija nad zbirnom gleda samo Status = PENDING: podsetnik u MANUAL_REQUIRED
+    # (ili pao FAILED) vise ne odbija, iako i dalje ceka u Oporavku.
     "lncb-pending-samo-pending": (
         "modDokumenta.bas",
-        "               StrComp(oldID, zbrID, vbTextCompare) = 0 Then\n",
-        "               StrComp(oldID, zbrID, vbTextCompare) = 0 And CStr(d(\"status\")) = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
+        "                If LncKontekstPogadja(oldID, oldBroj, zbrID, zbrBroj) Then\n",
+        "                If LncKontekstPogadja(oldID, oldBroj, zbrID, zbrBroj) And CStr(d(\"status\")) = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
         "Test_LNC_NedovrsenKontekstOdbija",
         "LNC21 (b): podsetnik u MANUAL_REQUIRED i dalje odbija",
     ),
-    # Kapija ne gleda da li je prijemnica stornirana: pala ispravka nad AKTIVNOM
-    # prijemnicom (koja se prevezuje po ID-u) pogresno odbija potez.
+    # Ispravka prijemnice odbija u SVAKOM statusu: kad je zamena vec uneta
+    # (MANUAL_REQUIRED, palete nisu prevezane) potez se pogresno odbija i salje
+    # operatera u F4, gde bi napravio duplu prijemnicu.
+    "lncb-pending-prijemnica-svaki-status": (
+        "modDokumenta.bas",
+        "                   StrComp(CStr(d(\"status\")), SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
+        "                   True Then   ' SABOTAZA: ispravka prijemnice u svakom statusu\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (d): zamena vec uneta (MANUAL_REQUIRED) ne zaustavlja potez",
+    ),
+    # Kapija ne gleda da li je prijemnica stornirana: ispravka nad AKTIVNOM
+    # prijemnicom (prevezuje se po ID-u) pogresno odbija potez.
     "lncb-pending-aktivna-prijemnica": (
         "modDokumenta.bas",
         "                                         COL_STORNIRANO)))) <> \"DA\" Then Exit Function\n",
         "                                         COL_STORNIRANO)))) = \"NIKAD\" Then Exit Function   ' SABOTAZA: i aktivna prijemnica ceka\n",
-        "Test_LNC_NedovrsenKontekstOdbija",
-        "LNC21 (c2): pala ispravka nad AKTIVNOM prijemnicom ne smeta potezu",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (c3): ispravka nad AKTIVNOM prijemnicom ne zaustavlja potez",
+    ),
+    # Red konteksta STAROG oblika (bez OldDocID-a) se tiho pusta umesto da se
+    # poredi po broju.
+    "lncb-pending-bez-broja": (
+        "modDokumenta.bas",
+        "        LncKontekstPogadja = BrojJednak(oldBroj, docBroj)\n",
+        "        LncKontekstPogadja = False   ' SABOTAZA: red bez OldDocID se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e2): kontekst starog oblika (bez OldDocID) odbija po broju",
+    ),
+    # Prijemnica STAROG oblika (bez ZbirnaRoditeljID) se tiho pusta: storno jedinog
+    # lista obara zbirnu, a zamena ostaje bez roditelja (KI-095 nad starim podacima).
+    "lncb-pending-prijemnica-bez-roda": (
+        "modDokumenta.bas",
+        "                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj)\n",
+        "                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj) And False   ' SABOTAZA: prijemnica bez roda se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (f): prijemnica bez ZbirnaRoditeljID se nalazi po broju zbirne",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
