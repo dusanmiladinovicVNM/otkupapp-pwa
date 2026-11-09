@@ -4113,7 +4113,8 @@ End Function
 ' plana koji potez izvrsava. "" = list nije u lancu (ili je, za ispravku, u nacrtu
 ' otpremnice: to je obicna ispravka). Kad potez ne sme, opis kaze i zasto.
 Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
-                                   Optional ByVal zaIspravku As Boolean = False) As String
+                                   Optional ByVal zaIspravku As Boolean = False, _
+                                   Optional ByVal noveStavke As Collection = Nothing) As String
     Dim p As Object, m As String, placeno As Double, razlog As String
     On Error GoTo EH
 
@@ -4129,7 +4130,7 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
     End If
 
     ' LNC-ODL-21: upozorenje o promeni kolicine ide na VRH posledica.
-    m = LncNapomenaKolicine(p, zaIspravku)
+    m = LncNapomenaKolicine(p, zaIspravku, noveStavke)
     If Len(m) > 0 Then m = m & vbCrLf & vbCrLf
 
     If Not CBool(p("otpIzdata")) Then
@@ -4287,7 +4288,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     LncRequirePlan p, SRC, False
     ' LNC-ODL-21: upozorenje se meri PRE izmena, a u log ide tek posle commit-a.
     Dim napomenaKol As String
-    napomenaKol = LncNapomenaKolicine(p, True)
+    napomenaKol = LncNapomenaKolicine(p, True, stavke)
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
                   "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
@@ -6426,12 +6427,13 @@ End Function
 ' zbira izvora, pa se razlika ne moze preneti: operater je vidi PRE poteza i
 ' odlucuje Da/Ne (ne odbijanje). Sve razlike, po klasi, za kg i gajbe, i za
 ' otpremnicu i za izdatu zbirnu koja dobija novu verziju. "" = nema razlike.
-Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Boolean) As String
+Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Boolean, _
+                                     Optional ByVal noveStavke As Collection = Nothing) As String
     Const SRC As String = "LncNapomenaKolicine"
     Dim ocek As Object, ocekAmb As Object
     Dim pov As Object, povAmb As Object, povBruto As Object, povBrutoPun As Object
     Dim zOcek As Object, zOcekAmb As Object, zPov As Object, zPovAmb As Object
-    Dim otpDeo As String, zbrDeo As String, s As String, m As String
+    Dim otpDeo As String, zbrDeo As String, prjDeo As String, s As String, m As String
 
     If Not CBool(p("otpIzdata")) Then Exit Function
 
@@ -6474,7 +6476,11 @@ Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Bool
         End If
     End If
 
-    If Len(otpDeo) = 0 And Len(zbrDeo) = 0 Then Exit Function
+    ' LNC-ODL-24: zbirna sa aktivnom prijemnicom -- posle LNC-ODL-21 delova, pod
+    ' istom (jednom) oznakom PAZNJA.
+    prjDeo = LncNapomenaPrijemnice(p, zaIspravku, noveStavke)
+
+    If Len(otpDeo) = 0 And Len(zbrDeo) = 0 And Len(prjDeo) = 0 Then Exit Function
 
     m = LNC_UPOZORENJE & " potez menja prijavljene kolicine."
     If Len(otpDeo) > 0 Then
@@ -6489,9 +6495,106 @@ Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Bool
             ". Nova verzija zbirne nosi taj zbir" & _
             IIf(zaIspravku, " (sa ispravljenim listom)", " (bez storniranog lista)") & "."
     End If
+    If Len(prjDeo) > 0 Then m = m & vbCrLf & prjDeo
     m = m & vbCrLf & "Bruto se uvek racuna iz listova. Nastavi samo ako su zbirovi tacni."
     LncNapomenaKolicine = m
 End Function
+
+' LNC-ODL-24 (operater 09.11.2026): zbirna sa AKTIVNOM prijemnicom -- kupac je robu
+' vec izmerio, a prijemnica se ne menja (LNC-ODL-02). Potvrda SVAKOG poteza u lancu
+' kaze koliko ce nositi nova verzija zbirne (X) i koliko prijemnice (Y), za kg i
+' gajbe; oznaka PAZNJA tada daje "Ne" kao podrazumevano (LncTekstImaUpozorenje).
+' Klasa se ne poredi: kupac je procenjuje pri prijemu (PRJ-ZBR-02).
+'
+' X se racuna kao pisac zbirne: stavke sestara (ZbrUcitajPovezano, isti primitiv
+' StavkeZaOtpremnicu kao CreateZbirna) + listovi otpremnice' (preostali, uz nove
+' stavke ispravke). Ispravka bez novih stavki (potvrda bez forme) kaze X bez njih.
+' Y je zbir stavki prijemnica koje je plan izabrao po ZbirnaRoditeljID, nikad po
+' labeli. "" = nema aktivne prijemnice, ili zbirna' ne nastaje (LNC-ODL-07 odbija).
+Private Function LncNapomenaPrijemnice(ByVal p As Object, ByVal zaIspravku As Boolean, _
+                                       ByVal noveStavke As Collection) As String
+    Const SRC As String = "LncNapomenaPrijemnice"
+    Dim xKg As Double, xAmb As Double, aKg As Double, aAmb As Double
+    Dim yKg As Double, yAmb As Double, lKg As Double, lAmb As Double
+    Dim zPov As Object, zPovAmb As Object, zOcek As Object, zOcekAmb As Object
+    Dim sestre As Collection, zbir As Object, rec As Variant, v As Variant
+    Dim k As Long, pid As String, lista As String, m As String, bezNovih As Boolean
+
+    If Not CBool(p("zbrIzdata")) Then Exit Function
+    If p("prijemnice").count = 0 Then Exit Function
+    If p("zbrSestre").count = 0 And p("otpPreostali").count = 0 And Not zaIspravku Then Exit Function
+
+    Set sestre = New Collection
+    For k = 1 To p("zbrSestre").count
+        sestre.Add CStr(p("zbrSestre")(k))
+    Next k
+    ZbrUcitajPovezano CStr(p("zbrID")), sestre, zPov, zPovAmb, SRC
+    For Each v In zPov.keys
+        xKg = xKg + CDbl(zPov(v))
+        xAmb = xAmb + CDbl(zPovAmb(v))
+    Next v
+    LncZbirListova p("otpPreostali"), lKg, lAmb
+    xKg = xKg + lKg
+    xAmb = xAmb + lAmb
+    bezNovih = zaIspravku And (noveStavke Is Nothing)
+    If zaIspravku And Not bezNovih Then
+        Dim st As Object
+        For k = 1 To noveStavke.count
+            Set st = noveStavke(k)
+            xKg = xKg + CDbl(st("Kolicina"))
+            xAmb = xAmb + CDbl(st("KolAmbalaze"))
+        Next k
+    End If
+
+    ZbrUcitajOcekivano CStr(p("zbrID")), zOcek, zOcekAmb, SRC
+    For Each v In zOcek.keys
+        aKg = aKg + CDbl(zOcek(v))
+        aAmb = aAmb + CDbl(zOcekAmb(v))
+    Next v
+
+    Set zbir = ZbirStavkiPoPrijemnici()
+    For k = 1 To p("prijemnice").count
+        pid = CStr(p("prijemnice")(k))
+        rec = ZbirStavkiZaPrijemnicu(zbir, pid, SRC)
+        yKg = yKg + CDbl(rec(0))
+        yAmb = yAmb + CDbl(rec(2))
+        If Len(lista) > 0 Then lista = lista & ", "
+        lista = lista & Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_PRJ_BROJ))) & _
+                " " & LncFmt(CDbl(rec(0)), False) & " kg"
+    Next k
+
+    m = "- Zbirna " & p("zbrBroj") & " ima aktivnu prijemnicu: kupac je robu vec izmerio, a " & _
+        "prijemnica se ne menja. Nova verzija zbirne nosi " & LncFmt(xKg, False) & " kg" & _
+        IIf(bezNovih, " + ispravljen list", "") & " (sada " & LncFmt(aKg, False) & " kg); " & _
+        "prijemnice: " & lista & " -- ukupno " & LncFmt(yKg, False) & " kg"
+    If Not bezNovih Then m = m & "; razlika zbirna - prijemnice " & LncFmt(xKg - yKg, False) & " kg"
+    m = m & "." & vbCrLf & "- Gajbe: nova verzija zbirne " & LncFmt(xAmb, True) & _
+        IIf(bezNovih, " + ispravljen list", "") & " (sada " & LncFmt(aAmb, True) & _
+        "), prijemnice " & LncFmt(yAmb, True)
+    If Not bezNovih Then m = m & ", razlika " & LncFmt(xAmb - yAmb, True)
+    LncNapomenaPrijemnice = m & "."
+End Function
+
+' Zbir kg i gajbi stavki zadatih listova -- kanonski strog citac otkupa
+' (modOtkup.StavkeOtkupaRedovi: 1 OtkupID | 3 Klasa | 4 Kolicina | 6 KolAmbalaze).
+Private Sub LncZbirListova(ByVal listovi As Collection, ByRef kg As Double, ByRef amb As Double)
+    Dim sve As Variant, skup As Object, i As Long, k As Long
+    kg = 0
+    amb = 0
+    If listovi.count = 0 Then Exit Sub
+    Set skup = CreateObject("Scripting.Dictionary")
+    For k = 1 To listovi.count
+        skup(UCase$(CStr(listovi(k)))) = True
+    Next k
+    sve = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(sve) Then Exit Sub
+    For i = 1 To UBound(sve, 1)
+        If skup.Exists(UCase$(CStr(sve(i, 1)))) Then
+            kg = kg + CDbl(sve(i, 4))
+            amb = amb + CDbl(sve(i, 6))
+        End If
+    Next i
+End Sub
 
 ' cilj(klasa) += izvor(klasa), za svaku klasu izvora.
 Private Sub LncDodajPoKlasi(ByVal cilj As Object, ByVal izvor As Object)

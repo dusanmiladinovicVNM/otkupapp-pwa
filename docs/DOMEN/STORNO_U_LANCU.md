@@ -311,7 +311,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > a1 — T21 crven nad starim kodom, potvrđeno u Excelu 09.11.2026 (BFP RunID 20261109212916-2353,
 > 18 padova, svi u T21 (a)/(b)); a2 — kapija `LNC-ODL-37` (`LncNedovrsenKontekstRazlog`, granice u
 > `Test_LNC_NedovrsenKontekstGranice`); a3 — trag upozorenja `LNC-ODL-38`
-> (`modStornoContext.DopisiPorukuKonteksta`, T23). a2 i a3 NEVERIFIKOVANO u Excelu.**
+> (`modStornoContext.DopisiPorukuKonteksta`, T23); a4 — upozorenje o aktivnoj prijemnici `LNC-ODL-24`
+> za sve poteze (`LncNapomenaPrijemnice`, T22; F1 potvrda dobija polja forme kroz
+> `modOtkupUnos.OtkupStavkeIzForme`). a2–a4 NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
 > je naredni rez, istom mehanikom"). Važi sve iz §1–§9 osim onoga što ovaj odeljak izričito
@@ -501,7 +503,7 @@ početku.
 `lncb-kapija-samo-u-tx` → T9 (tvrdnja pre potvrde) · `lncb-dodaj-bez-datuma` → T9 ·
 `lncb-dete-bez-korena` → T5 · `lncb-prijemnica-ostaje-na-staroj` → T6 · `lncb-y-po-labeli` → T6 · `lncb-x-iz-drugog-tela` → T5 ·
 `lncb-poslednji-izvadi-bez-kapije` → T7 · `lncb-ne-upisuje-na-ne` → T18 ·
-`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-*` (jedanaest: zbirna, otpremnica, prijemnica nevidljiva, samo PENDING, prijemnica u svakom statusu, aktivna prijemnica, bez broja, stari MANUAL, prijemnica bez roda, prijemnica bez OldDocID, nepoznata prijemnica) → T21 i granice · `lncb-trag-storno-bez-upozorenja`, `-ispravka-bez-upozorenja`, `-prepisuje-opis`, `-uvek` → T23 (`Test_LNC_UpozorenjeUTragu`).
+`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi`, `lncb-x-bez-preostalih`, `lncb-x-bez-novog-lista`, `lncb-tx-ispravka-bez-stavki`, `lncb-f1-bez-polja`, `lncb-upozorenje-bez-prijemnice` → T22 (`Test_LNC_UpozorenjePrijemniceSviPotezi`) · `lncb-pending-*` (jedanaest: zbirna, otpremnica, prijemnica nevidljiva, samo PENDING, prijemnica u svakom statusu, aktivna prijemnica, bez broja, stari MANUAL, prijemnica bez roda, prijemnica bez OldDocID, nepoznata prijemnica) → T21 i granice · `lncb-trag-storno-bez-upozorenja`, `-ispravka-bez-upozorenja`, `-prepisuje-opis`, `-uvek` → T23 (`Test_LNC_UpozorenjeUTragu`).
 
 **FALSE-GREEN pravila:** nijedan test ne tvrdi `AMB-INV-09` ni `-16` (ovde prazne); članstvo se
 ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri nad
@@ -524,7 +526,10 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
   **(a)** `modDokumenta` — jezgro plana po otpremnici, razlog-oblik `OtpRequireIzvorValjan`,
   `LncKontekstPar` kao funkcija, dva `_TX` ulaza po skeletu `StornoListaULancu_TX`, tekstovi
   poteza i telo X/Y (`LNC-ODL-24` za sve poteze) — BFP T1–T17, T21–T23 (tekst se meri nad opisom plana, ne kroz seam); T21 ide **prvi**, crven nad
-  današnjim kodom, pa popravka;
+  današnjim kodom, pa popravka. **Odstupanje (a4, 09.11.2026):** tačan X u F1 potvrdi ispravke traži
+  polja forme, pa deo (a) dira i `modScrDokumenti.PotvrdiIspravkuULancu` / `Scr_PotvrdaLancaProbaj`
+  (opcioni parametar polja) i `modOtkupUnos.OtkupStavkeIzForme` (jedno telo za upis i potvrdu);
+  sidro sabotaže `lnc-f1-bez-potvrde` je pomereno, pa ona ide u dokaz;
   **(b)** `modScrDokumenti` — kontekst cilja, radnje, potvrda kroz postojeći seam (reset kroz
   `Scr_PotvrdaLancaTestReset` / `Scr_OtpTestReset`), ključevi u `modPoruke` — T18–T20.
 - `modDokumenta`, `modScrDokumenti`, `modBusinessFlowProTests` i ovaj fajl ne dira nijedan
