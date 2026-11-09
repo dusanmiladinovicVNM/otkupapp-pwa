@@ -6,7 +6,7 @@
 > `IspravkaListaULancu_TX` nad `modOtkup.IspravkaOtkupaUTransakciji`, ruta u
 > `modOtkupUnos`) i deo 4 (F8, F1, UNDO kapija). NEVERIFIKOVANO u Excelu.**
 > **§10 (pre-flight 08.11.2026):** „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici
-> (`LNC-ODL-22..36`, `LNC-INV-12..20`) — odluke operatera zapisane, koda nema.
+> (`LNC-ODL-22..38`, `LNC-INV-12..21`) — odluke operatera zapisane, koda nema.
 > Mereno čitanjem nad `main` = `1caa86f`; Excel nije pokrenut, pa je svaka tvrdnja o
 > ponašanju ovde **NEVERIFIKOVANA** dok je ne potvrdi test. Verdikt po osama je §7.
 >
@@ -43,7 +43,7 @@ zapisuje kako, i šta je operater odlučio tamo gde pravilo ćuti.
 | **`LNC-ODL-03`** | Očekivanje nove otpremnice se **izvodi**: staro − list (+ novi list kod ispravke), po klasi, za kg i gajbe | Stara je bila izdata, a izdavanje je dokazalo očekivano = povezano po klasi (`OtpIzdaj`, `modDokumenta.bas:4923`). Umanjenje za jedan poznat list nije „izjednačavanje" koje je S3b-2a odbio. **Dopuna 08.11.2026:** premisa važi samo za usklađenu otpremnicu. Otpremnica starog oblika može da nosi očekivanje različito od zbira svojih listova, a nova izdata verzija sme da nosi samo zbir; zato potvrda takvog poteza počinje upozorenjem (`LNC-ODL-21`, KI-094) |
 | **`LNC-ODL-04`** | Novac kao i danas: storno odvezuje (`ResetNovacOtkupLink`, virman postaje slobodan avans); ispravka prenosi na nov list i prijavljuje preplatu (PUT A) | `ODLUKA_NOVAC_PRI_STORNU.md` (A + D suženo); bez novog koda za novac |
 | **`LNC-ODL-05`** | Ulaz za storno: **F8 nad listom**. Umesto današnjeg odbijanja nudi radnju sa uvidom posledica pre potvrde | F8 već ima obrazac „prvo vidi posledice, pa odluči" (`GradiUvid`, `modStornoImpact`) |
-| **`LNC-ODL-06`** | Obim prvog reza: **storno + ispravka** lista u lancu. Premeštanje lista na drugu otpremnicu je naredni rez, istom mehanikom | **Nastavak:** §10 — „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici, premeštanje u dva poteza (`LNC-ODL-22..36`, pre-flight 08.11.2026) |
+| **`LNC-ODL-06`** | Obim prvog reza: **storno + ispravka** lista u lancu. Premeštanje lista na drugu otpremnicu je naredni rez, istom mehanikom | **Nastavak:** §10 — „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici, premeštanje u dva poteza (`LNC-ODL-22..38`, pre-flight 08.11.2026) |
 | **`LNC-ODL-07`** | Poslednji izvor: otpremnica bez preostalih listova se **samo stornira** (bez naslednika); zbirna bez preostalih otpremnica isto. **Odbija se** kad bi aktivna prijemnica ostala bez zbirne — tada F8 PONIŠTENJE nad zbirnom | `GOLDEN_SCENARIJI.md` §10 t. 3 („prazna nova verzija nema smisla"); otpremnica bez izvora nije isporuka (`OtpIzdaj`) |
 | **`LNC-ODL-08`** | Fakturisana prijemnica se **prevezuje** kao i nefakturisana. Faktura i SEF se ne diraju | `PrijemnicaID` se ne menja, a linija fakture vezuje stavku prijemnice (`FAK-LIN-*`); ni faktura ni SEF ne vezuju zbirnu |
 | **`LNC-ODL-09`** | **Nema automatske štampe.** Poruka posle poteza imenuje stari → novi broj otpremnice i zbirne | Danas ni izdavanje ne štampa samo; papir ide iz Izveštaja |
@@ -305,7 +305,7 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
   (`AMB-10-ODL-40`) + T1 · **2** jezgro poteza za storno (BFP T2–T3, T5–T7, T9–T12, T16, T18)
   · **3** ispravka (T4, T8, T13, T15) · **4** ekrani F8/F1 + UNDO kapija (T14, T17).
 
-## 10) Dodaj blok / Izvadi blok u izdatoj otpremnici (`LNC-ODL-22..36`, `LNC-INV-12..20`)
+## 10) Dodaj blok / Izvadi blok u izdatoj otpremnici (`LNC-ODL-22..38`, `LNC-INV-12..21`)
 
 > **Status: PRE-FLIGHT 08.11.2026 — odluke operatera zapisane (08. i 09.11.2026), koda nema.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
@@ -328,12 +328,12 @@ nijedan put za promenu sastava; van zbirne postoji samo posredan put u više kor
 
 Kad je otpremnica u izdatoj zbirnoj, ostaje samo ručno rasklapanje lanca, kao u §0.
 
-### 10.2 Odluke (`LNC-ODL-22..36`)
+### 10.2 Odluke (`LNC-ODL-22..38`)
 
 | ID | Odluka | Obrazloženje / izvor |
 |---|---|---|
 | **`LNC-ODL-22`** | **„Dodaj blok" i „Izvadi blok"** nad IZDATOM otpremnicom su potez u lancu po `LNC-ODL-01..21`: jedna transakcija, stara otpremnica (i zbirna) padaju, nove verzije, prijemnice prevezane po ID-u, trag po ID-u, hladnjački lanac van poteza, upozorenje `LNC-ODL-21`. **Blok se ne stornira**: posle „Izvadi" je slobodan. Važi i bez zbirne (tada samo otpremnica'). F1 „Ispravi" (B-022, `IspravkaOtpremnice_TX`) ostaje **netaknut** — ostaje put za izdatu otpremnicu van zbirne, sa svojim tragom; ovaj rez ga ne menja i ne ujednačava | Operater 08.11.2026 (ulaz nad izdatom otpremnicom, obim dodavanje + uklanjanje). Skelet: `StornoListaULancu_TX` (`modDokumenta.bas:3996-4049`) bez koraka lista. „Minimal change": dva puta za izdatu van zbirne su svesna razlika (F1 „Ispravi" ne piše `tblStornoVeze` i meri ambalažu odmah) |
-| **`LNC-ODL-23`** | **Premeštanje A → B su dva poteza:** „Izvadi" iz A, pa „Dodaj" u B. Obrnut redosled nije moguć (Dodaj traži slobodan blok, 1291). U istoj izdatoj zbirnoj to daje Z → Z' → Z'' i dva nova broja. Međustanje je commit-ovano, pa „Izvadi" može da padne na `AMB-INV-07` kad je vozač gajbe bloka već predao kupcu, iako bi oba koraka zajedno bila neto nula — poruka tada imenuje vozača, tip i manjak. Jednopotezno „Premesti A → B" je zaseban rez | Operater 08.11.2026 (dva koraka). Odlaganje merenja važi unutar jedne transakcije (`modAmbalaza.bas:2882-2924`); odbijanje međustanja je tačan signal |
+| **`LNC-ODL-23`** | **Premeštanje A → B su dva poteza:** „Izvadi" iz A, pa „Dodaj" u B. Obrnut redosled nije moguć (Dodaj traži slobodan blok, 1291). U istoj izdatoj zbirnoj to daje Z → Z' → Z'' i dva nova broja. Međustanje je commit-ovano, pa „Izvadi" može da padne na `AMB-INV-07` kad je vozač gajbe bloka već predao kupcu, iako bi oba koraka zajedno bila neto nula — poruka tada imenuje vozača, tip i manjak i kaže da premeštanje u jednom potezu ne postoji. Potvrda „Izvadi" kaže da blok ostaje slobodan i da se u drugu otpremnicu dodaje posebnim potezom. Jednopotezno „Premesti A → B" je zaseban rez; **okidač** za njegov pre-flight: ručna provera (UAT) pokaže da je premeštanje u malina režimu često ili da sync preuzima blok između dva koraka | Operater 08.11.2026 (dva koraka). Odlaganje merenja važi unutar jedne transakcije (`modAmbalaza.bas:2882-2924`); odbijanje međustanja je tačan signal |
 | **`LNC-ODL-24`** | **Zbirna sa aktivnom prijemnicom:** potez je dozvoljen. Potvrda počinje `PAZNJA:` i nabraja: zbirna Z → X kg; prijemnice (broj: kg, …), ukupno Y kg; razlika — i isti red za gajbe. „Ne" je podrazumevano (`LncTekstImaUpozorenje`). Važi za **sve poteze u lancu** (i F8 storno lista, F1 „Storno" i F1 „Ispravi blok"), jednim telom. Upozorenje stoji **samo** kad postoji aktivna prijemnica ili razlika po `LNC-ODL-21`; usklađen potez bez prijemnice ostaje bez njega. X se računa istim primitivom kao pisac zbirne (`StavkeZaOtpremnicu` po sestri, `CreateZbirna`, `modDokumenta.bas:1155-1171`) plus listovi otpremnice', Y je zbir stavki prijemnica izabranih po `ZbirnaRoditeljID`, nikad po labeli. Klasa se ne poredi | Operater 08.11.2026 (upozorenje, „Ne" podrazumevano) i 09.11.2026 („kg i gajbe, svi potezi"). Klasu kupac procenjuje pri prijemu (`PRJ-ZBR-02`). Premisa `Test_LNC_OtpremnicaNeuskladjenaSaListovima` („usklađena nema upozorenje", `modBusinessFlowProTests.bas:27500`) ostaje: fixture je bez prijemnice |
 | **`LNC-ODL-25`** | **Poslednji blok = `LNC-ODL-07`:** otpremnica se stornira bez naslednika. Kad je ona jedini izvor izdate zbirne sa aktivnom prijemnicom → odbijanje **pre potvrde**, uputi na F8 PONIŠTENJE. Sa sestrama: zbirna' = sestre. Bez sestara i bez prijemnice: i zbirna bez naslednika. Nacrt zbirne: otpremnica izlazi u mestu (`ZBR-KANON-04`) | Operater 08.11.2026. Telo postoji: `LncPlanLista` stornoRazlog (`modDokumenta.bas:3910-3920`), `LncSastavi` za praznu otpremnicu (`:4273-4296`) |
 | **`LNC-ODL-26`** | **Potez ne dira list:** nema `StornoOtkup` ni `IspravkaOtkupaUTransakciji`, nema upisa u `tblOtkup`, `tblOtkupStavke`, `tblNovac`, `tblStornoZurnal`. Novac, isplate, avans, kartica i DOP1 ostaju na bloku. Potez ne otvara operaciju žurnala, pa UNDO nema šta da vrati (`LNC-INV-11` po konstrukciji); inverz poteza je suprotan potez | Izvedeno: žurnal otvara samo `StornoOtkup` (`modStorno.bas:151-156`); `LNC-ODL-04` je pravilo storna lista, ne ovog poteza |
@@ -347,22 +347,25 @@ Kad je otpremnica u izdatoj zbirnoj, ostaje samo ručno rasklapanje lanca, kao u
 | **`LNC-ODL-34`** | **Identitet putuje redom:** `OtpremnicaID` i `OtkupID` iz nevidljivih kolona reda, nikad po broju. Pisac proverava: „Izvadi" → `OtpremnicaZaOtkup(blok)` = cilj; „Dodaj" → `OtpremnicaZaOtkup(blok)` = "". Cilj koji je u međuvremenu storniran ili zamenjen → odbijanje po ID-u (pisac ne prati `ZamenjenSaID`) | Izvedeno: pre-flight §5; presedan `IspraviIzdatu` (`modScrDokumenti.bas:1401`) |
 | **`LNC-ODL-35`** | **Tekst poteza je njegov:** blok „izlazi iz" / „ulazi u" otpremnicu; nema „storniran" ni reda o novcu koji se odvezuje, nego „isplate ostaju na listu". `LncNapomenaKolicine` dobija vrstu poteza (bez „(bez storniranog lista)"). Potvrda imenuje posledice iz §10.6 koje operater ne vidi: broj zbirne' za prijemnicu koja još nije uneta, vozačevu zbirnu sa telefona koja nosi staru otpremnicu, i u malina režimu sledeći sync (`LNC-ODL-36`). Potvrda ide kroz **postojeći** seam potvrde poteza u lancu (`mPotvrdaLancaTest`, obrazac `PotvrdiIspravkuULancu`: beleži, odgovara „Ne"; gasi ga `Scr_PotvrdaLancaTestReset`), a kontekst cilja briše `Scr_OtpTestReset` — oba već zove `modTest` (`ResetSeamova`, `CleanupPosleTesta`), pa `modTest.bas` ostaje netaknut. Goli `MsgBox` ne. Rečenica `LncPoruka` o PWA zbirni bez naslednika se ispravlja | Izvedeno: današnji tekstovi govore jezikom storna (`modDokumenta.bas:3976-3985`, `:4566-4570`); `.claude/rules/testovi.md` §4 |
 | **`LNC-ODL-36`** | **Malina:** prihvata se da sledeći sync od izvađenog bloka napravi auto-otpremnicu; sync se ne menja. U malina režimu potvrda „Izvadi" kaže izričito: dodaj ga u ciljnu otpremnicu odmah, pre sledećeg sync-a. `LNC-INV-09` se za izvađeni blok svesno sužava (`LNC-INV-14`) | Operater 09.11.2026. `AutoCreateOtpremniceFromPWA_TX` (`modGoogleSyncOrchestrator.bas:240-245`) grupiše svaki slobodan izdat nehladnjački blok (`modMasterSync.bas:1325-1345`). Ista izloženost već postoji za „ukloni" iz nacrta i storno otpremnice |
+| **`LNC-ODL-37`** | **Nedovršen kontekst nad onim što potez menja → odbijanje pre potvrde** (za sve poteze u lancu, u zajedničkom planu, i ponovo u transakciji). Odbija se kad postoji red `tblStornoVeze` sa `NeedsRecovery = Da` nad starom otpremnicom ili starom zbirnom (F8 „Reši kasnije", PONIŠTENJE / DUPLI koji je pao ili čeka ručno), ili **nedovršena ispravka prijemnice** te zbirne (stara prijemnica već stornirana, zamena nije uneta; veza po `ZbirnaRoditeljID` stornirane prijemnice). Poruka imenuje `CorrectionID` i vrstu i upućuje: Oporavak → „Odbaci", ili završi ispravku prijemnice u F4. „Reši kasnije" / pao red nad **aktivnom** prijemnicom ne smeta: `PrijemnicaID` se ne menja i prevezuje se po ID-u | Operater 09.11.2026 („odbij, uputi na Oporavak"). Merenje T21 (čitanjem, 09.11.2026): plan i pisci danas ne čitaju `tblStornoVeze` (`LncPlanLista`, `LncRequirePlan`, `LncRasturi`, `modStornoDok.bas:200-239`); posle poteza podsetnik ostaje `PENDING` nad storniranom zbirnom, sa „Odbaci" kao jedinom radnjom (`modStornoRecovery.bas:60-73`, `modScrOporavak.bas:625-630`). Štetan slučaj: nedovršena ispravka prijemnice + storno jedinog izvora — stornirana prijemnica ne ulazi u `LNC-ODL-07` (`LncPrijemniceZbirne`, `modDokumenta.bas:4444`), zbirna ostaje bez naslednika i zamena prijemnice više nema roditelja (`ZBR_PARENT_NEMA`, `:524-528`) — **KI-095**. Nad otpremnicom F8 nedovršen kontekst ne pravi (`modStornoDok.bas:530-545`) |
+| **`LNC-ODL-38`** | **Potvrđeno upozorenje je trajan trag:** tekst `PAZNJA` koji je operater potvrdio (`LNC-ODL-21`, `-24`) upisuje se i u `Message` korenskog reda poteza u `tblStornoVeze`, **dopisan** uz postojeći opis poteza (ne umesto njega), u istoj transakciji, za sve poteze u lancu. Log posle commit-a ostaje | Operater 09.11.2026. Kolona i API postoje: `CompleteCorrectionContext(cid, …, message)` (`modStornoContext.bas:118`); bez promene šeme i bez novog pisca. S9 istoriju čita iz `tblStornoVeze` (`SLED-ODL-03`) |
 
-### 10.3 Invarijante (`LNC-INV-12..20`)
+### 10.3 Invarijante (`LNC-INV-12..21`)
 
 | ID | Tvrdnja | Vlasnik (gde se drži) · nivo merenja |
 |---|---|---|
 | **`LNC-INV-12`** | **List je netaknut:** red `tblOtkup` bloka je isti u svim kolonama (`Stornirano`, `CorrectionID`, `IzdatoStatus`…), isti su i stavke, `tblNovac` i `tblStornoZurnal`; redovi knjige ambalaže sa dokumentom Otkup se ne menjaju | koordinator u `modDokumenta` ne zove `StornoOtkup`, `IspravkaOtkupaUTransakciji` ni `modNovac`; `BeginStornoOp` postoji samo u `modStorno.StornoOtkup` (`modStorno.bas:154`) · fizički red |
 | **`LNC-INV-13`** | **Članstvo posle poteza:** „Dodaj" → blok je u `IzvoriOtpremnice(otpremnica')`; „Izvadi" → `OtpremnicaZaOtkup(blok)` = "" i blok je u `NevezaniOtkupi`, a „bila u" **sadrži** broj stare otpremnice (spaja sve ranije, `BivseOtpremniceIzvora`, `modDokumenta.bas:6695`). Staro članstvo ostaje (`LNC-INV-03`); `AktivnoOtpClanstvoPoKanonu` ne diže 1305 ni 1333 | pisci `OtpUpisiClanstvo` / `LncSastavi`; strogi čitač `AktivnoOtpClanstvoPoKanonu` · logički dokument |
 | **`LNC-INV-14`** | **Suženje `LNC-INV-09` za „Izvadi":** posle poteza je **tačno** izvađeni blok van svake aktivne otpremnice; svaki drugi list stare otpremnice je u otpremnici', a svaka izdata sestra stare zbirne u zbirnoj'. Za „Dodaj" `LNC-INV-09` važi neizmenjen | `LncSastavi` (izvori = preostali ± blok; zbirna' = sestre + otpremnica') · logički dokument |
-| **`LNC-INV-15`** | **Trag poteza:** tačno jedan red otpremnice (koren, `LNC-ODL-27`) i najviše jedan red zbirne (dete), oba završena u istoj transakciji (`LNC-INV-10`); nijedan red sa `OldDocType` Otkup. Trag po ID-u na oba kraja; `ZamenjenSaID <> ""` ⇒ `Stornirano = Da` | `modStornoContext` kroz `LncKontekstPar` (postaje funkcija koja vraća `CorrectionID`); trag piše `LncSastavi`; `LancaRazlog` nepromenjen · fizički red |
+| **`LNC-INV-15`** | **Trag poteza:** tačno jedan red otpremnice (koren, `LNC-ODL-27`) i najviše jedan red zbirne (dete), oba završena u istoj transakciji (`LNC-INV-10`); nijedan red sa `OldDocType` Otkup. Trag po ID-u na oba kraja; `ZamenjenSaID <> ""` ⇒ `Stornirano = Da`. Kad je potvrđeno upozorenje, `Message` korena ga sadrži (`LNC-ODL-38`) | `modStornoContext` kroz `LncKontekstPar` (postaje funkcija koja vraća `CorrectionID`); trag piše `LncSastavi`; `LancaRazlog` nepromenjen · fizički red |
 | **`LNC-INV-16`** | **Upozorenje se ne razilazi sa piscem:** X iz potvrde = zbir stavki zbirne' posle commit-a; Y = zbir prijemnica sa `ZbirnaRoditeljID` = zbirna' posle commit-a (prijemnice nepromenjene). `PAZNJA` ⇔ aktivna prijemnica ili razlika po `LNC-ODL-21` | plan u `modDokumenta`: X = `StavkeZaOtpremnicu` po sestri (isti primitiv kao `CreateZbirna`) + listovi otpremnice' (skup izvora, jer otpremnica' u planu još ne postoji, `LNC-ODL-28`); Y = zbir stavki prijemnica po `ZbirnaRoditeljID`. Jednakost sa piscem drži T5 · poslovni broj (kg) |
 | **`LNC-INV-17`** | **Ambalaža neto:** menjaju se samo redovi dokumenta Otpremnica — kontra-stav stare i knjiženje nove. Za otpremnicu usklađenu sa listovima: „Izvadi k": stanica +k, vozač −k; „Dodaj k": stanica −k, vozač +k; kooperant i kupac 0. Neusklađena (`LNC-ODL-21`) pomera i razliku između gajbi koje je stara knjižila i zbira listova — tu razliku već imenuje `PAZNJA`. Posle cele zamene nijedan realan nalog nije u minusu (`AMB-INV-07`). `AMB-INV-09` i `-16` su ovde prazne po konstrukciji i test **ne sme** da tvrdi da ih pokriva | `modAmbalaza` (`StornirajAmbalazuDokumenta` u grani odlaganja, `AmbOdloziInvarijanteZavrsi` → `RequireSaldoNaloga`); odlaganje otvara koordinator · saldo naloga po tipu |
 | **`LNC-INV-18`** | **Kapije plana = kapije pisca** za sve što plan može da izmeri — nacrt i status, hladnjača i N1, kapije dodatog bloka i datum, poslednji blok uz prijemnicu, identitet cilja i bloka, prijemnica samo po labeli: razlog stiže **pre potvrde**, a `_TX` vraća isti bez ijednog upisa. Dva odbijanja postoje **samo u transakciji**, posle „Da": ambalaža na kraju (`AMB-INV-07`, `AmbOdloziInvarijanteZavrsi`) i provera robe prijemnice (`PrijemnicaRobaRazlog`); za njih je jemstvo potpun povraćaj ~13 tabela (`LNC-INV-01`) | jedno telo u `modDokumenta` (razlog-oblik `OtpRequireIzvorValjan` + jezgro plana), dva pozivaoca; atomičnost drži `LncSnimi` |
 | **`LNC-INV-19`** | **Radnja se nudi samo u kontekstu u kome ima smisla:** „Dodaj" samo uz izabran izdat cilj i samo nad listom slobodnih blokova; „Izvadi" samo nad listom blokova izabranog cilja. Radnje su po listi, ne po redu (ugovor ljuske, `modScrDokumenti.bas:217-221`), pa neprimeren blok odbija plan imenom (`LNC-INV-18`). Nijedna lista ni u jednom kontekstu ne nudi više od `MAX_ACT` radnji | `modScrDokumenti.Scr_Radnje`; granica `modOtkupUI.MAX_ACT` |
 | **`LNC-INV-20`** | **Utovar i izvoz:** otpremnica' nosi `PredajaID` stare, pa `Chk_B11` ne nalazi utovar sa dva aktivna dokumenta; izvoz vozaču nema staru verziju a ima otpremnicu' sa njenom aktivnom zbirnom; `TekucaPredajaOtkupa(blok)` daje otpremnicu' posle „Dodaj" i "" posle „Izvadi"; ponovljen PRED red istog utovara za blok u otpremnici' je Duplicate | `OtpZaglavljeVerzije`; `modMasterSync.OtpremnicaPoPredaji`; `modIntegritet.Chk_B11`; `modStammdatenSync` (`:828-885`, `:1006-1034`) |
+| **`LNC-INV-21`** | **Nijedan nedovršen kontekst ne pokazuje na verziju koju je potez zamenio:** posle poteza nema reda sa `NeedsRecovery = Da` čiji je `OldDocID` stara otpremnica ili stara zbirna, niti nedovršene ispravke prijemnice čija je zbirna stornirana bez naslednika | kapija plana (`LNC-ODL-37`), jedno čitanje u `modStornoContext` (danas `GetPendingCorrections` ne vraća `OldDocID`) · fizički red |
 
-`LNC-INV-01..08` i `-10` važe neizmenjeni; `-09` sužava `-14`, `-11` važi po konstrukciji (`LNC-ODL-26`).
+`LNC-INV-01..08` i `-10` važe neizmenjeni; `-09` sužava `-14`, `-11` važi po konstrukciji (`LNC-ODL-26`). `LNC-INV-21` i `LNC-ODL-37` važe i za postojeće poteze (§1–§9).
 
 ### 10.4 Matrica stanja
 
@@ -384,6 +387,7 @@ Kad je otpremnica u izdatoj zbirnoj, ostaje samo ručno rasklapanje lanca, kao u
 | bilo koja | bilo koja | — | blok više nije u cilju / više nije slobodan; cilj storniran ili zamenjen posle liste | odbija se po ID-u (`LNC-ODL-34`) |
 | neusklađena sa izvorima | bilo koja | — | dozvoljen potez | `PAZNJA` po `LNC-ODL-21` sa tekstom ovog poteza; nova verzija nosi zbir izvora |
 | bilo koja | izdata | prijemnica samo po labeli | bilo koji | odbija se (`LNC-INV-07`) |
+| bilo koja | nacrt ili izdata, sa nedovršenim kontekstom (`NeedsRecovery = Da`) ili nedovršenom ispravkom prijemnice | — | bilo koji | odbija se pre potvrde, imenuje `CorrectionID` → Oporavak / F4 (`LNC-ODL-37`) |
 
 Stanja „izdata otpremnica bez zbirne uz prijemnicu" i „nacrt zbirne uz prijemnicu" ne postoje
 (`PrijemnicaRoditeljRazlog`, `PRJ-ZBR-01`).
@@ -409,11 +413,15 @@ lakše implementacije.
 | F4 prijemnica po broju zbirne sa papira | roditelj se razrešava po broju nad **aktivnim** zbirnim (`ZbirnaIdentResolve`), pa stari broj više ne vodi na zbirnu' | potvrda i poruka posle poteza imenuju nov broj zbirne (`LNC-ODL-09`, `-35`) |
 | Oporavak, izgubljeni blokovi | izvađen blok se vodi kao `IZGUBLJEN_BLOK` sa „bila u" (`modStornoRecovery.bas:136-145`) dok se ne doda | **tačan signal**, bez izmene |
 | integritet A2 i izveštaj manjka | kg zbirne' se pomera za ± kg bloka uz nepromenjenu prijemnicu → VIŠAK ili MANJAK | **očekivano** (A13: razlika ostaje vidljiva), kao u §6 |
-| pending kontekst (F8 „Reši kasnije") nad starom otpremnicom ili zbirnom | posle poteza pokazuje na storniranu verziju; ni plan ni `RequireStornoAllowed` pending ne proveravaju | **NEMERENO** — prvi test reza meri šta Oporavak radi sa takvim redom; ako ga i dalje nudi, odluka ide operateru pre koda dela (b). Isto važi i za postojeći potez |
+| nedovršen kontekst (F8 „Reši kasnije", pao PONIŠTENJE / DUPLI, nedovršena ispravka prijemnice) nad starom zbirnom | **izmereno čitanjem (T21, 09.11.2026):** danas ga potez ne vidi; posle poteza podsetnik pokazuje na storniranu zbirnu (Oporavak nudi samo „Odbaci", podaci nisu pogođeni), a uz storno jedinog izvora nedovršena ispravka prijemnice ostaje bez zbirne (KI-095). Nad otpremnicom ga F8 ne pravi | **`LNC-ODL-37`**: plan odbija i upućuje na Oporavak; važi i za postojeći potez. Isti nedostatak u F8 običnom stornu zbirne je KI-095, zaseban rez |
 | izvoz vozaču / otkupcu, PRED istog `PredajaID`, faktura, SEF, palete, novac | bez izmene | `LNC-INV-20`, `LNC-ODL-08`, `LNC-ODL-26` |
 | telefon za PWA zbirnu | i dalje pokazuje stari broj (`LNC-ODL-19`) | tekst poruke za zbirnu bez naslednika se ispravlja (`LNC-ODL-35`) |
 
 ### 10.7 Verdikt po osama (pre-flight skill §1)
+
+„PROVEN" ovde znači da je osa **zatvorena u specifikaciji** (odluka, vlasnik, dokaz u kodu koji postoji);
+**ne** znači da je novo ponašanje dokazano — testovi T1–T23 još ne postoje.
+
 
 | Osa | Status | Dokaz |
 |---|---|---|
@@ -422,7 +430,7 @@ lakše implementacije.
 | **CARDINALITY** | **PROVEN** | blok ∈ 0..1 nestornirane otpremnice (1305 / 1333, `AktivnoOtpClanstvoPoKanonu`); otpremnica ∈ 0..1 aktivne zbirne; nacrt ∉ zbirna; zbirna → 0..N prijemnica (dve kod 5 od 894 na C002, §7) — 1:N ide u test (T6) |
 | **INVARIANTS/OWNER** | **PROVEN** | `LNC-INV-12..20` sa vlasnikom; suženje `-09` (`-14`); `AMB-10-ODL-40` proširen (`LNC-ODL-31`, `AMBALAZA.md` §6.14c) |
 | **WRITERS** | **PROVEN uz uslov** | potez piše otpremnicu, zbirnu, izvore, stavke, vezu prijemnice (`modDokumenta`), ambalažu (`modAmbalaza` kroz `StornoOtpremnica` / `OtpIzdaj`), `tblStornoVeze` (`modStornoContext`); **ne** piše otkup, novac ni žurnal. **Uslov:** koordinator u `modDokumenta`, sve kroz API vlasnika; ne zovu se pisci sa sopstvenom transakcijom (`DodajOtpremnicaIzvor_TX`, `IspravkaOtpremnice_TX`); `who_writes.py --check-ownership` ostaje zelen bez izmene `WRITE_OWNERSHIP.json` |
-| **DOWNSTREAM** | **PROVEN uz uslov** | 10.6; **uslov:** pending kontekst se meri prvim testom reza pre koda ekrana |
+| **DOWNSTREAM** | **PROVEN** | 10.6; nedovršen kontekst izmeren čitanjem (T21) i zatvoren odlukom `LNC-ODL-37`; izvršna potvrda je T21 |
 | **CAPABILITY** | **PROVEN** | nova sposobnost B-049 (`MAPA_SPOSOBNOSTI.md`); **ostaje netaknuto:** F1 „Ispravi" (B-022), „vezi" / „ukloni" / „izdaj" nad nacrtom (A-024, A-025), F8 zbirna DUPLI / PONIŠTENJE / REŠI KASNIJE |
 | **ACCEPTANCE CONTRACT** | **PROVEN (plan)** | 10.8 |
 | **PLATFORM** | **N/A** | nema novog Excel/VBE/MSForms ponašanja: dugmad kroz postojeći bazen `Scr_Radnje`, potvrda kroz seam; izgled ostaje ručnoj proveri |
@@ -467,7 +475,8 @@ iz `LNC-ODL-33`. Testovi su u `RunBusinessFlowProSuite`; lanac grade kanonski pi
 | T18 `_EkranPotvrdaIRuta` | cilj se bira produkcionim putem (događaj nad mrežom, ne `Scr_OtpTestSet`); radnje samo u pravom kontekstu; tekst potvrde kroz seam (`PAZNJA` na početku uz prijemnicu); „Ne" ne upisuje; ID iz nevidljivih kolona; posle snimanja novog lista uz izdat cilj `RutaPosleUpisa` **ne** vraća `NACRT` i pokušaja vezivanja nema (meri se ruta, ne članstvo — pisac bi odbio ionako, pa bi tvrdnja nad članstvom bila placebo); posle uspeha cilj = otpremnica'; `Scr_PotvrdaLancaTestReset` gasi seam, `Scr_OtpTestReset` briše cilj |
 | T19 `_GranicaRadnji` | `Scr_Radnje` za svaku listu F1 i F2, sa ciljem i bez njega, ≤ `MAX_ACT` (u BFP, ne u `modTest`) |
 | T20 `_MalinaPoruka` | u malina režimu potvrda „Izvadi" imenuje sledeći sync, van njega ne |
-| T21 `_PendingKontekst` | **merenje pre koda ekrana:** šta Oporavak radi sa pending redom nad storniranom verzijom (10.6) |
+| T21 `_NedovrsenKontekstOdbija` | **prvo, crven nad današnjim kodom** (KI-095, `CLAUDE.md` §2): (S7) nedovršena ispravka prijemnice + storno jedinog lista u lancu — danas zbirna pada bez naslednika i zamena prijemnice nema roditelja; posle popravke plan odbija pre potvrde. (S1) „Reši kasnije" nad zbirnom + potez sa naslednikom — posle popravke odbija i imenuje `CorrectionID`. Meri i da stornirana prijemnica zadržava `ZbirnaRoditeljID` (osnov veze, nemereno). Isto za „Izvadi" kad postoji. „Reši kasnije" nad aktivnom prijemnicom ne smeta |
+| T23 `_UpozorenjeUTragu` | posle potvrđenog `PAZNJA` poteza `Message` korenskog reda sadrži tekst upozorenja **i** opis poteza (`LNC-ODL-38`), za storno lista u lancu i za „Dodaj"; bez upozorenja `Message` je samo opis |
 | T22 `_UpozorenjePrijemniceSviPotezi` | `LNC-ODL-24` važi i za F8 storno lista, F1 „Storno" i F1 „Ispravi blok" nad zbirnom sa prijemnicom; bez prijemnice usklađen potez ostaje bez `PAZNJA` |
 
 **Mora ostati netaknuto:** svi postojeći `Test_LNC_*` i `Test_AMB_ODL40_*`;
@@ -488,7 +497,7 @@ početku.
 `lncb-kapija-samo-u-tx` → T9 (tvrdnja pre potvrde) · `lncb-dodaj-bez-datuma` → T9 ·
 `lncb-dete-bez-korena` → T5 · `lncb-prijemnica-ostaje-na-staroj` → T6 · `lncb-y-po-labeli` → T6 · `lncb-x-iz-drugog-tela` → T5 ·
 `lncb-poslednji-izvadi-bez-kapije` → T7 · `lncb-ne-upisuje-na-ne` → T18 ·
-`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22.
+`lncb-izdata-u-ruti` → T18 · `lncb-upozorenje-samo-novi` → T22 · `lncb-pending-tiho` → T21 · `lncb-trag-bez-upozorenja` → T23.
 
 **FALSE-GREEN pravila:** nijedan test ne tvrdi `AMB-INV-09` ni `-16` (ovde prazne); članstvo se
 ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri nad
@@ -499,12 +508,19 @@ ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri 
 pa jednom `dokaz.py lncb`; Compile i ručna provera (izgled dugmadi, dijalozi nad pravim
 podacima) ostaju operateru.
 
+**Ručna provera (UAT), posle oba dela:** (1) premeštanje A → B u malina režimu sa sync-om između
+koraka — da li poruka kaže šta da se uradi i koliko se to dešava (okidač `LNC-ODL-23`); (2) operater
+razlikuje F1 „Ispravi" (izdata van zbirne, zaglavlje) od „Dodaj" / „Izvadi" (članstvo, i u zbirnoj)
+i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i starim neslaganjima, Enter =
+„Ne"; (4) odbijanje zbog podsetnika u Oporavku vodi do pravog reda i posle „Odbaci" potez prolazi.
+
 ### 10.9 Landing
 
 - **Prvo ovaj zapis (samo docs)**, pa kod u dva dela, svaki zelen sam za sebe:
   **(a)** `modDokumenta` — jezgro plana po otpremnici, razlog-oblik `OtpRequireIzvorValjan`,
   `LncKontekstPar` kao funkcija, dva `_TX` ulaza po skeletu `StornoListaULancu_TX`, tekstovi
-  poteza i telo X/Y (`LNC-ODL-24` za sve poteze) — BFP T1–T17, T21, T22 (tekst se meri nad opisom plana, ne kroz seam);
+  poteza i telo X/Y (`LNC-ODL-24` za sve poteze) — BFP T1–T17, T21–T23 (tekst se meri nad opisom plana, ne kroz seam); T21 ide **prvi**, crven nad
+  današnjim kodom, pa popravka;
   **(b)** `modScrDokumenti` — kontekst cilja, radnje, potvrda kroz postojeći seam (reset kroz
   `Scr_PotvrdaLancaTestReset` / `Scr_OtpTestReset`), ključevi u `modPoruke` — T18–T20.
 - `modDokumenta`, `modScrDokumenti`, `modBusinessFlowProTests` i ovaj fajl ne dira nijedan

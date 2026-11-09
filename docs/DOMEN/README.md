@@ -442,7 +442,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
 | Funkcionalne bele zone i product roadmap | `docs/DOMEN/FUNKCIONALNE_BELE_ZONE_I_ROADMAP.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
-| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..21`, `LNC-INV-01..11`); **§10: „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici** (`LNC-ODL-22..36`, `LNC-INV-12..20`) | `docs/DOMEN/STORNO_U_LANCU.md` — **§1–§9 u kodu (PR #471, #473); BFP zelen 08.11.2026 (3208/3208), RunAllTests 349/349, Compile zelen 08.11.2026; dokaz zelen za `lnc-stara-otp-*`, `lnc-neuskladjena-*` i `ki089-*`; dokaz ostalih `lnc-*`/`odl40-*` i rucna provera dijaloga cekaju. §10: pre-flight 08.11.2026, koda nema** |
+| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..21`, `LNC-INV-01..11`); **§10: „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici** (`LNC-ODL-22..38`, `LNC-INV-12..21`) | `docs/DOMEN/STORNO_U_LANCU.md` — **§1–§9 u kodu (PR #471, #473); BFP zelen 08.11.2026 (3208/3208), RunAllTests 349/349, Compile zelen 08.11.2026; dokaz zelen za `lnc-stara-otp-*`, `lnc-neuskladjena-*` i `ki089-*`; dokaz ostalih `lnc-*`/`odl40-*` i rucna provera dijaloga cekaju. §10: pre-flight 08.11.2026, koda nema** |
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |
