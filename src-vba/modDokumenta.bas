@@ -4050,6 +4050,19 @@ Private Function LncKontekstPogadja(ByVal oldID As String, ByVal oldBroj As Stri
     End If
 End Function
 
+' LNC-ODL-38: potvrdjeno upozorenje (LNC-ODL-21, -24) postaje TRAJAN trag poteza --
+' dopisuje se u Message korenskog reda tblStornoVeze, u ISTOJ transakciji, uz opis
+' poteza (ne umesto njega). Log posle commit-a ostaje; on se rotira, ovaj red ne.
+' Neuspeh upisa obara potez: potvrdjena razlika bez traga je ono sto ovo zatvara.
+Private Sub LncUpisiUpozorenjeUTrag(ByVal rootCid As String, ByVal napomena As String, _
+                                    ByVal src As String)
+    If Len(napomena) = 0 Then Exit Sub
+    If Not modStornoContext.DopisiPorukuKonteksta(rootCid, "Potvrdjeno upozorenje: " & _
+                                                  Replace(napomena, vbCrLf, " | ")) Then
+        Err.Raise vbObjectError + 1993, src, "Upozorenje nije upisano u trag poteza: " & rootCid
+    End If
+End Sub
+
 ' "(COR-000123, RESI_KASNIJE, PENDING)" -- identitet konteksta za odbijenicu; po
 ' njemu ga operater nalazi u Oporavku.
 Private Function LncKontekstOpis(ByVal d As Object) As String
@@ -4206,6 +4219,7 @@ Public Function StornoListaULancu_TX(ByVal otkupID As String, _
     Dim rootCid As String
     rootCid = LncKontekstKoren(SV_MODE_PONISTENJE, p, "", "", SRC)
     Set rez = LncSastavi(p, "", rootCid, tx, SRC)
+    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (storno)
 
     modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
 
@@ -4294,6 +4308,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     End If
 
     Set rez = LncSastavi(p, noviID, rootCid, tx, SRC)
+    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (ispravka)
 
     modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
 

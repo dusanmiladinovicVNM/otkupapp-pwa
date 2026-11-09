@@ -132,6 +132,41 @@ EH:
 End Function
 
 ' ============================================================
+' DOPISI - trajan dodatak uz opis konteksta (LNC-ODL-38: potvrdjeno upozorenje
+' poteza u lancu). Postojeci opis se NE brise: dodatak ide iza njega, odvojen sa
+' " | ". Isti oblik transakcije kao CompleteCorrectionContext (ugnjezdena TX pod
+' potezom koji je snimio tabelu). Prazan dodatak ne pise nista.
+' ============================================================
+Public Function DopisiPorukuKonteksta(ByVal correctionID As String, _
+                                      ByVal dodatak As String) As Boolean
+    Const SRC As String = MOD_NAME & ".DopisiPorukuKonteksta"
+    Dim tx As clsTransaction, rowIdx As Long, staro As String, novo As String
+    On Error GoTo EH
+
+    If Len(Trim$(dodatak)) = 0 Then
+        DopisiPorukuKonteksta = True
+        Exit Function
+    End If
+    rowIdx = RequireCorrectionRow(correctionID, SRC)
+    staro = GetCorrectionField(correctionID, COL_SV_MESSAGE)
+    novo = IIf(Len(staro) > 0, staro & " | ", "") & dodatak
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_STORNO_VEZE
+    RequireUpdateCell TBL_STORNO_VEZE, rowIdx, COL_SV_MESSAGE, novo, SRC
+    tx.CommitTx
+    Set tx = Nothing
+
+    DopisiPorukuKonteksta = True
+    Exit Function
+EH:
+    If Not tx Is Nothing Then tx.RollbackTx
+    LogErr SRC
+    DopisiPorukuKonteksta = False
+End Function
+
+' ============================================================
 ' FAIL - automatski storno/reassign/recalc nije uspeo. Ostaje vidljiv u recovery
 ' panelu (NeedsRecovery = Da). Best-effort: nikad ne baca (poziva se iz EH bloka).
 ' ============================================================
