@@ -7839,6 +7839,38 @@ SABOTAZE = {
         "Test_LNC_UpozorenjePrijemniceSviPotezi",
         "LNC22 (e): bez prijemnice nema upozorenja",
     ),
+    # F1 "Sacuvaj" ne salje polja forme u potvrdu: operater vidi X bez novog lista.
+    "lncb-f1-save-bez-polja": (
+        "modScrDokumenti.bas",
+        "        If Not PotvrdiIspravkuULancu(ispravkaID, p) Then\n",
+        "        If Not PotvrdiIspravkuULancu(ispravkaID) Then   ' SABOTAZA: Sacuvaj bez polja forme\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (c): F1 Sacuvaj salje polja forme u potvrdu",
+    ),
+    # X ne racuna sestre: potvrda imenuje drugi broj od zbirne' koju pisac pravi.
+    "lncb-x-bez-sestara": (
+        "modDokumenta.bas",
+        "        xKg = xKg + CDbl(zPov(v))\n",
+        "        ' SABOTAZA: X bez sestara\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (d): plan racuna X sa sestrom",
+    ),
+    # Deo o prijemnici dobija svoju oznaku PAZNJA: dve oznake u jednoj potvrdi.
+    "lncb-upozorenje-druga-oznaka": (
+        "modDokumenta.bas",
+        "    m = \"- Zbirna \" & p(\"zbrBroj\") & \" ima aktivnu prijemnicu\"\n",
+        "    m = LNC_UPOZORENJE & \" - Zbirna \" & p(\"zbrBroj\") & \" ima aktivnu prijemnicu\"   ' SABOTAZA: druga oznaka PAZNJA\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (f): jedna oznaka PAZNJA, prijemnica posle neslaganja otpremnice",
+    ),
+    # Dijalog bez granice: MsgBox tiho odseca kraj (pitanje F1, novac, posledice).
+    "lncb-dijalog-bez-granice": (
+        "modDokumenta.bas",
+        "    If okvir + Len(opis) > MAX_DIJALOG Then\n",
+        "    If False Then   ' SABOTAZA: bez granice dijaloga\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (g): dijalog ostaje ispod granice MsgBox-a, pitanje se vidi",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

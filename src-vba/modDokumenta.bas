@@ -4177,7 +4177,10 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
     LncPlanOpisZaOtkup = m
     Exit Function
 EH:
-    LncPlanOpisZaOtkup = "Posledice poteza nisu dostupne: " & Err.description
+    ' Pod oznakom PAZNJA, da dijalog ponudi "Ne": potez ciji plan ne moze da se
+    ' izracuna transakcija bi ionako odbila (review a4).
+    LncPlanOpisZaOtkup = LNC_UPOZORENJE & " posledice poteza nisu dostupne, pa ce potez " & _
+                         "verovatno biti odbijen: " & Err.description
 End Function
 
 ' STORNO OTKUPNOG LISTA U LANCU -- jedan potez. Vraca True kad je sve upisano;
@@ -6563,16 +6566,38 @@ Private Function LncNapomenaPrijemnice(ByVal p As Object, ByVal zaIspravku As Bo
                 " " & LncFmt(CDbl(rec(0)), False) & " kg"
     Next k
 
-    m = "- Zbirna " & p("zbrBroj") & " ima aktivnu prijemnicu: kupac je robu vec izmerio, a " & _
-        "prijemnica se ne menja. Nova verzija zbirne nosi " & LncFmt(xKg, False) & " kg" & _
-        IIf(bezNovih, " + ispravljen list", "") & " (sada " & LncFmt(aKg, False) & " kg); " & _
-        "prijemnice: " & lista & " -- ukupno " & LncFmt(yKg, False) & " kg"
-    If Not bezNovih Then m = m & "; razlika zbirna - prijemnice " & LncFmt(xKg - yKg, False) & " kg"
-    m = m & "." & vbCrLf & "- Gajbe: nova verzija zbirne " & LncFmt(xAmb, True) & _
-        IIf(bezNovih, " + ispravljen list", "") & " (sada " & LncFmt(aAmb, True) & _
-        "), prijemnice " & LncFmt(yAmb, True)
+    ' JEDAN red, kratak: potvrda je MsgBox (granica ~1024 znaka, LncDijalogTekst).
+    m = "- Zbirna " & p("zbrBroj") & " ima aktivnu prijemnicu"
+    m = m & " (kupac je robu izmerio; prijemnica se ne menja). Nova zbirna: " & _
+        LncFmt(xKg, False) & " kg" & IIf(bezNovih, " + ispravljen list", "") & _
+        " (sada " & LncFmt(aKg, False) & "), prijemnice: " & lista & ", ukupno " & _
+        LncFmt(yKg, False) & " kg"
+    If Not bezNovih Then m = m & ", razlika " & LncFmt(xKg - yKg, False) & " kg"
+    m = m & "; gajbe " & LncFmt(xAmb, True) & IIf(bezNovih, " + ispravljen list", "") & _
+        " (sada " & LncFmt(aAmb, True) & "), prijemnice " & LncFmt(yAmb, True)
     If Not bezNovih Then m = m & ", razlika " & LncFmt(xAmb - yAmb, True)
     LncNapomenaPrijemnice = m & "."
+End Function
+
+' MsgBox prikazuje oko 1024 znaka i TIHO odseca ostatak (modVbaTools). Potvrda
+' poteza u lancu zato ne sme da preraste granicu: uvod (pitanje F8 / F1 "Storno")
+' i pitanje na kraju (F1 "Ispravi blok") se uvek vide, a predugacak opis se
+' skracuje NA KRAJU, uz napomenu -- oznaka PAZNJA i brojevi su na njegovom pocetku.
+' Pun tekst ide u trag poteza (LNC-ODL-38) i u log. Jedno telo za sva tri dijaloga.
+Public Function LncDijalogTekst(ByVal uvod As String, ByVal opis As String, _
+                                Optional ByVal pitanje As String = "") As String
+    Const MAX_DIJALOG As Long = 1000
+    Const SKRACENO As String = " ... (skraceno; pun tekst ide u trag poteza i u log)"
+    Dim okvir As Long, mesta As Long
+    okvir = Len(uvod)
+    If Len(pitanje) > 0 Then okvir = okvir + Len(pitanje) + 4
+    If okvir + Len(opis) > MAX_DIJALOG Then
+        mesta = MAX_DIJALOG - okvir - Len(SKRACENO)
+        If mesta < 0 Then mesta = 0
+        opis = Left$(opis, mesta) & SKRACENO
+    End If
+    LncDijalogTekst = uvod & opis
+    If Len(pitanje) > 0 Then LncDijalogTekst = LncDijalogTekst & vbCrLf & vbCrLf & pitanje
 End Function
 
 ' Zbir kg i gajbi stavki zadatih listova -- kanonski strog citac otkupa
