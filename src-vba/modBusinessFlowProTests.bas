@@ -29368,6 +29368,8 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     tx.BeginTx
     HldSnimak tx
     tx.AddTableSnapshot TBL_STANICE
+    ' CreateOtkup (HldBlok) sme da primeni slobodan avans kooperanta.
+    tx.AddTableSnapshot TBL_NOVAC
     ' (l) druga, obicna stanica (vraca se sa transakcijom).
     Const STA_D9 As String = "ST-OGLTEST-90087"
     HldStanicaSaOznakom STA_D9, "Ne"
@@ -29383,6 +29385,11 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
         RequireUpdateCell TBL_OTKUP_STAVKE, CLng(r(k)), COL_OKS_OTKUP_ID, "LNCD9-NEMA-" & scenario, SRC
     Next k
     okI = LncDodajOdbijen(otpT, otkZ, "nema stavke")
+    ' Odmah nazad: strogi citac stavki (StavkeOtkupaRedovi) pada nad CELOM tabelom
+    ' cim jedna stavka nema zaglavlje -- (n) pravi otpremnicu kroz njega.
+    For k = 1 To r.count
+        RequireUpdateCell TBL_OTKUP_STAVKE, CLng(r(k)), COL_OKS_OTKUP_ID, otkZ, SRC
+    Next k
     ' (j) neizdat blok.
     S6K4Postavi TBL_OTKUP, COL_OTK_ID, otkD, COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT
     okJ = LncDodajOdbijen(otpT, otkD, "nije izdat")

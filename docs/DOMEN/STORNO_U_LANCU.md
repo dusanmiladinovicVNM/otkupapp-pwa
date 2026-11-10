@@ -324,6 +324,11 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > kulture), `_IzvadiDvePrijemnice` (T6) i `_PremestiADoB` (T16 + deo T17), sabotaže `lncb-dodaj-*`,
 > `lncb-trag-dodaj-bez-bloka`, `lncb-zbirna-bez-otpremnice`, `lncb-prijemnica-po-labeli`.
 > a2–a7 NEVERIFIKOVANO u Excelu.**
+> **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
+> ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
+> list koji ulazi ili se ispravlja. List **starog oblika** koji je već u otpremnici (bez stavki,
+> druga kultura od zaglavlja, neizdat) zato pada tek posle „Da", uz potpun povraćaj (`LNC-INV-01`).
+> Važi za sve poteze u lancu (storno i ispravka lista, Izvadi, Dodaj).
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
 > je naredni rez, istom mehanikom"). Važi sve iz §1–§9 osim onoga što ovaj odeljak izričito
