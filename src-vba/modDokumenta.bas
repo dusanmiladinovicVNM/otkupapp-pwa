@@ -3880,16 +3880,20 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
                           " -- osvezi listu."
             Exit Function
         End If
-        ' N1 / LNC-ODL-29: hladnjacki blok (i neizvesnost) se ne vadi -- njemu je put
-        ' storno lista u lancu na F8. Fail-closed.
-        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then
-            p("razlog") = "Blok " & p("otkupBroj") & " je hladnjacki (lanac 1:1) -- ne vadi se, " & _
-                          "nego stornira na F8 (storno lista u lancu)."
-            Exit Function
-        End If
-        If Len(putGreska) > 0 Then
-            p("razlog") = putGreska
-            Exit Function
+        ' PRAVI hladnjacki lanac (vozac = ogledalo stanice) ide na PONISTENJE -- to kaze
+        ' jezgro (LNC-ODL-14). N1 je RUCNA otpremnica stanice koja je POSLE oznacena kao
+        ' hladnjaca: njen blok se ne vadi, nego stornira na F8 (storno lista u lancu,
+        ' koja takvu otpremnicu ne vidi kao lanac). Neizvesnost odbija (fail-closed).
+        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then
+            If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then
+                p("razlog") = "Blok " & p("otkupBroj") & " je blok stanice oznacene kao hladnjaca " & _
+                              "(N1) -- ne vadi se, nego stornira na F8 (storno lista u lancu)."
+                Exit Function
+            End If
+            If Len(putGreska) > 0 Then
+                p("razlog") = putGreska
+                Exit Function
+            End If
         End If
         LncPlanOtpremnice p, otpremnicaID, otkupID, "", False, SRC
     Else
@@ -4493,6 +4497,12 @@ Public Function IzvadiBlokULancu_TX(ByVal otpremnicaID As String, ByVal otkupID 
 EH:
     outGreska = OtpPadTransakcije(tx, SRC, otkupID)
     modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+    ' LNC-ODL-23: medjustanje premestanja je commit-ovano, pa ambalaza meri odmah
+    ' posle "Izvadi" -- odbijenica kaze zasto i da jednog poteza nema.
+    If InStr(1, outGreska, "AMB-INV-07", vbBinaryCompare) > 0 Then
+        outGreska = outGreska & " Gajbe ovog bloka su vec predate dalje; premestanje u " & _
+                    "jednom potezu ne postoji (LNC-ODL-23)."
+    End If
     IzvadiBlokULancu_TX = False
 End Function
 
