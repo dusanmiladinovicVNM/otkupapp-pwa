@@ -8181,6 +8181,40 @@ SABOTAZE = {
         "Test_LNC_Blok_EkranPotvrdaIRuta",
         "LNCB18: Izvadi kroz ekran meri plan Izvadi (jedini izvor zbirne sa prijemnicom se odbija)",
     ),
+    # Izbor cilja vraca True: ljuska brise izabran red, pa "Ispravi" (B-022) i
+    # specifikacija nad jednim redom ostaju bez reda.
+    "lncb-ekran-cilj-brise-red": (
+        "modScrDokumenti.bas",
+        "            Scr_Event = bioNacrt\n",
+        "            Scr_Event = True   ' SABOTAZA: izbor cilja brise izabran red\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: klik na izdatu cuva listu i izabran red (Ispravi i specifikacija rade nad njim)",
+    ),
+    # Lista Nevezani nudi "Dodaj" i bez ikakvog konteksta (LNC-INV-19).
+    "lncb-ekran-dodaj-bez-konteksta": (
+        "modScrDokumenti.bas",
+        "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            ElseIf Len(CiljAktivan()) > 0 Then\n",
+        "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            Else   ' SABOTAZA: Dodaj bez konteksta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: bez konteksta (ni nacrt ni cilj) nema ni Izvadi ni Dodaj",
+    ),
+    # Potvrda Izvadi nosi uvod Dodaj.
+    "lncb-ekran-izvadi-uvod-dodaj": (
+        "modScrDokumenti.bas",
+        "        uvod = Poruka(\"OTKUI_ASK_IZVADI_BLOK\")\n",
+        "        uvod = Poruka(\"OTKUI_ASK_DODAJ_BLOK\")   ' SABOTAZA: uvod Izvadi kao Dodaj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: potvrda Izvadi ide kroz seam sa svojim uvodom, a Ne ne upisuje",
+    ),
+    # Recenice koje traze radnju (MALINA, telefon, broj zbirne) idu na KRAJ opisa,
+    # koji dijalog skracuje.
+    "lncb-opis-hitno-na-kraju": (
+        "modDokumenta.bas",
+        "    LncPlanOpisZaBlok = m\n",
+        "    LncPlanOpisZaBlok = IIf(Len(hitno) > 0, Replace(m, hitno & vbCrLf, \"\") & vbCrLf & hitno, m)   ' SABOTAZA: hitno na kraju\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: recenice koje traze radnju idu pre opisa poteza (dijalog skracuje kraj)",
+    ),
     # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
     "lncb-ekran-vise-od-max": (
         "modScrDokumenti.bas",
