@@ -4387,7 +4387,7 @@ Public Function LncPlanOpisZaBlok(ByVal otpremnicaID As String, ByVal otkupID As
     If vrsta = LNC_IZVADI And modMasterSync.AutoOtpremnicaDostupna() Then
         If Len(hitno) > 0 Then hitno = hitno & vbCrLf
         hitno = hitno & "MALINA: sledeci sync od slobodnog bloka sam pravi novu otpremnicu " & _
-                "-- dodaj ga u ciljnu otpremnicu odmah, pre sledeceg sync-a."
+                "-- ako ga premestas, dodaj ga u drugu otpremnicu odmah, pre sledeceg sync-a."
     End If
     If Len(hitno) > 0 Then m = m & hitno & vbCrLf
 

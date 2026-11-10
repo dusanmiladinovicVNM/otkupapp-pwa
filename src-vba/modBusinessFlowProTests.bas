@@ -29804,9 +29804,10 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     radBlok = modScrDokumenti.Scr_Radnje()
     modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
     radNev = modScrDokumenti.Scr_Radnje()
-    AssertTrue InStr(1, radNevPrazno, "dodaj:", vbBinaryCompare) = 0 And _
-               InStr(1, radBlokPrazno, "izvadi:", vbBinaryCompare) = 0, _
-               "LNCB18: bez konteksta (ni nacrt ni cilj) nema ni Izvadi ni Dodaj"
+    AssertTrue InStr(1, radNevPrazno, "dodaj:", vbBinaryCompare) = 0, _
+               "LNCB18: bez konteksta (ni nacrt ni cilj) lista Bez otpremnice ne nudi Dodaj"
+    AssertTrue InStr(1, radBlokPrazno, "izvadi:", vbBinaryCompare) = 0, _
+               "LNCB18: bez konteksta (ni nacrt ni cilj) lista Blokovi ne nudi Izvadi"
     AssertTrue InStr(1, radNev0, "dodaj:", vbBinaryCompare) = 0 And InStr(1, radNev0, "vezi:", vbBinaryCompare) > 0 And _
                InStr(1, radBlok, "izvadi:", vbBinaryCompare) > 0 And InStr(1, radBlok, "ukloni:", vbBinaryCompare) = 0 And _
                InStr(1, radBlok, "izdaj:", vbBinaryCompare) = 0 And InStr(1, radNev, "dodaj:", vbBinaryCompare) > 0 And _

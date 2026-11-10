@@ -8196,7 +8196,7 @@ SABOTAZE = {
         "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            ElseIf Len(CiljAktivan()) > 0 Then\n",
         "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            Else   ' SABOTAZA: Dodaj bez konteksta\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
-        "LNCB18: bez konteksta (ni nacrt ni cilj) nema ni Izvadi ni Dodaj",
+        "LNCB18: bez konteksta (ni nacrt ni cilj) lista Bez otpremnice ne nudi Dodaj",
     ),
     # Potvrda Izvadi nosi uvod Dodaj.
     "lncb-ekran-izvadi-uvod-dodaj": (
@@ -8222,6 +8222,14 @@ SABOTAZE = {
         "        If False Then Scr_OtpInfo = mCiljBroj & \"|\" & Poruka(\"OTKUI_OTP_CILJ\")   ' SABOTAZA: traka bez cilja\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
         "LNCB18: traka otpremnice imenuje izabran izdat cilj",
+    ),
+    # Lista Blokovi nudi "Izvadi" i bez ikakvog konteksta (LNC-INV-19).
+    "lncb-ekran-izvadi-bez-konteksta": (
+        "modScrDokumenti.bas",
+        "            If Len(mOtpID) = 0 And Len(CiljAktivan()) > 0 Then\n",
+        "            If Len(mOtpID) = 0 Then   ' SABOTAZA: Izvadi bez konteksta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: bez konteksta (ni nacrt ni cilj) lista Blokovi ne nudi Izvadi",
     ),
     # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
     "lncb-ekran-vise-od-max": (
