@@ -49,8 +49,9 @@ Private mMape As Object
 ' UkloniOtpremnicaIzvor_TX, IzdajOtpremnicu_TX). Ekran ne pise nijednu tabelu.
 '
 ' AKTIVNA otpremnica je uvek NACRT: samo nacrt prima i pusta izvore. Izdata se
-' vidi u listi, ali se ne bira; posle izdavanja ekran izlazi iz njenog
-' konteksta.
+' bira samo kao CILJ poteza nad blokom (mCiljID, STORNO_U_LANCU.md S10,
+' LNC-ODL-33) -- zaseban kontekst u koji nov list nikad ne ide; posle izdavanja
+' ekran izlazi iz konteksta nacrta.
 '
 ' Identitet ide REDOM, ne brojem: liste OTPREMNICE i BLOKOVI nose ID u
 ' nevidljivoj poslednjoj koloni (prioritet 4), pa ga sortiranje ne odvaja od
@@ -626,8 +627,9 @@ Public Function Scr_IzmenaOtpID() As String
     Scr_IzmenaOtpID = mIzmenaOtpID
 End Function
 
-' Opis aktivne otpremnice za traku iznad forme. Prazno = nema izabrane.
-' Oblik (13 polja):
+' Opis aktivne otpremnice za traku iznad forme. Prazno = nema ni nacrta ni cilja.
+' Bez nacrta, uz izabran izdat cilj: 2 polja (broj | podnaslov) -- ljuska tada
+' crta samo njih. Nacrt (13 polja):
 '   broj | stanica | datum | ocekKg | povKg | ostKg | ocekAmb | povAmb | ostAmb |
 '   cenaI | semafor | ostatak po klasi | cenaII
 ' semafor: -1 = neka klasa je PREKORACENA (kg ili gajbe), 0 = sve klase su na

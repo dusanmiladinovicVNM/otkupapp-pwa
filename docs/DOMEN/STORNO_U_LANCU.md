@@ -339,6 +339,17 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > osvežavanja trake, npr. prelaskom na listu Blokovi). **Poznato, svesno ostavljeno:** promena
 > otkupnog mesta ne briše cilj (`Scr_OtpStanica` čita samo nacrt, jer bi `NapustiOtpremnicu` inače
 > vratio i datum i robu forme); „Dodaj" bloka druge stanice plan tada odbija po `StanicaID`.
+> **OTVORENO (review dela b, dva kruga, 10.11.2026) — odluka operatera:** klik na red javlja ljusci
+> jednu vrednost za dve stvari (`modOtkupUI.RowFromTag`): True = „osveži mrežu i traku" **i**
+> „zaboravi izabran red"; False = ni jedno ni drugo. Izbor cilja klikom zato ne može i da sačuva red
+> (za „Ispravi" B-022 i specifikaciju) i da odmah osveži traku. Sada: red se čuva, a traka pokazuje
+> cilj od sledećeg osvežavanja (prelaz na listu Blokovi); do tada može da imenuje prethodni cilj.
+> Izlazi: (1) ljuska osvežava traku i kad red-događaj vrati False (dira `modOtkupUI.bas`, koji ovaj
+> rez po 10.9 ne dira); (2) cilj se bira radnjom nad redom („Izaberi za Izvadi / Dodaj", peta
+> radnja liste Otpremnice), a klik na izdatu ostaje kakav je bio — odstupanje od `LNC-ODL-33`;
+> (3) ostaje kako je. **Zatečeno, izvedeno čitanjem, nije reprodukovano:** dvoklik na izdatu u listi
+> Otpremnice puni formu otkupnog lista redom otpremnice (`LoadRowIntoForm`, broj otpremnice u polje
+> broja lista); isto je važilo i pre ovog reza.
 > a2–a7 i deo (b) NEVERIFIKOVANO u Excelu.**
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
 > ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
