@@ -29049,34 +29049,6 @@ Private Function LncKgZbirne(ByVal zbrID As String) As Double
     Next v
 End Function
 
-' Stanica izdaje k praznih gajbi kooperantu (revers): posle toga ih na stanici
-' nema. Isti pisci kao LncTipAmb; datum posle blokova testa.
-Private Sub LncStanicaIzdaje(ByVal oznaka As String, ByVal tipT As String, ByVal gajbi As Double)
-    Dim tx As clsTransaction, dok As String, dan As Date
-    Dim errNum As Long, errDesc As String
-    On Error GoTo EH
-    dan = NextTestDate()
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
-    tx.AddTableSnapshot TBL_AMBALAZA
-    dok = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "LNCIZ-" & oznaka, _
-                                       dan, AMB_NALOG_STANICA, TEST_ST_ID)
-    modAmbalaza.PrenesiAmbalazu tx, dan, tipT, gajbi, _
-                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
-                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dok
-    tx.CommitTx
-    Set tx = Nothing
-    Exit Sub
-EH:
-    errNum = Err.Number
-    errDesc = Err.description
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-    Err.Raise errNum, "LncStanicaIzdaje", errDesc
-End Sub
-
 ' T1 + T17 (deo): izdata otpremnica bez zbirne {A}, sa PredajaID; slobodan blok B
 ' (stariji datum, isplata 5.000). Dodaj B: otpremnica' = {A, B} (logicki dokument),
 ' nov broj, isti datum i PredajaID; stara stornirana i zadrzava sastav (A15); B
@@ -29450,17 +29422,23 @@ End Sub
 ' (b) prijemnica je primila svih 10 gajbi (vozac 0): kontra-stav stare bi vozaca u
 '     MEDJUKORAKU spustio na -10, a posle cele zamene nosi 5 -- prolazi samo zato
 '     sto se meri na kraju (LNC-ODL-31; kontrola je sabotaza lncb-dodaj-meri-usred).
-' (c) T13: gajbe bloka su posle otkupa izdate kooperantu, pa ih stanica nema --
-'     AMB-INV-07 na kraju odbija, odbijenica kaze zasto, i sve se vraca (LNC-INV-01).
+' (c) T13 -- SINTETICKA ANOMALIJA (fault injection, u transakciji testa koja se
+'     vraca): otpremnica W je knjizila 5 gajbi vise nego sto njen list nosi (stari
+'     oblik, LNC-ODL-21), pa stanica nema gajbe slobodnog bloka F. U knjizi
+'     uskladjenoj sa listovima manjka nema -- pune gajbe bloka stoje na stanici dok
+'     ih otpremnica ne ponese, a stanica izdaje samo prazne (AMB-INV-16). Pisac
+'     manjak odbija ODMAH (PrenesiAmbalazu), pa ga plan meri pre potvrde
+'     (LncDodajManjakStanice, LNC-INV-18); nijedna tabela se ne menja.
 Private Sub Test_LNC_Blok_DodajAmbalaza()
     Const SRC As String = "Test_LNC_Blok_DodajAmbalaza"
     Dim scenario As String, tipA As String, tipB As String, tipC As String
-    Dim g As String, g2 As String, g3 As String, por As String
+    Dim g As String, g2 As String, por As String
     Dim otkA As String, otkB As String, otp As String
     Dim otkC As String, otkD As String, otp2 As String, zbr2 As String, prj2 As String
-    Dim otkE As String, otkF As String, otp3 As String
-    Dim stPre As Double, vozPre As Double, koopPre As Double, kupPre As Double
+    Dim otkE As String, otkF As String, otkW As String, otp3 As String, otpW As String
+    Dim stPre As Double, vozPre As Double, koopPre As Double, kupPre As Double, stPosle As Double
     Dim ok As Boolean, ok2 As Boolean, ok3 As Boolean
+    Dim tx As clsTransaction, r As Collection, k As Long
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -29501,28 +29479,36 @@ Private Sub Test_LNC_Blok_DodajAmbalaza()
                      "LNCD11 (b): kupac se ne dira"
 
     ' (c) T13
-    tipC = LncTipAmb(scenario & "C", 15#)
+    tipC = LncTipAmb(scenario & "C", 20#)
     otkF = LncOtkup("LNCD11F-" & scenario, 100#, 5#, tipC)
+    otkW = LncOtkup("LNCD11W-" & scenario, 100#, 5#, tipC)
     otkE = LncOtkup("LNCD11E-" & scenario, 200#, 10#, tipC)
     otp3 = LncOtp("LNCD11Y-" & scenario, Pr3Izvor(otkE, ""), tipC)
-    LncStanicaIzdaje scenario & "C", tipC, 5#
+    otpW = LncOtp("LNCD11W-" & scenario, Pr3Izvor(otkW, ""), tipC)
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    Set r = FindRows(TBL_AMBALAZA, COL_AMB_DOK_ID, otpW)
+    If r.count = 1 Then RequireUpdateCell TBL_AMBALAZA, CLng(r(1)), COL_AMB_KOLICINA, 10#, SRC
     stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipC)
-    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipC)
-    ok3 = modDokumenta.DodajBlokULancu_TX(otp3, otkF, g3, por)
-    AssertTrue Not ok3 And InStr(1, g3, "AMB-INV-07", vbBinaryCompare) > 0 And _
-               InStr(1, g3, "stanica vise nema gajbe ovog bloka", vbBinaryCompare) > 0, _
-               "LNCD11 (c): stanica bez gajbi bloka -- ambalaza na kraju odbija i kaze zasto"
-    AssertTrue LncOtpPolje(otp3, COL_STORNIRANO) <> "Da" And modDokumenta.OtpremnicaZaOtkup(otkF) = "" And _
-               Len(LncOtpPolje(otp3, COL_TRACE_ZAMENJEN_SA_ID)) = 0, _
-               "LNCD11 (c): odbijen potez vraca sve (LNC-INV-01)"
-    AssertTrue Abs(stPre - modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipC)) < 0.001 And _
-               Abs(vozPre - modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipC)) < 0.001, _
-               "LNCD11 (c): knjiga ambalaze je vracena"
+    ok3 = LncDodajOdbijen(otp3, otkF, "Stanica nema gajbe za ovaj potez")
+    stPosle = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipC)
+    tx.RollbackTx
+    Set tx = Nothing
+    AssertTrue r.count = 1 And Abs(stPre) < 0.001, _
+               "LNCD11 (c): preduslov -- otpremnica W je odnela gajbe slobodnog bloka (stanica 0)"
+    AssertTrue ok3, "LNCD11 (c): stanica bez gajbi bloka -- plan odbija pre potvrde, isti razlog u transakciji"
+    AssertTrue Abs(stPosle - stPre) < 0.001 And modDokumenta.OtpremnicaZaOtkup(otkF) = "" And _
+               LncOtpPolje(otp3, COL_STORNIRANO) <> "Da", _
+               "LNCD11 (c): odbijen potez ne dira knjigu ni lanac (LNC-INV-01)"
     Exit Sub
 
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
 
@@ -29612,9 +29598,9 @@ End Sub
 
 ' Stara otpremnica bez kulture u zaglavlju (SINTETICKI stari oblik, obrazac rucne
 ' provere 07.11.2026). Plan meri dodati blok prema kulturi NOVE verzije, kao pisac
-' (OtpZaglavljeVerzije): blok druge kulture odbija citljiv razlog iz
-' OtpKulturaVerzije, ne "ocekivano ''"; blok iste kulture ulazi, a nova verzija
-' dobija kulturu.
+' (OtpZaglavljeVerzije): blok druge kulture odbija citljiv razlog koji krivi
+' blok (ne "ocekivano ''" i ne savet da se lanac rastura); blok iste kulture
+' ulazi, a nova verzija dobija kulturu.
 Private Sub Test_LNC_Blok_DodajStaraBezKulture()
     Const SRC As String = "Test_LNC_Blok_DodajStaraBezKulture"
     Const ODB As String = "Potez nije moguc:"
@@ -29645,7 +29631,8 @@ Private Sub Test_LNC_Blok_DodajStaraBezKulture()
     menjana = False
 
     AssertTrue Len(otkK) > 0 And Left$(opisK, Len(ODB)) = ODB And _
-               InStr(1, opisK, "razlicite kulture", vbBinaryCompare) > 0 And Not okK, _
+               InStr(1, opisK, "je druge kulture", vbBinaryCompare) > 0 And _
+               InStr(1, opisK, "rasturuje", vbBinaryCompare) = 0 And Not okK, _
                "LNCDK: blok druge kulture u staru otpremnicu se odbija citljivo"
     AssertTrue InStr(1, opis, ODB, vbBinaryCompare) = 0 And ok And Len(otpNova) > 0, _
                "LNCDK: blok iste kulture ulazi u staru otpremnicu bez kulture"

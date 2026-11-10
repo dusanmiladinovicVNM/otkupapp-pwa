@@ -7974,7 +7974,7 @@ SABOTAZE = {
     # Odbijenica ambalaze ne kaze da premestanja u jednom potezu nema (LNC-ODL-23).
     "lncb-izvadi-bez-poruke-odl23": (
         "modDokumenta.bas",
-        "    If InStr(1, outGreska, \"AMB-INV-07\", vbBinaryCompare) > 0 Then\n",
+        "    If vrsta = LNC_IZVADI And InStr(1, outGreska, \"AMB-INV-07\", vbBinaryCompare) > 0 Then\n",
         "    If False Then   ' SABOTAZA: bez LNC-ODL-23 recenice\n",
         "Test_LNC_Blok_IzvadiAmbalaza",
         "LNCB11 (b): ambalaza na kraju odbija Izvadi i odbijenica kaze da jednog poteza nema",
@@ -8063,14 +8063,6 @@ SABOTAZE = {
         "Test_LNC_Blok_DodajIzdataBezZbirne",
         "LNCD1: potvrda imenuje oba datuma kad se razlikuju (LNC-ODL-30)",
     ),
-    # Odbijenica ambalaze za Dodaj nosi tekst Izvadi.
-    "lncb-dodaj-bez-razloga-gajbi": (
-        "modDokumenta.bas",
-        "        If vrsta = LNC_DODAJ Then\n            outGreska = outGreska & \" Najcesci uzrok kod Dodaj: stanica vise nema gajbe \" & _\n",
-        "        If False Then   ' SABOTAZA: Dodaj bez razloga ambalaze\n            outGreska = outGreska & \" Najcesci uzrok kod Dodaj: stanica vise nema gajbe \" & _\n",
-        "Test_LNC_Blok_DodajAmbalaza",
-        "LNCD11 (c): stanica bez gajbi bloka -- ambalaza na kraju odbija i kaze zasto",
-    ),
     # KONTROLA iz T11: Dodaj meri ambalazu USRED zamene -- kontra-stav stare spusta
     # vozaca koji je predao gajbe u minus, pa potez ciji je kraj ispravan pada
     # (LNC-ODL-31). Izvadi ostaje nedirnut (svoja sabotaza: lncb-izvadi-meri-usred).
@@ -8080,6 +8072,24 @@ SABOTAZE = {
         "    LncRasturi p, tx, SRC: If vrsta = LNC_DODAJ Then modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC: modAmbalaza.AmbOdloziInvarijantePocni tx, SRC   ' SABOTAZA: Dodaj meri usred zamene\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
         "Test_LNC_Blok_DodajAmbalaza",
         "LNCD11 (b): Dodaj prolazi jer se ambalaza meri posle cele zamene",
+    ),
+    # Manjak gajbi stanice meri samo pisac: potvrda se nudi, a posle "Da" pada
+    # PrenesiAmbalazu sa savetom o NABAVCI (LNC-INV-18).
+    "lncb-dodaj-manjak-samo-u-tx": (
+        "modDokumenta.bas",
+        "            p(\"razlog\") = LncDodajManjakStanice(otpremnicaID, p(\"otpPreostali\"), SRC)\n",
+        "            p(\"razlog\") = \"\"   ' SABOTAZA: manjak stanice samo u piscu\n",
+        "Test_LNC_Blok_DodajAmbalaza",
+        "LNCD11 (c): stanica bez gajbi bloka -- plan odbija pre potvrde, isti razlog u transakciji",
+    ),
+    # Blok druge kulture u staru otpremnicu dobija savet "rasturi lanac" (kriv je
+    # blok, ne lanac).
+    "lncb-dodaj-kultura-poruka-lanca": (
+        "modDokumenta.bas",
+        "            If Len(razStara) = 0 And Len(kulStara) > 0 And Len(kulBloka) > 0 Then\n",
+        "            If False Then   ' SABOTAZA: savet lanca za los blok\n",
+        "Test_LNC_Blok_DodajStaraBezKulture",
+        "LNCDK: blok druge kulture u staru otpremnicu se odbija citljivo",
     ),
     # Zbirna' nastaje bez otpremnice': X iz potvrde se razilazi sa piscem (LNC-INV-16).
     "lncb-zbirna-bez-otpremnice": (
@@ -8092,8 +8102,8 @@ SABOTAZE = {
     # Dodaj ne vidi zbirnu iznad otpremnice: zbirna ostaje na staroj verziji.
     "lncb-dodaj-bez-zbirne": (
         "modDokumenta.bas",
-        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC\n    End If\n",
-        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC: p(\"zbrID\") = \"\"   ' SABOTAZA: Dodaj ne vidi zbirnu\n    End If\n",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC\n        If Len(CStr(p(\"razlog\"))) = 0 And CBool(p(\"otpIzdata\")) Then\n",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC: p(\"zbrID\") = \"\"   ' SABOTAZA: Dodaj ne vidi zbirnu\n        If Len(CStr(p(\"razlog\"))) = 0 And CBool(p(\"otpIzdata\")) Then\n",
         "Test_LNC_Blok_PremestiADoB",
         "LNCD16 (a): obe zbirne imaju nove verzije sa novim brojevima",
     ),

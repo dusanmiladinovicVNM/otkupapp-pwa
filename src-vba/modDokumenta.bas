@@ -3923,19 +3923,15 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
             Exit Function
         End If
         ' LNC-ODL-30: roba kupljena POSLE polaska kamiona nije mogla njime da putuje.
-        Dim datBlok As Date, datOtp As Date, vDat As Variant
-        vDat = LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM)
-        If Not IsDate(vDat) Then
+        Dim datBlok As Date, datOtp As Date
+        If Not LncDatumCelije(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM), datBlok) Then
             p("razlog") = "Blok " & p("otkupBroj") & " nema citljiv datum -- ne dodaje se."
             Exit Function
         End If
-        datBlok = CDate(vDat)
-        vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_DATUM)
-        If Not IsDate(vDat) Then
+        If Not LncDatumCelije(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_DATUM), datOtp) Then
             p("razlog") = "Otpremnica " & p("otpBroj") & " nema citljiv datum -- blok se ne dodaje."
             Exit Function
         End If
-        datOtp = CDate(vDat)
         p.Add "datumBloka", datBlok
         p.Add "datumOtp", datOtp
         If Int(datBlok) > Int(datOtp) Then
@@ -3963,6 +3959,16 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
         merKul.Add otkupID
         kulVer = OtpKulturaVerzije(otpremnicaID, merKul, razKul)
         If Len(razKul) > 0 Then
+            ' Listovi otpremnice su slozni, a blok nije: kriv je blok, ne lanac --
+            ' savet "rasturi lanac" iz OtpKulturaVerzije ovde ne vazi.
+            Dim kulStara As String, razStara As String, kulBloka As String
+            kulBloka = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA)))
+            If clKul.count > 0 Then kulStara = OtpKulturaVerzije(otpremnicaID, clKul, razStara)
+            If Len(razStara) = 0 And Len(kulStara) > 0 And Len(kulBloka) > 0 Then
+                razKul = "Blok " & p("otkupBroj") & " je druge kulture (" & KulturaOpisZaPoruku(kulBloka) & _
+                         ") od listova otpremnice " & p("otpBroj") & " (" & KulturaOpisZaPoruku(kulStara) & _
+                         ") -- otpremnica nosi jednu kulturu, pa se blok ne dodaje."
+            End If
             p("razlog") = razKul
             Exit Function
         End If
@@ -3975,6 +3981,9 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
             Exit Function
         End If
         LncPlanOtpremnice p, otpremnicaID, "", otkupID, False, SRC
+        If Len(CStr(p("razlog"))) = 0 And CBool(p("otpIzdata")) Then
+            p("razlog") = LncDodajManjakStanice(otpremnicaID, p("otpPreostali"), SRC)
+        End If
     End If
 
     ' LNC-ODL-28: nacrt se menja postojecim "vezi" / "ukloni", ne ovim potezom.
@@ -4598,19 +4607,57 @@ EH:
     outGreska = OtpPadTransakcije(tx, SRC, otkupID)
     modAmbalaza.AmbOdloziInvarijanteOtkazi tx
     ' LNC-ODL-23: medjustanje premestanja je commit-ovano, pa ambalaza meri odmah
-    ' posle "Izvadi" -- odbijenica kaze zasto i da jednog poteza nema. Kod "Dodaj"
-    ' gajbe gubi samo stanica (kod uskladjene otpremnice), pa tekst imenuje nju kao
-    ' najcesci uzrok; nalog iz AMB-INV-07 stoji ispred.
-    If InStr(1, outGreska, "AMB-INV-07", vbBinaryCompare) > 0 Then
-        If vrsta = LNC_DODAJ Then
-            outGreska = outGreska & " Najcesci uzrok kod Dodaj: stanica vise nema gajbe " & _
-                        "ovog bloka (izdate su dalje posle otkupa), pa ih otpremnica ne moze poneti."
-        Else
-            outGreska = outGreska & " Gajbe ovog bloka su vec predate dalje; premestanje u " & _
-                        "jednom potezu ne postoji (LNC-ODL-23)."
-        End If
+    ' posle "Izvadi" -- odbijenica kaze zasto i da jednog poteza nema. Za "Dodaj"
+    ' manjak stanice meri plan pre potvrde (LncDodajManjakStanice); AMB-INV-07 na
+    ' kraju tada imenuje nalog sam (vozac, kod otpremnice neuskladjene sa listovima).
+    If vrsta = LNC_IZVADI And InStr(1, outGreska, "AMB-INV-07", vbBinaryCompare) > 0 Then
+        outGreska = outGreska & " Gajbe ovog bloka su vec predate dalje; premestanje u " & _
+                    "jednom potezu ne postoji (LNC-ODL-23)."
     End If
     LncPotezNadBlokom = False
+End Function
+
+' LNC-INV-18 za "Dodaj": otpremnica' knjizi stanica -> vozac zbir gajbi svojih
+' listova (OtpKnjiziAmbalazu), a PrenesiAmbalazu manjak stanice odbija ODMAH --
+' AMB-10-ODL-40 odlaze samo kontra-stav. Plan zato meri isto sto ce pisac videti:
+' saldo stanice BEZ redova stare otpremnice (kontra-stav ih vraca) prema gajbama
+' nove verzije. U knjizi uskladjenoj sa listovima manjka nema -- pune gajbe
+' slobodnog bloka stoje na stanici -- pa ovo hvata stari oblik (otpremnica koja je
+' knjizila vise nego sto listovi nose). "" = nema manjka.
+Private Function LncDodajManjakStanice(ByVal otpID As String, ByVal izvori As Collection, _
+                                       ByVal src As String) As String
+    Dim tipAmb As String, stanicaID As String, gajbe As Double, manjak As Double, k As Long
+    tipAmb = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    If Len(tipAmb) = 0 Then Exit Function
+    For k = 1 To izvori.count
+        gajbe = gajbe + OtpGajbeIzvora(CStr(izvori(k)), src)
+    Next k
+    If gajbe <= 0 Then Exit Function
+    stanicaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
+    manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_STANICA, stanicaID, tipAmb, gajbe, _
+                                            DOK_TIP_OTPREMNICA, otpID)
+    If manjak > 0 Then
+        LncDodajManjakStanice = "Stanica nema gajbe za ovaj potez: nova verzija otpremnice " & _
+            Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ))) & _
+            " bi nosila " & Fmt2Zbr(gajbe) & " gajbi '" & tipAmb & "', a stanica ih bez nje drzi " & _
+            Fmt2Zbr(gajbe - manjak) & " (manjak " & Fmt2Zbr(manjak) & "). Gajbe bloka su otisle " & _
+            "drugim putem -- prvo uskladi knjigu gajbi stanice."
+    End If
+End Function
+
+' Datum iz celije: Date, ili serijski broj (celija bez formata datuma) -- isto
+' pravilo kao modUiData.CellDate. Prazno i tekst koji nije datum: False.
+Private Function LncDatumCelije(ByVal v As Variant, ByRef outDatum As Date) As Boolean
+    If IsEmpty(v) Or IsNull(v) Then Exit Function
+    If VarType(v) <> vbString And IsNumeric(v) Then
+        If Not modUiData.DatumSerijskiValidan(CDbl(v)) Then Exit Function
+        outDatum = CDate(CDbl(v))
+    ElseIf IsDate(v) Then
+        outDatum = CDate(v)
+    Else
+        Exit Function
+    End If
+    LncDatumCelije = True
 End Function
 
 ' ISPRAVKA OTKUPNOG LISTA U LANCU -- jedan potez (LNC-ODL-06, -12).
