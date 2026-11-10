@@ -1513,16 +1513,17 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     ' STORNO_U_LANCU.md S10 (LNC-ODL-33): izdata otpremnica kao CILJ poteza nad blokom.
     UpsertRow lo, existing, "OTKUI_BTN_RED_IZVADI", "Izvadi iz otpremnice"
     UpsertRow lo, existing, "OTKUI_BTN_RED_DODAJ", "Dodaj u otpremnicu"
-    UpsertRow lo, existing, "OTKUI_BTN_RED_CILJ", "Izaberi za Izvadi / Dodaj"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_CILJ", "Izvadi / Dodaj"
     UpsertRow lo, existing, "OTKUI_MSG_IZDATA_RADNJA", "Otpremnica je izdata " & ChrW(8212) & _
-              " ne prima nove blokove. Blok se iz nje vadi ili u nju dodaje radnjom " & ChrW(8222) & _
-              "Izaberi za Izvadi / Dodaj" & ChrW(8220) & "."
+              " ne prima nove blokove. Blok se iz nje vadi ili u nju dodaje: izaberi je radnjom " & _
+              ChrW(8222) & "Izvadi / Dodaj" & ChrW(8220) & "."
     UpsertRow lo, existing, "OTKUI_ERR_CILJ_NACRT", "Otpremnica je nacrt " & ChrW(8212) & _
               " njeni blokovi se menjaju radnjama Ve" & ChrW(382) & "i / Ukloni; nacrt se bira klikom na red."
     UpsertRow lo, existing, "OTKUI_MSG_CILJ", "Izabrana izdata otpremnica " & ChrW(8212) & _
-              " blok se vadi u listi Blokovi otpremnice, a dodaje iz liste Bez otpremnice:"
+              " otvori listu Blokovi otpremnice (Izvadi) ili Bez otpremnice (Dodaj):"
     UpsertRow lo, existing, "OTKUI_MSG_IZDATA_U_F1", "Otpremnica je izdata " & ChrW(8212) & _
-              " blok se u nju dodaje ili iz nje vadi u F1: lista Otpremnice, klik na nju."
+              " blok se u nju dodaje ili iz nje vadi u F1: lista Otpremnice, radnja " & _
+              ChrW(8222) & "Izvadi / Dodaj" & ChrW(8220) & "."
     UpsertRow lo, existing, "OTKUI_OTP_CILJ", "Izdata " & ChrW(8212) & " izabrana za Izvadi / Dodaj blok"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_CILJ", "Nema izabrane izdate otpremnice " & ChrW(8212) & _
               " izaberi je u listi Otpremnice."

@@ -234,7 +234,7 @@ Public Function Scr_Radnje() As String
                          "spec:OTKUI_BTN_RED_SPEC:152:ghost:2|" & _
                          "specdat:OTKUI_BTN_RED_SPECDAT:96:ghost:0|" & _
                          "ispravi:OTKUI_BTN_RED_ISPRAVI:88:danger:1|" & _
-                         "cilj:OTKUI_BTN_RED_CILJ:150:soft:1"
+                         "cilj:OTKUI_BTN_RED_CILJ:100:soft:1"
         Case "NEVEZANI"
             ' Blok bez otpremnice se vezuje za AKTIVNI nacrt -- isti pisac kao
             ' posle unosa; bez aktivne otpremnice radnje nema.
@@ -1529,8 +1529,10 @@ End Function
 ' Radnja "cilj" nad redom liste Otpremnice (LNC-ODL-33, izmena operatera
 ' 10.11.2026): izdata otpremnica postaje CILJ poteza nad blokom. Identitet je
 ' OtpremnicaID iz nevidljive kolone reda. Uspeh vraca True -- ljuska tada
-' osvezava listu, mrezu i traku (RefreshFromData), a sledeci potez su blokovi
-' cilja.
+' osvezava mrezu i traku (RefreshFromData). Lista se NE prebacuje: prelaz na
+' Blokovi ide dugmetom liste, koje jedino cisti oznake i pretragu prethodne liste
+' (ClearMarks, mSearch u ljusci). Sirina 100 = sirina dugmeta radnje (ljuska je
+' ne menja), pa red radnji ne gubi vise mesta nego sto mora.
 Private Function IzaberiCiljRed(ByVal red As Long) As Boolean
     Dim oid As String, razlog As String
     If red <= 0 Then
@@ -1543,7 +1545,6 @@ Private Function IzaberiCiljRed(ByVal red As Long) As Boolean
         modOtkupUI.ShowToast razlog, True
         Exit Function
     End If
-    mLista = "BLOKOVI"
     IzaberiCiljRed = True
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_CILJ") & " " & mCiljBroj, False
 End Function
