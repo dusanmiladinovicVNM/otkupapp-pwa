@@ -1510,6 +1510,22 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_OTP_ST_IZDATA", "Izdata"
     UpsertRow lo, existing, "OTKUI_ERR_OTP_IZDATA", "Otpremnica je izdata " & ChrW(8212) & " ne prima nove blokove."
     UpsertRow lo, existing, "OTKUI_ERR_OTP_NEPOZNATA", "Otpremnica nije prona" & ChrW(273) & "ena ili je stornirana."
+    ' STORNO_U_LANCU.md S10 (LNC-ODL-33): izdata otpremnica kao CILJ poteza nad blokom.
+    UpsertRow lo, existing, "OTKUI_BTN_RED_IZVADI", "Izvadi iz otpremnice"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_DODAJ", "Dodaj u otpremnicu"
+    UpsertRow lo, existing, "OTKUI_MSG_CILJ", "Izabrana izdata otpremnica " & ChrW(8212) & _
+              " blok se u nju dodaje ili iz nje vadi u lancu:"
+    UpsertRow lo, existing, "OTKUI_MSG_IZDATA_U_F1", "Otpremnica je izdata " & ChrW(8212) & _
+              " blok se u nju dodaje ili iz nje vadi u F1: lista Otpremnice, klik na nju."
+    UpsertRow lo, existing, "OTKUI_ERR_NEMA_CILJ", "Nema izabrane izdate otpremnice " & ChrW(8212) & _
+              " izaberi je u listi Otpremnice."
+    UpsertRow lo, existing, "OTKUI_ERR_POTEZ_BLOK", "Potez NIJE upisan:"
+    UpsertRow lo, existing, "OTKUI_ASK_IZVADI_BLOK", "Blok izlazi iz izdate otpremnice " & ChrW(8212) & _
+              " potez menja i lanac, u jednoj transakciji:"
+    UpsertRow lo, existing, "OTKUI_ASK_DODAJ_BLOK", "Blok ulazi u izdatu otpremnicu " & ChrW(8212) & _
+              " potez menja i lanac, u jednoj transakciji:"
+    UpsertRow lo, existing, "OTKUI_ASK_POTEZ_BLOK_2", "Izvr" & ChrW(353) & "iti potez? (Ne = ni" & ChrW(353) & _
+              "ta se ne upisuje.)"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_AKT_OTP", "Nema izabrane otpremnice " & ChrW(8212) & " izaberi nacrt u listi Otpremnice."
     UpsertRow lo, existing, "OTKUI_ERR_VEZA_OTP", "Otkup NIJE vezan za otpremnicu:"
     UpsertRow lo, existing, "OTKUI_MSG_VEZAN", "Vezan za otpremnicu"

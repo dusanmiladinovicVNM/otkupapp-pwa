@@ -8116,6 +8116,79 @@ SABOTAZE = {
         "Test_LNC_Blok_IzvadiDvePrijemnice",
         "LNCB6: tudja prijemnica sa istom labelom se ne seli",
     ),
+    # --- deo (b): ekran F1, cilj poteza nad blokom (LNC-ODL-33) ------------------
+    # Klik na izdatu u listi Otpremnice ne bira cilj (stari toast "izdata").
+    "lncb-ekran-izdata-ne-bira": (
+        "modScrDokumenti.bas",
+        "        If razlog = Poruka(\"OTKUI_ERR_OTP_IZDATA\") Then\n",
+        "        If False Then   ' SABOTAZA: izdata se ne bira kao cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: klik na izdatu u listi Otpremnice je bira kao cilj i napusta nacrt",
+    ),
+    # Izbor cilja ne napusta nacrt: dva konteksta, a nov list ide u nacrt.
+    "lncb-ekran-dva-konteksta": (
+        "modScrDokumenti.bas",
+        "    If Len(mOtpID) > 0 Then\n        mOtpID = \"\"\n        mOtpBroj = \"\"\n        modOtkupUI.ClearForm\n",
+        "    If False Then   ' SABOTAZA: cilj ne napusta nacrt\n        mOtpID = \"\"\n        mOtpBroj = \"\"\n        modOtkupUI.ClearForm\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: nov list uz izdat cilj ne ide u nacrt (ruta posle upisa)",
+    ),
+    # Uz cilj lista Blokovi nudi "ukloni" (radnju nacrta) umesto "Izvadi".
+    "lncb-ekran-ukloni-uz-cilj": (
+        "modScrDokumenti.bas",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1\"\n",
+        "                             \"ukloni:OTKUI_BTN_RED_UKLONI:136:danger:1\"   ' SABOTAZA: radnja nacrta uz cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Izvadi i Dodaj se nude samo uz izdat cilj, vezi / ukloni / izdaj tada ne",
+    ),
+    # Seam potvrde odgovara "Da": potez se upisuje bez operatera.
+    "lncb-ekran-seam-da": (
+        "modScrDokumenti.bas",
+        "    txt = modDokumenta.LncDijalogTekst(uvod & vbCrLf & vbCrLf, opis, Poruka(\"OTKUI_ASK_POTEZ_BLOK_2\"))\n    If IsTestMode() Then\n        mPotvrdaLancaTest = txt\n        Exit Function\n",
+        "    txt = modDokumenta.LncDijalogTekst(uvod & vbCrLf & vbCrLf, opis, Poruka(\"OTKUI_ASK_POTEZ_BLOK_2\"))\n    If IsTestMode() Then\n        mPotvrdaLancaTest = txt\n        PotvrdiPotezNadBlokom = True: Exit Function   ' SABOTAZA: seam odgovara Da\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Ne ne upisuje",
+    ),
+    # Cilj ne prati naslednika: posle poteza ostaje bez cilja.
+    "lncb-ekran-cilj-ne-prati": (
+        "modScrDokumenti.bas",
+        "        id = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, COL_TRACE_ZAMENJEN_SA_ID)))\n",
+        "        id = \"\"   ' SABOTAZA: cilj ne prati naslednika\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: posle uspeha cilj prelazi na novu verziju otpremnice",
+    ),
+    # Test reset ne brise cilj: zaostao cilj menja radnje sledeceg testa.
+    "lncb-ekran-reset-bez-cilja": (
+        "modScrDokumenti.bas",
+        "    mOtpBroj = \"\"\n    mCiljID = \"\"\n    mCiljBroj = \"\"\n    mLista = \"\"\n",
+        "    mOtpBroj = \"\"\n    mCiljBroj = \"\"   ' SABOTAZA: reset bez cilja\n    mLista = \"\"\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Scr_OtpTestReset brise cilj",
+    ),
+    # Lista Blokovi ne vidi cilj (cita samo nacrt).
+    "lncb-ekran-blokovi-bez-cilja": (
+        "modScrDokumenti.bas",
+        "    If Len(otpLista) = 0 Then otpLista = CiljAktivan()\n",
+        "    If False Then otpLista = CiljAktivan()   ' SABOTAZA: blokovi samo nacrta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: lista Blokovi pokazuje blokove izabranog cilja",
+    ),
+    # Radnja "izvadi" vozi potez Dodaj (zamenjena vrsta).
+    "lncb-ekran-izvadi-kao-dodaj": (
+        "modScrDokumenti.bas",
+        "            RowAction = PotezNaCilju(LNC_IZVADI, otkupID)\n",
+        "            RowAction = PotezNaCilju(LNC_DODAJ, otkupID)   ' SABOTAZA: izvadi vozi Dodaj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Izvadi kroz ekran meri plan Izvadi (jedini izvor zbirne sa prijemnicom se odbija)",
+    ),
+    # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
+    "lncb-ekran-vise-od-max": (
+        "modScrDokumenti.bas",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1\"\n",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1\"   ' SABOTAZA: vise od MAX_ACT\n",
+        "Test_LNC_Blok_GranicaRadnji",
+        "LNCB19: nijedna lista F1 i F2 ni u jednom kontekstu ne nudi vise od MAX_ACT radnji",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (
