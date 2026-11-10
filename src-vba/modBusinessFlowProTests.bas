@@ -29684,15 +29684,16 @@ Private Function LncRedListe(ByVal id As String) As Long
     Next i
 End Function
 
-' Izbor cilja PRODUKCIONIM putem: lista Otpremnice, red po identitetu, klik na
-' red (Scr_Event "row:n") -- ne Scr_OtpTestSet.
+' Izbor cilja PRODUKCIONIM putem (LNC-ODL-33, izmena operatera 10.11.2026): lista
+' Otpremnice, red po identitetu, radnja "cilj" nad njim (Scr_Event "act:cilj:n")
+' -- ne Scr_OtpTestSet. True = radnja je javila promenu i cilj je bas taj ID.
 Private Function LncEkranIzaberiCilj(ByVal otpID As String) As Boolean
-    Dim red As Long
+    Dim red As Long, promena As Boolean
     modScrDokumenti.Scr_Event "lsOTPREMNICE", "Click"
     red = LncRedListe(otpID)
     If red = 0 Then Exit Function
-    modScrDokumenti.Scr_Event "row:" & CStr(red), "Click"
-    LncEkranIzaberiCilj = (modScrDokumenti.Scr_CiljID() = otpID)
+    promena = modScrDokumenti.Scr_Event("act:cilj:" & CStr(red), "Click")
+    LncEkranIzaberiCilj = promena And (modScrDokumenti.Scr_CiljID() = otpID)
 End Function
 
 ' Radnje svake liste iz `liste` u tekucem rezimu: broj <= MAX_ACT i svaki natpis
@@ -29719,8 +29720,10 @@ Private Function LncRadnjeProblem(ByVal kontekst As String, ByVal liste As Varia
     LncRadnjeProblem = m
 End Function
 
-' T18 (LNC-ODL-33, -35, LNC-INV-19): ekran F1. Cilj se bira PRODUKCIONIM putem i
-' napusta nacrt; Izvadi / Dodaj se nude samo uz izdat cilj, "vezi" / "ukloni" /
+' T18 (LNC-ODL-33, -35, LNC-INV-19): ekran F1. Cilj se bira PRODUKCIONIM putem --
+' radnjom "Izaberi za Izvadi / Dodaj" nad redom liste Otpremnice (izmena operatera
+' 10.11.2026); obican klik na izdatu ne bira nista i cuva izabran red, a nacrt se
+' radnjom ne bira. Izbor napusta nacrt; Izvadi / Dodaj se nude samo uz izdat cilj, "vezi" / "ukloni" /
 ' "izdaj" tada ne; nov list uz izdat cilj ne ide u nacrt (meri se ruta, ne
 ' clanstvo); potvrda ide kroz postojeci seam, sa PAZNJA uz prijemnicu i brojem
 ' bloka iz reda izabranog po identitetu; "Ne" ne upisuje; odbijen plan se kaze bez
@@ -29738,6 +29741,7 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     Dim promena As Boolean, promenaOdb As Boolean, posleNe As String, posleOdb As String
     Dim promenaIzv As Boolean, txtIzv As String, posleIzv As String
     Dim radNevPrazno As String, radBlokPrazno As String, redOtp As Long, drugiKlik As Boolean
+    Dim redD As Long, nacrtKaoCilj As Boolean, ciljPosleKlika As String
     Dim redC As Long, promenaC As Boolean, txtC As String, posleC As String, info As String
     Dim seamPosle As String, ciljPosle As String, naslov As String, okD As Boolean
     Dim izabran2 As Boolean, okI As Boolean, ciljBez As String, izabran3 As Boolean, posleReseta As String
@@ -29775,20 +29779,12 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     izabran = LncEkranIzaberiCilj(otp)
     nacrtNapusten = (modScrDokumenti.Scr_OtpID() = "")
     listaPosle = modScrDokumenti.Scr_Lista()
-    AssertTrue izabran And nacrtNapusten And listaPosle = "OTPREMNICE", _
-               "LNCB18: klik na izdatu u listi Otpremnice je bira kao cilj i napusta nacrt"
-    ' Bez nacrta klik ne menja listu i vraca False: ljuska cuva izabran red, nad
-    ' kojim rade "Ispravi" (B-022) i specifikacija.
-    redOtp = LncRedListe(otp)
-    drugiKlik = modScrDokumenti.Scr_Event("row:" & CStr(redOtp), "Click")
-    AssertTrue redOtp > 0 And Not drugiKlik And modScrDokumenti.Scr_Lista() = "OTPREMNICE" And _
-               modScrDokumenti.Scr_CiljID() = otp, _
-               "LNCB18: klik na izdatu cuva listu i izabran red (Ispravi i specifikacija rade nad njim)"
+    AssertTrue izabran And nacrtNapusten And listaPosle = "BLOKOVI", _
+               "LNCB18: radnja Izaberi nad izdatom je bira kao cilj, napusta nacrt i vodi na njene blokove"
     info = modScrDokumenti.Scr_OtpInfo()
     AssertTrue Left$(info, Len(LncOtpPolje(otp, COL_OTP_BROJ)) + 1) = LncOtpPolje(otp, COL_OTP_BROJ) & "|" And _
                InStr(1, info, Poruka("OTKUI_OTP_CILJ"), vbBinaryCompare) > 0, _
                "LNCB18: traka otpremnice imenuje izabran izdat cilj"
-    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
     redA = LncRedListe(otkA)
     AssertTrue redA > 0, "LNCB18: lista Blokovi pokazuje blokove izabranog cilja"
     ' Izvadi kroz ekran ide planom Izvadi: A je jedini blok, a zbirna ima prijemnicu.
@@ -29816,6 +29812,22 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     ruta = modScrDokumenti.RutaPosleUpisa(otkL, False, False)
     AssertTrue ruta <> modScrDokumenti.RUTA_NACRT, _
                "LNCB18: nov list uz izdat cilj ne ide u nacrt (ruta posle upisa)"
+
+    ' Obican klik na izdatu ne menja nista i vraca False: ljuska cuva izabran red,
+    ' nad kojim rade "Ispravi" (B-022) i specifikacija. Nacrt se radnjom ne bira.
+    modScrDokumenti.Scr_Event "lsOTPREMNICE", "Click"
+    redOtp = LncRedListe(otp2)
+    drugiKlik = modScrDokumenti.Scr_Event("row:" & CStr(redOtp), "Click")
+    ciljPosleKlika = modScrDokumenti.Scr_CiljID()
+    AssertTrue redOtp > 0 And Not drugiKlik And modScrDokumenti.Scr_Lista() = "OTPREMNICE" And _
+               ciljPosleKlika = otp, _
+               "LNCB18: klik na izdatu ne menja cilj ni listu i cuva izabran red (Ispravi i specifikacija)"
+    redD = LncRedListe(draft)
+    nacrtKaoCilj = modScrDokumenti.Scr_Event("act:cilj:" & CStr(redD), "Click")
+    AssertTrue redD > 0 And Not nacrtKaoCilj And modScrDokumenti.Scr_CiljID() = otp And _
+               modScrDokumenti.Scr_OtpID() = "", _
+               "LNCB18: radnja Izaberi odbija nacrt (cilj i nacrt ostaju kakvi su bili)"
+    modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
 
     ' Dodaj kroz ekran: potvrda kroz seam, "Ne".
     redB = LncRedListe(otkB)
