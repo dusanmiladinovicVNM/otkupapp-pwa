@@ -353,6 +353,13 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_Blok_IzvadiNacrtZbirne
     Test_LNC_Blok_IzvadiOdbijen
     Test_LNC_Blok_IzvadiAmbalaza
+    Test_LNC_Blok_IzvadiDvePrijemnice
+    Test_LNC_Blok_DodajIzdataBezZbirne
+    Test_LNC_Blok_DodajUZbirnuSaPrijemnicom
+    Test_LNC_Blok_DodajOdbijen
+    Test_LNC_Blok_DodajAmbalaza
+    Test_LNC_Blok_PremestiADoB
+    Test_LNC_Blok_DodajStaraBezKulture
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -28987,6 +28994,672 @@ Private Sub Test_LNC_Blok_IzvadiAmbalaza()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' ============================================================
+' LNC BLOK: "Dodaj blok" u IZDATU otpremnicu (STORNO_U_LANCU.md S10, a7)
+' ============================================================
+' Blok ULAZI u otpremnicu' -- ne stornira se, novac i zurnal se ne diraju, koren
+' traga je par OTPREMNICE (LNC-ODL-22, -26, -27). Slobodan blok se pravi PRE
+' otpremnice: test-datumi rastu (NextTestDate), a "Dodaj" odbija blok kasniji od
+' otpremnice (LNC-ODL-30). Lanac grade kanonski pisci (normal production state),
+' osim gde je izricito receno.
+
+' Jedan pokusaj "Dodaj" koji MORA biti odbijen: razlog iz plana PRE potvrde, isti
+' razlog iz transakcije i nijedna od 13 tabela promenjena (LNC-INV-18, -01).
+' Tvrdnju pise pozivalac, statican literal po slucaju (tools/sabotaza.py); pad
+' ostavlja oba teksta u logu.
+Private Function LncDodajOdbijen(ByVal otpID As String, ByVal otkupID As String, _
+                                 ByVal ocekivano As String) As Boolean
+    Const ODB As String = "Potez nije moguc:"
+    Dim opis As String, ok As Boolean, g As String, por As String, pre As String
+    opis = modDokumenta.LncPlanOpisZaBlok(otpID, otkupID, LNC_DODAJ)
+    pre = LncBrojeviLanca()
+    ok = modDokumenta.DodajBlokULancu_TX(otpID, otkupID, g, por)
+    LncDodajOdbijen = (Left$(opis, Len(ODB)) = ODB) And _
+                      (InStr(1, opis, ocekivano, vbTextCompare) > 0) And Not ok And _
+                      (InStr(1, g, ocekivano, vbTextCompare) > 0) And (pre = LncBrojeviLanca())
+    If Not LncDodajOdbijen Then
+        LogWarn "LncDodajOdbijen", "ocekivano [" & ocekivano & "] | plan: " & Left$(opis, 300) & _
+                " | tx ok=" & CStr(ok) & ": " & Left$(g, 300)
+    End If
+End Function
+
+' Otisak stavki JEDNE prijemnice (sve kolone) -- kolicine i stavke se pri
+' prevezivanju ne menjaju (LNC-ODL-02, -08). Nivo fizickog reda.
+Private Function LncOtisakPrijemnice(ByVal prjID As String) As String
+    Dim s As Variant, r As Collection, c As Long, k As Long, m As String
+    s = GetTableData(TBL_PRIJEMNICA_STAVKE)
+    Set r = FindRows(TBL_PRIJEMNICA_STAVKE, COL_PRS_PRIJEMNICA_ID, prjID)
+    For k = 1 To r.count
+        For c = 1 To UBound(s, 2)
+            m = m & "|" & NzToText(s(CLng(r(k)), c))
+        Next c
+    Next k
+    LncOtisakPrijemnice = CStr(r.count) & m
+End Function
+
+' Zbir kg stavki zbirne, preko svih klasa (isti citalac kao integritet).
+Private Function LncKgZbirne(ByVal zbrID As String) As Double
+    Dim poKl As Object, v As Variant
+    Set poKl = modDokumenta.ZbirnaPoKlasi(zbrID)
+    For Each v In poKl.keys
+        LncKgZbirne = LncKgZbirne + CDbl(poKl(v)(0))
+    Next v
+End Function
+
+' Stanica izdaje k praznih gajbi kooperantu (revers): posle toga ih na stanici
+' nema. Isti pisci kao LncTipAmb; datum posle blokova testa.
+Private Sub LncStanicaIzdaje(ByVal oznaka As String, ByVal tipT As String, ByVal gajbi As Double)
+    Dim tx As clsTransaction, dok As String, dan As Date
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+    dan = NextTestDate()
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA_DOKUMENT
+    tx.AddTableSnapshot TBL_AMBALAZA
+    dok = modAmbalaza.UpisiAmbDokument(tx, AMB_DOK_REVERS, "LNCIZ-" & oznaka, _
+                                       dan, AMB_NALOG_STANICA, TEST_ST_ID)
+    modAmbalaza.PrenesiAmbalazu tx, dan, tipT, gajbi, _
+                AMB_NALOG_STANICA, TEST_ST_ID, AMB_NALOG_KOOPERANT, TEST_KOOP_ID, _
+                AMB_VK_IZDATA_PRAZNA, DOK_TIP_AMBALAZA_DOKUMENT, dok
+    tx.CommitTx
+    Set tx = Nothing
+    Exit Sub
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "LncStanicaIzdaje", errDesc
+End Sub
+
+' T1 + T17 (deo): izdata otpremnica bez zbirne {A}, sa PredajaID; slobodan blok B
+' (stariji datum, isplata 5.000). Dodaj B: otpremnica' = {A, B} (logicki dokument),
+' nov broj, isti datum i PredajaID; stara stornirana i zadrzava sastav (A15); B
+' netaknut u svim kolonama (fizicki red); trag je jedan red, koren = par
+' otpremnice; tekuca predaja bloka je otpremnica' istog utovara (LNC-INV-20).
+Private Sub Test_LNC_Blok_DodajIzdataBezZbirne()
+    Const SRC As String = "Test_LNC_Blok_DodajIzdataBezZbirne"
+    Dim scenario As String, hO As Object, g As String, por As String, opis As String
+    Dim otkA As String, otkB As String, otp As String, otpNova As String, root As String
+    Dim ok As Boolean, izv As Collection, imaA As Boolean, imaB As Boolean, k As Long
+    Dim placenoPre As Double, otisakPre As String, zurnalPre As Long
+    Dim tOtp As String, tVoz As String, tPred As String, tZbr As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCD1")
+    otkB = LncOtkup("LNCD1B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkA = LncOtkup("LNCD1A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    Set hO = OtpHeader(TEST_PREFIX & "-OTP-LNCD1-" & scenario)
+    hO("TipAmbalaze") = TEST_TIP_AMB
+    hO("PredajaID") = "PRED-LNCD1-" & scenario
+    otp = CreateOtpremnicaIzIzvora_TX(hO, Pr3Izvor(otkA, ""), g)
+    AssertTrue Len(otp) > 0 And Len(LncOtpPolje(otp, COL_OTP_PREDAJA_ID)) > 0, _
+               "LNCD1: preduslov -- izdata otpremnica sa PredajaID"
+    If Len(otp) = 0 Then Exit Sub
+    SaveNovac TEST_PREFIX & "-NOV-LNCD1-" & scenario, NextTestDate(), _
+              "TEST KOOPERANT", TEST_KOOP_ID, "Kooperant", _
+              "", TEST_KOOP_ID, "", "", _
+              NOV_KES_OTKUPAC_KOOP, 0#, 5000#, "kes na otkupnom mestu", otkB
+    placenoPre = modNovac.GetIsplataForOtkup(otkB)
+    otisakPre = LncOtisakBloka(otkB)
+    zurnalPre = CountRows(TBL_STORNO_ZURNAL)
+
+    opis = modDokumenta.LncPlanOpisZaBlok(otp, otkB, LNC_DODAJ)
+    ok = modDokumenta.DodajBlokULancu_TX(otp, otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    root = LncOtpPolje(otp, COL_TRACE_CORRECTION_ID)
+
+    AssertTrue InStr(1, opis, "Potez nije moguc", vbBinaryCompare) = 0 And _
+               InStr(1, opis, " ulazi u otpremnicu ", vbBinaryCompare) > 0 And _
+               InStr(1, opis, "isplate ostaju na listu", vbBinaryCompare) > 0, _
+               "LNCD1: potvrda kaze da blok ulazi i da isplate ostaju na listu"
+    AssertTrue InStr(1, opis, "Blok je od ", vbBinaryCompare) > 0 And _
+               InStr(1, opis, "nova verzija nosi datum otpremnice", vbBinaryCompare) > 0, _
+               "LNCD1: potvrda imenuje oba datuma kad se razlikuju (LNC-ODL-30)"
+    AssertTrue ok And Len(otpNova) > 0, "LNCD1: Dodaj je proknjizen (" & g & ")"
+    If Len(otpNova) > 0 Then
+        Set izv = modDokumenta.IzvoriOtpremnice(otpNova)
+        For k = 1 To izv.count
+            If StrComp(CStr(izv(k)), otkA, vbTextCompare) = 0 Then imaA = True
+            If StrComp(CStr(izv(k)), otkB, vbTextCompare) = 0 Then imaB = True
+        Next k
+        AssertTrue izv.count = 2 And imaA And imaB, _
+                   "LNCD1: nova verzija nosi stari list i dodati blok (LNC-INV-13)"
+        AssertTrue LncOtpPolje(otpNova, COL_OTP_BROJ) <> LncOtpPolje(otp, COL_OTP_BROJ) And _
+                   LncOtpPolje(otpNova, COL_OTP_DATUM) = LncOtpPolje(otp, COL_OTP_DATUM) And _
+                   LncOtpPolje(otpNova, COL_OTP_PREDAJA_ID) = LncOtpPolje(otp, COL_OTP_PREDAJA_ID), _
+                   "LNCD1: nova verzija ima nov broj, a isti datum i PredajaID"
+    End If
+    AssertEquals otpNova, modDokumenta.OtpremnicaZaOtkup(otkB), _
+                 "LNCD1: blok je u novoj verziji otpremnice"
+    AssertTrue LncOtpPolje(otp, COL_STORNIRANO) = "Da" And _
+               modDokumenta.IzvoriOtpremnice(otp).count = 1, _
+               "LNCD1: stara otpremnica je stornirana i zadrzava sastav (A15)"
+    AssertEquals otisakPre, LncOtisakBloka(otkB), _
+                 "LNCD1: red bloka i njegove stavke su nepromenjeni (LNC-INV-12)"
+    AssertDoubleNear placenoPre, modNovac.GetIsplataForOtkup(otkB), 0.001, _
+                     "LNCD1: isplata ostaje na bloku"
+    AssertEquals CStr(zurnalPre), CStr(CountRows(TBL_STORNO_ZURNAL)), _
+                 "LNCD1: potez ne otvara operaciju zurnala"
+    AssertTrue Len(root) > 0 And _
+               modStornoContext.GetCorrectionField(root, COL_SV_OLD_DOCTYPE) = DOK_TIP_OTPREMNICA And _
+               modStornoContext.GetCorrectionField(root, COL_SV_PARENT_DOCTYPE) = SV_PARENT_LANAC And _
+               Len(modStornoContext.GetCorrectionField(root, COL_SV_PARENT_DOCID)) = 0 And _
+               modStornoContext.GetCorrectionField(root, COL_SV_MODE) = SV_MODE_ISPRAVKA, _
+               "LNCD1: koren traga je par otpremnice (LANAC, bez roditelja)"
+    AssertTrue InStr(1, modStornoContext.GetCorrectionField(root, COL_SV_MESSAGE), _
+                     "Blok " & OtkPolje(otkB, COL_OTK_BR_DOK) & " ulazi u otpremnicu.", vbBinaryCompare) > 0, _
+               "LNCD1: trag imenuje dodati blok"
+    AssertEquals "1", CStr(LncRedovaPoteza(root)), "LNCD1: trag ima tacno jedan zavrsen red"
+    AssertTrue InStr(1, por, "je dodat u otpremnicu", vbBinaryCompare) > 0, _
+               "LNCD1: poruka posle poteza kaze da je blok dodat"
+    modStammdatenSync.TekucaPredajaOtkupa otkB, tOtp, tVoz, tPred, tZbr
+    AssertTrue Len(otpNova) > 0 And tOtp = otpNova And tPred = "PRED-LNCD1-" & scenario, _
+               "LNCD1 (T17): tekuca predaja bloka je otpremnica' istog utovara (LNC-INV-20)"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T5: zbirna {otpremnica {A}, sestra {S}} sa aktivnom prijemnicom 350; Dodaj B 100.
+' Opis plana pocinje sa PAZNJA i imenuje X = 450; X = zbir stavki zbirne' posle
+' commit-a (LNC-INV-16, poslovni broj kg); zbirna' = sestra + otpremnica';
+' prijemnica prevezana po oba polja, stavke netaknute; trag koren + dete.
+Private Sub Test_LNC_Blok_DodajUZbirnuSaPrijemnicom()
+    Const SRC As String = "Test_LNC_Blok_DodajUZbirnuSaPrijemnicom"
+    Dim scenario As String, g As String, por As String, opis As String, ok As Boolean
+    Dim otkA As String, otkB As String, otkS As String, otp As String, otpS As String
+    Dim zbr As String, prj As String, otpNova As String, zbrNova As String
+    Dim root As String, cidZ As String, otisakPrj As String, izvZ As Collection
+    Dim imaNova As Boolean, imaS As Boolean, k As Long, msg As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCD5")
+    otkB = LncOtkup("LNCD5B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkA = LncOtkup("LNCD5A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkS = LncOtkup("LNCD5S-" & scenario, 150#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCD5-" & scenario, Pr3Izvor(otkA, ""), TEST_TIP_AMB)
+    otpS = LncOtp("LNCD5S-" & scenario, Pr3Izvor(otkS, ""), TEST_TIP_AMB)
+    zbr = LncZbr("LNCD5-" & scenario, Pr3Izvor(otp, otpS))
+    prj = LncPrj("LNCD5-" & scenario, zbr, 350#, 0, TEST_TIP_AMB)
+    otisakPrj = LncOtisakPrijemnice(prj)
+
+    opis = modDokumenta.LncPlanOpisZaBlok(otp, otkB, LNC_DODAJ)
+    ok = modDokumenta.DodajBlokULancu_TX(otp, otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
+    root = LncOtpPolje(otp, COL_TRACE_CORRECTION_ID)
+    cidZ = LncZbrPolje(zbr, COL_TRACE_CORRECTION_ID)
+
+    AssertTrue Left$(opis, Len("PAZNJA:")) = "PAZNJA:" And _
+               InStr(1, opis, "Nova zbirna: 450.00 kg (sada 350.00)", vbBinaryCompare) > 0, _
+               "LNCD5: potvrda pocinje sa PAZNJA i imenuje novu zbirnu uz prijemnicu"
+    AssertTrue ok And Len(otpNova) > 0 And Len(zbrNova) > 0, _
+               "LNCD5: Dodaj uz zbirnu sa prijemnicom je proknjizen (" & g & ")"
+    If Len(zbrNova) = 0 Then Exit Sub
+    AssertDoubleNear 450#, LncKgZbirne(zbrNova), 0.001, _
+                     "LNCD5: X iz potvrde = zbir stavki nove zbirne (LNC-INV-16)"
+    Set izvZ = modDokumenta.IzvoriZbirne(zbrNova)
+    For k = 1 To izvZ.count
+        If StrComp(CStr(izvZ(k)), otpNova, vbTextCompare) = 0 Then imaNova = True
+        If StrComp(CStr(izvZ(k)), otpS, vbTextCompare) = 0 Then imaS = True
+    Next k
+    AssertTrue izvZ.count = 2 And imaNova And imaS, _
+               "LNCD5: nova zbirna = sestra + nova verzija otpremnice"
+    AssertTrue LncPrjPolje(prj, COL_DETE_ZBIRNA_ROD) = zbrNova And _
+               LncPrjPolje(prj, COL_PRJ_BROJ_ZBIRNE) = LncZbrPolje(zbrNova, COL_ZBR_BROJ), _
+               "LNCD5: prijemnica je prevezana po oba polja"
+    AssertEquals otisakPrj, LncOtisakPrijemnice(prj), _
+                 "LNCD5: kolicine i stavke prijemnice se ne menjaju"
+    AssertEquals "2", CStr(LncRedovaPoteza(root)), "LNCD5: trag ima koren i dete"
+    AssertTrue Len(root) > 0 And _
+               Len(modStornoContext.GetCorrectionField(root, COL_SV_PARENT_DOCID)) = 0 And _
+               modStornoContext.GetCorrectionField(cidZ, COL_SV_PARENT_DOCID) = root, _
+               "LNCD5: koren je par otpremnice, red zbirne je njegovo dete"
+    msg = modStornoContext.GetCorrectionField(root, COL_SV_MESSAGE)
+    AssertTrue InStr(1, msg, "Potvrdjeno upozorenje:", vbBinaryCompare) > 0 And _
+               InStr(1, msg, " ulazi u otpremnicu.", vbBinaryCompare) > 0, _
+               "LNCD5: trag Dodaj nosi potvrdjeno upozorenje i ime bloka (LNC-ODL-38)"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T6: zbirna sa DVE prijemnice (150 + 100) i treca prijemnica sa ISTOM labelom
+' zbirne a drugim roditeljem (SINTETICKA ANOMALIJA, fault injection: pisac danas
+' pise labelu iz roditelja). Izvadi B: Y = 250 (samo prijemnice po
+' ZbirnaRoditeljID), obe prevezane, treca ostaje gde je bila. Varijanta: aktivna
+' prijemnica samo po labeli odbija potez (LNC-INV-07).
+Private Sub Test_LNC_Blok_IzvadiDvePrijemnice()
+    Const SRC As String = "Test_LNC_Blok_IzvadiDvePrijemnice"
+    Const ODB As String = "Potez nije moguc:"
+    Dim scenario As String, g As String, por As String, opis As String, opis2 As String
+    Dim otkA As String, otkB As String, otkC As String, otp As String, otpC As String
+    Dim zbr As String, zbrC As String, prj1 As String, prj2 As String, prj3 As String
+    Dim zbrNova As String, otpNova As String, brNova As String, lbl3 As String
+    Dim ok As Boolean, ok2 As Boolean, labelaMenjana As Boolean, rodMenjan As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCB6")
+    otkA = LncOtkup("LNCB6A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNCB6B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkC = LncOtkup("LNCB6C-" & scenario, 50#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCB6-" & scenario, Pr3Izvor(otkA, otkB), TEST_TIP_AMB)
+    otpC = LncOtp("LNCB6C-" & scenario, Pr3Izvor(otkC, ""), TEST_TIP_AMB)
+    zbr = LncZbr("LNCB6-" & scenario, Pr3Izvor(otp, ""))
+    zbrC = LncZbr("LNCB6C-" & scenario, Pr3Izvor(otpC, ""))
+    prj1 = LncPrj("LNCB6P1-" & scenario, zbr, 150#, 0, TEST_TIP_AMB)
+    prj2 = LncPrj("LNCB6P2-" & scenario, zbr, 100#, 0, TEST_TIP_AMB)
+    prj3 = LncPrj("LNCB6P3-" & scenario, zbrC, 50#, 0, TEST_TIP_AMB)
+    labelaMenjana = True
+    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj3, COL_PRJ_BROJ_ZBIRNE, LncZbrPolje(zbr, COL_ZBR_BROJ)
+    lbl3 = LncPrjPolje(prj3, COL_PRJ_BROJ_ZBIRNE)
+
+    opis = modDokumenta.LncPlanOpisZaBlok(otp, otkB, LNC_IZVADI)
+    ok = modDokumenta.IzvadiBlokULancu_TX(otp, otkB, g, por)
+    zbrNova = LncZbrPolje(zbr, COL_TRACE_ZAMENJEN_SA_ID)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    brNova = LncZbrPolje(zbrNova, COL_ZBR_BROJ)
+
+    AssertTrue InStr(1, opis, "Nova zbirna: 200.00 kg (sada 300.00)", vbBinaryCompare) > 0 And _
+               InStr(1, opis, ", ukupno 250.00 kg", vbBinaryCompare) > 0, _
+               "LNCB6: Y je zbir prijemnica zbirne po ID-u, bez tudje sa istom labelom"
+    AssertTrue ok And Len(zbrNova) > 0 And Len(otpNova) > 0, _
+               "LNCB6: Izvadi uz dve prijemnice je proknjizen (" & g & ")"
+    AssertTrue Len(zbrNova) > 0 And _
+               LncPrjPolje(prj1, COL_DETE_ZBIRNA_ROD) = zbrNova And LncPrjPolje(prj1, COL_PRJ_BROJ_ZBIRNE) = brNova And _
+               LncPrjPolje(prj2, COL_DETE_ZBIRNA_ROD) = zbrNova And LncPrjPolje(prj2, COL_PRJ_BROJ_ZBIRNE) = brNova, _
+               "LNCB6: obe prijemnice su prevezane na novu zbirnu"
+    AssertTrue LncPrjPolje(prj3, COL_DETE_ZBIRNA_ROD) = zbrC And LncPrjPolje(prj3, COL_PRJ_BROJ_ZBIRNE) = lbl3, _
+               "LNCB6: tudja prijemnica sa istom labelom se ne seli"
+
+    ' Varijanta: prijemnica nove zbirne samo po labeli (SINTETICKI).
+    If Len(otpNova) > 0 Then
+        rodMenjan = True
+        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj1, COL_DETE_ZBIRNA_ROD, ""
+        opis2 = modDokumenta.LncPlanOpisZaBlok(otpNova, otkA, LNC_IZVADI)
+        ok2 = modDokumenta.IzvadiBlokULancu_TX(otpNova, otkA, g, por)
+        S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj1, COL_DETE_ZBIRNA_ROD, zbrNova
+        rodMenjan = False
+        AssertTrue Left$(opis2, Len(ODB)) = ODB And _
+                   InStr(1, opis2, "ZbirnaRoditeljID", vbBinaryCompare) > 0 And Not ok2 And _
+                   LncOtpPolje(otpNova, COL_STORNIRANO) <> "Da", _
+                   "LNCB6: aktivna prijemnica samo po labeli odbija Izvadi (LNC-INV-07)"
+    End If
+    S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj3, COL_PRJ_BROJ_ZBIRNE, LncZbrPolje(zbrC, COL_ZBR_BROJ)
+    labelaMenjana = False
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If rodMenjan Then S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj1, COL_DETE_ZBIRNA_ROD, zbrNova
+    If labelaMenjana Then S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj3, COL_PRJ_BROJ_ZBIRNE, LncZbrPolje(zbrC, COL_ZBR_BROJ)
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T9 (LNC-INV-18): "Dodaj" odbija PRE potvrde i ISTIM razlogom u transakciji, bez
+' ijednog upisa, za svaki slucaj iz 10.4. Normal production state: (a) zauzet u
+' nacrtu i (b) u drugoj izdatoj -- poruka imenuje otpremnicu; (c) storniran;
+' (d) druga kultura; (e) drugi tip gajbi; (f) datum posle otpremnice
+' (LNC-ODL-30); (g) nacrt kao cilj. U transakciji testa koja se vraca: (l) druga
+' stanica (obicna, ne hladnjaca); SINTETICKI (fault injection) (h) otpremnica bez
+' tipa ambalaze uz blok sa gajbama, (i) blok bez stavki, (j) neizdat blok, (k)
+' neizvesnost (blok bez otkupnog mesta); hladnjaca: (m) hladnjacki blok, (n)
+' hladnjacki cilj.
+Private Sub Test_LNC_Blok_DodajOdbijen()
+    Const SRC As String = "Test_LNC_Blok_DodajOdbijen"
+    Dim scenario As String, g As String, msgS As String, h As Object, ocek As Collection
+    Dim tipG As String, datT As Date, brS As String
+    Dim otkT As String, otkN As String, otkI As String, otkS As String, otkK As String
+    Dim otkG As String, otkF As String, otkZ As String, otkD As String, otkU As String
+    Dim otkQ As String, otkM As String, otkL As String
+    Dim otpT As String, otpN As String, otpI As String, otpH As String
+    Dim blokH As String, blokC As String, r As Collection, k As Long
+    Dim okH As Boolean, okI As Boolean, okJ As Boolean, okK As Boolean, okM As Boolean, okN As Boolean
+    Dim okL As Boolean
+    Dim tx As clsTransaction
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCD9")
+    tipG = LncTipAmb(scenario & "G", 10#)
+
+    ' Slobodni blokovi PRE otpremnica (datumi rastu).
+    otkT = LncOtkup("LNCD9T-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkN = LncOtkup("LNCD9N-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkI = LncOtkup("LNCD9I-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    brS = "LNCD9S-" & scenario
+    otkS = LncOtkup(brS, 100#, 0#, TEST_TIP_AMB)
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-LNCD9K-" & scenario)
+    h("KulturaID") = TEST_KUL_BEZ_SORTE_ID
+    h("VrstaVoca") = TEST_VRSTA_BEZ_SORTE
+    h("SortaVoca") = ""
+    otkK = CreateOtkup_TX(h, OtkStavke(100#, 50#, 0#, 0#, 0#, 0#), g)
+    otkG = LncOtkup("LNCD9G-" & scenario, 100#, 5#, tipG)
+    otkF = LncOtkup("LNCD9F-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkZ = LncOtkup("LNCD9Z-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkD = LncOtkup("LNCD9D-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkU = LncOtkup("LNCD9U-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkQ = LncOtkup("LNCD9Q-" & scenario, 100#, 0#, TEST_TIP_AMB)
+
+    ' Ciljevi i zauzetost.
+    otpT = LncOtp("LNCD9T-" & scenario, Pr3Izvor(otkT, ""), TEST_TIP_AMB)
+    Set ocek = New Collection
+    ocek.Add Pr3Ocekivano(KLASA_I, 100#, 0#)
+    Set h = OtpHeader(TEST_PREFIX & "-OTP-LNCD9N-" & scenario)
+    h("TipAmbalaze") = TEST_TIP_AMB
+    otpN = CreateOtpremnicaDraft_TX(h, ocek, g)
+    If Len(otpN) > 0 Then DodajOtpremnicaIzvor_TX otpN, otkN, g
+    otpI = LncOtp("LNCD9I-" & scenario, Pr3Izvor(otkI, ""), TEST_TIP_AMB)
+    modStornoDok.StornoIzvrsi STIP_OTKUP, TEST_PREFIX & "-OTK-" & brS, "", msgS, otkS
+    datT = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpT, COL_OTP_DATUM))
+    otkL = LncOtkup("LNCD9L-" & scenario, 100#, 0#, TEST_TIP_AMB)
+
+    AssertTrue Len(otpT) > 0 And Len(otpN) > 0 And Len(otpI) > 0 And Len(otkK) > 0 And _
+               modDokumenta.OtpremnicaZaOtkup(otkN) = otpN And _
+               OtkPolje(otkS, COL_STORNIRANO) = "Da", _
+               "LNCD9: preduslov -- ciljevi i blokovi su napravljeni"
+
+    AssertTrue LncDodajOdbijen(otpT, otkN, "je vec u otpremnici " & LncOtpPolje(otpN, COL_OTP_BROJ)), _
+               "LNCD9 (a): blok iz nacrta se odbija i poruka imenuje nacrt"
+    AssertTrue LncDodajOdbijen(otpT, otkI, "je vec u otpremnici " & LncOtpPolje(otpI, COL_OTP_BROJ)), _
+               "LNCD9 (b): blok druge izdate otpremnice se odbija i poruka je imenuje"
+    AssertTrue LncDodajOdbijen(otpT, otkS, "je storniran"), _
+               "LNCD9 (c): storniran blok se odbija"
+    AssertTrue LncDodajOdbijen(otpT, otkK, "KulturaID"), _
+               "LNCD9 (d): blok druge kulture se odbija pre potvrde"
+    AssertTrue LncDodajOdbijen(otpT, otkG, "TipAmbalaze"), _
+               "LNCD9 (e): blok drugog tipa gajbi se odbija"
+    AssertTrue LncDodajOdbijen(otpT, otkL, "LNC-ODL-30"), _
+               "LNCD9 (f): blok kasniji od otpremnice se odbija (LNC-ODL-30)"
+    AssertTrue LncDodajOdbijen(otpN, otkF, "NACRT"), _
+               "LNCD9 (g): nacrt kao cilj se odbija"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    HldSnimak tx
+    tx.AddTableSnapshot TBL_STANICE
+    ' (l) druga, obicna stanica (vraca se sa transakcijom).
+    Const STA_D9 As String = "ST-OGLTEST-90087"
+    HldStanicaSaOznakom STA_D9, "Ne"
+    otkM = HldBlok("LNCD9X-" & scenario, STA_D9, datT, 100#, 50#, 0, 0#, 0#, 0)
+    If Len(otkM) > 0 Then okL = LncDodajOdbijen(otpT, otkM, "StanicaID")
+    ' (h) stari oblik: otpremnica bez tipa ambalaze, blok sa gajbama.
+    S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otpT, COL_OTP_TIP_AMB, ""
+    okH = LncDodajOdbijen(otpT, otkG, "nema tip ambalaze")
+    S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otpT, COL_OTP_TIP_AMB, TEST_TIP_AMB
+    ' (i) blok bez stavki: stavke prepisane na drugi ID.
+    Set r = FindRows(TBL_OTKUP_STAVKE, COL_OKS_OTKUP_ID, otkZ)
+    For k = 1 To r.count
+        RequireUpdateCell TBL_OTKUP_STAVKE, CLng(r(k)), COL_OKS_OTKUP_ID, "LNCD9-NEMA-" & scenario, SRC
+    Next k
+    okI = LncDodajOdbijen(otpT, otkZ, "nema stavke")
+    ' (j) neizdat blok.
+    S6K4Postavi TBL_OTKUP, COL_OTK_ID, otkD, COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT
+    okJ = LncDodajOdbijen(otpT, otkD, "nije izdat")
+    ' (k) neizvesnost: blok bez otkupnog mesta -- LanacVaziZaBlok odbija (fail-closed).
+    S6K4Postavi TBL_OTKUP, COL_OTK_ID, otkU, COL_OTK_STANICA, ""
+    okK = LncDodajOdbijen(otpT, otkU, "nema otkupno mesto")
+    ' (m) hladnjacki blok; (n) hladnjacki cilj (vozac = ogledalo stanice).
+    blokH = HldBlok("LNCD9H-" & scenario, TEST_HLAD_ST_ID, datT, 40#, 100#, 0, 0#, 0#, 0)
+    If Len(blokH) > 0 Then okM = LncDodajOdbijen(otpT, blokH, "ide u svoj lanac")
+    blokC = HldBlok("LNCD9C-" & scenario, TEST_HLAD_ST_ID, NextTestDate(), 40#, 100#, 0, 0#, 0#, 0)
+    otpH = HldOtpremnicaLanca(blokC, modMalina.VozacOgledaloZaStanicu(TEST_HLAD_ST_ID), g)
+    If Len(otpH) > 0 Then okN = LncDodajOdbijen(otpH, otkQ, "hladnjackog lanca")
+    tx.RollbackTx
+    Set tx = Nothing
+
+    AssertTrue okL, "LNCD9 (l): blok druge stanice se odbija"
+    AssertTrue okH, "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239"
+    AssertTrue okI, "LNCD9 (i): blok bez stavki se odbija"
+    AssertTrue okJ, "LNCD9 (j): neizdat blok se odbija"
+    AssertTrue okK, "LNCD9 (k): neizvesnost (blok bez otkupnog mesta) odbija, fail-closed"
+    AssertTrue okM, "LNCD9 (m): hladnjacki blok se ne dodaje rucno"
+    AssertTrue okN, "LNCD9 (n): hladnjacki cilj se odbija"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T11 (Dodaj) + T13: ambalaza neto, svaki scenario sa svojim tipom gajbi.
+' (a) otpremnica {A 10 gajbi}, slobodan B 5: Dodaj B -- stanica -5, vozac +5,
+'     kooperant 0 (LNC-INV-17).
+' (b) prijemnica je primila svih 10 gajbi (vozac 0): kontra-stav stare bi vozaca u
+'     MEDJUKORAKU spustio na -10, a posle cele zamene nosi 5 -- prolazi samo zato
+'     sto se meri na kraju (LNC-ODL-31; kontrola je sabotaza lncb-dodaj-meri-usred).
+' (c) T13: gajbe bloka su posle otkupa izdate kooperantu, pa ih stanica nema --
+'     AMB-INV-07 na kraju odbija, odbijenica kaze zasto, i sve se vraca (LNC-INV-01).
+Private Sub Test_LNC_Blok_DodajAmbalaza()
+    Const SRC As String = "Test_LNC_Blok_DodajAmbalaza"
+    Dim scenario As String, tipA As String, tipB As String, tipC As String
+    Dim g As String, g2 As String, g3 As String, por As String
+    Dim otkA As String, otkB As String, otp As String
+    Dim otkC As String, otkD As String, otp2 As String, zbr2 As String, prj2 As String
+    Dim otkE As String, otkF As String, otp3 As String
+    Dim stPre As Double, vozPre As Double, koopPre As Double, kupPre As Double
+    Dim ok As Boolean, ok2 As Boolean, ok3 As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCD11")
+
+    ' (a)
+    tipA = LncTipAmb(scenario & "A", 15#)
+    otkB = LncOtkup("LNCD11B-" & scenario, 100#, 5#, tipA)
+    otkA = LncOtkup("LNCD11A-" & scenario, 200#, 10#, tipA)
+    otp = LncOtp("LNCD11-" & scenario, Pr3Izvor(otkA, ""), tipA)
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipA)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipA)
+    koopPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipA)
+    ok = modDokumenta.DodajBlokULancu_TX(otp, otkB, g, por)
+    AssertTrue ok, "LNCD11 (a): Dodaj bloka sa gajbama je proknjizen (" & g & ")"
+    AssertDoubleNear stPre - 5#, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipA), 0.001, _
+                     "LNCD11 (a): stanica predaje gajbe dodatog bloka"
+    AssertDoubleNear vozPre + 5#, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipA), 0.001, _
+                     "LNCD11 (a): vozac nosi i gajbe dodatog bloka"
+    AssertDoubleNear koopPre, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KOOPERANT, TEST_KOOP_ID, tipA), 0.001, _
+                     "LNCD11 (a): kooperant se ne dira"
+
+    ' (b)
+    tipB = LncTipAmb(scenario & "B", 15#)
+    otkD = LncOtkup("LNCD11D-" & scenario, 100#, 5#, tipB)
+    otkC = LncOtkup("LNCD11C-" & scenario, 200#, 10#, tipB)
+    otp2 = LncOtp("LNCD11X-" & scenario, Pr3Izvor(otkC, ""), tipB)
+    zbr2 = LncZbr("LNCD11X-" & scenario, Pr3Izvor(otp2, ""))
+    prj2 = LncPrj("LNCD11X-" & scenario, zbr2, 200#, 10, tipB)
+    kupPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipB)
+    ok2 = modDokumenta.DodajBlokULancu_TX(otp2, otkD, g2, por)
+    AssertTrue ok2, "LNCD11 (b): Dodaj prolazi jer se ambalaza meri posle cele zamene"
+    AssertDoubleNear 5#, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipB), 0.001, _
+                     "LNCD11 (b): vozac posle zamene nosi gajbe dodatog bloka"
+    AssertDoubleNear 0#, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipB), 0.001, _
+                     "LNCD11 (b): stanica je predala sve gajbe"
+    AssertDoubleNear kupPre, modAmbalaza.AmbSaldoNaloga(AMB_NALOG_KUPAC, TEST_KUP_ID, tipB), 0.001, _
+                     "LNCD11 (b): kupac se ne dira"
+
+    ' (c) T13
+    tipC = LncTipAmb(scenario & "C", 15#)
+    otkF = LncOtkup("LNCD11F-" & scenario, 100#, 5#, tipC)
+    otkE = LncOtkup("LNCD11E-" & scenario, 200#, 10#, tipC)
+    otp3 = LncOtp("LNCD11Y-" & scenario, Pr3Izvor(otkE, ""), tipC)
+    LncStanicaIzdaje scenario & "C", tipC, 5#
+    stPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipC)
+    vozPre = modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipC)
+    ok3 = modDokumenta.DodajBlokULancu_TX(otp3, otkF, g3, por)
+    AssertTrue Not ok3 And InStr(1, g3, "AMB-INV-07", vbBinaryCompare) > 0 And _
+               InStr(1, g3, "stanica vise nema gajbe ovog bloka", vbBinaryCompare) > 0, _
+               "LNCD11 (c): stanica bez gajbi bloka -- ambalaza na kraju odbija i kaze zasto"
+    AssertTrue LncOtpPolje(otp3, COL_STORNIRANO) <> "Da" And modDokumenta.OtpremnicaZaOtkup(otkF) = "" And _
+               Len(LncOtpPolje(otp3, COL_TRACE_ZAMENJEN_SA_ID)) = 0, _
+               "LNCD11 (c): odbijen potez vraca sve (LNC-INV-01)"
+    AssertTrue Abs(stPre - modAmbalaza.AmbSaldoNaloga(AMB_NALOG_STANICA, TEST_ST_ID, tipC)) < 0.001 And _
+               Abs(vozPre - modAmbalaza.AmbSaldoNaloga(AMB_NALOG_VOZAC, TEST_VOZ_ID, tipC)) < 0.001, _
+               "LNCD11 (c): knjiga ambalaze je vracena"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T16 + T17 (deo): premestanje su DVA poteza (LNC-ODL-23).
+' (a) dve zbirne: Izvadi X iz A (zbirna ZA), pa Dodaj X u B (zbirna ZB). Izmedju
+'     koraka X je slobodan i nema tekucu predaju; na kraju je u B', obe zbirne imaju
+'     nove verzije sa novim brojevima, prijemnice prate svoje zbirne, a tekuca
+'     predaja bloka je B' sa brojem ZB' (LNC-INV-20).
+' (b) ista zbirna Z: Z -> Z' -> Z'', prijemnica na Z''.
+Private Sub Test_LNC_Blok_PremestiADoB()
+    Const SRC As String = "Test_LNC_Blok_PremestiADoB"
+    Dim scenario As String, g As String, por As String
+    Dim otkX As String, otkA As String, otkB As String, otpA As String, otpB As String
+    Dim zA As String, zB As String, pA As String, pB As String
+    Dim otpB2 As String, zA2 As String, zB2 As String, slobodan As Boolean
+    Dim otkY As String, otkC As String, otkD As String, otpC As String, otpD As String
+    Dim z0 As String, z1 As String, z2 As String, pZ As String
+    Dim ok1 As Boolean, ok2 As Boolean, ok3 As Boolean, ok4 As Boolean
+    Dim tOtp As String, tVoz As String, tPred As String, tZbr As String, tOtpSred As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCD16")
+
+    ' (a)
+    otkX = LncOtkup("LNCD16X-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkA = LncOtkup("LNCD16A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkB = LncOtkup("LNCD16B-" & scenario, 150#, 0#, TEST_TIP_AMB)
+    otpA = LncOtp("LNCD16A-" & scenario, Pr3Izvor(otkA, otkX), TEST_TIP_AMB)
+    otpB = LncOtp("LNCD16B-" & scenario, Pr3Izvor(otkB, ""), TEST_TIP_AMB)
+    zA = LncZbr("LNCD16A-" & scenario, Pr3Izvor(otpA, ""))
+    zB = LncZbr("LNCD16B-" & scenario, Pr3Izvor(otpB, ""))
+    pA = LncPrj("LNCD16A-" & scenario, zA, 300#, 0, TEST_TIP_AMB)
+    pB = LncPrj("LNCD16B-" & scenario, zB, 150#, 0, TEST_TIP_AMB)
+
+    ok1 = modDokumenta.IzvadiBlokULancu_TX(otpA, otkX, g, por)
+    slobodan = (modDokumenta.OtpremnicaZaOtkup(otkX) = "") And _
+               modDokumenta.NevezaniOtkupi().Exists(UCase$(otkX))
+    modStammdatenSync.TekucaPredajaOtkupa otkX, tOtpSred, tVoz, tPred, tZbr
+    ok2 = modDokumenta.DodajBlokULancu_TX(otpB, otkX, g, por)
+    otpB2 = LncOtpPolje(otpB, COL_TRACE_ZAMENJEN_SA_ID)
+    zA2 = LncZbrPolje(zA, COL_TRACE_ZAMENJEN_SA_ID)
+    zB2 = LncZbrPolje(zB, COL_TRACE_ZAMENJEN_SA_ID)
+    modStammdatenSync.TekucaPredajaOtkupa otkX, tOtp, tVoz, tPred, tZbr
+
+    AssertTrue ok1 And slobodan And Len(tOtpSred) = 0, _
+               "LNCD16 (a): izmedju dva poteza blok je slobodan i bez tekuce predaje"
+    AssertTrue ok2 And Len(otpB2) > 0 And modDokumenta.OtpremnicaZaOtkup(otkX) = otpB2, _
+               "LNCD16 (a): posle drugog poteza blok je u novoj verziji otpremnice B"
+    AssertTrue Len(zA2) > 0 And Len(zB2) > 0 And _
+               LncZbrPolje(zA2, COL_ZBR_BROJ) <> LncZbrPolje(zA, COL_ZBR_BROJ) And _
+               LncZbrPolje(zB2, COL_ZBR_BROJ) <> LncZbrPolje(zB, COL_ZBR_BROJ), _
+               "LNCD16 (a): obe zbirne imaju nove verzije sa novim brojevima"
+    AssertTrue Len(zA2) > 0 And Len(zB2) > 0 And _
+               LncPrjPolje(pA, COL_DETE_ZBIRNA_ROD) = zA2 And LncPrjPolje(pB, COL_DETE_ZBIRNA_ROD) = zB2, _
+               "LNCD16 (a): prijemnice prate svoje zbirne"
+    AssertTrue Len(otpB2) > 0 And tOtp = otpB2 And Len(zB2) > 0 And tZbr = LncZbrPolje(zB2, COL_ZBR_BROJ), _
+               "LNCD16 (T17): tekuca predaja bloka je B' sa brojem nove zbirne (LNC-INV-20)"
+
+    ' (b)
+    otkY = LncOtkup("LNCD16Y-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkC = LncOtkup("LNCD16C-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkD = LncOtkup("LNCD16D-" & scenario, 150#, 0#, TEST_TIP_AMB)
+    otpC = LncOtp("LNCD16C-" & scenario, Pr3Izvor(otkC, otkY), TEST_TIP_AMB)
+    otpD = LncOtp("LNCD16D-" & scenario, Pr3Izvor(otkD, ""), TEST_TIP_AMB)
+    z0 = LncZbr("LNCD16Z-" & scenario, Pr3Izvor(otpC, otpD))
+    pZ = LncPrj("LNCD16Z-" & scenario, z0, 450#, 0, TEST_TIP_AMB)
+    ok3 = modDokumenta.IzvadiBlokULancu_TX(otpC, otkY, g, por)
+    z1 = LncZbrPolje(z0, COL_TRACE_ZAMENJEN_SA_ID)
+    ok4 = modDokumenta.DodajBlokULancu_TX(otpD, otkY, g, por)
+    If Len(z1) > 0 Then z2 = LncZbrPolje(z1, COL_TRACE_ZAMENJEN_SA_ID)
+    AssertTrue ok3 And ok4 And Len(z1) > 0 And Len(z2) > 0 And z1 <> z2 And _
+               LncZbrPolje(z1, COL_STORNIRANO) = "Da" And LncZbrPolje(z2, COL_STORNIRANO) <> "Da", _
+               "LNCD16 (b): ista zbirna ide Z -> Z' -> Z''"
+    AssertTrue Len(z2) > 0 And LncPrjPolje(pZ, COL_DETE_ZBIRNA_ROD) = z2, _
+               "LNCD16 (b): prijemnica je na poslednjoj verziji zbirne"
+    AssertTrue Len(z2) > 0 And modDokumenta.IzvoriZbirne(z2).count = 2 And _
+               modDokumenta.OtpremnicaZaOtkup(otkY) = LncOtpPolje(otpD, COL_TRACE_ZAMENJEN_SA_ID), _
+               "LNCD16 (b): Z'' nosi obe nove verzije, blok je u D'"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' Stara otpremnica bez kulture u zaglavlju (SINTETICKI stari oblik, obrazac rucne
+' provere 07.11.2026). Plan meri dodati blok prema kulturi NOVE verzije, kao pisac
+' (OtpZaglavljeVerzije): blok druge kulture odbija citljiv razlog iz
+' OtpKulturaVerzije, ne "ocekivano ''"; blok iste kulture ulazi, a nova verzija
+' dobija kulturu.
+Private Sub Test_LNC_Blok_DodajStaraBezKulture()
+    Const SRC As String = "Test_LNC_Blok_DodajStaraBezKulture"
+    Const ODB As String = "Potez nije moguc:"
+    Dim scenario As String, g As String, por As String, h As Object
+    Dim otkA As String, otkB As String, otkK As String, otp As String, otpNova As String
+    Dim opisK As String, okK As Boolean, opis As String, ok As Boolean, menjana As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCDK")
+    otkB = LncOtkup("LNCDKB-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    Set h = OtkHeader(TEST_PREFIX & "-OTK-LNCDKK-" & scenario)
+    h("KulturaID") = TEST_KUL_BEZ_SORTE_ID
+    h("VrstaVoca") = TEST_VRSTA_BEZ_SORTE
+    h("SortaVoca") = ""
+    otkK = CreateOtkup_TX(h, OtkStavke(100#, 50#, 0#, 0#, 0#, 0#), g)
+    otkA = LncOtkup("LNCDKA-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCDK-" & scenario, Pr3Izvor(otkA, ""), TEST_TIP_AMB)
+    menjana = True
+    S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, ""
+
+    opisK = modDokumenta.LncPlanOpisZaBlok(otp, otkK, LNC_DODAJ)
+    okK = modDokumenta.DodajBlokULancu_TX(otp, otkK, g, por)
+    opis = modDokumenta.LncPlanOpisZaBlok(otp, otkB, LNC_DODAJ)
+    ok = modDokumenta.DodajBlokULancu_TX(otp, otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
+    menjana = False
+
+    AssertTrue Len(otkK) > 0 And Left$(opisK, Len(ODB)) = ODB And _
+               InStr(1, opisK, "razlicite kulture", vbBinaryCompare) > 0 And Not okK, _
+               "LNCDK: blok druge kulture u staru otpremnicu se odbija citljivo"
+    AssertTrue InStr(1, opis, ODB, vbBinaryCompare) = 0 And ok And Len(otpNova) > 0, _
+               "LNCDK: blok iste kulture ulazi u staru otpremnicu bez kulture"
+    AssertTrue Len(otpNova) > 0 And LncOtpPolje(otpNova, COL_OTP_KULTURA) = TEST_KULTURA_ID And _
+               modDokumenta.IzvoriOtpremnice(otpNova).count = 2, _
+               "LNCDK: nova verzija dobija kulturu listova i nosi oba lista"
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If menjana Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
+    On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
 
