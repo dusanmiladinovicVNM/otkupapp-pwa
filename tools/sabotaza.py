@@ -7618,7 +7618,7 @@ SABOTAZE = {
     # Plan ispravke meri samo preostale listove: F1 otvara formu, a snimanje pada.
     "lnc-stara-otp-ispravka-bez-lista": (
         "modDokumenta.bas",
-        "    If zaIspravku Then mereni.Add otkupID\n",
+        "    If meriIzlazeci Then mereni.Add otkupID\n",
         "    ' SABOTAZA: ispravka ne meri list koji se ispravlja\n",
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
