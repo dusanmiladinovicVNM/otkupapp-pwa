@@ -8123,7 +8123,7 @@ SABOTAZE = {
         "    razlog = IzaberiCilj(oid)\n",
         "    razlog = Poruka(\"OTKUI_ERR_OTP_IZDATA\")   ' SABOTAZA: radnja ne bira cilj\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
-        "LNCB18: radnja Izaberi nad izdatom je bira kao cilj, napusta nacrt i vodi na njene blokove",
+        "LNCB18: radnja Izaberi nad izdatom je bira kao cilj i napusta nacrt",
     ),
     # Izbor cilja ne napusta nacrt: dva konteksta, a nov list ide u nacrt.
     "lncb-ekran-dva-konteksta": (
@@ -8189,6 +8189,15 @@ SABOTAZE = {
         "            modOtkupUI.ShowToast Poruka(\"OTKUI_MSG_IZDATA_RADNJA\"), False: Scr_Event = True   ' SABOTAZA: klik na izdatu brise izabran red\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
         "LNCB18: klik na izdatu ne menja cilj ni listu i cuva izabran red (Ispravi i specifikacija)",
+    ),
+    # Radnja prebacuje listu na Blokovi: oznake i pretraga liste Otpremnice prelaze
+    # u listu blokova (RefreshFromData ih ne cisti).
+    "lncb-ekran-cilj-prebacuje-listu": (
+        "modScrDokumenti.bas",
+        "    IzaberiCiljRed = True\n",
+        "    mLista = \"BLOKOVI\": IzaberiCiljRed = True   ' SABOTAZA: radnja prebacuje listu\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: posle izbora cilja lista ostaje (oznake i pretragu cisti tek dugme liste)",
     ),
     # Radnja Izaberi prima i nacrt (dva konteksta nad istim dokumentom).
     "lncb-ekran-cilj-nacrt": (

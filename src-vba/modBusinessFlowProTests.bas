@@ -29721,7 +29721,7 @@ Private Function LncRadnjeProblem(ByVal kontekst As String, ByVal liste As Varia
 End Function
 
 ' T18 (LNC-ODL-33, -35, LNC-INV-19): ekran F1. Cilj se bira PRODUKCIONIM putem --
-' radnjom "Izaberi za Izvadi / Dodaj" nad redom liste Otpremnice (izmena operatera
+' radnjom "Izvadi / Dodaj" (cilj) nad redom liste Otpremnice (izmena operatera
 ' 10.11.2026); obican klik na izdatu ne bira nista i cuva izabran red, a nacrt se
 ' radnjom ne bira. Izbor napusta nacrt; Izvadi / Dodaj se nude samo uz izdat cilj, "vezi" / "ukloni" /
 ' "izdaj" tada ne; nov list uz izdat cilj ne ide u nacrt (meri se ruta, ne
@@ -29779,12 +29779,15 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     izabran = LncEkranIzaberiCilj(otp)
     nacrtNapusten = (modScrDokumenti.Scr_OtpID() = "")
     listaPosle = modScrDokumenti.Scr_Lista()
-    AssertTrue izabran And nacrtNapusten And listaPosle = "BLOKOVI", _
-               "LNCB18: radnja Izaberi nad izdatom je bira kao cilj, napusta nacrt i vodi na njene blokove"
+    AssertTrue izabran And nacrtNapusten, _
+               "LNCB18: radnja Izaberi nad izdatom je bira kao cilj i napusta nacrt"
+    AssertEquals "OTPREMNICE", listaPosle, _
+                 "LNCB18: posle izbora cilja lista ostaje (oznake i pretragu cisti tek dugme liste)"
     info = modScrDokumenti.Scr_OtpInfo()
     AssertTrue Left$(info, Len(LncOtpPolje(otp, COL_OTP_BROJ)) + 1) = LncOtpPolje(otp, COL_OTP_BROJ) & "|" And _
                InStr(1, info, Poruka("OTKUI_OTP_CILJ"), vbBinaryCompare) > 0, _
                "LNCB18: traka otpremnice imenuje izabran izdat cilj"
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
     redA = LncRedListe(otkA)
     AssertTrue redA > 0, "LNCB18: lista Blokovi pokazuje blokove izabranog cilja"
     ' Izvadi kroz ekran ide planom Izvadi: A je jedini blok, a zbirna ima prijemnicu.
@@ -29960,7 +29963,7 @@ Private Sub Test_LNC_Blok_GranicaRadnji()
     End If
     modScrDokumenti.Scr_ZbrOtkazi
 
-    AssertTrue izabran, "LNCB19: preduslov -- izdat cilj je izabran klikom na red"
+    AssertTrue izabran, "LNCB19: preduslov -- izdat cilj je izabran radnjom nad redom"
     AssertEquals "", m, "LNCB19: nijedna lista F1 i F2 ni u jednom kontekstu ne nudi vise od MAX_ACT radnji"
     SetTestMode prevTest
     modOtkupUI.ActiveMode = prevMode
