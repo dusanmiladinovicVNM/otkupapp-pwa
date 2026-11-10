@@ -8117,13 +8117,13 @@ SABOTAZE = {
         "LNCB6: tudja prijemnica sa istom labelom se ne seli",
     ),
     # --- deo (b): ekran F1, cilj poteza nad blokom (LNC-ODL-33) ------------------
-    # Klik na izdatu u listi Otpremnice ne bira cilj (stari toast "izdata").
+    # Radnja "Izaberi za Izvadi / Dodaj" ne bira cilj.
     "lncb-ekran-izdata-ne-bira": (
         "modScrDokumenti.bas",
-        "        If razlog = Poruka(\"OTKUI_ERR_OTP_IZDATA\") Then\n",
-        "        If False Then   ' SABOTAZA: izdata se ne bira kao cilj\n",
+        "    razlog = IzaberiCilj(oid)\n",
+        "    razlog = Poruka(\"OTKUI_ERR_OTP_IZDATA\")   ' SABOTAZA: radnja ne bira cilj\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
-        "LNCB18: klik na izdatu u listi Otpremnice je bira kao cilj i napusta nacrt",
+        "LNCB18: radnja Izaberi nad izdatom je bira kao cilj, napusta nacrt i vodi na njene blokove",
     ),
     # Izbor cilja ne napusta nacrt: dva konteksta, a nov list ide u nacrt.
     "lncb-ekran-dva-konteksta": (
@@ -8181,14 +8181,22 @@ SABOTAZE = {
         "Test_LNC_Blok_EkranPotvrdaIRuta",
         "LNCB18: Izvadi kroz ekran meri plan Izvadi (jedini izvor zbirne sa prijemnicom se odbija)",
     ),
-    # Izbor cilja vraca True: ljuska brise izabran red, pa "Ispravi" (B-022) i
+    # Klik na izdatu vraca True: ljuska brise izabran red, pa "Ispravi" (B-022) i
     # specifikacija nad jednim redom ostaju bez reda.
     "lncb-ekran-cilj-brise-red": (
         "modScrDokumenti.bas",
-        "            Scr_Event = bioNacrt\n",
-        "            Scr_Event = True   ' SABOTAZA: izbor cilja brise izabran red\n",
+        "            modOtkupUI.ShowToast Poruka(\"OTKUI_MSG_IZDATA_RADNJA\"), False\n",
+        "            modOtkupUI.ShowToast Poruka(\"OTKUI_MSG_IZDATA_RADNJA\"), False: Scr_Event = True   ' SABOTAZA: klik na izdatu brise izabran red\n",
         "Test_LNC_Blok_EkranPotvrdaIRuta",
-        "LNCB18: klik na izdatu cuva listu i izabran red (Ispravi i specifikacija rade nad njim)",
+        "LNCB18: klik na izdatu ne menja cilj ni listu i cuva izabran red (Ispravi i specifikacija)",
+    ),
+    # Radnja Izaberi prima i nacrt (dva konteksta nad istim dokumentom).
+    "lncb-ekran-cilj-nacrt": (
+        "modScrDokumenti.bas",
+        "    If Not modDokumenta.IzdatoStatusJeIzdato(st) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt kao cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: radnja Izaberi odbija nacrt (cilj i nacrt ostaju kakvi su bili)",
     ),
     # Lista Nevezani nudi "Dodaj" i bez ikakvog konteksta (LNC-INV-19).
     "lncb-ekran-dodaj-bez-konteksta": (

@@ -233,7 +233,8 @@ Public Function Scr_Radnje() As String
             Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
                          "spec:OTKUI_BTN_RED_SPEC:152:ghost:2|" & _
                          "specdat:OTKUI_BTN_RED_SPECDAT:96:ghost:0|" & _
-                         "ispravi:OTKUI_BTN_RED_ISPRAVI:88:danger:1"
+                         "ispravi:OTKUI_BTN_RED_ISPRAVI:88:danger:1|" & _
+                         "cilj:OTKUI_BTN_RED_CILJ:150:soft:1"
         Case "NEVEZANI"
             ' Blok bez otpremnice se vezuje za AKTIVNI nacrt -- isti pisac kao
             ' posle unosa; bez aktivne otpremnice radnje nema.
@@ -399,7 +400,11 @@ Private Function IzaberiCilj(ByVal otpID As String) As String
     End If
     st = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_TRACE_IZDATO_STATUS)))
     If Not modDokumenta.IzdatoStatusJeIzdato(st) Then
-        IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        If UCase$(st) = UCase$(IZDATO_DRAFT) Then
+            IzaberiCilj = Poruka("OTKUI_ERR_CILJ_NACRT")
+        Else
+            IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        End If
         Exit Function
     End If
     If Len(mOtpID) > 0 Then
@@ -1285,20 +1290,12 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         oidReda = CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), UBound(OtpGridCols()) + 1))
         razlog = AktivirajOtpremnicu(oidReda)
         If razlog = Poruka("OTKUI_ERR_OTP_IZDATA") Then
-            ' LNC-ODL-33: izdata se bira kao CILJ poteza nad blokom, ne kao nacrt.
-            ' Lista i izbor reda OSTAJU (Scr_Event = False): ljuska tada cuva
-            ' izabran red, a nad njim rade "Ispravi" (B-022) i specifikacija.
-            ' Blokovi cilja su u listi Blokovi otpremnice. Napusten nacrt je
-            ' izuzetak -- traka i forma moraju da se osveze (True).
-            Dim bioNacrt As Boolean
-            bioNacrt = (Len(mOtpID) > 0)
-            razlog = IzaberiCilj(oidReda)
-            If Len(razlog) > 0 Then
-                modOtkupUI.ShowToast razlog, True
-                Exit Function
-            End If
-            modOtkupUI.ShowToast Poruka("OTKUI_MSG_CILJ") & " " & mCiljBroj, False
-            Scr_Event = bioNacrt
+            ' Klik na izdatu ne menja nista (Scr_Event = False), pa ljuska cuva
+            ' izabran red -- nad njim rade "Ispravi" (B-022) i specifikacija. CILJ
+            ' poteza nad blokom se bira RADNJOM "cilj" (LNC-ODL-33, izmena operatera
+            ' 10.11.2026): ljuska klikom na red javlja jednu vrednost za "osvezi" i
+            ' "zaboravi red", pa izbor klikom nije mogao da ima oba.
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZDATA_RADNJA"), False
             Exit Function
         End If
         If Len(razlog) > 0 Then
@@ -1512,6 +1509,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "ispravi"
             RowAction = IspraviIzdatu(red)
 
+        Case "cilj"
+            RowAction = IzaberiCiljRed(red)
+
         Case "izvadi"
             RowAction = PotezNaCilju(LNC_IZVADI, otkupID)
 
@@ -1524,6 +1524,28 @@ Private Function RowAction(ByVal tag As String) As Boolean
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Radnja "cilj" nad redom liste Otpremnice (LNC-ODL-33, izmena operatera
+' 10.11.2026): izdata otpremnica postaje CILJ poteza nad blokom. Identitet je
+' OtpremnicaID iz nevidljive kolone reda. Uspeh vraca True -- ljuska tada
+' osvezava listu, mrezu i traku (RefreshFromData), a sledeci potez su blokovi
+' cilja.
+Private Function IzaberiCiljRed(ByVal red As Long) As Boolean
+    Dim oid As String, razlog As String
+    If red <= 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    oid = Trim$(CStr(modOtkupUI.GridCell(red, UBound(OtpGridCols()) + 1)))
+    razlog = IzaberiCilj(oid)
+    If Len(razlog) > 0 Then
+        modOtkupUI.ShowToast razlog, True
+        Exit Function
+    End If
+    mLista = "BLOKOVI"
+    IzaberiCiljRed = True
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_CILJ") & " " & mCiljBroj, False
 End Function
 
 ' Potez nad blokom izabranog CILJA (LNC-ODL-22, -33, -35). Potvrda dolazi iz
