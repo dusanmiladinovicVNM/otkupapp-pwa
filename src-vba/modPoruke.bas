@@ -1514,7 +1514,7 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_RED_IZVADI", "Izvadi iz otpremnice"
     UpsertRow lo, existing, "OTKUI_BTN_RED_DODAJ", "Dodaj u otpremnicu"
     UpsertRow lo, existing, "OTKUI_MSG_CILJ", "Izabrana izdata otpremnica " & ChrW(8212) & _
-              " blok se u nju dodaje ili iz nje vadi u lancu:"
+              " blok se vadi u listi Blokovi otpremnice, a dodaje iz liste Bez otpremnice:"
     UpsertRow lo, existing, "OTKUI_MSG_IZDATA_U_F1", "Otpremnica je izdata " & ChrW(8212) & _
               " blok se u nju dodaje ili iz nje vadi u F1: lista Otpremnice, klik na nju."
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_CILJ", "Nema izabrane izdate otpremnice " & ChrW(8212) & _

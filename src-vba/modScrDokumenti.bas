@@ -1278,16 +1278,20 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         oidReda = CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), UBound(OtpGridCols()) + 1))
         razlog = AktivirajOtpremnicu(oidReda)
         If razlog = Poruka("OTKUI_ERR_OTP_IZDATA") Then
-            ' LNC-ODL-33: izdata se bira kao CILJ poteza nad blokom, ne kao nacrt;
-            ' sledeci potez su njeni blokovi.
+            ' LNC-ODL-33: izdata se bira kao CILJ poteza nad blokom, ne kao nacrt.
+            ' Lista i izbor reda OSTAJU (Scr_Event = False): ljuska tada cuva
+            ' izabran red, a nad njim rade "Ispravi" (B-022) i specifikacija.
+            ' Blokovi cilja su u listi Blokovi otpremnice. Napusten nacrt je
+            ' izuzetak -- traka i forma moraju da se osveze (True).
+            Dim bioNacrt As Boolean
+            bioNacrt = (Len(mOtpID) > 0)
             razlog = IzaberiCilj(oidReda)
             If Len(razlog) > 0 Then
                 modOtkupUI.ShowToast razlog, True
                 Exit Function
             End If
-            mLista = "BLOKOVI"
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_CILJ") & " " & mCiljBroj, False
-            Scr_Event = True
+            Scr_Event = bioNacrt
             Exit Function
         End If
         If Len(razlog) > 0 Then

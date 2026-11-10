@@ -4374,6 +4374,23 @@ Public Function LncPlanOpisZaBlok(ByVal otpremnicaID As String, ByVal otkupID As
     If Len(m) > 0 Then m = m & vbCrLf & vbCrLf
 
     imaOtpNova = (p("otpPreostali").count > 0)
+    ' Recenice koje traze RADNJU operatera idu odmah posle upozorenja: potvrda je
+    ' MsgBox (~1024 znaka), a LncDijalogTekst skracuje KRAJ opisa.
+    Dim hitno As String
+    If Len(CStr(p("zbrID"))) = 0 Then
+        hitno = "Ako vozac na telefonu sastavlja zbirnu sa ovom otpremnicom, ta zbirna " & _
+                "se nece uvesti -- sastavlja je ponovo posle sledeceg sync-a."
+    ElseIf CBool(p("zbrIzdata")) And (p("zbrSestre").count > 0 Or imaOtpNova) Then
+        hitno = "Prijemnica koja jos nije uneta ide na NOVI broj zbirne (dobija ga " & _
+                "ovim potezom), ne na broj sa papira."
+    End If
+    If vrsta = LNC_IZVADI And modMasterSync.AutoOtpremnicaDostupna() Then
+        If Len(hitno) > 0 Then hitno = hitno & vbCrLf
+        hitno = hitno & "MALINA: sledeci sync od slobodnog bloka sam pravi novu otpremnicu " & _
+                "-- dodaj ga u ciljnu otpremnicu odmah, pre sledeceg sync-a."
+    End If
+    If Len(hitno) > 0 Then m = m & hitno & vbCrLf
+
     If vrsta = LNC_DODAJ Then
         m = m & "Blok " & p("otkupBroj") & " ulazi u otpremnicu " & p("otpBroj") & _
                 " (isplate ostaju na listu)."
@@ -4397,18 +4414,6 @@ Public Function LncPlanOpisZaBlok(ByVal otpremnicaID As String, ByVal otkupID As
                 "poslednji blok)."
     End If
     m = m & LncOpisZbirne(p, imaOtpNova)
-
-    If Len(CStr(p("zbrID"))) = 0 Then
-        m = m & vbCrLf & "Ako vozac na telefonu sastavlja zbirnu sa ovom otpremnicom, ta zbirna " & _
-                "se nece uvesti -- sastavlja je ponovo posle sledeceg sync-a."
-    ElseIf CBool(p("zbrIzdata")) And (p("zbrSestre").count > 0 Or imaOtpNova) Then
-        m = m & vbCrLf & "Prijemnica koja jos nije uneta ide na NOVI broj zbirne (dobija ga " & _
-                "ovim potezom), ne na broj sa papira."
-    End If
-    If vrsta = LNC_IZVADI And modMasterSync.AutoOtpremnicaDostupna() Then
-        m = m & vbCrLf & "MALINA: sledeci sync od slobodnog bloka sam pravi novu otpremnicu " & _
-                "-- dodaj ga u ciljnu otpremnicu odmah, pre sledeceg sync-a."
-    End If
 
     LncPlanOpisZaBlok = m
     Exit Function

@@ -28477,6 +28477,10 @@ Private Sub Test_LNC_Blok_IzvadiIzdataBezZbirne()
     AssertTrue InStr(1, opisMal, "MALINA:", vbBinaryCompare) > 0 And _
                InStr(1, opis, "MALINA:", vbBinaryCompare) = 0, _
                "LNCB2: u malina rezimu potvrda imenuje sledeci sync, van njega ne"
+    AssertTrue InStr(1, opisMal, "MALINA:", vbBinaryCompare) > 0 And _
+               InStr(1, opisMal, "MALINA:", vbBinaryCompare) < InStr(1, opisMal, " izlazi iz otpremnice ", vbBinaryCompare) And _
+               InStr(1, opis, "vozac na telefonu", vbBinaryCompare) < InStr(1, opis, " izlazi iz otpremnice ", vbBinaryCompare), _
+               "LNCB2: recenice koje traze radnju idu pre opisa poteza (dijalog skracuje kraj)"
     AssertTrue ok, "LNCB2: Izvadi je proknjizen (" & g & ")"
     AssertEquals "", modDokumenta.OtpremnicaZaOtkup(otkB), _
                  "LNCB2: blok vise nije ni u jednoj aktivnoj otpremnici"
@@ -29733,6 +29737,8 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     Dim redB As Long, redL As Long, redA As Long, txt As String, txtOdb As String, pre As String
     Dim promena As Boolean, promenaOdb As Boolean, posleNe As String, posleOdb As String
     Dim promenaIzv As Boolean, txtIzv As String, posleIzv As String
+    Dim radNevPrazno As String, radBlokPrazno As String, redOtp As Long, drugiKlik As Boolean
+    Dim redC As Long, promenaC As Boolean, txtC As String, posleC As String
     Dim seamPosle As String, ciljPosle As String, naslov As String, okD As Boolean
     Dim izabran2 As Boolean, okI As Boolean, ciljBez As String, izabran3 As Boolean, posleReseta As String
     Dim errNum As Long, errDesc As String
@@ -29757,6 +29763,11 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     modOtkupUI.ActiveMode = "F1"
     modScrDokumenti.Scr_OtpTestReset
     modScrDokumenti.Scr_PotvrdaLancaTestReset
+    ' Bez konteksta (ni nacrt ni cilj) nema ni Izvadi ni Dodaj.
+    modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
+    radNevPrazno = modScrDokumenti.Scr_Radnje()
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
+    radBlokPrazno = modScrDokumenti.Scr_Radnje()
     AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draft), "LNCB18: preduslov -- nacrt je aktivan"
     modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
     radNev0 = modScrDokumenti.Scr_Radnje()
@@ -29764,8 +29775,16 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     izabran = LncEkranIzaberiCilj(otp)
     nacrtNapusten = (modScrDokumenti.Scr_OtpID() = "")
     listaPosle = modScrDokumenti.Scr_Lista()
-    AssertTrue izabran And nacrtNapusten And listaPosle = "BLOKOVI", _
+    AssertTrue izabran And nacrtNapusten And listaPosle = "OTPREMNICE", _
                "LNCB18: klik na izdatu u listi Otpremnice je bira kao cilj i napusta nacrt"
+    ' Bez nacrta klik ne menja listu i vraca False: ljuska cuva izabran red, nad
+    ' kojim rade "Ispravi" (B-022) i specifikacija.
+    redOtp = LncRedListe(otp)
+    drugiKlik = modScrDokumenti.Scr_Event("row:" & CStr(redOtp), "Click")
+    AssertTrue redOtp > 0 And Not drugiKlik And modScrDokumenti.Scr_Lista() = "OTPREMNICE" And _
+               modScrDokumenti.Scr_CiljID() = otp, _
+               "LNCB18: klik na izdatu cuva listu i izabran red (Ispravi i specifikacija rade nad njim)"
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
     redA = LncRedListe(otkA)
     AssertTrue redA > 0, "LNCB18: lista Blokovi pokazuje blokove izabranog cilja"
     ' Izvadi kroz ekran ide planom Izvadi: A je jedini blok, a zbirna ima prijemnicu.
@@ -29781,6 +29800,9 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     radBlok = modScrDokumenti.Scr_Radnje()
     modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
     radNev = modScrDokumenti.Scr_Radnje()
+    AssertTrue InStr(1, radNevPrazno, "dodaj:", vbBinaryCompare) = 0 And _
+               InStr(1, radBlokPrazno, "izvadi:", vbBinaryCompare) = 0, _
+               "LNCB18: bez konteksta (ni nacrt ni cilj) nema ni Izvadi ni Dodaj"
     AssertTrue InStr(1, radNev0, "dodaj:", vbBinaryCompare) = 0 And InStr(1, radNev0, "vezi:", vbBinaryCompare) > 0 And _
                InStr(1, radBlok, "izvadi:", vbBinaryCompare) > 0 And InStr(1, radBlok, "ukloni:", vbBinaryCompare) = 0 And _
                InStr(1, radBlok, "izdaj:", vbBinaryCompare) = 0 And InStr(1, radNev, "dodaj:", vbBinaryCompare) > 0 And _
@@ -29827,8 +29849,22 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
                naslov = LncOtpPolje(otpNova, COL_OTP_BROJ), _
                "LNCB18: posle uspeha cilj prelazi na novu verziju otpremnice"
 
-    ' Bez naslednika se brise.
+    ' Izvadi kroz ekran: potvrda kroz seam, "Ne".
     izabran2 = LncEkranIzaberiCilj(otp2)
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
+    redC = LncRedListe(otkC)
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    pre = LncBrojeviLanca()
+    promenaC = modScrDokumenti.Scr_Event("act:izvadi:" & CStr(redC), "Click")
+    txtC = modScrDokumenti.Scr_PotvrdaLancaTest()
+    posleC = LncBrojeviLanca()
+    AssertTrue redC > 0 And InStr(1, txtC, Poruka("OTKUI_ASK_IZVADI_BLOK"), vbBinaryCompare) = 1 And _
+               InStr(1, txtC, " izlazi iz otpremnice ", vbBinaryCompare) > 0 And _
+               Not promenaC And pre = posleC, _
+               "LNCB18: potvrda Izvadi ide kroz seam sa svojim uvodom, a Ne ne upisuje"
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+
+    ' Bez naslednika se brise.
     okI = modDokumenta.IzvadiBlokULancu_TX(otp2, otkC, g, por)
     ciljBez = modScrDokumenti.Scr_CiljID()
     AssertTrue izabran2 And okI And Len(ciljBez) = 0, _
