@@ -323,7 +323,17 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > telo `LncPotezNadBlokom`), testovi `Test_LNC_Blok_Dodaj*` (T1, T5, T9, T11 + T13, stari oblik bez
 > kulture), `_IzvadiDvePrijemnice` (T6) i `_PremestiADoB` (T16 + deo T17), sabotaže `lncb-dodaj-*`,
 > `lncb-trag-dodaj-bez-bloka`, `lncb-zbirna-bez-otpremnice`, `lncb-prijemnica-po-labeli`.
-> a2–a7 NEVERIFIKOVANO u Excelu.**
+> **Deo (b), ekran F1 (10.11.2026):** `modScrDokumenti` — cilj `mCiljID` odvojen od `mOtpID`
+> (`IzaberiCilj`, `CiljAktivan` prati `ZamenjenSaID`, bez naslednika se briše), klik na izdatu u
+> listi Otpremnice je bira, radnje „Izvadi" (Blokovi) i „Dodaj" (Nevezani) samo uz cilj, potvrda
+> `PotvrdiPotezNadBlokom` kroz postojeći seam `mPotvrdaLancaTest`, F2 nad izdatom upućuje na F1;
+> ključevi `OTKUI_BTN_RED_IZVADI/DODAJ`, `OTKUI_MSG_CILJ`, `OTKUI_MSG_IZDATA_U_F1`,
+> `OTKUI_ERR_NEMA_CILJ`, `OTKUI_ERR_POTEZ_BLOK`, `OTKUI_ASK_IZVADI/DODAJ_BLOK`,
+> `OTKUI_ASK_POTEZ_BLOK_2`. Testovi `Test_LNC_Blok_EkranPotvrdaIRuta` (T18) i `_GranicaRadnji` (T19),
+> sabotaže `lncb-ekran-*`. **T20** je izmeren nad opisom plana u `_IzvadiIzdataBezZbirne` — isti
+> opis je telo dijaloga. Uspeh kroz ekran se ne vozi: seam po pravilu odgovara „Ne"
+> (`.claude/rules/testovi.md` §4), pa „cilj = otpremnica'" meri praćenje naslednika posle poteza.
+> a2–a7 i deo (b) NEVERIFIKOVANO u Excelu.**
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
 > ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
 > list koji ulazi ili se ispravlja. List **starog oblika** koji je već u otpremnici (bez stavki,

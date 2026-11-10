@@ -360,6 +360,8 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_Blok_DodajAmbalaza
     Test_LNC_Blok_PremestiADoB
     Test_LNC_Blok_DodajStaraBezKulture
+    Test_LNC_Blok_EkranPotvrdaIRuta
+    Test_LNC_Blok_GranicaRadnji
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
     Test_LNC_KI089_PotvrdaIspravkeULancu
@@ -29653,6 +29655,272 @@ EH:
     errDesc = Err.description
     On Error Resume Next
     If menjana Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' ============================================================
+' LNC BLOK -- EKRAN F1 (STORNO_U_LANCU.md S10, deo b; LNC-ODL-33, -35, LNC-INV-19)
+' ============================================================
+' Red tekuce liste ciji je identitet (nevidljiva kolona) dati ID; 0 = nema. Mreza
+' se puni kao u ljusci (GridTestLoad radi samo u test rezimu).
+Private Function LncRedListe(ByVal id As String) As Long
+    Dim identKol As Long, n As Long, i As Long
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    identKol = modOtkupUI.GridIdentKolonaTest()
+    n = modOtkupUI.GridBrojRedova()
+    If identKol = 0 Then Exit Function
+    For i = 1 To n
+        If StrComp(Trim$(CStr(nz(modOtkupUI.GridCell(i, identKol), ""))), id, vbTextCompare) = 0 Then
+            LncRedListe = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Izbor cilja PRODUKCIONIM putem: lista Otpremnice, red po identitetu, klik na
+' red (Scr_Event "row:n") -- ne Scr_OtpTestSet.
+Private Function LncEkranIzaberiCilj(ByVal otpID As String) As Boolean
+    Dim red As Long
+    modScrDokumenti.Scr_Event "lsOTPREMNICE", "Click"
+    red = LncRedListe(otpID)
+    If red = 0 Then Exit Function
+    modScrDokumenti.Scr_Event "row:" & CStr(red), "Click"
+    LncEkranIzaberiCilj = (modScrDokumenti.Scr_CiljID() = otpID)
+End Function
+
+' Radnje svake liste iz `liste` u tekucem rezimu: broj <= MAX_ACT i svaki natpis
+' je u katalogu poruka (Poruka nikad ne vraca prazno -- nepoznat kljuc je
+' "[KLJUC]"). "" = sve u redu, inace opis svakog prekrsaja.
+Private Function LncRadnjeProblem(ByVal kontekst As String, ByVal liste As Variant) As String
+    Dim i As Long, k As Long, r As String, d() As String, kljuc As String, m As String
+    For i = LBound(liste) To UBound(liste)
+        modScrDokumenti.Scr_Event "ls" & CStr(liste(i)), "Click"
+        r = modScrDokumenti.Scr_Radnje()
+        If Len(r) > 0 Then
+            d = Split(r, "|")
+            If UBound(d) + 1 > modOtkupUI.MAX_ACT Then
+                m = m & " " & kontekst & "/" & CStr(liste(i)) & ": " & CStr(UBound(d) + 1) & " radnji;"
+            End If
+            For k = 0 To UBound(d)
+                kljuc = Split(d(k), ":")(1)
+                If Poruka(kljuc) = "[" & kljuc & "]" Then
+                    m = m & " " & kontekst & "/" & CStr(liste(i)) & ": nema natpisa " & kljuc & ";"
+                End If
+            Next k
+        End If
+    Next i
+    LncRadnjeProblem = m
+End Function
+
+' T18 (LNC-ODL-33, -35, LNC-INV-19): ekran F1. Cilj se bira PRODUKCIONIM putem i
+' napusta nacrt; Izvadi / Dodaj se nude samo uz izdat cilj, "vezi" / "ukloni" /
+' "izdaj" tada ne; nov list uz izdat cilj ne ide u nacrt (meri se ruta, ne
+' clanstvo); potvrda ide kroz postojeci seam, sa PAZNJA uz prijemnicu i brojem
+' bloka iz reda izabranog po identitetu; "Ne" ne upisuje; odbijen plan se kaze bez
+' pitanja; cilj prati naslednika, a bez naslednika se brise; oba test-reseta
+' gase svoje. Lanac grade kanonski pisci (normal production state).
+Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
+    Const SRC As String = "Test_LNC_Blok_EkranPotvrdaIRuta"
+    Const ODB As String = "Potez nije moguc:"
+    Dim scenario As String, g As String, por As String, prevMode As String, prevTest As Boolean
+    Dim otkA As String, otkB As String, otkC As String, otkL As String
+    Dim otp As String, otp2 As String, zbr As String, prj As String, draft As String, otpNova As String
+    Dim izabran As Boolean, nacrtNapusten As Boolean, listaPosle As String
+    Dim radNev0 As String, radBlok As String, radNev As String, ruta As String
+    Dim redB As Long, redL As Long, redA As Long, txt As String, txtOdb As String, pre As String
+    Dim promena As Boolean, promenaOdb As Boolean, posleNe As String, posleOdb As String
+    Dim promenaIzv As Boolean, txtIzv As String, posleIzv As String
+    Dim seamPosle As String, ciljPosle As String, naslov As String, okD As Boolean
+    Dim izabran2 As Boolean, okI As Boolean, ciljBez As String, izabran3 As Boolean, posleReseta As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCB18")
+    prevMode = modOtkupUI.ActiveMode
+    prevTest = IsTestMode()
+    SetTestMode True
+
+    otkB = LncOtkup("LNCB18B-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkA = LncOtkup("LNCB18A-" & scenario, 200#, 0#, TEST_TIP_AMB)
+    otkC = LncOtkup("LNCB18C-" & scenario, 50#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCB18-" & scenario, Pr3Izvor(otkA, ""), TEST_TIP_AMB)
+    otp2 = LncOtp("LNCB18C-" & scenario, Pr3Izvor(otkC, ""), TEST_TIP_AMB)
+    zbr = LncZbr("LNCB18-" & scenario, Pr3Izvor(otp, ""))
+    prj = LncPrj("LNCB18-" & scenario, zbr, 200#, 0, TEST_TIP_AMB)
+    otkL = LncOtkup("LNCB18L-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    draft = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-LNCB18D-" & scenario), _
+                                     OtpOcek(100#, 0#, 0#, 0#), g)
+
+    modOtkupUI.ActiveMode = "F1"
+    modScrDokumenti.Scr_OtpTestReset
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    AssertEquals "", modScrDokumenti.AktivirajOtpremnicu(draft), "LNCB18: preduslov -- nacrt je aktivan"
+    modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
+    radNev0 = modScrDokumenti.Scr_Radnje()
+
+    izabran = LncEkranIzaberiCilj(otp)
+    nacrtNapusten = (modScrDokumenti.Scr_OtpID() = "")
+    listaPosle = modScrDokumenti.Scr_Lista()
+    AssertTrue izabran And nacrtNapusten And listaPosle = "BLOKOVI", _
+               "LNCB18: klik na izdatu u listi Otpremnice je bira kao cilj i napusta nacrt"
+    redA = LncRedListe(otkA)
+    AssertTrue redA > 0, "LNCB18: lista Blokovi pokazuje blokove izabranog cilja"
+    ' Izvadi kroz ekran ide planom Izvadi: A je jedini blok, a zbirna ima prijemnicu.
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    pre = LncBrojeviLanca()
+    promenaIzv = modScrDokumenti.Scr_Event("act:izvadi:" & CStr(redA), "Click")
+    txtIzv = modScrDokumenti.Scr_PotvrdaLancaTest()
+    posleIzv = LncBrojeviLanca()
+    AssertTrue redA > 0 And Left$(txtIzv, Len(ODB)) = ODB And _
+               InStr(1, txtIzv, "jedini izvor zbirne", vbBinaryCompare) > 0 And _
+               Not promenaIzv And pre = posleIzv, _
+               "LNCB18: Izvadi kroz ekran meri plan Izvadi (jedini izvor zbirne sa prijemnicom se odbija)"
+    radBlok = modScrDokumenti.Scr_Radnje()
+    modScrDokumenti.Scr_Event "lsNEVEZANI", "Click"
+    radNev = modScrDokumenti.Scr_Radnje()
+    AssertTrue InStr(1, radNev0, "dodaj:", vbBinaryCompare) = 0 And InStr(1, radNev0, "vezi:", vbBinaryCompare) > 0 And _
+               InStr(1, radBlok, "izvadi:", vbBinaryCompare) > 0 And InStr(1, radBlok, "ukloni:", vbBinaryCompare) = 0 And _
+               InStr(1, radBlok, "izdaj:", vbBinaryCompare) = 0 And InStr(1, radNev, "dodaj:", vbBinaryCompare) > 0 And _
+               InStr(1, radNev, "vezi:", vbBinaryCompare) = 0, _
+               "LNCB18: Izvadi i Dodaj se nude samo uz izdat cilj, vezi / ukloni / izdaj tada ne"
+    ruta = modScrDokumenti.RutaPosleUpisa(otkL, False, False)
+    AssertTrue ruta <> modScrDokumenti.RUTA_NACRT, _
+               "LNCB18: nov list uz izdat cilj ne ide u nacrt (ruta posle upisa)"
+
+    ' Dodaj kroz ekran: potvrda kroz seam, "Ne".
+    redB = LncRedListe(otkB)
+    pre = LncBrojeviLanca()
+    promena = modScrDokumenti.Scr_Event("act:dodaj:" & CStr(redB), "Click")
+    txt = modScrDokumenti.Scr_PotvrdaLancaTest()
+    posleNe = LncBrojeviLanca()
+    AssertTrue redB > 0 And InStr(1, txt, Poruka("OTKUI_ASK_DODAJ_BLOK"), vbBinaryCompare) = 1 And _
+               InStr(1, txt, "PAZNJA:", vbBinaryCompare) > 0 And _
+               InStr(1, txt, "Blok " & OtkPolje(otkB, COL_OTK_BR_DOK) & " ulazi", vbBinaryCompare) > 0, _
+               "LNCB18: potvrda Dodaj ide kroz seam, sa PAZNJA uz prijemnicu i blokom izabranim po identitetu"
+    AssertTrue Not promena And pre = posleNe And modDokumenta.OtpremnicaZaOtkup(otkB) = "", _
+               "LNCB18: Ne ne upisuje"
+
+    ' Odbijen plan: blok kasniji od otpremnice -- kaze se bez pitanja.
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    redL = LncRedListe(otkL)
+    pre = LncBrojeviLanca()
+    promenaOdb = modScrDokumenti.Scr_Event("act:dodaj:" & CStr(redL), "Click")
+    txtOdb = modScrDokumenti.Scr_PotvrdaLancaTest()
+    posleOdb = LncBrojeviLanca()
+    AssertTrue redL > 0 And Left$(txtOdb, Len(ODB)) = ODB And InStr(1, txtOdb, "LNC-ODL-30", vbBinaryCompare) > 0 And _
+               Not promenaOdb And pre = posleOdb, _
+               "LNCB18: odbijen plan se kaze bez pitanja i bez upisa"
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    seamPosle = modScrDokumenti.Scr_PotvrdaLancaTest()
+    AssertEquals "", seamPosle, "LNCB18: Scr_PotvrdaLancaTestReset gasi seam potvrde"
+
+    ' Cilj prati naslednika.
+    okD = modDokumenta.DodajBlokULancu_TX(otp, otkB, g, por)
+    otpNova = LncOtpPolje(otp, COL_TRACE_ZAMENJEN_SA_ID)
+    ciljPosle = modScrDokumenti.Scr_CiljID()
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
+    naslov = modScrDokumenti.Scr_NaslovDopuna()
+    AssertTrue okD And Len(otpNova) > 0 And ciljPosle = otpNova And _
+               naslov = LncOtpPolje(otpNova, COL_OTP_BROJ), _
+               "LNCB18: posle uspeha cilj prelazi na novu verziju otpremnice"
+
+    ' Bez naslednika se brise.
+    izabran2 = LncEkranIzaberiCilj(otp2)
+    okI = modDokumenta.IzvadiBlokULancu_TX(otp2, otkC, g, por)
+    ciljBez = modScrDokumenti.Scr_CiljID()
+    AssertTrue izabran2 And okI And Len(ciljBez) = 0, _
+               "LNCB18: Izvadi poslednjeg bloka brise cilj (bez naslednika)"
+
+    izabran3 = LncEkranIzaberiCilj(otpNova)
+    modScrDokumenti.Scr_OtpTestReset
+    posleReseta = modScrDokumenti.Scr_CiljID()
+    AssertTrue izabran3 And Len(posleReseta) = 0, "LNCB18: Scr_OtpTestReset brise cilj"
+
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modScrDokumenti.Scr_OtpTestReset
+    modScrDokumenti.Scr_PotvrdaLancaTestReset
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T19 (LNC-INV-19): nijedna lista F1 i F2 ni u jednom kontekstu (bez konteksta,
+' uz nacrt otpremnice, uz izdat cilj, uz nacrt zbirne) ne nudi vise od MAX_ACT
+' radnji, a svaki natpis radnje je u katalogu poruka. Visak radnji ljuska tiho ne
+' crta (modOtkupUI, BazenStaje).
+Private Sub Test_LNC_Blok_GranicaRadnji()
+    Const SRC As String = "Test_LNC_Blok_GranicaRadnji"
+    Dim scenario As String, g As String, prevMode As String, prevTest As Boolean
+    Dim otk As String, otp As String, draft As String, zbrN As String, m As String
+    Dim izabran As Boolean
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCB19")
+    ' Novi natpisi moraju biti u katalogu i pre rucnog EnsurePoruke (idempotentno,
+    ' bez MsgBox-a -- isti obrazac kao ostali testovi kataloga).
+    modSetup.EnsurePoruke
+    prevMode = modOtkupUI.ActiveMode
+    prevTest = IsTestMode()
+    SetTestMode True
+
+    otk = LncOtkup("LNCB19-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCB19-" & scenario, Pr3Izvor(otk, ""), TEST_TIP_AMB)
+    draft = CreateOtpremnicaDraft_TX(OtpHeader(TEST_PREFIX & "-OTP-LNCB19D-" & scenario), _
+                                     OtpOcek(100#, 0#, 0#, 0#), g)
+    zbrN = CreateZbirnaDraft_TX(Pr3Header(TEST_PREFIX & "-ZBR-LNCB19-" & scenario), _
+                                ZbrOcek(KLASA_I, 100#, 0#), g)
+
+    modOtkupUI.ActiveMode = "F1"
+    modScrDokumenti.Scr_OtpTestReset
+    m = LncRadnjeProblem("F1 bez konteksta", Array("SVI", "OTPREMNICE", "BLOKOVI", "NEVEZANI", "KOOPERANTI"))
+    If Len(draft) > 0 Then
+        If Len(modScrDokumenti.AktivirajOtpremnicu(draft)) = 0 Then
+            m = m & LncRadnjeProblem("F1 uz nacrt", Array("SVI", "OTPREMNICE", "BLOKOVI", "NEVEZANI", "KOOPERANTI"))
+        End If
+    End If
+    izabran = LncEkranIzaberiCilj(otp)
+    If izabran Then
+        m = m & LncRadnjeProblem("F1 uz cilj", Array("SVI", "OTPREMNICE", "BLOKOVI", "NEVEZANI", "KOOPERANTI"))
+    End If
+    modScrDokumenti.Scr_OtpTestReset
+
+    modOtkupUI.ActiveMode = "F2"
+    modScrDokumenti.Scr_ZbrOtkazi
+    m = m & LncRadnjeProblem("F2 bez konteksta", Array("SVI", "ZBIRNE", "IZVORI", "NEVEZANE"))
+    If Len(zbrN) > 0 Then
+        If Len(modScrDokumenti.AktivirajZbirnu(zbrN)) = 0 Then
+            m = m & LncRadnjeProblem("F2 uz nacrt zbirne", Array("SVI", "ZBIRNE", "IZVORI", "NEVEZANE"))
+        End If
+    End If
+    modScrDokumenti.Scr_ZbrOtkazi
+
+    AssertTrue izabran, "LNCB19: preduslov -- izdat cilj je izabran klikom na red"
+    AssertEquals "", m, "LNCB19: nijedna lista F1 i F2 ni u jednom kontekstu ne nudi vise od MAX_ACT radnji"
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modScrDokumenti.Scr_OtpTestReset
+    modScrDokumenti.Scr_ZbrOtkazi
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

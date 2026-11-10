@@ -67,6 +67,14 @@ Private mMape As Object
 Private mLista As String          ' "SVI" | "OTPREMNICE" | "BLOKOVI" | "KOOPERANTI"
 Private mOtpID As String          ' aktivna otpremnica (OtpremnicaID) -- NACRT
 Private mOtpBroj As String        ' njen broj - za traku i naslov liste
+' CILJ POTEZA NAD BLOKOM (STORNO_U_LANCU.md S10, LNC-ODL-33): IZDATA otpremnica
+' izabrana u listi Otpremnice, u koju se blok dodaje ili iz koje se vadi. Zaseban
+' kontekst, NE mOtpID: mOtpID je samo nacrt, a RutaPosleUpisa i VeziZaAktivnu
+' citaju samo njega -- nov list nikad ne ide u izdatu. Radni sto ima najvise
+' jedan kontekst, pa izbor jednog napusta drugi. Cilj prati naslednika
+' (CiljAktivan).
+Private mCiljID As String
+Private mCiljBroj As String
 
 ' IZMENA NACRTA u F2 (odluka 19.09.2026): klik na nacrt u listi F2 popuni formu,
 ' a snimanje tada MENJA taj nacrt (UpdateOtpremnicaDraft_TX) umesto da pravi
@@ -128,7 +136,13 @@ End Function
 
 ' Dopuna naslova mreze: u listi izvora stoji broj aktivnog dokumenta.
 Public Function Scr_NaslovDopuna() As String
-    If Scr_Lista() = "BLOKOVI" Then Scr_NaslovDopuna = mOtpBroj
+    If Scr_Lista() = "BLOKOVI" Then
+        If Len(mOtpID) > 0 Then
+            Scr_NaslovDopuna = mOtpBroj
+        ElseIf Len(CiljAktivan()) > 0 Then
+            Scr_NaslovDopuna = mCiljBroj
+        End If
+    End If
     If Scr_Lista() = "IZVORI" Then Scr_NaslovDopuna = mZbrBroj
 End Function
 
@@ -193,6 +207,15 @@ Public Function Scr_Radnje() As String
             If Len(mOtpID) > 0 Then _
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
         Case "BLOKOVI"
+            If Len(mOtpID) = 0 And Len(CiljAktivan()) > 0 Then
+                ' Blokovi IZDATE otpremnice (cilj): blok izlazi potezom u lancu
+                ' (LNC-ODL-22). "ukloni" i "izdaj" su radnje nacrta i ovde se ne
+                ' nude (LNC-ODL-33); ispravka bloka u lancu ostaje (LNC-ODL-11).
+                Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
+                             "ispravblok:OTKUI_BTN_RED_ISPRAVI_BLOK:96:soft:1|" & _
+                             "izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1"
+                Exit Function
+            End If
             ' Blok u sastavu se NE stornira (kapija u modStorno.StornoOtkup) --
             ' prvo izlazi iz nacrta. Izdavanje ne trazi red: radi nad aktivnom.
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
@@ -221,9 +244,14 @@ Public Function Scr_Radnje() As String
             ' lanac nema prekidac, stanica je jedini autoritet (S6 korak 7,
             ' odluka 2). Ovde je za blok kome je pala vec otpremnica; lanac koji
             ' je stao kasnije nastavlja se iz Oporavka (odluka 8).
+            ' Uz izabran izdat CILJ (ne nacrt) blok se u njega dodaje potezom u
+            ' lancu (LNC-ODL-22, -33); "vezi" ostaje samo za nacrt.
             Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1"
-            If Len(mOtpID) > 0 Then _
+            If Len(mOtpID) > 0 Then
                 Scr_Radnje = Scr_Radnje & "|vezi:OTKUI_BTN_RED_VEZI:132:soft:1"
+            ElseIf Len(CiljAktivan()) > 0 Then
+                Scr_Radnje = Scr_Radnje & "|dodaj:OTKUI_BTN_RED_DODAJ:132:soft:1"
+            End If
             Scr_Radnje = Scr_Radnje & "|ponovi:OTKUI_BTN_RED_PONOVI:140:soft:1"
     End Select
 End Function
@@ -257,6 +285,8 @@ End Function
 Public Sub Scr_OtpOtkazi()
     mOtpID = ""
     mOtpBroj = ""
+    mCiljID = ""
+    mCiljBroj = ""
     mLista = "OTPREMNICE"
 End Sub
 
@@ -275,6 +305,8 @@ Public Sub Scr_OtpTestReset()
     If Not IsTestMode() Then Exit Sub
     mOtpID = ""
     mOtpBroj = ""
+    mCiljID = ""
+    mCiljBroj = ""
     mLista = ""
 End Sub
 
@@ -295,9 +327,90 @@ Public Function AktivirajOtpremnicu(ByVal otpID As String) As String
     If Len(AktivirajOtpremnicu) > 0 Then Exit Function
     mOtpID = otpID
     mOtpBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    ' Jedan kontekst: izbor nacrta napusta izabran izdat cilj (LNC-ODL-33).
+    mCiljID = ""
+    mCiljBroj = ""
     Exit Function
 EH:
     AktivirajOtpremnicu = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' OtpremnicaID izabranog izdatog CILJA ("" = nema) -- posle pracenja naslednika.
+Public Function Scr_CiljID() As String
+    Scr_CiljID = CiljAktivan()
+End Function
+
+' Cilj prati naslednika (LNC-ODL-33): potez nad blokom -- i svaki drugi put koji
+' zameni izdatu otpremnicu (F8, F1 "Ispravi", Oporavak) -- stornira staru verziju
+' i pise ZamenjenSaID. Aktivna IZDATA nova verzija postaje cilj; stornirana bez
+' naslednika, nacrt ili nepoznata -- cilj se brise. Greska u citanju brise cilj:
+' nepoznato stanje nije cilj (fail-closed).
+Private Function CiljAktivan() As String
+    Dim id As String, k As Long, nadjen As Boolean
+    On Error GoTo EH
+    id = mCiljID
+    For k = 1 To 50
+        If Len(id) = 0 Then Exit For
+        If FindRows(TBL_OTPREMNICA, COL_OTP_ID, id).count <> 1 Then Exit For
+        If UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, _
+                                             COL_STORNIRANO)))) <> "DA" Then
+            nadjen = modDokumenta.IzdatoStatusJeIzdato(Trim$(NzToText(LookupValue( _
+                         TBL_OTPREMNICA, COL_OTP_ID, id, COL_TRACE_IZDATO_STATUS))))
+            Exit For
+        End If
+        id = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, COL_TRACE_ZAMENJEN_SA_ID)))
+    Next k
+    If Not nadjen Then id = ""
+    If StrComp(id, mCiljID, vbTextCompare) <> 0 Then
+        mCiljID = id
+        mCiljBroj = ""
+        If Len(id) > 0 Then
+            mCiljBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, COL_OTP_BROJ)))
+        End If
+    End If
+    CiljAktivan = mCiljID
+    Exit Function
+EH:
+    mCiljID = ""
+    mCiljBroj = ""
+    CiljAktivan = ""
+End Function
+
+' Izbor IZDATE otpremnice za cilj poteza nad blokom (LNC-ODL-33). "" = izabrana,
+' inace razlog. Nacrt se bira kroz AktivirajOtpremnicu, ne ovde. Izbor napusta
+' aktivan nacrt -- isti izlaz kao Scr_OtpOtkazi + ClearForm: datum i zbirna nacrta
+' vise ne vaze (.claude/rules/otkup-i-dokumenta.md S3).
+Private Function IzaberiCilj(ByVal otpID As String) As String
+    Dim st As String
+    On Error GoTo EH
+    otpID = Trim$(otpID)
+    If Len(otpID) = 0 Then
+        IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    If FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID).count <> 1 Then
+        IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    If UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_STORNIRANO)))) = "DA" Then
+        IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    st = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_TRACE_IZDATO_STATUS)))
+    If Not modDokumenta.IzdatoStatusJeIzdato(st) Then
+        IzaberiCilj = Poruka("OTKUI_ERR_OTP_NEPOZNATA")
+        Exit Function
+    End If
+    If Len(mOtpID) > 0 Then
+        mOtpID = ""
+        mOtpBroj = ""
+        modOtkupUI.ClearForm
+    End If
+    mCiljID = otpID
+    mCiljBroj = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
+    Exit Function
+EH:
+    IzaberiCilj = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
 End Function
 
 ' "" kad je otpremnica aktivan NACRT, inace razlog za operatera. Jedno pravilo
@@ -1161,9 +1274,22 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' Klik na red u listi otpremnica BIRA aktivnu otpremnicu. ID dolazi iz
     ' nevidljive kolone reda, ne iz broja.
     If Left$(tag, 4) = "row:" And Scr_Lista() = "OTPREMNICE" Then
-        Dim razlog As String
-        razlog = AktivirajOtpremnicu(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), _
-                                                               UBound(OtpGridCols()) + 1)))
+        Dim razlog As String, oidReda As String
+        oidReda = CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), UBound(OtpGridCols()) + 1))
+        razlog = AktivirajOtpremnicu(oidReda)
+        If razlog = Poruka("OTKUI_ERR_OTP_IZDATA") Then
+            ' LNC-ODL-33: izdata se bira kao CILJ poteza nad blokom, ne kao nacrt;
+            ' sledeci potez su njeni blokovi.
+            razlog = IzaberiCilj(oidReda)
+            If Len(razlog) > 0 Then
+                modOtkupUI.ShowToast razlog, True
+                Exit Function
+            End If
+            mLista = "BLOKOVI"
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_CILJ") & " " & mCiljBroj, False
+            Scr_Event = True
+            Exit Function
+        End If
         If Len(razlog) > 0 Then
             modOtkupUI.ShowToast razlog, True
             Exit Function
@@ -1222,7 +1348,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
         ' "ispravi" NIJE ovde: to je ispravka OTPREMNICE, a lista otpremnica
         ' nema OtkupID u redu. Kljucevi su zato razdvojeni -- isti kljuc za dve
         ' radnje je jednom vec ugasio onu drugu (review #368).
-        Case "print", "storno", "vezi", "ukloni", "ponovi", "ispravblok"
+        Case "print", "storno", "vezi", "ukloni", "ponovi", "ispravblok", "izvadi", "dodaj"
             If Len(otkupID) = 0 Then
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
                 Exit Function
@@ -1375,12 +1501,81 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "ispravi"
             RowAction = IspraviIzdatu(red)
 
+        Case "izvadi"
+            RowAction = PotezNaCilju(LNC_IZVADI, otkupID)
+
+        Case "dodaj"
+            RowAction = PotezNaCilju(LNC_DODAJ, otkupID)
+
         Case Else
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Potez nad blokom izabranog CILJA (LNC-ODL-22, -33, -35). Potvrda dolazi iz
+' ISTOG plana koji potez izvrsava (LncPlanOpisZaBlok); plan koji odbija se kaze
+' odmah, bez pitanja. Posle uspeha cilj prelazi na novu verziju (CiljAktivan), a
+' bez naslednika -- Izvadi poslednjeg bloka -- se brise i lista se vraca na
+' otpremnice. Vraca True kad je potez upisan (mreza se cita ponovo).
+Private Function PotezNaCilju(ByVal vrsta As String, ByVal otkupID As String) As Boolean
+    Dim cilj As String, ok As Boolean, g As String, por As String
+    cilj = CiljAktivan()
+    If Len(cilj) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_CILJ"), True
+        Exit Function
+    End If
+    If Not PotvrdiPotezNadBlokom(vrsta, cilj, otkupID) Then Exit Function
+    If vrsta = LNC_DODAJ Then
+        ok = modDokumenta.DodajBlokULancu_TX(cilj, otkupID, g, por)
+    Else
+        ok = modDokumenta.IzvadiBlokULancu_TX(cilj, otkupID, g, por)
+    End If
+    If Not ok Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_POTEZ_BLOK") & " " & g, True
+        Exit Function
+    End If
+    Scr_ResetCache
+    PotezNaCilju = True
+    If Len(CiljAktivan()) = 0 Then mLista = "OTPREMNICE"
+    modOtkupUI.ShowToast por, False
+End Function
+
+' Potvrda poteza nad blokom -- isti obrazac kao PotvrdiIspravkuULancu: tekst iz
+' plana, uz upozorenje (PAZNJA) "Ne" je podrazumevano (LNC-ODL-21/24), greska je
+' "Ne". U test rezimu potvrda BELEZI (Scr_PotvrdaLancaTest) i odgovara "Ne" --
+' seam posmatra i zabranjuje, ne upisuje. Odbijen plan se ne pita: kaze se.
+Private Function PotvrdiPotezNadBlokom(ByVal vrsta As String, ByVal cilj As String, _
+                                       ByVal otkupID As String) As Boolean
+    Const ODBIJEN As String = "Potez nije moguc:"
+    Dim opis As String, txt As String, uvod As String
+    On Error GoTo EH
+    opis = modDokumenta.LncPlanOpisZaBlok(cilj, otkupID, vrsta)
+    If Len(opis) = 0 Or Left$(opis, Len(ODBIJEN)) = ODBIJEN Then
+        If IsTestMode() Then mPotvrdaLancaTest = opis
+        modOtkupUI.ShowToast IIf(Len(opis) > 0, opis, Poruka("OTKUI_ERR_RADNJA")), True
+        Exit Function
+    End If
+    If vrsta = LNC_DODAJ Then
+        uvod = Poruka("OTKUI_ASK_DODAJ_BLOK")
+    Else
+        uvod = Poruka("OTKUI_ASK_IZVADI_BLOK")
+    End If
+    txt = modDokumenta.LncDijalogTekst(uvod & vbCrLf & vbCrLf, opis, Poruka("OTKUI_ASK_POTEZ_BLOK_2"))
+    If IsTestMode() Then
+        mPotvrdaLancaTest = txt
+        Exit Function
+    End If
+    If modDokumenta.LncTekstImaUpozorenje(opis) Then
+        PotvrdiPotezNadBlokom = (MsgBox(txt, vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
+    Else
+        PotvrdiPotezNadBlokom = (MsgBox(txt, vbQuestion + vbYesNo, APP_NAME) = vbYes)
+    End If
+    Exit Function
+EH:
+    PotvrdiPotezNadBlokom = False
 End Function
 
 ' Ispravka izdate otpremnice (B-022): jedan potez -- stara se stornira, a nova
@@ -1548,7 +1743,9 @@ Private Sub IzaberiNacrtZaIzmenu(ByVal red As Long)
         modOtkupUI.ApplyPrefill spec
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZMENA_NACRTA") & " " & mIzmenaBroj, False
     ElseIf razlog = Poruka("OTKUI_ERR_OTP_IZDATA") Then
-        modOtkupUI.ShowToast razlog, False
+        ' Izdata se ne menja u F2: blok se u nju dodaje ili iz nje vadi u F1
+        ' (LNC-ODL-33).
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZDATA_U_F1"), False
     Else
         ' Izmena je zatvorena; forma PRETHODNE izmene ne sme da ostane, jer bi
         ' je sledece snimanje upisalo kao nov nacrt -- duplikat.
@@ -3654,14 +3851,18 @@ Private Function RowsBlokovi(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "blokovi"
 
-    If Len(mOtpID) = 0 Then
+    ' Blokovi aktivnog nacrta, a bez njega blokovi izabranog izdatog cilja.
+    Dim otpLista As String
+    otpLista = mOtpID
+    If Len(otpLista) = 0 Then otpLista = CiljAktivan()
+    If Len(otpLista) = 0 Then
         RowsBlokovi = Array(BlokGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
     ' Sastav kroz strog citac pisaca -- ekran ne cita tblOtpremnicaIzvori sam.
     mStep = "sastav"
-    Set izv = modDokumenta.IzvoriOtpremnice(mOtpID)
+    Set izv = modDokumenta.IzvoriOtpremnice(otpLista)
     Set clan = CreateObject("Scripting.Dictionary")
     For i = 1 To izv.count
         clan(UCase$(CStr(izv(i)))) = True
