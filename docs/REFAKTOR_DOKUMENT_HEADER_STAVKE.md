@@ -11215,7 +11215,7 @@ Krug je samo merio; kod se menjao tamo gde je merenje našlo zastareo test ili s
 > broj je u `main`-u uzeo S8). Nalazi iz `#461` su ovde pročitani kao hipoteze i svaki je meren
 > ponovo. Invarijante i odluke su u `docs/DOMEN/SLEDLJIVOST.md` (`SLED-IDENT-01/02`,
 > `SLED-INV-01..03`, `SLED-ODL-01..08` **DONETE** 04.11.2026, `SLED-KLASA-01`). Stanje:
-> `docs/STANJE_REFAKTORA.md`, stavka 324. Produkcionog koda u ovom koraku nema.
+> `docs/STANJE_REFAKTORA.md`, stavka 325 (preslaganje na `1fa4937a`: stavka 326, odeljak na kraju). Produkcionog koda u ovom koraku nema.
 >
 > **Novo u odnosu na `#461`:** sesija ima Windows i Excel, pa su tvrdnje koje su tamo bile
 > „izvedeno iz koda, NIJE reprodukovano" ili `UNMEASURED` izmerene read-only sondom nad **kopijom**
@@ -11523,6 +11523,72 @@ odseca nego označava; graf crta samo aktivne veze, istorija iz `tblStornoVeze`;
 PARCELE, A4, dokument iza reda, GlobalGAP i dokument perioda; spisak kooperanata na paletnom listu kroz
 isti graf; jedan graf `modSledljivost`; izvoz za PWA po `ZbirnaRoditeljID`, najranija prijemnica, niski
 prioritet; `Prijemnica.BrojZbirne` ostaje labela bez spoja.
+
+#### Preslaganje na `main` = `1fa4937a` (10.11.2026, `docs/STANJE_REFAKTORA.md` stavka 326)
+
+> `docs/DOMEN/STORNO_U_LANCU.md` §9 traži da se ovaj pre-flight preslaže na rez „storno i ispravka
+> otkupnog lista u lancu" (`#471`–`#473`) i da ponovi merenje 2. Brojevi linija iznad i dalje važe za
+> `57ab47ed`. Ovde je izmereno samo ono što se od tada promenilo. Excel nije bio dostupan, pa sonda nad
+> C002 (merenje 5) nije ponovljena. Rez u lancu ne menja podatke C002, pa njene brojke važe za kod
+> `57ab47ed`.
+
+**Šta je ušlo u `main` posle `57ab47ed`, a dira S9:**
+- doplata kooperantu (`#460`, stavka 323), sa proverama integriteta DOP1 i GOT1;
+- rez u lancu (`#471`–`#473`):
+  - nove kolone `tblZbirna.IspravkaOdID` i `ZamenjenSaID`, na kraju kanona (`LNC-ODL-16`);
+  - korekcija je red po paru u `tblStornoVeze`, sa zajedničkim korenom (`LNC-ODL-20`);
+  - provere KUL1 i KUL2 (`KI-092`, `KI-093`);
+- alati migracije (`tools/migracija/`, `MIG-ODL-20..23`). Kod S9 ne dira.
+
+**Ponovo izmereno:**
+
+1. **Popis** (razlika prema merenju 1, samo živa mesta):
+
+   | Grupa | `57ab47ed` | `1fa4937a` | Šta je novo |
+   |---|---|---|---|
+   | `otk_linija` | 18 | 19 | `LncIspravkaMenjaLanac` čita `TipAmbalaze`, činjenicu zaglavlja |
+   | `otp_zaglavlje` | 45 | 49 | `OtpZaglavljeVerzije`, `OtpKulturaVerzije`, KUL1 i KUL2 dodati, a `OtpIspravi` izašao; sve su činjenice zaglavlja |
+   | `prj_brojzbirne` | 31 | **33** | `LncPrijemniceZbirne`: broj služi samo kao detektor reda bez `ZbirnaRoditeljID`, i taj red potez **odbija**, ne spaja. `LncPreveziPrijemnicu`: labela u koraku sa ID-em (`PoveziDeteNaZbirnu`). Ukupno je 12 labela/detektora i 21 spoj (N4 bez promene) |
+   | `x_trace` | 16 | 17 | `KulVerzijeTabele`: rezervna grana po broju-obliku (N16) |
+
+   Ostale grupe su iste.
+2. **Pisci:**
+   - **kolona bez pisca je i dalje 20.** Pretraga upisa po konstanti i po literalu, van testova, daje
+     ista brisanja kao u merenju 2. Rez u lancu ne piše nijednu od njih, kao što i obećava
+     (`STORNO_U_LANCU.md` §9);
+   - **novo:** `tblZbirna.IspravkaOdID` / `ZamenjenSaID` piše `LncSastavi` (`modDokumenta:4336-4337`).
+     `tblOtpremnica.IspravkaOdID` pišu rez u lancu (`:4292`) i `OtpIspravi` (`:6031`);
+   - ID-trag verzije time nose otkup, otpremnica, zbirna i ambalaža. **Prijemnica je jedina bez
+     ID-traga:** ima samo broj-oblik, kroz `StampIspravkaTrace` (`modDokUnos:1339`).
+4. **Integritet:** `RunAllChecks` ima **24** provere. Nove su DOP1 (osnovica doplate), GOT1 (gotovina
+   preko osnovice), KUL1 (kultura lista) i KUL2 (verzija druge sorte). Sve su novog modela i ostaju.
+   KUL2 vezu verzija bira po `IspravkaOdID`, a po broju samo kad kolone nema (zbirna pre `#471`). Uz
+   današnji kanon obe tabele nose kolonu i imaju pisca, pa je grana po broju nedostižna.
+
+**Kapije nad ovom granom:** čisti su `vba_check` (193 fajla), `who_writes --check`,
+`--check-ownership` (isti preostali ciljevi A11) i `gen_schema_module --check` (`4CCA6C14`).
+**`popis_citalaca --check` pada** (N15).
+
+**Novi nalazi:**
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| N15 | **`popis_citalaca --check` pada na samom `main`-u:** `prj_brojzbirne` ima 33 živa mesta, a prag je 31 (spušten u S8 2b-2). Oba nova mesta su iz reza u lancu i oba su ispravna (detektor i labela, v. popis iznad), ali kapija je crvena. **CI je ne pušta:** `.github/workflows/static.yml` nema taj korak, a `vba_gate --popis` je popis suite-ova, druga stvar | `python tools/popis_citalaca.py --check` nad `1fa4937a` | **Predlog, čeka odluku:** (a) odluka u planu: prag 33, sa razlogom „dva mesta reza u lancu nisu spoj". Pravilo iz `popis_citalaca.py` zabranjuje podizanje bez nje. S9-3 posle toga deli grupu na spoj (prag 0) i labelu. (b) Korak `popis_citalaca --check` u CI ide u **zaseban** PR (process). |
+| N16 | **KUL2 ima rezervnu granu po broju-obliku traga** (`modIntegritet.KulVerzijeTabele`): kad tabela nema `IspravkaOdID`, prethodnu verziju traži po broju `IspravkaOd`. Uz današnji kanon je grana nedostižna | `modIntegritet:385` | briše se sa ostalim čitaocima broj-oblika (N8), u S9-2 |
+
+**Obaveze iz reza u lancu za S9** (`STORNO_U_LANCU.md` §9, `LNC-ODL-16`, `LNC-ODL-20`):
+- kanon (S9-6) **ne briše** `IspravkaOdID` / `ZamenjenSaID` (zbirna, otpremnica, otkup). Briše samo
+  broj-oblik tamo gde nema pisca (`SLED-ODL-08`);
+- istorija verzija (`SLED-ODL-03`) čita ID-trag zaglavlja i red po paru u `tblStornoVeze`. Koren
+  poteza u lancu nosi `ParentDocType = LANAC` (`LNC-ODL-20`);
+- rez u lancu ne piše broj-oblik koji S9 briše. Potvrđeno merenjem 2 iznad.
+
+**GO / HOLD:** bez promene. Rez u lancu je imao prioritet „pre S9" i sada je u `main`-u.
+
+**Landing:**
+- `#461` je zatvoren (05.11.2026) kao zamenjen ovim PR-om;
+- `#457` je i dalje otvoren i dira `AMBALAZA.md`, `README.md` i `modTest.bas`. Brojevi testova i odeljaka
+  za kod S9 se zato dodeljuju posle njegovog merge-a (`STORNO_U_LANCU.md` §9).
 
 ## 15) Backlog — namerno van opsega
 
