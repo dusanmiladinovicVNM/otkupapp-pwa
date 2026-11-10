@@ -7879,8 +7879,8 @@ SABOTAZE = {
         "Test_LNC_Blok_IzvadiIzdataBezZbirne",
         "LNCB2: blok nije storniran",
     ),
-    # Koren traga ide na blok: kasniji obican storno bloka bi UNDO-u izgledao kao
-    # deo poteza u lancu.
+    # CorrectionID korena se pise na blok (LNC-ODL-27). Obara samo tvrdnju nad
+    # poljem: UNDO (LancaRazlog) gleda OldDocID korena, a koren je par otpremnice.
     "lncb-koren-na-bloku": (
         "modDokumenta.bas",
         "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (izvadi)\n",
@@ -7907,8 +7907,8 @@ SABOTAZE = {
     # Hladnjacki blok (N1) se vadi kao obican.
     "lncb-izvadi-n1": (
         "modDokumenta.bas",
-        "        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
-        "        If False Then   ' SABOTAZA: hladnjacki blok se vadi\n",
+        "            If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
+        "            If False Then   ' SABOTAZA: hladnjacki blok se vadi\n",
         "Test_LNC_Blok_IzvadiOdbijen",
         "LNCB10 (d): hladnjacki blok (N1) se ne vadi",
     ),
@@ -7919,6 +7919,65 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: zastareo cilj\n",
         "Test_LNC_Blok_IzvadiOdbijen",
         "LNCB10 (c): zastareo cilj (zamenjena otpremnica) se odbija po ID-u",
+    ),
+    # Koren poteza ide na LIST (kao storno lista): red LANAC sa OldDocID = blok, pa
+    # UNDO kasnijeg obicnog storna bloka biva odbijen (LNC-ODL-27, T15).
+    "lncb-izvadi-koren-lista": (
+        "modDokumenta.bas",
+        "    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    rootCid = LncKontekstKoren(SV_MODE_PONISTENJE, p, \"\", \"\", SRC): Set rez = LncSastavi(p, \"\", rootCid, tx, SRC)   ' SABOTAZA: koren na listu\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2 (T15): obican storno izvadjenog bloka ostaje povratan",
+    ),
+    # Pravi hladnjacki lanac se tretira kao N1: operater ide na F8 storno lista,
+    # koji isti blok odbija i salje na PONISTENJE.
+    "lncb-izvadi-lanac-kao-n1": (
+        "modDokumenta.bas",
+        "        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then\n",
+        "        If True Then   ' SABOTAZA: pravi lanac kao N1\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (e): blok pravog hladnjackog lanca upucuje na PONISTENJE",
+    ),
+    # Potvrdjeno upozorenje Izvadi ostaje samo u logu.
+    "lncb-trag-izvadi-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (izvadi)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, \"\", SRC   ' SABOTAZA: izvadi bez upozorenja\n",
+        "Test_LNC_Blok_IzvadiPoslednji",
+        "LNCB3 (T8): trag Izvadi nosi potvrdjeno upozorenje",
+    ),
+    # Red zbirne nije dete korena: trag poteza se raspada na dva korena.
+    "lncb-izvadi-dete-bez-korena": (
+        "modDokumenta.bas",
+        "                   zbrNova, CStr(rez(\"zbrNovaBroj\")), TBL_ZBIRNA, COL_ZBR_ID, _\n                   rootCid, src\n",
+        "                   zbrNova, CStr(rez(\"zbrNovaBroj\")), TBL_ZBIRNA, COL_ZBR_ID, _\n                   \"\", src   ' SABOTAZA: zbirna bez korena\n",
+        "Test_LNC_Blok_IzvadiUZbirni",
+        "LNCBZ: red zbirne je dete korena otpremnice",
+    ),
+    # Recnik storna u upozorenju Izvadi ("bez storniranog lista").
+    "lncb-sufiks-izvadi": (
+        "modDokumenta.bas",
+        "            LncNapomenaSufiks = \" (bez izvadjenog bloka)\"\n",
+        "            LncNapomenaSufiks = \" (bez storniranog lista)\"   ' SABOTAZA: recnik storna\n",
+        "Test_LNC_Blok_IzvadiNeuskladjena",
+        "LNCB14: neslaganje se kaze recima poteza (bez izvadjenog bloka)",
+    ),
+    # Ambalaza se meri USRED zamene (posle rasturanja): medjukorak vozaca u minusu
+    # obara potez ciji je kraj ispravan (LNC-ODL-31).
+    "lncb-izvadi-meri-usred": (
+        "modDokumenta.bas",
+        "    LncRasturi p, tx, SRC\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    LncRasturi p, tx, SRC: modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC: modAmbalaza.AmbOdloziInvarijantePocni tx, SRC   ' SABOTAZA: meri usred zamene\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "Test_LNC_Blok_IzvadiAmbalaza",
+        "LNCB11 (c): Izvadi prolazi jer se ambalaza meri posle cele zamene",
+    ),
+    # Odbijenica ambalaze ne kaze da premestanja u jednom potezu nema (LNC-ODL-23).
+    "lncb-izvadi-bez-poruke-odl23": (
+        "modDokumenta.bas",
+        "    If InStr(1, outGreska, \"AMB-INV-07\", vbBinaryCompare) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: bez LNC-ODL-23 recenice\n",
+        "Test_LNC_Blok_IzvadiAmbalaza",
+        "LNCB11 (b): ambalaza na kraju odbija Izvadi i odbijenica kaze da jednog poteza nema",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.

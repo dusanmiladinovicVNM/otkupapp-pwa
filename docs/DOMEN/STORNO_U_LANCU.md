@@ -316,7 +316,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > `modOtkupUnos.OtkupStavkeIzForme`); a5 — preslaganje bez promene ponašanja (`LncPlanOtpremnice`,
 > `OtpProveriIzvor` / `OtpIzvorRazlog`, `LncKontekstPar` kao funkcija, koren na paru otpremnice);
 > a6 — „Izvadi blok" (`LncPlanBlok`, `LncPlanOpisZaBlok`, `IzvadiBlokULancu_TX`, testovi
-> `Test_LNC_Blok_Izvadi*`, sabotaže `lncb-izvadi-*`, `lncb-koren-na-bloku`, `lncb-zastareo-cilj`).
+> `Test_LNC_Blok_Izvadi*` — 7, sabotaže `lncb-izvadi-*`, `lncb-koren-na-bloku`, `lncb-zastareo-cilj`,
+> `lncb-trag-izvadi-bez-upozorenja`, `lncb-sufiks-izvadi`). Pravi hladnjački lanac → PONIŠTENJE,
+> N1 (ručna otpremnica stanice posle označene kao hladnjača) → F8 storno lista u lancu.
 > a2–a6 NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
@@ -503,7 +505,7 @@ početku.
 
 **Sabotaže** (samo nove, prefiks `lncb-`, pa `python tools/dokaz.py lncb`):
 `lncb-dodaj-bez-odlaganja` → T11 · `lncb-izvadi-stornira-list` → T2, T15 ·
-`lncb-koren-na-bloku` → T15 · `lncb-dodaj-bez-kapije-hladnjace` → T9 ·
+`lncb-koren-na-bloku` → polje CorrectionID bloka, `lncb-izvadi-koren-lista` → T15 (UNDO) · `lncb-dodaj-bez-kapije-hladnjace` → T9 ·
 `lncb-kapija-samo-u-tx` → T9 (tvrdnja pre potvrde) · `lncb-dodaj-bez-datuma` → T9 ·
 `lncb-dete-bez-korena` → T5 · `lncb-prijemnica-ostaje-na-staroj` → T6 · `lncb-y-po-labeli` → T6 · `lncb-x-iz-drugog-tela` → T5 ·
 `lncb-poslednji-izvadi-bez-kapije` → T7 · `lncb-ne-upisuje-na-ne` → T18 ·
