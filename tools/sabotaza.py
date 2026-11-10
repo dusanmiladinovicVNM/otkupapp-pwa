@@ -8215,6 +8215,14 @@ SABOTAZE = {
         "Test_LNC_Blok_IzvadiIzdataBezZbirne",
         "LNCB2: recenice koje traze radnju idu pre opisa poteza (dijalog skracuje kraj)",
     ),
+    # Traka kaze "nema izabrane otpremnice" dok je cilj izabran.
+    "lncb-ekran-traka-bez-cilja": (
+        "modScrDokumenti.bas",
+        "        If Len(CiljAktivan()) > 0 Then Scr_OtpInfo = mCiljBroj & \"|\" & Poruka(\"OTKUI_OTP_CILJ\")\n",
+        "        If False Then Scr_OtpInfo = mCiljBroj & \"|\" & Poruka(\"OTKUI_OTP_CILJ\")   ' SABOTAZA: traka bez cilja\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: traka otpremnice imenuje izabran izdat cilj",
+    ),
     # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
     "lncb-ekran-vise-od-max": (
         "modScrDokumenti.bas",

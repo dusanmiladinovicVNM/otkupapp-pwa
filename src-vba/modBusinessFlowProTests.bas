@@ -29738,7 +29738,7 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     Dim promena As Boolean, promenaOdb As Boolean, posleNe As String, posleOdb As String
     Dim promenaIzv As Boolean, txtIzv As String, posleIzv As String
     Dim radNevPrazno As String, radBlokPrazno As String, redOtp As Long, drugiKlik As Boolean
-    Dim redC As Long, promenaC As Boolean, txtC As String, posleC As String
+    Dim redC As Long, promenaC As Boolean, txtC As String, posleC As String, info As String
     Dim seamPosle As String, ciljPosle As String, naslov As String, okD As Boolean
     Dim izabran2 As Boolean, okI As Boolean, ciljBez As String, izabran3 As Boolean, posleReseta As String
     Dim errNum As Long, errDesc As String
@@ -29784,6 +29784,10 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
     AssertTrue redOtp > 0 And Not drugiKlik And modScrDokumenti.Scr_Lista() = "OTPREMNICE" And _
                modScrDokumenti.Scr_CiljID() = otp, _
                "LNCB18: klik na izdatu cuva listu i izabran red (Ispravi i specifikacija rade nad njim)"
+    info = modScrDokumenti.Scr_OtpInfo()
+    AssertTrue Left$(info, Len(LncOtpPolje(otp, COL_OTP_BROJ)) + 1) = LncOtpPolje(otp, COL_OTP_BROJ) & "|" And _
+               InStr(1, info, Poruka("OTKUI_OTP_CILJ"), vbBinaryCompare) > 0, _
+               "LNCB18: traka otpremnice imenuje izabran izdat cilj"
     modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
     redA = LncRedListe(otkA)
     AssertTrue redA > 0, "LNCB18: lista Blokovi pokazuje blokove izabranog cilja"
