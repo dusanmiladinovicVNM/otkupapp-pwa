@@ -7871,6 +7871,55 @@ SABOTAZE = {
         "Test_LNC_UpozorenjePrijemniceSviPotezi",
         "LNC22 (g): dijalog ostaje ispod granice MsgBox-a, pitanje se vidi",
     ),
+    # LNC S10 a6 -- "Izvadi blok". Potez stornira blok umesto da ga ostavi slobodnog.
+    "lncb-izvadi-stornira-blok": (
+        "modDokumenta.bas",
+        "    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    modStorno.StornoOtkup otkupID, tx: Set rez = LncSastavi(p, \"\", \"\", tx, SRC)   ' SABOTAZA: Izvadi stornira blok\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: blok nije storniran",
+    ),
+    # Koren traga ide na blok: kasniji obican storno bloka bi UNDO-u izgledao kao
+    # deo poteza u lancu.
+    "lncb-koren-na-bloku": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (izvadi)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC: RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)(1), COL_TRACE_CORRECTION_ID, rootCid, SRC   ' SABOTAZA: koren na bloku\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: na blok se CorrectionID ne pise (LNC-ODL-27)",
+    ),
+    # Blok iz tudje otpremnice: identitet sa liste nije proveren u planu.
+    "lncb-izvadi-tudji-blok": (
+        "modDokumenta.bas",
+        "        If StrComp(gde, otpremnicaID, vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: blok iz tudje otpremnice\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (b): blok koji nije u cilju se odbija po ID-u",
+    ),
+    # Nacrt kao cilj se ne odbija: potez bi izvadio blok iz nacrta u mestu.
+    "lncb-izvadi-nacrt": (
+        "modDokumenta.bas",
+        "    If Len(CStr(p(\"razlog\"))) = 0 And Not CBool(p(\"otpIzdata\")) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt kao cilj\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (a): nacrt kao cilj se odbija pre potvrde",
+    ),
+    # Hladnjacki blok (N1) se vadi kao obican.
+    "lncb-izvadi-n1": (
+        "modDokumenta.bas",
+        "        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
+        "        If False Then   ' SABOTAZA: hladnjacki blok se vadi\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (d): hladnjacki blok (N1) se ne vadi",
+    ),
+    # Zastareo cilj (otpremnica zamenjena posle liste) se ne prepoznaje kao takav.
+    "lncb-zastareo-cilj": (
+        "modDokumenta.bas",
+        "    If ciljStorniran Then\n",
+        "    If False Then   ' SABOTAZA: zastareo cilj\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (c): zastareo cilj (zamenjena otpremnica) se odbija po ID-u",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

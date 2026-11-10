@@ -313,7 +313,11 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > `Test_LNC_NedovrsenKontekstGranice`); a3 — trag upozorenja `LNC-ODL-38`
 > (`modStornoContext.DopisiPorukuKonteksta`, T23); a4 — upozorenje o aktivnoj prijemnici `LNC-ODL-24`
 > za sve poteze (`LncNapomenaPrijemnice`, T22; F1 potvrda dobija polja forme kroz
-> `modOtkupUnos.OtkupStavkeIzForme`). a2–a4 NEVERIFIKOVANO u Excelu.**
+> `modOtkupUnos.OtkupStavkeIzForme`); a5 — preslaganje bez promene ponašanja (`LncPlanOtpremnice`,
+> `OtpProveriIzvor` / `OtpIzvorRazlog`, `LncKontekstPar` kao funkcija, koren na paru otpremnice);
+> a6 — „Izvadi blok" (`LncPlanBlok`, `LncPlanOpisZaBlok`, `IzvadiBlokULancu_TX`, testovi
+> `Test_LNC_Blok_Izvadi*`, sabotaže `lncb-izvadi-*`, `lncb-koren-na-bloku`, `lncb-zastareo-cilj`).
+> a2–a6 NEVERIFIKOVANO u Excelu.**
 > Mereno čitanjem nad `main` = `1fa4937` (merge #473); Excel nije pokrenut, pa je svaka tvrdnja
 > o ponašanju **NEVERIFIKOVANA**. Nastavak `LNC-ODL-06` („premeštanje lista na drugu otpremnicu
 > je naredni rez, istom mehanikom"). Važi sve iz §1–§9 osim onoga što ovaj odeljak izričito
