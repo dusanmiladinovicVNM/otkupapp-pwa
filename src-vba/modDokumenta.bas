@@ -3807,7 +3807,7 @@ Public Function LncPlanLista(ByVal otkupID As String, _
 
     ' Ostatak je jezgro po otpremnici (LNC-ODL-28): list izlazi iz otpremnice',
     ' a u ispravci se meri i njegova kultura (nov list je nasledjuje).
-    LncPlanOtpremnice p, otpID, otkupID, "", zaIspravku
+    LncPlanOtpremnice p, otpID, otkupID, "", zaIspravku, SRC
 End Function
 
 ' JEZGRO PLANA PO OTPREMNICI (LNC-ODL-28): sve sto potez u lancu treba da zna o
@@ -3823,8 +3823,7 @@ End Function
 ' Zove ga i plan lista i plan bloka, pa postoji JEDAN odgovor na "sta potez radi".
 Private Sub LncPlanOtpremnice(ByVal p As Object, ByVal otpID As String, _
                               ByVal izlazi As String, ByVal ulazi As String, _
-                              ByVal meriIzlazeci As Boolean)
-    Const SRC As String = "LncPlanOtpremnice"
+                              ByVal meriIzlazeci As Boolean, ByVal SRC As String)
     Dim otkupID As String
     otkupID = izlazi
 
@@ -5798,24 +5797,28 @@ Private Function OtpIzvorRazlog(ByVal otpremnicaID As String, ByVal otkupID As S
                                 Optional ByRef outErrNum As Long) As String
     outErrNum = 0
     On Error GoTo EH
+    If Len(otkupID) = 0 Then
+        Err.Raise vbObjectError + 1287, src, "Prazan OtkupID."
+    End If
+    OtpRedHeadera otpremnicaID, src
     OtpProveriIzvor otpremnicaID, otkupID, src, traziSlobodan
     Exit Function
 EH:
+    ' Sistemski pad (sema, citanje) nije poslovni razlog: ide dalje, glasno.
+    If modSchemaGuard.JeSistemskiPad(Err.Number) Then
+        Err.Raise Err.Number, Err.Source, Err.description
+    End If
     outErrNum = Err.Number
     OtpIzvorRazlog = Err.description
 End Function
 
 ' Telo provere izvora BEZ uslova "nacrt": otkup, stavke, stanica, kultura, izdat,
 ' tip ambalaze (kad nosi gajbe) i kanonsko clanstvo. Dize gresku sa brojem.
+' Prazan OtkupID i zaglavlje otpremnice proverava pozivalac (jednom, ne po izvoru).
 Private Sub OtpProveriIzvor(ByVal otpremnicaID As String, _
                             ByVal otkupID As String, _
                             ByVal src As String, _
                             ByVal traziSlobodan As Boolean)
-    If Len(otkupID) = 0 Then
-        Err.Raise vbObjectError + 1287, src, "Prazan OtkupID."
-    End If
-    OtpRedHeadera otpremnicaID, src
-
     RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, otkupID, "OtkupID", src
 
     If StrComp(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
