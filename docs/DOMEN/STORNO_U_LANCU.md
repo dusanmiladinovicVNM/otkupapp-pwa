@@ -292,13 +292,13 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
   kanon), pa važi u oba smera: ovaj rez **ne piše** broj-oblik koji S9 briše, a S9-6 **ne
   briše** nove ID kolone zbirne (`LNC-ODL-16`) i čita red po paru u `tblStornoVeze`
   (`LNC-ODL-20`). Pre-flight S9 posle preslaganja treba ponovo da izmeri merenje 2
-  („kolone bez pisca"): `tblZbirna.IspravkaOdID` / `ZamenjenSaID` tada imaju pisca.
+  („kolone bez pisca"): `tblZbirna.IspravkaOdID` / `ZamenjenSaID` tada imaju pisca **Urađeno** 10.11.2026 (plan §14.64, „Preslaganje na `1fa4937a`").
 - **Šema** (`LNC-ODL-16`) je centralni registar → serijski, sama u svom commitu.
 - PR #457 (ambalaža, otvoren) dira `AMBALAZA.md`, `README.md`, `modTest.bas`: brojevi
   testova i odeljaka se dodeljuju **posle** njegovog merge-a.
 - Numeracija plana (`REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.x) i stavki
   (`STANJE_REFAKTORA.md`) se ovde namerno ne dodeljuje: #469 zauzima §14.64 i stavke
-  323–324.
+  324–326 (posle preslaganja na `1fa4937a`; stavku 323 je u međuvremenu uzela doplata).
 - Predlog sečenja (svaki deo zelen sam za sebe): **1** šema + ambalaža na kraju
   (`AMB-10-ODL-40`) + T1 · **2** jezgro poteza za storno (BFP T2–T3, T5–T7, T9–T12, T16, T18)
   · **3** ispravka (T4, T8, T13, T15) · **4** ekrani F8/F1 + UNDO kapija (T14, T17).

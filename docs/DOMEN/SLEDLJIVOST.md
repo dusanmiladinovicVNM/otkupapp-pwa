@@ -1,7 +1,7 @@
 # Sledljivost kao graf — identitet, ivice, invarijante i odluke S9
 
 > **Izvor:** pre-flight S9 (plan `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.64,
-> `docs/STANJE_REFAKTORA.md` stavka 324). Mereno nad `main` = `57ab47ed`, posle zatvaranja
+> `docs/STANJE_REFAKTORA.md` stavke 325–326). Mereno nad `main` = `57ab47ed`, posle zatvaranja
 > S8 (stavka 322). Linije koda u ovom fajlu važe za taj commit.
 >
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
@@ -25,6 +25,7 @@
 | Sledljivost na paleti (C-040 i spisak kooperanata na paletnom i preradnom listu) pripada S9 | `PAL-ODL-07` |
 | C002 ostaje na izdanju pre S8 reza 2b; posledica: ni izmene S9 ne idu u C002 | `PAL-ODL-12` (stavka 311) |
 | Stare provere integriteta se **ne prevode**: brišu se sa starim modelom, a slajs dodaje proveru pravila novog modela | plan §14.8, odluka 11 |
+| Verzija zbirne nosi **ID-trag** (`IspravkaOdID` / `ZamenjenSaID`), kao otkup i otpremnica. Korekcija u lancu je **red po paru u `tblStornoVeze`**, sa zajedničkim korenom `ParentDocType = LANAC`. Kanon S9 te kolone ne briše | `docs/DOMEN/STORNO_U_LANCU.md`, `LNC-ODL-16`, `LNC-ODL-20` (preslaganje na `1fa4937a`, plan §14.64) |
 | Prerada 2.0 (lager jedinica, šarža, genealogija) je **zaseban plan, nije implementiran**; njena faza C2 je pisana nad obrisanim modulima | `docs/PRERADA_2_MODEL_I_PLAN.md` §8 |
 
 ## 2) Graf — ivice, kardinalnost i čitač
