@@ -7883,7 +7883,7 @@ SABOTAZE = {
     # poljem: UNDO (LancaRazlog) gleda OldDocID korena, a koren je par otpremnice.
     "lncb-koren-na-bloku": (
         "modDokumenta.bas",
-        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (izvadi)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (blok)\n",
         "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC: RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)(1), COL_TRACE_CORRECTION_ID, rootCid, SRC   ' SABOTAZA: koren na bloku\n",
         "Test_LNC_Blok_IzvadiIzdataBezZbirne",
         "LNCB2: na blok se CorrectionID ne pise (LNC-ODL-27)",
@@ -7941,7 +7941,7 @@ SABOTAZE = {
     # Potvrdjeno upozorenje Izvadi ostaje samo u logu.
     "lncb-trag-izvadi-bez-upozorenja": (
         "modDokumenta.bas",
-        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (izvadi)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (blok)\n",
         "    LncUpisiUpozorenjeUTrag rootCid, \"\", SRC   ' SABOTAZA: izvadi bez upozorenja\n",
         "Test_LNC_Blok_IzvadiPoslednji",
         "LNCB3 (T8): trag Izvadi nosi potvrdjeno upozorenje",
@@ -7978,6 +7978,133 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: bez LNC-ODL-23 recenice\n",
         "Test_LNC_Blok_IzvadiAmbalaza",
         "LNCB11 (b): ambalaza na kraju odbija Izvadi i odbijenica kaze da jednog poteza nema",
+    ),
+    # --- a7: "Dodaj blok" (STORNO_U_LANCU.md S10) ---------------------------------
+    # Zauzet blok (nacrt ili druga izdata) ne odbija citljivo: pisac bi ga odbio
+    # tehnickom 1291, bez imena otpremnice (LNC-ODL-29).
+    "lncb-dodaj-zauzet": (
+        "modDokumenta.bas",
+        "        gde = OtpremnicaZaOtkup(otkupID)\n        If Len(gde) > 0 Then\n",
+        "        gde = OtpremnicaZaOtkup(otkupID)\n        If False Then   ' SABOTAZA: zauzet blok bez imena otpremnice\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (a): blok iz nacrta se odbija i poruka imenuje nacrt",
+    ),
+    # Datum se ne meri: roba kupljena posle polaska kamiona ulazi (LNC-ODL-30).
+    "lncb-dodaj-bez-datuma": (
+        "modDokumenta.bas",
+        "        If Int(datBlok) > Int(datOtp) Then\n",
+        "        If False Then   ' SABOTAZA: datum se ne meri\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (f): blok kasniji od otpremnice se odbija (LNC-ODL-30)",
+    ),
+    # Hladnjacki blok se ne prepoznaje -- pada tek na "drugom polju StanicaID".
+    "lncb-dodaj-bez-kapije-hladnjace": (
+        "modDokumenta.bas",
+        "        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
+        "        If False Then   ' SABOTAZA: hladnjacki blok se dodaje\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (m): hladnjacki blok se ne dodaje rucno",
+    ),
+    # Kapije izvora samo u piscu: potvrda se nudi, a transakcija posle "Da" odbija
+    # (LNC-INV-18).
+    "lncb-dodaj-kapija-samo-u-tx": (
+        "modDokumenta.bas",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)\n",
+        "        raz = \"\"   ' SABOTAZA: kapije izvora samo u piscu\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (d): blok druge kulture se odbija pre potvrde",
+    ),
+    # Plan meri prema zaglavlju, ne prema novoj verziji: stara otpremnica bez
+    # kulture odbija i blok iste kulture, koji bi pisac primio.
+    "lncb-dodaj-kultura-zaglavlja": (
+        "modDokumenta.bas",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)\n",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True)   ' SABOTAZA: meri prema zaglavlju\n",
+        "Test_LNC_Blok_DodajStaraBezKulture",
+        "LNCDK: blok iste kulture ulazi u staru otpremnicu bez kulture",
+    ),
+    # Otpremnica bez tipa uz blok sa gajbama pada tehnickom 1239 ("ocekivano ''").
+    "lncb-dodaj-tip-tehnicki": (
+        "modDokumenta.bas",
+        "        If OtpGajbeIzvora(otkupID, SRC) > 0 And _\n",
+        "        If False And OtpGajbeIzvora(otkupID, SRC) > 0 And _\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239",
+    ),
+    # Hladnjacki cilj se meri tek u jezgru: blok druge stanice pada na StanicaID.
+    "lncb-dodaj-hladni-cilj": (
+        "modDokumenta.bas",
+        "        If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then\n",
+        "        If False Then   ' SABOTAZA: hladnjacki cilj kasno\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (n): hladnjacki cilj se odbija",
+    ),
+    # Blok ne ulazi u otpremnicu': potez proknjizi staru sadrzinu pod novim brojem.
+    "lncb-dodaj-bez-bloka-u-novoj": (
+        "modDokumenta.bas",
+        "    If Len(ulazi) > 0 Then p(\"otpPreostali\").Add ulazi\n",
+        "    If False Then p(\"otpPreostali\").Add ulazi   ' SABOTAZA: blok ne ulazi u novu verziju\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: nova verzija nosi stari list i dodati blok (LNC-INV-13)",
+    ),
+    # Trag Dodaj kaze recnikom Izvadi.
+    "lncb-trag-dodaj-bez-bloka": (
+        "modDokumenta.bas",
+        "        tragBloka = \"Blok \" & p(\"otkupBroj\") & \" ulazi u otpremnicu.\"\n",
+        "        tragBloka = \"Blok \" & p(\"otkupBroj\") & \" izlazi iz otpremnice.\"   ' SABOTAZA: trag ne imenuje dodavanje\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: trag imenuje dodati blok",
+    ),
+    # Potvrda ne imenuje oba datuma kad se razlikuju (LNC-ODL-30).
+    "lncb-dodaj-bez-dva-datuma": (
+        "modDokumenta.bas",
+        "            If Int(CDate(p(\"datumBloka\"))) <> Int(CDate(p(\"datumOtp\"))) Then\n",
+        "            If False Then   ' SABOTAZA: potvrda bez datuma\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: potvrda imenuje oba datuma kad se razlikuju (LNC-ODL-30)",
+    ),
+    # Odbijenica ambalaze za Dodaj nosi tekst Izvadi.
+    "lncb-dodaj-bez-razloga-gajbi": (
+        "modDokumenta.bas",
+        "        If vrsta = LNC_DODAJ Then\n            outGreska = outGreska & \" Najcesci uzrok kod Dodaj: stanica vise nema gajbe \" & _\n",
+        "        If False Then   ' SABOTAZA: Dodaj bez razloga ambalaze\n            outGreska = outGreska & \" Najcesci uzrok kod Dodaj: stanica vise nema gajbe \" & _\n",
+        "Test_LNC_Blok_DodajAmbalaza",
+        "LNCD11 (c): stanica bez gajbi bloka -- ambalaza na kraju odbija i kaze zasto",
+    ),
+    # KONTROLA iz T11: Dodaj meri ambalazu USRED zamene -- kontra-stav stare spusta
+    # vozaca koji je predao gajbe u minus, pa potez ciji je kraj ispravan pada
+    # (LNC-ODL-31). Izvadi ostaje nedirnut (svoja sabotaza: lncb-izvadi-meri-usred).
+    "lncb-dodaj-meri-usred": (
+        "modDokumenta.bas",
+        "    LncRasturi p, tx, SRC\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    LncRasturi p, tx, SRC: If vrsta = LNC_DODAJ Then modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC: modAmbalaza.AmbOdloziInvarijantePocni tx, SRC   ' SABOTAZA: Dodaj meri usred zamene\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "Test_LNC_Blok_DodajAmbalaza",
+        "LNCD11 (b): Dodaj prolazi jer se ambalaza meri posle cele zamene",
+    ),
+    # Zbirna' nastaje bez otpremnice': X iz potvrde se razilazi sa piscem (LNC-INV-16).
+    "lncb-zbirna-bez-otpremnice": (
+        "modDokumenta.bas",
+        "    If Len(otpNova) > 0 Then izvZ.Add otpNova\n",
+        "    If False Then izvZ.Add otpNova   ' SABOTAZA: zbirna' bez otpremnice'\n",
+        "Test_LNC_Blok_DodajUZbirnuSaPrijemnicom",
+        "LNCD5: X iz potvrde = zbir stavki nove zbirne (LNC-INV-16)",
+    ),
+    # Dodaj ne vidi zbirnu iznad otpremnice: zbirna ostaje na staroj verziji.
+    "lncb-dodaj-bez-zbirne": (
+        "modDokumenta.bas",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC\n    End If\n",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC: p(\"zbrID\") = \"\"   ' SABOTAZA: Dodaj ne vidi zbirnu\n    End If\n",
+        "Test_LNC_Blok_PremestiADoB",
+        "LNCD16 (a): obe zbirne imaju nove verzije sa novim brojevima",
+    ),
+    # Prijemnica se pogadja i po LABELI: tudja prijemnica sa istim brojem zbirne
+    # ulazi u Y i seli se (LNC-INV-07).
+    "lncb-prijemnica-po-labeli": (
+        "modDokumenta.bas",
+        "            If StrComp(rod, zbirnaID, vbTextCompare) = 0 Then\n",
+        "            If StrComp(rod, zbirnaID, vbTextCompare) = 0 Or BrojJednak(d(i, cBr), brojZbirne) Then   ' SABOTAZA: po labeli\n",
+        "Test_LNC_Blok_IzvadiDvePrijemnice",
+        "LNCB6: tudja prijemnica sa istom labelom se ne seli",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
