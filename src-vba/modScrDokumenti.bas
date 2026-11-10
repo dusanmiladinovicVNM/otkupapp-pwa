@@ -649,7 +649,12 @@ Public Function Scr_OtpInfo() As String
         Exit Function
     End If
 
-    If Len(mOtpID) = 0 Then Exit Function
+    If Len(mOtpID) = 0 Then
+        ' LNC-ODL-33: bez nacrta traka imenuje izabran izdat CILJ -- samo broj i
+        ' podnaslov (ljuska tada crta samo njih); brojevi napretka su nacrta.
+        If Len(CiljAktivan()) > 0 Then Scr_OtpInfo = mCiljBroj & "|" & Poruka("OTKUI_OTP_CILJ")
+        Exit Function
+    End If
 
     Set prog = modDokumenta.GetOtpremnicaProgress(mOtpID)
     sveNula = True

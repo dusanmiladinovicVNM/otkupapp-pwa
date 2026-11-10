@@ -1517,6 +1517,7 @@ Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
               " blok se vadi u listi Blokovi otpremnice, a dodaje iz liste Bez otpremnice:"
     UpsertRow lo, existing, "OTKUI_MSG_IZDATA_U_F1", "Otpremnica je izdata " & ChrW(8212) & _
               " blok se u nju dodaje ili iz nje vadi u F1: lista Otpremnice, klik na nju."
+    UpsertRow lo, existing, "OTKUI_OTP_CILJ", "Izdata " & ChrW(8212) & " izabrana za Izvadi / Dodaj blok"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_CILJ", "Nema izabrane izdate otpremnice " & ChrW(8212) & _
               " izaberi je u listi Otpremnice."
     UpsertRow lo, existing, "OTKUI_ERR_POTEZ_BLOK", "Potez NIJE upisan:"
