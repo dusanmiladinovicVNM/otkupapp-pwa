@@ -582,3 +582,61 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
 - **Ispravka naziva (09.11.2026):** ovaj fajl je „Ispravi" izdate otpremnice zvao „F2 Ispravi";
   radnja stoji u F1, lista „Otpremnice" (`modScrDokumenti.bas:203-214`), pa je naziv ispravljen
   u §0, §3, §6, §7, §8.
+
+## 11) KI-095 put (2): F8 storno zbirne uz nedovršenu ispravku prijemnice (`KI95-ODL-01..04`, `KI95-INV-01`)
+
+> **Status: PRE-FLIGHT 11.11.2026** (odluke operatera 11.11.2026). Prvo test koji pada nad
+> današnjim kodom (`Test_KI095_F8ZbirnaUzNedovrsenuIspravku`, `CLAUDE.md` §2), pa popravka u
+> zasebnom commit-u. Mereno čitanjem nad granom ovog reza; Excel nije pokrenut — NEVERIFIKOVANO.
+
+**Problem.** F8 „Ispravi" prijemnice odmah stornira staru prijemnicu (palete ostaju na njoj), a
+red `tblStornoVeze` ostaje `PENDING` dok se zamena ne unese u F4
+(`modStornoFlow.RunPrijemnicaCorrection`). Stornirana prijemnica zadržava `ZbirnaRoditeljID`
+(meri T21). Ako se u tom prozoru zbirna stornira **bez naslednika**, zamena nema aktivnu izdatu
+zbirnu: F4 je odbija (`ZBR_PARENT_NEMA`, `modDokumenta.PrijemnicaRoditeljRazlog`) pre nego što
+prepozna ispravku, a nedovršen `PENDING` red ostaje i svaku sledeću prijemnicu u F4 pita da li je
+zamena (`modDokUnos.NadjiIspravku` broji globalno). Put (1), potezi u lancu, zatvoren je
+kapijom `LNC-ODL-37`.
+
+**Pisci.** Jedini pisac `Stornirano = Da` nad `tblZbirna` je `modStorno.StornoZbirna`. Do njega
+iz F8 vode četiri ulaza, nijedan ne proverava ispravku prijemnice:
+
+| Ulaz | Put | Kapija danas |
+|---|---|---|
+| obican storno zbirne | `modScrStorno` → `StornoRazlog` → `StornoIzvrsi` → `StornoZbirna_TX` | samo „aktivna" i par ID/broj |
+| DUPLI zbirne | `RunZbirnaCorrection` → `StornoZbirnaIDetach_TX` | `ZbirnaScopeRazlog`; red konteksta nastaje PRE storna |
+| PONISTENJE zbirne | `RunZbirnaCorrection` → `PonistiZbirnaChain_TX` | KI-039 preradjena paleta; kaskada stornira samo AKTIVNE prijemnice |
+| PONISTENJE druge (aktivne) prijemnice | `RunPrijemnicaCorrection` → `PonistiZbirnaChain_TX` | KI-040 faktura; kaskada stornira i zbirnu |
+
+| ID | Odluka | Razlog |
+|---|---|---|
+| **`KI95-ODL-01`** | Kapija zatvara **sva četiri** F8 ulaza | Operater 11.11.2026; svaki ostavlja zamenu bez roditelja |
+| **`KI95-ODL-02`** | **Uska kapija:** odbija samo nedovršena ispravka prijemnice (`ISPRAVKA_ODMAH`, `PENDING`, stara prijemnica stornirana, veza po `ZbirnaRoditeljID`, stari oblik po broju). Podsetnik „Reši kasnije" ili pao kontekst nad samom zbirnom **ne** odbija F8 | Operater 11.11.2026; samo taj slučaj kvari podatke, a podsetnik se i rešava u F8. `MANUAL_REQUIRED` znači da je zamena već uneta, pa ne odbija (isto kao `LNC-ODL-37`) |
+| **`KI95-ODL-03`** | Jedno telo, `LNC-ODL-37` u uskom obliku: `modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog` (proširen `LncNedovrsenKontekstRazlog`, opcija „samo ispravke prijemnice") | `.claude/rules/testovi.md` §5; kopija pravila bi se razišla |
+| **`KI95-ODL-04`** | Razlog stiže **pre potvrde** (`StornoRazlog`, grana zbirne) i ponovo u piscu (`StornoIzvrsi`; `RunZbirnaCorrection` i `RunPrijemnicaCorrection` PONISTENJE **pre** spiska posledica i **pre** reda konteksta — odbijen pokušaj ne ostaje FAILED u Oporavku, lekcija KI-039/KI-040) | `StornoRazlog` ne zna mod, pa odbija i „Reši kasnije" nad tom zbirnom; pisac ga pušta (ništa ne stornira) — svesno |
+
+| ID | Invarijanta | Vlasnik |
+|---|---|---|
+| **`KI95-INV-01`** | Zbirna se ne stornira bez naslednika dok na njoj visi nedovršena ispravka prijemnice; posle F4 (zamena uneta) ili Oporavak „Odbaci" storno opet prolazi | `ZbirnaCekaIspravkuPrijemniceRazlog`; pozivaoci iz `KI95-ODL-04` |
+
+**Verdikt (pre-flight §1):** DOMAIN — PROVEN (zbirna je roditelj prijemnice, `ZBR-PARENT-01`) ·
+IDENTITY — PROVEN (veza po `ZbirnaRoditeljID` na storniranoj prijemnici, T21; stari oblik po broju,
+`LncPrijemnicaCekaIspravku`) · CARDINALITY — N prijemnica po zbirni, kapija po svakoj nedovršenoj
+ispravci · INVARIANTS/OWNER — `KI95-INV-01` · WRITERS — jedan pisac, četiri ulaza (tabela) ·
+DOWNSTREAM — F4 zamena, `NadjiIspravku`, Oporavak, palete na storniranoj prijemnici; ništa se ne
+upisuje novo · CAPABILITY — F8 storno zbirne ostaje, odbija se samo u prozoru ispravke ·
+EVENTS — N/A (kapija odbijanja, nema novog dokumenta, datuma ni statusa) · PLATFORM — N/A
+(postojeći dijalozi F8) · LANDING — ista grana posle dela (b); `modDokumenta`, `modStornoDok`,
+`modStornoFlow`, BFP, `sabotaza.py`; PR #457 te fajlove ne dira.
+
+**Dokaz (plan):** `Test_KI095_F8ZbirnaUzNedovrsenuIspravku` (BFP). **Crveno danas:** (a) obican
+storno — razlog pre potvrde imenuje kontekst, pisac odbija, zbirna ostaje aktivna; (b) PONISTENJE
+zbirne odbija pre spiska posledica, DUPLI odbija bez novog reda konteksta; (b2) PONISTENJE druge
+prijemnice odbija pre spiska i posle potvrde. **Zeleno i danas (kontrole):** (c) posle „Odbaci"
+storno prolazi; (d) `MANUAL_REQUIRED` ne odbija (sintetički); (e) ispravka druge zbirne ne smeta;
+(f) „Reši kasnije" nad samom zbirnom ne odbija (uska kapija). Sabotaže `ki095-*`.
+
+**Van ovog reza (zapisano, nije mereno):** poruka posle storna zbirne (`STORNO_MSG_ZBIRNA_PRIJ`)
+traži prijemnicu po broju bez filtera storna, pa može imenovati baš storniranu; hladnjački auto-lanac
+(`AutoLanacHladnjaca`) možda pravi novu prijemnicu za zbirnu čija je jedina prijemnica stornirana
+radi ispravke.
