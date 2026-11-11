@@ -242,7 +242,12 @@ PRAGOVI = collections.OrderedDict([
     ("prj_linija", 0),
     ("prj_kes", 0),
     ("prj_generacija", 0),
-    ("prj_brojzbirne", 31),
+    # S9 N15 (plan 14.64, "Preslaganje na 1fa4937a"; odluka operatera 11.11.2026):
+    # 31 -> 33. Rez "storno i ispravka otkupnog lista u lancu" (#471-#473) dodao je
+    # dva mesta, i nijedno nije spoj po broju: LncPrijemniceZbirne broj koristi samo
+    # da prepozna red bez ZbirnaRoditeljID i potez ODBIJE, a LncPreveziPrijemnicu
+    # pise labelu u koraku sa ID-em. S9-3 deli grupu na spoj (prag 0) i labelu.
+    ("prj_brojzbirne", 33),
     ("fak_broj_prj", 0),
     ("pal_broj", 0),
 ])

@@ -7,7 +7,7 @@
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
 > trajao) je ovde ponovo izmeren i zamenjen. Odluke iz njega važe.
 >
-> **Odluke (operater, 04.11.2026): sve `SLED-ODL-01..08` su DONETE** (§5), uz pravilo klase
+> **Odluke (operater): sve `SLED-ODL-01..09` su DONETE** (§5; 01–08 04.11.2026, 09 „tok dokumenta" 11.11.2026), uz pravilo klase
 > `SLED-KLASA-01` (varijanta b, §5a). Invarijante `SLED-INV-xx` imenuju šta kod danas drži, šta
 > mu fali i ko je vlasnik posle S9.
 
@@ -114,7 +114,7 @@ nego što kolona izađe iz kanona. S3–S6 su ovo ostavili otvorenim: brisanje k
 otpremnice i zbirne je odloženo „u svoj rez" i nikad nije došlo. **Vlasnik posle S9:** rez
 S9-6 (kanon i self-heal), kapija `popis_citalaca.py --check` (prag 0 po grupi).
 
-## 5) Odluke — DONETE (operater, 04.11.2026)
+## 5) Odluke — DONETE (operater: 01–08 04.11.2026, 09 11.11.2026)
 
 | ID | Pitanje | Odluka | Zašto | Rez |
 |---|---|---|---|---|
@@ -126,6 +126,7 @@ S9-6 (kanon i self-heal), kapija `popis_citalaca.py --check` (prag 0 po grupi).
 | **`SLED-ODL-06`** | Granica sa Preradom 2.0 | **Jedan graf, modul `modSledljivost`** (ime je slobodno: modul iz plana Prerade 2.0 je obrisan u `c79935be`). Prerada 2.0 C2 ga proširuje ivicama LJ i šarže, a ne pravi svoj. `PRERADA_2_MODEL_I_PLAN.md` §8 se ispravlja u S9-1 | reuse > new; dva grafa bi dala dva porekla | S9-1 |
 | **`SLED-ODL-07`** | Izvoz za PWA (`ExportOtkupiAll`): koju prijemnicu otkup pokazuje kad zbirna ima dve? | Prijemnice po `ZbirnaRoditeljID`. Kad ih je više: **najranija po datumu**, uz broj prijemnica. Ugovor kolona GAS/PWA se ne menja. Operater: **PWA se verovatno neće koristiti, AgriX VBA će najverovatnije biti samo desktop**, pa je ovo minimalna popravka niskog prioriteta | Danas „prva je dovoljna" po **broju** (`modStammdatenSync:1245`) | S9-3 |
 | **`SLED-ODL-08`** | Labele na detetu: `Prijemnica.BrojZbirne` i broj-oblik traga ispravke | **`Prijemnica.BrojZbirne` ostaje** kao snapshot labele za papir i pretragu, ali **nijedan spoj** po njemu (kapija `NEMA_BROJA_KAO_FK`). Broj-oblik traga (`IspravkaOd`/`ZamenjenSa`) se briše gde nema produkcionog pisca (otpremnica, zbirna, novac); na prijemnici ostaje dok papir ne pređe na `tblStornoVeze` | Jedini pisac traga (`StampIspravkaTrace:1453`) u produkciji zove samo prijemnica (`modDokUnos:1339`); za identitet od broj-oblika ne zavisi ništa | S9-3, S9-6 |
+| **`SLED-ODL-09`** | Da li klik na bilo koji dokument (OTK, OTP, ZBR, PRJ, faktura) pokazuje ceo tok u kome je taj dokument, sa onim što je ispred i iza njega? | **Da: radnja „Tok" nad redom dokumenta** u F1–F4 (DOKUMENTI), Stornu i Izveštajima otvara **tok dokumenta**: unazad (preci) i unapred (potomci), po nivoima, od izabranog čvora. Ostali dokumenti iste grupe (drugi otkupi iste otpremnice, druge otpremnice iste zbirne) se prikazuju **sažeto** („+12 otkupa u istoj otpremnici"), sa mogućnošću širenja. Važe ista pravila kao za ceo graf: samo aktivne veze, a istorija ide posebno (`SLED-ODL-03`); unazad od prijemnice važi nadskup sa natpisom „moguće poreklo" (`SLED-ODL-01`), uz oznaku klase (`SLED-KLASA-01`); hladnjački lanac se filtrira po klasi. Svaki čvor nosi svoj datum i status, i iz njega se može otvoriti dokument (C-043) | Operater traži odgovor na „gde je ovo išlo i odakle je došlo" iz dokumenta koji već gleda, a ne preko posebnog ekrana po otkupnom listu. Jezgro grafa (S9-1) hoda iz bilo kog čvora u oba smera, pa je ovo samo prikaz nad istim čitačem; drugi čitač se ne gradi | S9-7 |
 
 ## 5a) Klasa — `SLED-KLASA-01`
 

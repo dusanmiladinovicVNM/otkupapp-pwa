@@ -11409,6 +11409,7 @@ jednom; aktivnost (storno se ne crta, `SLED-ODL-03`); pripadnost (ivica razreša
 | C-037 / C-038 ručno i auto vezivanje otkupa na otpremnicu | obrisan; vezivanje radi F2 | **REPLACED**: F2 „vezi" → `DodajOtpremnicaIzvor_TX`; auto: auto-lanac i uvoz predaje |
 | C-039 GlobalGAP dokument zbirne, C-040 dokument perioda | obrisan | **MIGRATED** u S9-7 (`PAL-ODL-07`) |
 | C-041 A4 lanca | mrtav `StampajSledljivostLanacDoc:4984` | **MIGRATED** u S9-7 (prvo reuse tela; izgled je ručna provera) |
+| **nova** — tok dokumenta (`SLED-ODL-09`): klik na bilo koji dokument pokazuje ceo tok, unazad i unapred | ne postoji | **NOVO u S9-7**, nad jezgrom S9-1; radnja „Tok" na redu dokumenta u F1–F4, Stornu i Izveštajima |
 | C-042 štampa liste | obrisan | zajednički put liste ljuske |
 | C-043 dokument iza reda | obrisan | **MIGRATED**; ruta po ID-u čvora |
 | C-050 / C-051 paletni list: spisak kooperanata | prazan od S1b-1 (`modPaletniList:910`, `:3337`) | **MIGRATED** u S9-7 kroz jezgro (`SLED-ODL-05`) |
@@ -11589,6 +11590,29 @@ prioritet; `Prijemnica.BrojZbirne` ostaje labela bez spoja.
 - `#461` je zatvoren (05.11.2026) kao zamenjen ovim PR-om;
 - `#457` je i dalje otvoren i dira `AMBALAZA.md`, `README.md` i `modTest.bas`. Brojevi testova i odeljaka
   za kod S9 se zato dodeljuju posle njegovog merge-a (`STORNO_U_LANCU.md` §9).
+
+#### Odluka operatera 11.11.2026 — `SLED-ODL-09` i N15 (`docs/STANJE_REFAKTORA.md` stavka 327)
+
+- **`SLED-ODL-09` — tok dokumenta (DONETA):**
+  - radnja „Tok" nad redom bilo kog dokumenta (OTK, OTP, ZBR, PRJ, faktura) u F1–F4, Stornu i Izveštajima;
+  - prikazuje tok unazad i unapred, po nivoima. Ostali dokumenti iste grupe su sažeti i mogu da se rašire;
+  - važe `SLED-ODL-01`, `-03` i `SLED-KLASA-01`. Tekst je u `docs/DOMEN/SLEDLJIVOST.md` §5;
+  - **rez: S9-7.** Prikaz je nad istim jezgrom (S9-1), bez drugog čitača. Radnja „Tok" se dodaje i
+    ekranima koje ne nosi S9 (F1–F4, Storno, Izveštaji). Brojevi testova se dodeljuju posle `#457`.
+- **Ugovor S9-7 dobija:**
+  - **Važi:** iz svake vrste dokumenta tok sadrži tačno pretke i potomke po ID ivicama. Ostali dokumenti
+    iste grupe su prebrojani, a ne izostavljeni;
+  - **Negativ:** dve zbirne istog broja, dva vozača. Tok zbirne A nema nijedan dokument zbirne B (obrazac
+    G3, mamac kao u S9-1);
+  - **Edge:** prijemnica unazad daje nadskup sa oznakom klase; hladnjački lanac je filtriran po klasi;
+    stornirana verzija nije u toku nego u istoriji;
+  - **Ručno:** izgled toka na ekranu.
+- **N15 — oba predloga prihvaćena:**
+  - **(a)** prag `prj_brojzbirne` je u ovom PR-u podignut 31 → 33 (`tools/popis_citalaca.py`, komentar
+    upućuje ovde). **Dokaz u oba smera:** prag 32 → `PAO`, prag 34 → `PRAG ZASTAREO`, prag 33 → `ok`.
+    S9-3 posle toga deli grupu na spoj (prag 0) i labelu;
+  - **(b)** korak `popis_citalaca --check` u CI ide **zasebnim** PR-om (process). Taj PR se merge-uje
+    **posle** ovog: pre njega je kapija na `main`-u crvena, i to je ujedno dokaz da korak meri.
 
 ## 15) Backlog — namerno van opsega
 
