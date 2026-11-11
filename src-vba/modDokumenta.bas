@@ -4155,6 +4155,29 @@ Private Sub LncPlanOtpremnice(ByVal p As Object, ByVal otpID As String, _
     End If
 End Sub
 
+' KI-095 put (2) (STORNO_U_LANCU.md S11, KI95-ODL-01..04): F8 storno zbirne --
+' obican, DUPLI, PONISTENJE zbirne i PONISTENJE prijemnice koje kaskadno stornira
+' zbirnu -- ne sme da ostavi zapocetu ispravku prijemnice bez roditelja. ISTO telo
+' kao kapija poteza u lancu (LncNedovrsenKontekstRazlog), USKO (odluka operatera
+' 11.11.2026): odbija samo nedovrsena ispravka prijemnice (PENDING, zamena nije
+' uneta); podsetnik ili pao kontekst nad samom zbirnom se i dalje resava u F8.
+' "" = nema prepreke. Zovu je F8 pre potvrde (StornoRazlog) i pisci pre reda
+' konteksta (StornoIzvrsi, RunZbirnaCorrection, RunPrijemnicaCorrection).
+Public Function ZbirnaCekaIspravkuPrijemniceRazlog(ByVal zbrID As String, _
+                                                   ByVal zbrBroj As String) As String
+    Dim ktx As Collection, g As String
+    On Error GoTo EH
+    zbrID = Trim$(zbrID)
+    If Len(zbrID) = 0 Then Exit Function
+    Set ktx = modStornoContext.GetPendingCorrections(g)
+    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, "", "", zbrID, _
+                                                                    Trim$(zbrBroj), True)
+    Exit Function
+EH:
+    ZbirnaCekaIspravkuPrijemniceRazlog = "Zapocete ispravke prijemnica ne mogu da se provere, " & _
+        "pa se storno zbirne odbija: [" & Err.Number & "] " & Err.description
+End Function
+
 ' LNC-ODL-37 (KI-095): potez u lancu ne zamenjuje otpremnicu ni zbirnu nad kojom
 ' stoji NEDOVRSEN kontekst (tblStornoVeze, NeedsRecovery = Da): F8 "Resi kasnije",
 ' PONISTENJE / DUPLI koji je pao ili ceka rucno. Posle poteza bi taj podsetnik
@@ -4180,7 +4203,8 @@ End Sub
 ' (drugi par je prazan). "" = nema prepreke.
 Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal greska As String, _
                                             ByVal otpID As String, ByVal otpBroj As String, _
-                                            ByVal zbrID As String, ByVal zbrBroj As String) As String
+                                            ByVal zbrID As String, ByVal zbrBroj As String, _
+                                            Optional ByVal samoIspravkePrijemnice As Boolean = False) As String
     Const SRC As String = "LncNedovrsenKontekstRazlog"
     Const SAVET As String = ". Prvo ga resi ili odbaci (ekran Oporavak, lista Nedovrseno)."
     Const PO_BROJU As String = " (stari red bez OldDocID, poklopljen po BROJU -- proveri " & _
@@ -4210,7 +4234,7 @@ Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal
             End If
         End If
         If Len(zbrID) > 0 Then
-            If StrComp(tip, FLOW_DOC_ZBIRNA, vbTextCompare) = 0 Then
+            If StrComp(tip, FLOW_DOC_ZBIRNA, vbTextCompare) = 0 And Not samoIspravkePrijemnice Then
                 If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) Then
                     LncNedovrsenKontekstRazlog = "Nad zbirnom " & zbrBroj & _
                         " stoji nedovrsen kontekst " & LncKontekstOpis(d) & _

@@ -8272,6 +8272,63 @@ SABOTAZE = {
         "Test_LNC_Blok_GranicaRadnji",
         "LNCB19: nijedna lista F1 i F2 ni u jednom kontekstu ne nudi vise od MAX_ACT radnji",
     ),
+    # --- KI-095 put (2): F8 storno zbirne uz nedovrsenu ispravku prijemnice ----
+    # (STORNO_U_LANCU.md S11). Kapija samo u piscu: F8 nudi potvrdu, a posle "Da" odbija.
+    "ki095-f8-preflight-bez-kapije": (
+        "modStornoDok.bas",
+        "                StornoRazlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)\n",
+        "                StornoRazlog = \"\"   ' SABOTAZA: F8 bez kapije pre potvrde\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (a): F8 storno zbirne imenuje nedovrsenu ispravku prijemnice PRE potvrde",
+    ),
+    # Kapija samo pre potvrde: drugi pozivalac pisca stornira zbirnu.
+    "ki095-f8-pisac-bez-kapije": (
+        "modStornoDok.bas",
+        "            razlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)\n",
+        "            razlog = \"\"   ' SABOTAZA: pisac bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (a): pisac odbija storno zbirne istim razlogom",
+    ),
+    # DUPLI i PONISTENJE zbirne bez kapije (red konteksta nastaje, zbirna pada).
+    "ki095-mod-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)\n",
+        "    razKi095 = \"\"   ' SABOTAZA: DUPLI i PONISTENJE bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b): DUPLI zbirne odbija bez zapisa u Oporavku i bez storna",
+    ),
+    # PONISTENJE druge prijemnice kaskadno stornira zbirnu.
+    "ki095-prijemnica-ponistenje-bez-kapije": (
+        "modStornoFlow.bas",
+        "                razKi095P = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrKi095, parentZbirna)\n",
+        "                razKi095P = \"\"   ' SABOTAZA: kaskada prijemnice bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b2): PONISTENJE druge prijemnice ne stornira zbirnu uz nedovrsenu ispravku",
+    ),
+    # Siroka kapija (kao LNC-ODL-37): podsetnik nad samom zbirnom blokira F8 (KI95-ODL-02).
+    "ki095-kapija-siroka": (
+        "modDokumenta.bas",
+        "    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, \"\", \"\", zbrID, _\n                                                                    Trim$(zbrBroj), True)\n",
+        "    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, \"\", \"\", zbrID, _\n                                                                    Trim$(zbrBroj), False)   ' SABOTAZA: siroka kapija\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (f): podsetnik Resi kasnije nad samom zbirnom ne odbija F8 storno (uska kapija)",
+    ),
+    # Ispravka u svakom statusu odbija -- i ona cija je zamena vec uneta (MANUAL).
+    "ki095-manual-odbija": (
+        "modDokumenta.bas",
+        "                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
+        "                   True Then   ' SABOTAZA: ispravka u svakom statusu (KI-095)\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (d): zamena vec uneta (MANUAL_REQUIRED) ne odbija F8 storno zbirne",
+    ),
+    # Kapija ne gleda SVOJU zbirnu: ispravka bilo koje zbirne blokira svaki storno.
+    "ki095-gate-globalan": (
+        "modDokumenta.bas",
+        "        LncPrijemnicaCekaIspravku = (StrComp(rod, zbrID, vbTextCompare) = 0)\n",
+        "        LncPrijemnicaCekaIspravku = True   ' SABOTAZA: ispravka bilo koje zbirne\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (e): nedovrsena ispravka druge zbirne ne smeta F8 stornu",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (

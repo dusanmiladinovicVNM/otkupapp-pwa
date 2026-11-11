@@ -238,6 +238,11 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                 StornoRazlog = NijePronadjen(broj)
             ElseIf Not ZbirnaParOK(docID, broj) Then
                 StornoRazlog = modPoruke.Poruka("STORNO_ERR_ZBR_PAR")
+            Else
+                ' KI-095 put (2) (KI95-ODL-04): zbirna bez naslednika ne sme da
+                ' ostavi zapocetu ispravku prijemnice bez roditelja. Razlog stize
+                ' PRE svakog moda; pisci ga mere ponovo.
+                StornoRazlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)
             End If
 
         Case STIP_PRIJEMNICA
@@ -395,6 +400,12 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             End If
             If Not ZbirnaParOK(docID, broj) Then
                 poruka = modPoruke.Poruka("STORNO_ERR_ZBR_PAR")
+                Exit Function
+            End If
+            ' KI-095 put (2): ista kapija kao StornoRazlog -- pisac meri ponovo.
+            razlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)
+            If Len(razlog) > 0 Then
+                poruka = razlog
                 Exit Function
             End If
             ok = StornoZbirna_TX(Trim$(docID))
