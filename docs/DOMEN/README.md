@@ -447,6 +447,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |
 | **Palete i prerada — identitet, količina i odluke S8** (`PAL-IDENT-01/02`, `PAL-INV-01/02`, `PAL-ODL-01..07`) | `docs/DOMEN/PALETE.md` |
+| **Sledljivost kao graf — ivice, identitet, invarijante i odluke S9** (`SLED-IDENT-01/02`, `SLED-INV-01..03`, `SLED-ODL-01..08`, `SLED-KLASA-01`) | `docs/DOMEN/SLEDLJIVOST.md` |
 | Provere integriteta | `docs/INTEGRITET_PROVERE.md` |
 | Arhitektonski ugovor (A1–A12, kapije, Pre-Flight) | `docs/DOMEN/ARCHITECTURE_CONTRACT.md` |
 | Ciljni model dokumenata (header + stavke, PK/FK, kardinaliteti) | `docs/DOMEN/DOCUMENT_HEADER_LINES.md` |
