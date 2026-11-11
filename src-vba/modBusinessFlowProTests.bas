@@ -341,6 +341,7 @@ Public Sub RunBusinessFlowProSuite()
     ' LNC-ODL-37 / KI-095: nedovrsen kontekst nad zbirnom odbija potez (T21)
     Test_LNC_NedovrsenKontekstOdbija
     Test_LNC_NedovrsenKontekstGranice
+    Test_KI095_F8ZbirnaUzNedovrsenuIspravku
     ' LNC-ODL-38: potvrdjeno upozorenje je trajan trag poteza (T23)
     Test_LNC_UpozorenjeUTragu
     ' LNC-ODL-24: upozorenje o aktivnoj prijemnici za sve poteze (T22)
@@ -30037,6 +30038,180 @@ EH:
     modScrDokumenti.Scr_ZbrOtkazi
     SetTestMode prevTest
     modOtkupUI.ActiveMode = prevMode
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' ============================================================
+' KI-095 put (2): F8 storno zbirne uz nedovrsenu ispravku prijemnice
+' (STORNO_U_LANCU.md S11, KI95-ODL-01..04, KI95-INV-01)
+' ============================================================
+' F8 "Ispravi" prijemnice ostavlja staru storniranu, a kontekst PENDING dok se
+' zamena ne unese u F4. Zbirna stornirana bez naslednika u tom prozoru ostavlja
+' zamenu bez roditelja (ZBR_PARENT_NEMA). Fixture grade kanonski pisci (normal
+' production state), osim gde je izricito receno; svaki odeljak ima svoj lanac,
+' jer danasnji kod u (a), (b) i (b2) zaista stornira.
+' CRVENO nad kodom pre popravke: (a), (b), (b2). Kontrole (c)-(f) zelene su i pre i
+' posle (uska kapija, KI95-ODL-02).
+Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
+    Const SRC As String = "Test_KI095_F8ZbirnaUzNedovrsenuIspravku"
+    Dim scenario As String, r As Object
+    Dim otkA As String, otpA As String, zbrA As String, prjA As String, cidA As String, brA As String
+    Dim razA As String, okA As Boolean, izlazA As String, otkE As String, otpE As String, zbrE As String
+    Dim otkB1 As String, otkB2 As String, otpB As String, zbrB As String, prjB1 As String, prjB2 As String
+    Dim cidB As String, brB As String, razB As String, rP As Object, rD As Object, svPre As Long, cidDupli As String
+    Dim otkP1 As String, otkP2 As String, otpP As String, zbrP As String, prjP1 As String, prjP2 As String
+    Dim cidP As String, brP2 As String, rPp As Object, rPf As Object, cidPon As String
+    Dim otkC As String, otpC As String, zbrC As String, prjC As String, cidC As String, brC As String
+    Dim razC As String, okC As Boolean, izlazC As String, odbacen As Boolean
+    Dim otkD As String, otpD As String, zbrD As String, prjD As String, prjD2 As String, cidD As String, razD As String
+    Dim otkF As String, otpF As String, zbrF As String, cidF As String, razF As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("KI95")
+
+    ' ---- (a) obican F8 storno zbirne, jedina prijemnica u ispravci ----
+    otkA = LncOtkup("KI95A-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkE = LncOtkup("KI95E-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpA = LncOtp("KI95A-" & scenario, Pr3Izvor(otkA, ""), TEST_TIP_AMB)
+    otpE = LncOtp("KI95E-" & scenario, Pr3Izvor(otkE, ""), TEST_TIP_AMB)
+    zbrA = LncZbr("KI95A-" & scenario, Pr3Izvor(otpA, ""))
+    zbrE = LncZbr("KI95E-" & scenario, Pr3Izvor(otpE, ""))
+    prjA = LncPrj("KI95A-" & scenario, zbrA, 100#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjA, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjA))
+    cidA = CStr(r("correctionID"))
+    brA = LncZbrPolje(zbrA, COL_ZBR_BROJ)
+    AssertTrue CBool(r("success")) And Len(cidA) > 0 And LncPrjPolje(prjA, COL_STORNIRANO) = "Da" And _
+               LncPrjPolje(prjA, COL_DETE_ZBIRNA_ROD) = zbrA, _
+               "KI095 (a): preduslov -- ispravka prijemnice je zapoceta, stara stornirana i vezana za zbirnu"
+
+    razA = modStornoDok.StornoRazlog(STIP_ZBIRNA, brA, "", zbrA)
+    okA = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brA, "", izlazA, zbrA)
+    AssertTrue InStr(1, razA, cidA, vbTextCompare) > 0, _
+               "KI095 (a): F8 storno zbirne imenuje nedovrsenu ispravku prijemnice PRE potvrde"
+    AssertTrue Not okA And InStr(1, izlazA, cidA, vbTextCompare) > 0, _
+               "KI095 (a): pisac odbija storno zbirne istim razlogom"
+    AssertTrue LncZbrPolje(zbrA, COL_STORNIRANO) <> "Da", _
+               "KI095 (a): zbirna ostaje aktivna -- zamena prijemnice ima roditelja"
+    AssertEquals SV_STATUS_PENDING, modStornoContext.GetCorrectionField(cidA, COL_SV_STATUS), _
+                 "KI095 (a): ispravka prijemnice ostaje nedovrsena (storno je ne zatvara)"
+    ' (e) Kapija je vezana za SVOJU zbirnu: ispravka zbirne A ne smeta zbirni E.
+    AssertEquals "", modStornoDok.StornoRazlog(STIP_ZBIRNA, LncZbrPolje(zbrE, COL_ZBR_BROJ), "", zbrE), _
+                 "KI095 (e): nedovrsena ispravka druge zbirne ne smeta F8 stornu"
+
+    ' ---- (b) DUPLI i PONISTENJE zbirne, uz drugu (aktivnu) prijemnicu ----
+    otkB1 = LncOtkup("KI95B1-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkB2 = LncOtkup("KI95B2-" & scenario, 50#, 0#, TEST_TIP_AMB)
+    otpB = LncOtp("KI95B-" & scenario, Pr3Izvor(otkB1, otkB2), TEST_TIP_AMB)
+    zbrB = LncZbr("KI95B-" & scenario, Pr3Izvor(otpB, ""))
+    prjB1 = LncPrj("KI95B1-" & scenario, zbrB, 100#, 0, TEST_TIP_AMB)
+    prjB2 = LncPrj("KI95B2-" & scenario, zbrB, 50#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjB1, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjB1))
+    cidB = CStr(r("correctionID"))
+    brB = LncZbrPolje(zbrB, COL_ZBR_BROJ)
+    AssertTrue CBool(r("success")) And Len(cidB) > 0, _
+               "KI095 (b): preduslov -- ispravka prve prijemnice je zapoceta"
+    razB = modStornoDok.StornoRazlog(STIP_ZBIRNA, brB, "", zbrB)
+    Set rP = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, brB, "", SV_MODE_PONISTENJE, False, False, zbrB)
+    svPre = CountRows(TBL_STORNO_VEZE)
+    Set rD = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, brB, "", SV_MODE_DUPLI, True, False, zbrB)
+    If Not rD Is Nothing Then cidDupli = CStr(rD("correctionID"))
+    AssertTrue InStr(1, razB, cidB, vbTextCompare) > 0, _
+               "KI095 (b): razlog pre potvrde vazi za svaki mod zbirne"
+    AssertTrue Not rP Is Nothing, "KI095 (b): preduslov -- PONISTENJE je vratilo rezultat"
+    If Not rP Is Nothing Then
+        AssertTrue Not CBool(rP("blocked")) And Not CBool(rP("success")) And _
+                   InStr(1, CStr(rP("message")), cidB, vbTextCompare) > 0, _
+                   "KI095 (b): PONISTENJE zbirne odbija pre spiska posledica"
+    End If
+    AssertTrue Not rD Is Nothing, "KI095 (b): preduslov -- DUPLI je vratio rezultat"
+    If Not rD Is Nothing Then
+        AssertTrue Not CBool(rD("success")) And InStr(1, CStr(rD("message")), cidB, vbTextCompare) > 0 And _
+                   CountRows(TBL_STORNO_VEZE) = svPre And LncZbrPolje(zbrB, COL_STORNIRANO) <> "Da", _
+                   "KI095 (b): DUPLI zbirne odbija bez zapisa u Oporavku i bez storna"
+    End If
+
+    ' ---- (b2) PONISTENJE druge, aktivne prijemnice iste zbirne (kaskada) ----
+    otkP1 = LncOtkup("KI95P1-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otkP2 = LncOtkup("KI95P2-" & scenario, 50#, 0#, TEST_TIP_AMB)
+    otpP = LncOtp("KI95P-" & scenario, Pr3Izvor(otkP1, otkP2), TEST_TIP_AMB)
+    zbrP = LncZbr("KI95P-" & scenario, Pr3Izvor(otpP, ""))
+    prjP1 = LncPrj("KI95P1-" & scenario, zbrP, 100#, 0, TEST_TIP_AMB)
+    prjP2 = LncPrj("KI95P2-" & scenario, zbrP, 50#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjP1, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjP1))
+    cidP = CStr(r("correctionID"))
+    brP2 = LncPrjPolje(prjP2, COL_PRJ_BROJ)
+    Set rPp = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, brP2, "", SV_MODE_PONISTENJE, False, False, _
+                                           S6K4Ident(prjP2))
+    Set rPf = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, brP2, "", SV_MODE_PONISTENJE, True, False, _
+                                           S6K4Ident(prjP2))
+    If Not rPf Is Nothing Then cidPon = CStr(rPf("correctionID"))
+    AssertTrue Len(cidP) > 0 And Not rPp Is Nothing And Not rPf Is Nothing, _
+               "KI095 (b2): preduslov -- ispravka prve prijemnice je zapoceta, PONISTENJE druge je vratilo rezultat"
+    If Not rPp Is Nothing And Not rPf Is Nothing Then
+        AssertTrue Not CBool(rPp("blocked")) And InStr(1, CStr(rPp("message")), cidP, vbTextCompare) > 0 And _
+                   Not CBool(rPf("success")) And InStr(1, CStr(rPf("message")), cidP, vbTextCompare) > 0 And _
+                   LncZbrPolje(zbrP, COL_STORNIRANO) <> "Da" And LncPrjPolje(prjP2, COL_STORNIRANO) <> "Da", _
+                   "KI095 (b2): PONISTENJE druge prijemnice ne stornira zbirnu uz nedovrsenu ispravku"
+    End If
+
+    ' ---- (c) KONTROLA: posle "Odbaci" u Oporavku storno prolazi ----
+    otkC = LncOtkup("KI95C-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpC = LncOtp("KI95C-" & scenario, Pr3Izvor(otkC, ""), TEST_TIP_AMB)
+    zbrC = LncZbr("KI95C-" & scenario, Pr3Izvor(otpC, ""))
+    prjC = LncPrj("KI95C-" & scenario, zbrC, 100#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjC, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjC))
+    cidC = CStr(r("correctionID"))
+    brC = LncZbrPolje(zbrC, COL_ZBR_BROJ)
+    odbacen = modScrOporavak.OdbaciIspravkuCore(cidC)
+    razC = modStornoDok.StornoRazlog(STIP_ZBIRNA, brC, "", zbrC)
+    okC = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brC, "", izlazC, zbrC)
+    AssertTrue Len(cidC) > 0 And odbacen And Len(razC) = 0 And okC And LncZbrPolje(zbrC, COL_STORNIRANO) = "Da", _
+               "KI095 (c): posle Odbaci u Oporavku F8 storno zbirne prolazi (" & izlazC & ")"
+
+    ' ---- (d) KONTROLA: zamena vec uneta (MANUAL_REQUIRED) ne odbija ----
+    ' SINTETICKI: produkcija MANUAL_REQUIRED pise u PreveziPaleteIspravke posle
+    ' unosa zamene u F4; ovde se zamena upisuje piscem, a status se postavlja rucno.
+    otkD = LncOtkup("KI95D-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpD = LncOtp("KI95D-" & scenario, Pr3Izvor(otkD, ""), TEST_TIP_AMB)
+    zbrD = LncZbr("KI95D-" & scenario, Pr3Izvor(otpD, ""))
+    prjD = LncPrj("KI95D-" & scenario, zbrD, 100#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjD, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjD))
+    cidD = CStr(r("correctionID"))
+    prjD2 = LncPrj("KI95D2-" & scenario, zbrD, 100#, 0, TEST_TIP_AMB)
+    AssertTrue Len(cidD) > 0 And Len(prjD2) > 0 And _
+               modStornoContext.MarkCorrectionManual(cidD, "KI095 test", "KI095: sinteticki MANUAL"), _
+               "KI095 (d): preduslov -- zamena je upisana, kontekst MANUAL_REQUIRED"
+    razD = modStornoDok.StornoRazlog(STIP_ZBIRNA, LncZbrPolje(zbrD, COL_ZBR_BROJ), "", zbrD)
+    AssertTrue InStr(1, razD, cidD, vbTextCompare) = 0, _
+               "KI095 (d): zamena vec uneta (MANUAL_REQUIRED) ne odbija F8 storno zbirne"
+
+    ' ---- (f) KONTROLA, uska kapija: "Resi kasnije" nad samom zbirnom ne odbija ----
+    otkF = LncOtkup("KI95F-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpF = LncOtp("KI95F-" & scenario, Pr3Izvor(otkF, ""), TEST_TIP_AMB)
+    zbrF = LncZbr("KI95F-" & scenario, Pr3Izvor(otpF, ""))
+    Set r = modStornoFlow.RunZbirnaCorrection(LncZbrPolje(zbrF, COL_ZBR_BROJ), SV_MODE_RESI_KASNIJE, True, zbrF)
+    cidF = CStr(r("correctionID"))
+    razF = modStornoDok.StornoRazlog(STIP_ZBIRNA, LncZbrPolje(zbrF, COL_ZBR_BROJ), "", zbrF)
+    AssertTrue Len(cidF) > 0 And Len(razF) = 0, _
+               "KI095 (f): podsetnik Resi kasnije nad samom zbirnom ne odbija F8 storno (uska kapija)"
+
+    LncOdbaciKontekste cidA, cidB, cidP, cidD
+    LncOdbaciKontekste cidF, cidDupli, cidPon, ""
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    LncOdbaciKontekste cidA, cidB, cidP, cidD
+    LncOdbaciKontekste cidF, cidDupli, cidPon, cidC
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub
