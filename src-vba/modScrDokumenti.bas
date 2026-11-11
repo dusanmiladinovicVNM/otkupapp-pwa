@@ -342,6 +342,32 @@ Public Function Scr_CiljID() As String
     Scr_CiljID = CiljAktivan()
 End Function
 
+' Promena otkupnog mesta (ljuska, NapustiOtpremnicu): cilj DRUGE stanice se
+' pusta -- na ekranu bi stajala stanica B, a "Izvadi" bi menjao dokument stanice
+' A (review 11.11.2026). Datum i roba forme nisu cilja, pa se ne diraju (zato ne
+' Scr_OtpOtkazi). True = cilj je pusten, pa ljuska osvezava traku i listu; lista
+' blokova cilja tada vise nema sta da pokaze i vraca se na otpremnice.
+' Clan koji kroz Application.Run digne gresku otvara dijalog (UI-PAD-01), pa
+' ovde nema propustene greske: nepoznato stanje pusta cilj (fail-closed).
+Public Function Scr_CiljNapustiZaStanicu(ByVal stID As String) As Boolean
+    Dim cilj As String, st As String
+    On Error GoTo EH
+    cilj = CiljAktivan()
+    If Len(cilj) = 0 Then Exit Function
+    st = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, cilj, COL_OTP_STANICA)))
+    If StrComp(st, Trim$(stID), vbTextCompare) = 0 Then Exit Function
+    mCiljID = ""
+    mCiljBroj = ""
+    If mLista = "BLOKOVI" Then mLista = "OTPREMNICE"
+    Scr_CiljNapustiZaStanicu = True
+    Exit Function
+EH:
+    mCiljID = ""
+    mCiljBroj = ""
+    If mLista = "BLOKOVI" Then mLista = "OTPREMNICE"
+    Scr_CiljNapustiZaStanicu = True
+End Function
+
 ' Cilj prati naslednika (LNC-ODL-33): potez nad blokom -- i svaki drugi put koji
 ' zameni izdatu otpremnicu (F8, F1 "Ispravi", Oporavak) -- stornira staru verziju
 ' i pise ZamenjenSaID. Aktivna IZDATA nova verzija postaje cilj; stornirana bez

@@ -8859,9 +8859,24 @@ End Function
 ' pod mLoading da ugnjezdeni okidaci (datum, vrsta) ne bi ponovo ulazili u
 ' OnStanicaChanged - stanje se sredjuje jednom, na kraju.
 Private Sub NapustiOtpremnicu(ByVal stID As String)
-    Dim otpSt As String
+    Dim otpSt As String, ciljPusten As Boolean
     On Error Resume Next
     If mScreen <> "DOKUMENTI" Then Exit Sub
+    ' Izabran izdat CILJ poteza nad blokom (STORNO_U_LANCU.md S10) pripada svom
+    ' otkupnom mestu kao i nacrt: ekran ga pusta kad se mesto promeni. Samo cilj --
+    ' datum i roba forme nisu bili njegovi, pa se ne diraju. Rezultat ide u
+    ' promenljivu: greska u uslovu If pod Resume Next bi usla u telo.
+    ciljPusten = CBool(Application.Run("modScrDokumenti.Scr_CiljNapustiZaStanicu", stID))
+    Err.Clear
+    If ciljPusten Then
+        mSelRow = 0
+        RefreshOtpTraka mFrm
+        RefreshListSeg mFrm
+        RefreshGridTitle mFrm
+        ReloadGrid
+        LayoutOtkup mFrm
+        Exit Sub
+    End If
     otpSt = CStr(Application.Run("modScrDokumenti.Scr_OtpStanica"))
     Err.Clear
     If Len(otpSt) = 0 Then Exit Sub
