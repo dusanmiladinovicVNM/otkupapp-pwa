@@ -8248,6 +8248,22 @@ SABOTAZE = {
         "Test_LNC_Blok_EkranPotvrdaIRuta",
         "LNCB18: bez konteksta (ni nacrt ni cilj) lista Blokovi ne nudi Izvadi",
     ),
+    # Promena otkupnog mesta ne pusta cilj druge stanice (review 11.11.2026).
+    "lncb-ekran-stanica-ne-pusta": (
+        "modScrDokumenti.bas",
+        "    If StrComp(st, Trim$(stID), vbTextCompare) = 0 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: cilj prezivljava promenu stanice\n",
+        "Test_LNC_Blok_EkranPromenaStanice",
+        "LNCB18S: promena otkupnog mesta pusta cilj druge stanice",
+    ),
+    # I izbor ISTE stanice pusta cilj.
+    "lncb-ekran-stanica-pusta-uvek": (
+        "modScrDokumenti.bas",
+        "    If StrComp(st, Trim$(stID), vbTextCompare) = 0 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: i ista stanica pusta cilj\n",
+        "Test_LNC_Blok_EkranPromenaStanice",
+        "LNCB18S: izbor iste stanice ne dira cilj",
+    ),
     # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
     "lncb-ekran-vise-od-max": (
         "modScrDokumenti.bas",

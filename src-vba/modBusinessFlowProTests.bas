@@ -361,6 +361,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_LNC_Blok_PremestiADoB
     Test_LNC_Blok_DodajStaraBezKulture
     Test_LNC_Blok_EkranPotvrdaIRuta
+    Test_LNC_Blok_EkranPromenaStanice
     Test_LNC_Blok_GranicaRadnji
     ' KI-089: potvrda manjka u ispravci se meri kao kod pisca
     Test_OTK_KI089_PotvrdaIspravkeKaoPisac
@@ -29906,6 +29907,65 @@ EH:
     On Error Resume Next
     modScrDokumenti.Scr_OtpTestReset
     modScrDokumenti.Scr_PotvrdaLancaTestReset
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
+    On Error GoTo 0
+    LogFatal SRC, errNum, errDesc
+End Sub
+
+' T18b (review 11.11.2026): promena otkupnog mesta pusta izabran izdat cilj DRUGE
+' stanice -- inace bi na ekranu stajala stanica B, a "Izvadi" bi menjao dokument
+' stanice A. Ista stanica cilj ne dira. Meri clan ekrana koji ljuska zove iz
+' NapustiOtpremnicu; sam poziv iz ljuske trazi zivu formu, pa je rucna provera.
+Private Sub Test_LNC_Blok_EkranPromenaStanice()
+    Const SRC As String = "Test_LNC_Blok_EkranPromenaStanice"
+    Dim scenario As String, prevMode As String, prevTest As Boolean
+    Dim otk As String, otp As String, izabran As Boolean
+    Dim istaPusta As Boolean, ciljIsta As String, drugaPusta As Boolean, ciljDruga As String
+    Dim listaPosle As String, infoPosle As String, radBlok As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    scenario = NewScenarioCode("LNCB18S")
+    prevMode = modOtkupUI.ActiveMode
+    prevTest = IsTestMode()
+    SetTestMode True
+
+    otk = LncOtkup("LNCB18S-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otp = LncOtp("LNCB18S-" & scenario, Pr3Izvor(otk, ""), TEST_TIP_AMB)
+    modOtkupUI.ActiveMode = "F1"
+    modScrDokumenti.Scr_OtpTestReset
+    izabran = LncEkranIzaberiCilj(otp)
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
+
+    istaPusta = modScrDokumenti.Scr_CiljNapustiZaStanicu(TEST_ST_ID)
+    ciljIsta = modScrDokumenti.Scr_CiljID()
+    drugaPusta = modScrDokumenti.Scr_CiljNapustiZaStanicu("ST-LNCB18S-DRUGA")
+    ciljDruga = modScrDokumenti.Scr_CiljID()
+    listaPosle = modScrDokumenti.Scr_Lista()
+    infoPosle = modScrDokumenti.Scr_OtpInfo()
+    modScrDokumenti.Scr_Event "lsBLOKOVI", "Click"
+    radBlok = modScrDokumenti.Scr_Radnje()
+
+    AssertTrue izabran, "LNCB18S: preduslov -- izdat cilj je izabran radnjom nad redom"
+    AssertTrue Not istaPusta And ciljIsta = otp, _
+               "LNCB18S: izbor iste stanice ne dira cilj"
+    AssertTrue drugaPusta And Len(ciljDruga) = 0, _
+               "LNCB18S: promena otkupnog mesta pusta cilj druge stanice"
+    AssertTrue listaPosle = "OTPREMNICE" And Len(infoPosle) = 0 And _
+               InStr(1, radBlok, "izvadi:", vbBinaryCompare) = 0, _
+               "LNCB18S: posle pustanja cilja nema trake, liste blokova cilja ni radnje Izvadi"
+
+    modScrDokumenti.Scr_OtpTestReset
+    SetTestMode prevTest
+    modOtkupUI.ActiveMode = prevMode
+    Exit Sub
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modScrDokumenti.Scr_OtpTestReset
     SetTestMode prevTest
     modOtkupUI.ActiveMode = prevMode
     On Error GoTo 0
