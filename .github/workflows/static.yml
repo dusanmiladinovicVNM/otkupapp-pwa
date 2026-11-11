@@ -170,6 +170,15 @@ jobs:
       - name: gen_schema_module self-test
         run: python3 tools/gen_schema_module.py --self-test
 
+      # Pragovi zivih citalaca starog modela (PRAGOVI u popis_citalaca.py). Do
+      # 11.11.2026. kapija je postojala samo lokalno, pa je rez u lancu
+      # (#471-#473) podigao prj_brojzbirne preko praga, a da nista nije
+      # pocrvenelo (S9 N15, plan 14.64). Prag se spusta kad slajs skine
+      # citaoce; podize se samo uz odluku u planu, a merenje ispod praga takodje
+      # pada (zastareo prag). Cist Python nad radnim stablom, bez gita i Excela.
+      - name: popis citalaca -- pragovi starog modela
+        run: python3 tools/popis_citalaca.py --check
+
       # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
       # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
       # i videla se tek kao [break] u VBE-u na Windows masini.
