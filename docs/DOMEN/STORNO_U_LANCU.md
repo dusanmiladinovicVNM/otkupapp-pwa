@@ -636,9 +636,10 @@ EVENTS — N/A (kapija odbijanja, nema novog dokumenta, datuma ni statusa) · PL
 **Dokaz (plan):** `Test_KI095_F8ZbirnaUzNedovrsenuIspravku` (BFP). **Crveno danas:** (a) obican
 storno — razlog pre potvrde imenuje kontekst, pisac odbija, zbirna ostaje aktivna; (b) PONISTENJE
 zbirne odbija pre spiska posledica, DUPLI odbija bez novog reda konteksta; (b2) PONISTENJE druge
-prijemnice odbija pre spiska i posle potvrde. **Zeleno i danas (kontrole):** (c) posle „Odbaci"
-storno prolazi; (d) `MANUAL_REQUIRED` ne odbija (sintetički); (e) ispravka druge zbirne ne smeta;
-(f) „Reši kasnije" nad samom zbirnom ne odbija (uska kapija). Sabotaže `ki095-*`.
+prijemnice odbija pre spiska i posle potvrde, bez reda u Oporavku; (f2) F8 pre potvrde odbija i
+„Reši kasnije", a pisac ga pušta. **Zeleno i danas (kontrole):** (c) posle „Odbaci" storno
+prolazi; (d) `MANUAL_REQUIRED` ne odbija (sintetički, razlog prazan); (e) ispravka druge zbirne
+ne smeta; (f) „Reši kasnije" nad samom zbirnom ne odbija (uska kapija). Sabotaže `ki095-*` (9).
 
 **Van ovog reza (zapisano, nije mereno):** poruka posle storna zbirne (`STORNO_MSG_ZBIRNA_PRIJ`)
 traži prijemnicu po broju bez filtera storna, pa može imenovati baš storniranu; hladnjački auto-lanac

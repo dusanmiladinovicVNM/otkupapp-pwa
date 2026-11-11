@@ -30051,8 +30051,8 @@ End Sub
 ' zamenu bez roditelja (ZBR_PARENT_NEMA). Fixture grade kanonski pisci (normal
 ' production state), osim gde je izricito receno; svaki odeljak ima svoj lanac,
 ' jer danasnji kod u (a), (b) i (b2) zaista stornira.
-' CRVENO nad kodom pre popravke: (a), (b), (b2). Kontrole (c)-(f) zelene su i pre i
-' posle (uska kapija, KI95-ODL-02).
+' CRVENO nad kodom pre popravke: (a), (b), (b2) i deo (f2) pre potvrde. Kontrole
+' (c)-(f) zelene su i pre i posle (uska kapija, KI95-ODL-02).
 Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
     Const SRC As String = "Test_KI095_F8ZbirnaUzNedovrsenuIspravku"
     Dim scenario As String, r As Object
@@ -30066,6 +30066,8 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
     Dim razC As String, okC As Boolean, izlazC As String, odbacen As Boolean
     Dim otkD As String, otpD As String, zbrD As String, prjD As String, prjD2 As String, cidD As String, razD As String
     Dim otkF As String, otpF As String, zbrF As String, cidF As String, razF As String
+    Dim svPre2 As Long, otkG As String, otpG As String, zbrG As String, prjG As String
+    Dim cidG As String, rG As Object, cidResi As String, razG As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -30145,6 +30147,7 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
                 SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjP1))
     cidP = CStr(r("correctionID"))
     brP2 = LncPrjPolje(prjP2, COL_PRJ_BROJ)
+    svPre2 = CountRows(TBL_STORNO_VEZE)
     Set rPp = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, brP2, "", SV_MODE_PONISTENJE, False, False, _
                                            S6K4Ident(prjP2))
     Set rPf = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, brP2, "", SV_MODE_PONISTENJE, True, False, _
@@ -30158,6 +30161,8 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
                    LncZbrPolje(zbrP, COL_STORNIRANO) <> "Da" And LncPrjPolje(prjP2, COL_STORNIRANO) <> "Da", _
                    "KI095 (b2): PONISTENJE druge prijemnice ne stornira zbirnu uz nedovrsenu ispravku"
     End If
+    AssertEquals CStr(svPre2), CStr(CountRows(TBL_STORNO_VEZE)), _
+                 "KI095 (b2): odbijeno PONISTENJE prijemnice ne ostavlja red u Oporavku"
 
     ' ---- (c) KONTROLA: posle "Odbaci" u Oporavku storno prolazi ----
     otkC = LncOtkup("KI95C-" & scenario, 100#, 0#, TEST_TIP_AMB)
@@ -30189,8 +30194,8 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
                modStornoContext.MarkCorrectionManual(cidD, "KI095 test", "KI095: sinteticki MANUAL"), _
                "KI095 (d): preduslov -- zamena je upisana, kontekst MANUAL_REQUIRED"
     razD = modStornoDok.StornoRazlog(STIP_ZBIRNA, LncZbrPolje(zbrD, COL_ZBR_BROJ), "", zbrD)
-    AssertTrue InStr(1, razD, cidD, vbTextCompare) = 0, _
-               "KI095 (d): zamena vec uneta (MANUAL_REQUIRED) ne odbija F8 storno zbirne"
+    AssertEquals "", razD, _
+                 "KI095 (d): zamena vec uneta (MANUAL_REQUIRED) ne odbija F8 storno zbirne"
 
     ' ---- (f) KONTROLA, uska kapija: "Resi kasnije" nad samom zbirnom ne odbija ----
     otkF = LncOtkup("KI95F-" & scenario, 100#, 0#, TEST_TIP_AMB)
@@ -30202,8 +30207,25 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
     AssertTrue Len(cidF) > 0 And Len(razF) = 0, _
                "KI095 (f): podsetnik Resi kasnije nad samom zbirnom ne odbija F8 storno (uska kapija)"
 
+    ' ---- (f2) KI95-ODL-04, svesna razlika: F8 pre potvrde odbija svaki mod (ne zna
+    ' koji), a pisac pusta "Resi kasnije" -- on nista ne stornira, samo parkira ----
+    otkG = LncOtkup("KI95G-" & scenario, 100#, 0#, TEST_TIP_AMB)
+    otpG = LncOtp("KI95G-" & scenario, Pr3Izvor(otkG, ""), TEST_TIP_AMB)
+    zbrG = LncZbr("KI95G-" & scenario, Pr3Izvor(otpG, ""))
+    prjG = LncPrj("KI95G-" & scenario, zbrG, 100#, 0, TEST_TIP_AMB)
+    Set r = modStornoFlow.RunPrijemnicaCorrection(LncPrjPolje(prjG, COL_PRJ_BROJ), _
+                SV_MODE_ISPRAVKA, True, False, S6K4Ident(prjG))
+    cidG = CStr(r("correctionID"))
+    razG = modStornoDok.StornoRazlog(STIP_ZBIRNA, LncZbrPolje(zbrG, COL_ZBR_BROJ), "", zbrG)
+    Set rG = modStornoFlow.RunZbirnaCorrection(LncZbrPolje(zbrG, COL_ZBR_BROJ), SV_MODE_RESI_KASNIJE, True, zbrG)
+    cidResi = CStr(rG("correctionID"))
+    AssertTrue Len(cidG) > 0 And InStr(1, razG, cidG, vbTextCompare) > 0 And CBool(rG("success")) And _
+               LncZbrPolje(zbrG, COL_STORNIRANO) <> "Da", _
+               "KI095 (f2): F8 pre potvrde odbija i Resi kasnije, a pisac ga pusta (nista ne stornira)"
+
     LncOdbaciKontekste cidA, cidB, cidP, cidD
     LncOdbaciKontekste cidF, cidDupli, cidPon, ""
+    LncOdbaciKontekste cidG, cidResi, "", ""
     Exit Sub
 
 EH:
@@ -30212,6 +30234,7 @@ EH:
     On Error Resume Next
     LncOdbaciKontekste cidA, cidB, cidP, cidD
     LncOdbaciKontekste cidF, cidDupli, cidPon, cidC
+    LncOdbaciKontekste cidG, cidResi, "", ""
     On Error GoTo 0
     LogFatal SRC, errNum, errDesc
 End Sub

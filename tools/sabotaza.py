@@ -8329,6 +8329,23 @@ SABOTAZE = {
         "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
         "KI095 (e): nedovrsena ispravka druge zbirne ne smeta F8 stornu",
     ),
+    # Odbijeno PONISTENJE prijemnice ipak ostavlja red konteksta (kapija posle
+    # CreateCorrectionContext) -- FAILED/PENDING trag u Oporavku (KI-039/KI-040).
+    "ki095-ponistenje-red-pre-kapije": (
+        "modStornoFlow.bas",
+        "                    r(\"message\") = razKi095P\n",
+        "                    r(\"correctionID\") = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, , , , FLOW_DOC_ZBIRNA, , parentZbirna, \"SABOTAZA\"): r(\"message\") = razKi095P   ' SABOTAZA: red pre kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b2): odbijeno PONISTENJE prijemnice ne ostavlja red u Oporavku",
+    ),
+    # Pisac odbija i "Resi kasnije", koje nista ne stornira (KI95-ODL-04).
+    "ki095-resi-kasnije-odbija": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)\n",
+        "    razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)   ' SABOTAZA: i Resi kasnije odbija\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (f2): F8 pre potvrde odbija i Resi kasnije, a pisac ga pusta (nista ne stornira)",
+    ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
     "ki089-ekran-meri-sa-starim-listom": (
