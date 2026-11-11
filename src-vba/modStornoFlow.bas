@@ -374,6 +374,17 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     Dim zbrOldID As String
     zbrOldID = CStr(s("zbrID"))
 
+    ' KI-095 put (2) (KI95-ODL-01, -04): DUPLI i PONISTENJE storniraju zbirnu bez
+    ' naslednika -- ne dok na njoj visi zapoceta ispravka prijemnice. Pre spiska
+    ' posledica i PRE reda konteksta: odbijen pokusaj ne ostaje FAILED u Oporavku
+    ' (lekcija KI-039/KI-040). "Resi kasnije" nista ne stornira, pa sme.
+    Dim razKi095 As String
+    If mode <> SV_MODE_RESI_KASNIJE Then razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)
+    If Len(razKi095) > 0 Then
+        r("message") = razKi095
+        Exit Function
+    End If
+
     Select Case mode
         Case SV_MODE_RESI_KASNIJE
             r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, _
@@ -599,6 +610,19 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
             ' otpremnica (+oslobodi blokove) + prijemnice + palete. Zbirna: sve otpremnice
             ' odlaze -> kg 0 -> storno (rekalk je unutar kaskade ako bi neka ostala).
             ' UVEK prvo pun spisak posledica + svesna potvrda (forceConfirm).
+            ' KI-095 put (2): kaskada stornira i zbirnu -- ne dok na njoj visi
+            ' zapoceta ispravka DRUGE prijemnice. Pre spiska posledica i pre reda
+            ' konteksta, isto kao u zbirna grani.
+            If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) Then
+                Dim zbrKi095 As String, razKi095P As String
+                zbrKi095 = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_DETE_ZBIRNA_ROD))
+                If Len(zbrKi095) = 0 Then zbrKi095 = ZbirnaIDZaBroj(parentZbirna)
+                razKi095P = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrKi095, parentZbirna)
+                If Len(razKi095P) > 0 Then
+                    r("message") = razKi095P
+                    Exit Function
+                End If
+            End If
             If Not forceConfirm Then
                 r("blocked") = True
                 ' Identitet ide i u spisak posledica (S6 korak 4): bez njega okvir

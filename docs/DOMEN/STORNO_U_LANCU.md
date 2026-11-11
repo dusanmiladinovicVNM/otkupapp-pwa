@@ -585,9 +585,13 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
 
 ## 11) KI-095 put (2): F8 storno zbirne uz nedovršenu ispravku prijemnice (`KI95-ODL-01..04`, `KI95-INV-01`)
 
-> **Status: PRE-FLIGHT 11.11.2026** (odluke operatera 11.11.2026). Prvo test koji pada nad
-> današnjim kodom (`Test_KI095_F8ZbirnaUzNedovrsenuIspravku`, `CLAUDE.md` §2), pa popravka u
-> zasebnom commit-u. Mereno čitanjem nad granom ovog reza; Excel nije pokrenut — NEVERIFIKOVANO.
+> **Status: PRE-FLIGHT 11.11.2026** (odluke operatera 11.11.2026). Test koji pada nad kodom pre
+> popravke je zaseban commit (`c0a1a3a7`, `Test_KI095_F8ZbirnaUzNedovrsenuIspravku`, `CLAUDE.md`
+> §2); popravka je sledeći commit: `modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog` (proširen
+> `LncNedovrsenKontekstRazlog`, opcija `samoIspravkePrijemnice`), pozivi u
+> `modStornoDok.StornoRazlog` / `StornoIzvrsi` i `modStornoFlow.RunZbirnaCorrection` /
+> `RunPrijemnicaCorrection` (PONISTENJE), sabotaže `ki095-*`. Excel nije pokrenut — crvenilo na
+> `c0a1a3a7` i zelenilo posle popravke su NEVERIFIKOVANI.
 
 **Problem.** F8 „Ispravi" prijemnice odmah stornira staru prijemnicu (palete ostaju na njoj), a
 red `tblStornoVeze` ostaje `PENDING` dok se zamena ne unese u F4
