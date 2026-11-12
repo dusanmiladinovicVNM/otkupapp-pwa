@@ -39,6 +39,14 @@ Attribute VB_Name = "modScrDoplata"
 ' praznjenja stopa. Izbor ide piscu kao OtkupID-evi (KnjiziDoplatu_TX), a pisac
 ' izabrane ponovo proverava.
 '
+' OBUHVAT OBRACUNA (DOP-ODL-31): polje "Samo kooperant". Prazno = obracun za
+' sve kooperante; izabran kooperant = obracun samo za njega. Ekran ga samo
+' PROSLEDJUJE motoru (DoplataPlan / DoplataPreklapanja / KnjiziDoplatu_TX) -- plan
+' tada vec nosi samo njegove blokove, pa liste, zbirovi i izbor blokova rade bez
+' ijedne izmene. Tekst koji nije izabran iz liste NIJE "svi": pregled i knjizenje
+' staju. Isti obuhvat postavlja i kartica kooperanta u Izvestajima
+' (Scr_DopOtvoriZaKooperanta). Posle knjizenja obuhvat se prazni, kao stope.
+'
 ' PITANJA OPERATERU idu kroz Pitaj, obrazac KI-015: u test rezimu pitanje se
 ' BELEZI i odgovor je uvek "Ne" -- MsgBox u nevidljivom Excelu visi. Put "Da"
 ' je KnjiziJezgro, koje test zove direktno (Scr_DopKnjiziTest), a pisac sa
@@ -89,6 +97,12 @@ Private mCombosPunjeni As Boolean
 Private mStep As String
 Private mNacin As Long              ' DOP_NACIN_* (DOP-ODL-15); 0 = nije biran -> nacin 1
 Private mIskljuceni As Object       ' Dictionary: OtkupID iskljucenih blokova (DOP-ODL-16)
+' OBUHVAT OBRACUNA (DOP-ODL-31): "" = svi kooperanti, inace KooperantID za koga
+' se obracun radi. mObuhvatNerazresen: polje nosi tekst koji NIJE izabran
+' kooperant -- to nije "svi" nego zastoj (pregled i knjizenje odbijaju).
+Private mObuhvat As String
+Private mObuhvatNerazresen As Boolean
+Private mKoopZastareli As Boolean   ' sifarnik kooperanata se menjao (Scr_ResetCache)
 
 ' TEST SEAM (KI-015 obrazac): poslednje pitanje koje bi ekran postavio. Seam
 ' samo POSMATRA -- odgovor u test rezimu je uvek "Ne". Gasi ga Scr_DopTestReset,
@@ -98,6 +112,10 @@ Private mPitanjeTest As String
 ' TEST SEAM: unos zone bez zone (forma se u testu ne crta). Postavlja ga samo
 ' Scr_DopUnosTestSet, tvrdo gejtovan; citalac ponovo pita IsTestMode().
 Private mUnosTest As Object
+
+' TEST SEAM: obuhvat postavljen bez polja (Scr_DopObuhvatTestSet). Dok je
+' postavljen, stanje se u test rezimu NE cita ponovo iz polja zone.
+Private mObuhvatTest As Boolean
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -166,6 +184,8 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrDopOdSat", Poruka("OTKUI_FLD_DOP_SAT"), "txt", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopDo", Poruka("OTKUI_FLD_DOP_DO"), "txt", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopDoSat", Poruka("OTKUI_FLD_DOP_SAT"), "txt", "", 1, False, False, "DOP"
+    ' obuhvat obracuna (DOP-ODL-31): prazno = svi kooperanti
+    modOtkupUI.NewFieldG z, "scrDopKoop", Poruka("OTKUI_FLD_DOP_KOOPERANT"), "cmb", "", 1, False, False, "DOP"
     modOtkupUI.NewFieldG z, "scrDopNap", Poruka("OTKUI_FLD_DOP_NAPOMENA"), "txt", "", 1, False, False, "DOP"
     ' --- red B: nacin unosa (DOP-ODL-15) i stopa po kljucu cenovnika (DOP-ODL-02) ---
     modOtkupUI.NewFieldG z, "scrDopNacin", Poruka("OTKUI_FLD_DOP_NACIN"), "cmb", "", 1, False, False, "DOP"
@@ -217,9 +237,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     z.Controls("dopBg").width = w - 2 * (PAD - 10)
     z.Controls("dopBg").Height = DOP_Y_BTN - DOP_Y_LBL_A - 2
 
-    ' RED A: datum, od + sat, do + sat, napomena. Sat je uzi -- nosi "hh:mm".
+    ' RED A: datum, od + sat, do + sat, samo kooperant, napomena. Sat je uzi --
+    ' nosi "hh:mm".
     fwS = 64
-    fw = (w - PAD * 2 - DOP_GAP * 5 - fwS * 2) / 4
+    fw = (w - PAD * 2 - DOP_GAP * 6 - fwS * 2) / 5
     If fw < 90 Then fw = 90
     X = PAD
     PoljeX z, "scrDopDatum", X, fw, DOP_Y_LBL_A: X = X + fw + DOP_GAP
@@ -227,6 +248,7 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     PoljeX z, "scrDopOdSat", X, fwS, DOP_Y_LBL_A: X = X + fwS + DOP_GAP
     PoljeX z, "scrDopDo", X, fw, DOP_Y_LBL_A: X = X + fw + DOP_GAP
     PoljeX z, "scrDopDoSat", X, fwS, DOP_Y_LBL_A: X = X + fwS + DOP_GAP
+    PoljeX z, "scrDopKoop", X, fw, DOP_Y_LBL_A: X = X + fw + DOP_GAP
     PoljeX z, "scrDopNap", X, fw, DOP_Y_LBL_A
 
     ' RED B: nacin, vrsta, sorta, klasa, stopa, dugme "dodaj stopu".
@@ -319,6 +341,86 @@ Private Sub PonistiPregled()
     mPlan = Empty
     mPlanBez = ""
 End Sub
+
+' Postavi obuhvat obracuna (DOP-ODL-31). Promena ponistava pregled i izbor
+' blokova: plan je racunat za drugog kooperanta (ili za sve), pa bi "Knjizi"
+' pokazao jedno a upisao drugo. Nerazresen unos nikad ne nosi ID.
+Private Sub PostaviObuhvat(ByVal kooperantID As String, ByVal nerazresen As Boolean)
+    Dim novi As String
+    If Not nerazresen Then novi = Trim$(kooperantID)
+    If StrComp(novi, mObuhvat, vbTextCompare) = 0 And nerazresen = mObuhvatNerazresen Then Exit Sub
+    mObuhvat = novi
+    mObuhvatNerazresen = nerazresen
+    Set mIskljuceni = Nothing
+    PonistiPregled
+End Sub
+
+' Stanje obuhvata prati POLJE kad zona postoji: operater gleda u polje, pa je
+' ono izvor istine u trenutku pregleda i knjizenja, ne samo pri promeni.
+' Prazno = svi. Tekst bez IZABRANE stavke nije "svi" -- operater je hteo jednog,
+' a obracun bi platio sve -- pa je to zastoj (testovi.md par. 5, nerazresen
+' izbor). Cita se ListIndex, ne GetComboID: njegov rezervni put vadi ID iz
+' teksta, a ovde ID sme da dodje samo iz izabrane stavke.
+Private Sub ObuhvatSaPolja()
+    Dim c As Object, iD As String
+    If IsTestMode() And mObuhvatTest Then Exit Sub
+    Set c = Kontrola("scrDopKoop")
+    If c Is Nothing Then Exit Sub
+    If Len(Trim$(CStr(c.text))) = 0 Then
+        PostaviObuhvat "", False
+        Exit Sub
+    End If
+    If c.ListIndex >= 0 Then iD = Trim$(CStr(c.List(c.ListIndex, 1)))
+    PostaviObuhvat iD, (Len(iD) = 0)
+End Sub
+
+' Polje pokazuje ono sto stanje nosi (dolazak sa kartice, praznjenje posle
+' knjizenja). Upis u kontrolu okida Change, pa ide pod mFill.
+'
+' False kad polje POSTOJI a ne moze da pokaze kooperanta obuhvata. Pozivalac tada
+' ne sme da ostavi obuhvat u stanju: pregled cita POLJE (ObuhvatSaPolja), pa bi
+' prazno polje tiho pretvorilo "samo ovaj kooperant" u "svi". Kooperant upisan
+' posle punjenja liste se zato trazi jos jednom, nad ponovo napunjenom listom.
+Private Function ObuhvatUPolje() As Boolean
+    Dim c As Object, pre As Boolean, ok As Boolean, muk As Boolean
+    On Error Resume Next
+    PuniCombos
+    Set c = Kontrola("scrDopKoop")
+    If c Is Nothing Then
+        ObuhvatUPolje = True            ' zone jos nema: stanje je jedini izvor
+        Err.Clear
+        Exit Function
+    End If
+    ' Upis nije kucanje: bez garda bi ljuska otvorila panel izbora nad poljem.
+    pre = mFill
+    mFill = True
+    muk = modOtkupUI.PanelIzboraMiruj(True)
+    ok = SetComboByID(c, mObuhvat)
+    If Not ok Then
+        PuniKooperante
+        ok = SetComboByID(c, mObuhvat)
+    End If
+    modOtkupUI.PanelIzboraMiruj muk
+    mFill = pre
+    ObuhvatUPolje = ok
+    ' "Resume Next" prigusuje gresku, ali je ne brise -- ne sme da stigne ljusci.
+    Err.Clear
+End Function
+
+' Zastoj zbog obuhvata kao TEKST za operatera, "" kad ga nema.
+Private Function ObuhvatProblem() As String
+    ObuhvatSaPolja
+    If mObuhvatNerazresen Then ObuhvatProblem = Poruka("OTKUI_ERR_DOP_KOOP_NERAZRESEN")
+End Function
+
+' Ime kooperanta obuhvata za pitanja i poruke, sa ID-em -- dva kooperanta istog
+' imena se inace ne razlikuju, a ovo je finansijska odluka.
+Private Function ObuhvatNaziv() As String
+    Dim ime As String
+    ime = Trim$(NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, mObuhvat, "Ime")) & " " & _
+                NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, mObuhvat, "Prezime")))
+    ObuhvatNaziv = ComboDisplayWithID(ime, mObuhvat)
+End Function
 
 ' Nacin unosa za ceo obracun (DOP-ODL-15). Dok operater ne izabere, nacin 1.
 Private Function Nacin() As Long
@@ -592,6 +694,10 @@ Private Sub ObradiPromenu(ByVal tag As String)
             PromeniNacinIzCombo
         Case "scrDopVrstaT"
             PuniSorte
+        Case "scrDopKoopT"
+            ' obuhvat je deo pregleda: promena ga ponistava (v. PostaviObuhvat)
+            ObuhvatSaPolja
+            OsveziZonu
         Case "scrDopDatumT", "scrDopOdT", "scrDopOdSatT", "scrDopDoT", "scrDopDoSatT"
             ' period je deo pregleda: promena ga ponistava (v. PonistiPregled)
             PonistiPregled
@@ -743,8 +849,13 @@ Private Function PregledJezgro() As String
         PregledJezgro = greska
         Exit Function
     End If
+    greska = ObuhvatProblem()
+    If Len(greska) > 0 Then
+        PregledJezgro = greska
+        Exit Function
+    End If
     On Error GoTo EH
-    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez, Nacin())
+    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez, Nacin(), mObuhvat)
     Exit Function
 EH:
     PregledJezgro = ChrW(10007) & " " & Err.description
@@ -783,7 +894,7 @@ Private Function KnjiziKlik() As Boolean
     If Not Pitaj(PitanjeKnjizenja(izbor)) Then Exit Function
 
     If UnosPerioda(pOd, pDo, dat, greska) Then
-        preklop = modDoplata.DoplataPreklapanja(pOd, pDo, Stope(), Nacin(), izbor)
+        preklop = modDoplata.DoplataPreklapanja(pOd, pDo, Stope(), Nacin(), izbor, mObuhvat)
         If Len(preklop) > 0 Then
             If Not Pitaj(preklop) Then Exit Function
             potvrda = True
@@ -809,7 +920,13 @@ Private Function PitanjeKnjizenja(ByVal izbor As Object) As String
         Next i
     End If
     nIskl = BlokSaDoplatom().count - izbor.count
-    PitanjeKnjizenja = Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(izbor.count) & " " & _
+    ' Obracun za jednog kooperanta se IMENUJE pre brojki (DOP-ODL-31): operater
+    ' potvrdjuje kome placa, ne samo koliko.
+    If Len(mObuhvat) > 0 Then
+        PitanjeKnjizenja = Poruka("OTKUI_LBL_DOP_SAMO_KOOP") & " " & ObuhvatNaziv() & ". "
+    End If
+    PitanjeKnjizenja = PitanjeKnjizenja & _
+                       Poruka("OTKUI_ASK_DOP_KNJIZI") & " " & CStr(izbor.count) & " " & _
                        Poruka("OTKUI_LBL_DOP_DOK") & ", " & FmtKolicina(kg) & " kg, " & _
                        Format$(din, "#,##0.00") & " din"
     If nIskl > 0 Then
@@ -831,6 +948,10 @@ Private Function KnjiziJezgro(ByVal potvrdaPonavljanja As Boolean) As Boolean
         modOtkupUI.ShowToast greska, True
         Exit Function
     End If
+    ' Obuhvat se cita iz polja i ovde: promena posle pregleda ponistava plan
+    ' (PostaviObuhvat), pa ga PregledJezgro racuna ponovo, u obuhvatu koji
+    ' operater sada vidi -- i tu staje ako kooperant nije izabran iz liste.
+    ObuhvatSaPolja
     If Not IsArray(mPlan) Then
         greska = PregledJezgro()
         If Len(greska) > 0 Then
@@ -845,7 +966,7 @@ Private Function KnjiziJezgro(ByVal potvrdaPonavljanja As Boolean) As Boolean
     End If
     obr = modDoplata.KnjiziDoplatu_TX(dat, pOd, pDo, Stope(), Unos("scrDopNap"), _
                                       potvrdaPonavljanja, greska, en, Nacin(), _
-                                      izbor)
+                                      izbor, mObuhvat)
     If Len(obr) = 0 Then
         modOtkupUI.ShowToast ChrW(10007) & " " & greska, True
         Exit Function
@@ -854,6 +975,10 @@ Private Function KnjiziJezgro(ByVal potvrdaPonavljanja As Boolean) As Boolean
     Set mStope = New Collection
     Set mIskljuceni = Nothing
     PonistiPregled
+    ' Sledeci obracun je nov obracun: obuhvat se prazni kao i stope, pa polje.
+    mObuhvatTest = False
+    PostaviObuhvat "", False
+    ObuhvatUPolje
     mLista = DOP_KNJIZENO
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_KNJIZENO") & " " & _
                          CStr(modDoplata.AktivneDoplateObracuna(obr).count) & " " & _
@@ -955,6 +1080,9 @@ Private Sub PuniCombos()
     CB.AddItem KLASA_I
     CB.AddItem KLASA_II
 
+    mStep = "kooperanti"
+    PuniKooperante
+
     ' Redosled stavki JE nacin: ListIndex + 1 = DOP_NACIN_PO_KG / DOP_NACIN_KONACNA.
     mStep = "nacin"
     Set CB = z.Controls("scrDopNacin").Controls("scrDopNacinT")
@@ -969,6 +1097,63 @@ EH:
     mFill = False
     Debug.Print "modScrDoplata.PuniCombos PAO na koraku [" & mStep & "]: " & _
                 Err.Number & " " & Err.description
+End Sub
+
+' Lista kooperanata u polju obuhvata (DOP-ODL-31). Prikaz nosi i ID: izbor je
+' finansijska odluka, a dva kooperanta istog imena moraju da se razlikuju. Svi
+' kooperanti, i neaktivni -- doplata placa robu koja je vec predata. Izabran
+' kooperant prezivljava ponovno punjenje, a ukucan a neizabran tekst ostaje u
+' polju: ispraznjeno polje bi zastoj ("nije izabran") pretvorilo u "svi".
+Private Sub PuniKooperante()
+    Dim CB As Object, mapa As Object, k As Variant, pre As Boolean, cur As String
+    Dim tekst As String, muk As Boolean, gard As Boolean
+    pre = mFill
+    On Error GoTo EH
+    Set CB = Kontrola("scrDopKoop")
+    If CB Is Nothing Then Exit Sub
+    mFill = True
+    ' Punjenje i vracanje izbora nisu kucanje (v. modOtkupUI.PanelIzboraMiruj).
+    muk = modOtkupUI.PanelIzboraMiruj(True)
+    gard = True
+    If CB.ListIndex >= 0 Then
+        cur = Trim$(CStr(CB.List(CB.ListIndex, 1)))
+    Else
+        tekst = CStr(CB.text)
+    End If
+    CB.Clear
+    CB.ColumnCount = 2
+    CB.ColumnWidths = "180 pt;0 pt"
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
+    Set mapa = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    For Each k In mapa.keys
+        CB.AddItem Trim$(CStr(mapa(k)))
+        CB.List(CB.ListCount - 1, 1) = CStr(k)
+    Next k
+    ShowIDInComboDisplay CB
+    If Len(cur) > 0 Then
+        SetComboByID CB, cur
+    ElseIf Len(tekst) > 0 Then
+        CB.text = tekst
+    End If
+    mKoopZastareli = False
+    modOtkupUI.PanelIzboraMiruj muk
+    mFill = pre
+    Exit Sub
+EH:
+    If gard Then modOtkupUI.PanelIzboraMiruj muk
+    mFill = pre
+    Debug.Print "modScrDoplata.PuniKooperante PAO: " & Err.Number & " " & Err.description
+    Err.Clear
+End Sub
+
+' Ljuska ga zove pri svakom osvezavanju AKTIVNOG ekrana (RefreshFromData), pa i
+' pri ulasku na ekran. Sifarnik kooperanata se mogao promeniti dok je operater
+' bio drugde, pa se lista u polju obuhvata puni ponovo pri sledecem osvezavanju
+' zone -- inace bi nov kooperant bio "neizabran iz liste" do restarta. Isti
+' obrazac kao RefillMaticniCombos u ljusci.
+Public Sub Scr_ResetCache()
+    mKoopZastareli = True
 End Sub
 
 Private Sub PuniSorte()
@@ -1012,6 +1197,7 @@ Private Sub OsveziZonu()
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     PuniCombos
+    If mKoopZastareli Then PuniKooperante
 
     ' Combo i natpis iznosa prate STVARNI nacin (i posle odbijene promene).
     pre = mFill
@@ -1053,8 +1239,11 @@ Private Sub OsveziZonu()
     If Len(mPlanBez) > 0 Then
         t = t & "   " & ChrW(183) & "   " & Poruka("OTKUI_ERR_DOP_STOPA_BEZ_OTKUPA") & " " & mPlanBez
     End If
+    If mObuhvatNerazresen Then
+        t = t & "   " & ChrW(183) & "   " & Poruka("OTKUI_ERR_DOP_KOOP_NERAZRESEN")
+    End If
     z.Controls("dopHint").caption = t
-    z.Controls("dopHint").ForeColor = IIf(Len(mPlanBez) > 0, C_RUST, C_MUTED)
+    z.Controls("dopHint").ForeColor = IIf(Len(mPlanBez) > 0 Or mObuhvatNerazresen, C_RUST, C_MUTED)
 End Sub
 
 '=====================================================================
@@ -1429,6 +1618,57 @@ Public Sub Scr_DopTestReset()
     mPitanjeTest = ""
     mNacin = 0
     Set mIskljuceni = Nothing
+    mObuhvatTest = False
+    mObuhvat = ""
+    mObuhvatNerazresen = False
+    ObuhvatUPolje
+End Sub
+
+' ULAZ SA KARTICE KOOPERANTA (modScrIzvestaji, DOP-ODL-31): obracun samo za tog
+' kooperanta. Zove se POSLE prelaska na ekran (modOtkupUI.IdiNaEkran) -- zona
+' tada postoji, pa polje pokazuje isto sto stanje nosi. "" kad je postavljen,
+' inace razlog. NIJE test seam: radi i u produkciji. Kooperant mora da postoji
+' tacno jednom -- ID stize iz izvestaja, ali ulaz ne veruje pozivaocu. Unete
+' stope ostaju: one su kljuc i vrednost, ne zavise od kooperanta.
+Public Function Scr_DopOtvoriZaKooperanta(ByVal kooperantID As String) As String
+    Dim iD As String
+    On Error GoTo EH
+    iD = Trim$(kooperantID)
+    If Len(iD) = 0 Then
+        Scr_DopOtvoriZaKooperanta = Poruka("OTKUI_ERR_DOP_KOOP_NEMA")
+        Exit Function
+    End If
+    RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, iD, "KooperantID", _
+                      "modScrDoplata.Scr_DopOtvoriZaKooperanta"
+    mObuhvatTest = False
+    PostaviObuhvat iD, False
+    If Not ObuhvatUPolje() Then
+        PostaviObuhvat "", False
+        ObuhvatUPolje
+        Scr_DopOtvoriZaKooperanta = Poruka("OTKUI_ERR_DOP_KOOP_NEMA")
+        Exit Function
+    End If
+    mLista = DOP_STOPE
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_DOP_OTVORENO_ZA") & " " & ObuhvatNaziv(), False
+    Exit Function
+EH:
+    Scr_DopOtvoriZaKooperanta = Poruka("OTKUI_ERR_DOP_KOOP_NEMA") & " " & Err.description
+    Err.Clear
+End Function
+
+' Obuhvat koji ekran trenutno nosi ("" = svi kooperanti). Samo cita.
+Public Function Scr_DopObuhvat() As String
+    Scr_DopObuhvat = mObuhvat
+End Function
+
+' TEST SEAM: obuhvat bez polja (zona se u testu ne crta uvek). nerazresen = True
+' glumi tekst ukucan u polje bez izbora iz liste. Tvrdo gejtovan; dok je
+' postavljen, stanje se u test rezimu ne cita ponovo iz polja.
+Public Sub Scr_DopObuhvatTestSet(ByVal kooperantID As String, _
+                                 Optional ByVal nerazresen As Boolean = False)
+    If Not IsTestMode() Then Exit Sub
+    mObuhvatTest = True
+    PostaviObuhvat kooperantID, nerazresen
 End Sub
 
 ' Unos zone bez zone. Kljucevi su imena polja (scrDopDatum, scrDopOd,

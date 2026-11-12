@@ -2397,6 +2397,13 @@ Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MSG_WB_IMPORT_PREKINUT", ChrW(10007) & " Nije snimljeno: prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun. Dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati backup, pa snimi."
     ' --- Kapija: nepotpun rollback ne sme da se snimi u svesku ---
     UpsertRow lo, existing, "APP_MSG_ROLLBACK_NEPOTPUN_NE_SNIMAM", "Prethodni rollback nije bio potpun, pa podaci u memoriji mogu biti " & "nekonzistentni." & vbCrLf & vbCrLf & "Upis i snimanje su ZATVORENI za ovu sesiju. Sveska se zatvara BEZ snimanja " & ChrW(8212) & " na disku stoji stanje pre te transakcije." & vbCrLf & vbCrLf & "Posle ponovnog otvaranja proveri tabele:"
+    ' --- Doplata samo za jednog kooperanta (DOP-ODL-31) ---
+    UpsertRow lo, existing, "OTKUI_FLD_DOP_KOOPERANT", "Samo kooperant"
+    UpsertRow lo, existing, "OTKUI_LBL_DOP_SAMO_KOOP", "Samo kooperant:"
+    UpsertRow lo, existing, "OTKUI_ERR_DOP_KOOP_NERAZRESEN", ChrW(10007) & " Kooperant nije izabran iz liste " & ChrW(8212) & " izaberi ga ili isprazni polje"
+    UpsertRow lo, existing, "OTKUI_ERR_DOP_KOOP_NEMA", ChrW(10007) & " Kooperant nije prepoznat."
+    UpsertRow lo, existing, "OTKUI_MSG_DOP_OTVORENO_ZA", "Doplata samo za kooperanta:"
+    UpsertRow lo, existing, "OTKUI_BTN_IZ_DOPLATA", "Doplata kooperantu"
     UpsertRow lo, existing, "APP_MSG_IMPORT_PREKINUT_NE_SNIMAM", "Prethodni uvoz VBA koda je prekinut, pa je projekat mo" & ChrW(382) & "da nepotpun." & vbCrLf & vbCrLf & "Sveska se zatvara BEZ snimanja " & ChrW(8212) & " snimanje bi u" & ChrW(269) & "inilo o" & ChrW(353) & "te" & ChrW(263) & "enje trajnim." & vbCrLf & vbCrLf & "Posle otvaranja: dovr" & ChrW(353) & "i 'Uvezi VBA' ili vrati poslednji backup."
 End Sub
 

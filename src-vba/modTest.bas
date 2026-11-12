@@ -460,6 +460,8 @@ Public Sub RunAllTests()
     RunOne 348
     RunOne 349
     RunOne 350
+    RunOne 351
+    RunOne 352
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1120,6 +1122,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 348: TestName = "T_Doplata_KarticaZbirnoPoObracunu"
         Case 349: TestName = "T_Doplata_BrojeviBezSlova"
         Case 350: TestName = "T_KUL1_KulturaListaPoSorti"
+        Case 351: TestName = "T_Doplata_ObuhvatKooperanta"
+        Case 352: TestName = "T_Doplata_ObuhvatNaEkranu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1478,6 +1482,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 348: T_Doplata_KarticaZbirnoPoObracunu
         Case 349: T_Doplata_BrojeviBezSlova
         Case 350: T_KUL1_KulturaListaPoSorti
+        Case 351: T_Doplata_ObuhvatKooperanta
+        Case 352: T_Doplata_ObuhvatNaEkranu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -31059,3 +31065,258 @@ Private Function DopEkranBlok(ByVal otkupID As String) As String
         End If
     Next i
 End Function
+
+' ============================================================
+' 351. DOP-ODL-31 / DOP-12: OBRACUN SAMO ZA JEDNOG KOOPERANTA (OBUHVAT).
+' ============================================================
+' Obuhvat suzava plan PRE svega ostalog: tudji blokovi ne ulaze, stopa koja ne
+' pogadja nijedan blok kooperanta se prijavljuje iako pogadja tudje, a pisac
+' knjizi samo njegove dokumente i na svaki upisuje obuhvat. Signal osnovice za
+' takav obracun trazi retro unos samo medju blokovima tog kooperanta; obracun
+' bez obuhvata se ponasa kao do sada. Citalac pada po imenu kad obuhvat nije
+' kooperant dokumenta ili kad dokumenti istog obracuna nose razlicit obuhvat --
+' obe nepravilnosti se prave i ODMAH vracaju, pre ijedne tvrdnje (synthetic
+' anomaly, ne normalno stanje).
+' Tok (juce, klasa I osim gde pise): A o1 10 kg, A o2 4 kg; B o3 6 kg, B o4 II
+'   3 kg. Obracun S: obuhvat A, 10 din/kg. Obracun G: bez obuhvata, samo blok o3.
+'   Posle knjizenja: retro B o5 5 kg, pa retro A o6 7 kg.
+' SABOTAZE: dop-obuhvat-plan-bez-filtera, dop-obuhvat-pisac-plan-bez-obuhvata,
+'   dop-obuhvat-ne-upisuje-se, dop-obuhvat-nepostojeci-prolazi,
+'   dop-obuhvat-signal-gleda-sve, dop-obuhvat-signal-gasi-retro,
+'   dop-obuhvat-citalac-tudj-kooperant, dop-obuhvat-citalac-razlicit.
+' BEZ SABOTAZE, namerno: kapija u KnjiziPlan (DOP_ERR_BASE + 36) je odbrana u
+' dubinu iza suzenog plana -- sama se testom ne moze oboriti, a kad plan pisca
+' izgubi obuhvat (dop-obuhvat-pisac-plan-bez-obuhvata) bas ona zaustavlja upis.
+' Tvrdnja o tudjem bloku u izboru stoji iza obe kapije, pa nema svoju sabotazu.
+Private Sub T_Doplata_ObuhvatKooperanta()
+    Dim b As String, vr As String, kul As String, kA As String, kB As String
+    Dim o1 As String, o2 As String, o3 As String, o4 As String, o5 As String, o6 As String
+    Dim stope As Collection, stope2 As Collection, bez As String, bezSvi As String
+    Dim plan As Variant, obrS As String, obrG As String, obr As String
+    Dim g As String, en As Long, izbor As Object, n0 As Long, nema As String
+    Dim idDok As String, rows As Collection, greska1 As String, greska2 As String
+
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    o2 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 4, 0)
+    o3 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 6, 0)
+    o4 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 0, 3)
+    ' Blokovi nastaju PRE knjizenja (v. test 334): isti sekund se racuna kao retro.
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    DopVremeUnosa o2, DateAdd("n", -1, Now)
+    DopVremeUnosa o3, DateAdd("n", -1, Now)
+    DopVremeUnosa o4, DateAdd("n", -1, Now)
+    Set stope = DopStope(DopStopa(vr, "S1", KLASA_I, 10))
+    Set stope2 = DopStope(DopStopa(vr, "S1", KLASA_I, 10), DopStopa(vr, "S1", KLASA_II, 5))
+
+    ' --- plan ---
+    AssertEq DopPlanKg(modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), stope, bez)), _
+             Format$(20, "0.00"), "preduslov: plan bez obuhvata nosi blokove oba kooperanta"
+    plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), stope, bez, DOP_NACIN_PO_KG, kA)
+    AssertEq DopPlanTekst(plan), _
+             DopRed(kA, FX_STANICA, KLASA_I, 10, 100) & DopRed(kA, FX_STANICA, KLASA_I, 4, 40), _
+             "plan sa obuhvatom nosi samo blokove tog kooperanta"
+    plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), stope2, bezSvi)
+    plan = modDoplata.DoplataPlan(DopJuceOd(), DopJuceDo(), stope2, bez, DOP_NACIN_PO_KG, kA)
+    AssertEq bezSvi & "#" & bez, "#" & vr & " S1 " & KLASA_II, _
+             "stopa koja ne pogadja nijedan blok kooperanta obuhvata se prijavljuje"
+
+    ' --- pisac ---
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    obrS = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 351-S", _
+                                       False, g, en, DOP_NACIN_PO_KG, Nothing, kA)
+    AssertEq g & "|" & CStr(DopBrojRedova(TBL_DOPLATA) - n0) & "|" & DopDokBloka(obrS, o3), "|2|", _
+             "obracun sa obuhvatom knjizi samo dokumente tog kooperanta"
+    AssertEq DopObuhvatBloka(obrS, o1) & "|" & DopObuhvatBloka(obrS, o2), kA & "|" & kA, _
+             "pisac upisuje obuhvat na svaki dokument obracuna"
+
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor.CompareMode = vbTextCompare
+    izbor(o3) = True
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 351-tudj", _
+                                      True, g, en, DOP_NACIN_PO_KG, izbor, kA)
+    AssertEq (Len(obr) = 0 And InStr(1, g, o3, vbTextCompare) > 0 And _
+              DopBrojRedova(TBL_DOPLATA) = n0), True, _
+             "izabran blok drugog kooperanta obara knjizenje po imenu"
+    nema = "KOOP-NEMA-" & b
+    obr = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 351-nema", _
+                                      True, g, en, DOP_NACIN_PO_KG, Nothing, nema)
+    AssertEq (Len(obr) = 0 And InStr(1, g, nema, vbTextCompare) > 0 And _
+              DopBrojRedova(TBL_DOPLATA) = n0), True, _
+             "nepostojeci kooperant obuhvata obara knjizenje po imenu"
+
+    ' --- signal osnovice ---
+    izbor.RemoveAll
+    izbor(o3) = True
+    obrG = modDoplata.KnjiziDoplatu_TX(Date, DopJuceOd(), DopJuceDo(), stope, "test 351-G", _
+                                       False, g, en, DOP_NACIN_PO_KG, izbor)
+    AssertEq g & "|" & DopObuhvatBloka(obrG, o3) & "|" & DopOdstupanjaObracuna(obrS) & _
+             DopOdstupanjaObracuna(obrG), "||", _
+             "preduslov: obracun bez obuhvata ostavlja kolonu praznu i nijedan obracun nema nalaz"
+    o5 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 5, 0)
+    AssertEq DopOdstupanjaObracuna(obrS) & "#" & DopOdstupanjaObracuna(obrG), _
+             "#|" & Format$(0, "0.00") & "|" & Format$(5, "0.00") & ";", _
+             "retro blok drugog kooperanta nije nalaz obracuna sa obuhvatom, a jeste obracuna bez obuhvata"
+    o6 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 7, 0)
+    AssertEq DopOdstupanjaObracuna(obrS), _
+             "|" & Format$(0, "0.00") & "|" & Format$(7, "0.00") & ";", _
+             "retro blok kooperanta obuhvata jeste nalaz tog obracuna"
+
+    ' --- citalac (DOP-12): obe nepravilnosti odmah vracene ---
+    idDok = DopIdBloka(obrS, o1)
+    Set rows = FindRows(TBL_DOPLATA, COL_DOP_ID, idDok)
+    RequireUpdateCell TBL_DOPLATA, rows(1), COL_DOP_OBUHVAT, kB, "modTest"
+    greska1 = DopCitalacGreska()
+    RequireUpdateCell TBL_DOPLATA, rows(1), COL_DOP_OBUHVAT, "", "modTest"
+    greska2 = DopCitalacGreska()
+    RequireUpdateCell TBL_DOPLATA, rows(1), COL_DOP_OBUHVAT, kA, "modTest"
+    AssertEq (InStr(1, greska1, idDok, vbTextCompare) > 0 And _
+              InStr(1, greska1, kB, vbTextCompare) > 0), True, _
+             "citalac: dokument ciji obuhvat nije njegov kooperant pada po imenu"
+    AssertEq (InStr(1, greska2, "razlicit obuhvat", vbTextCompare) > 0), True, _
+             "citalac: dokumenti istog obracuna sa razlicitim obuhvatom padaju po imenu"
+    AssertEq DopCitalacGreska(), "", "preduslov: posle vracanja citalac prolazi"
+End Sub
+
+' Obuhvat upisan na dokument obracuna za dati blok ("" i kad dokumenta nema).
+Private Function DopObuhvatBloka(ByVal obracunID As String, ByVal otkupID As String) As String
+    Dim idDok As String
+    idDok = DopIdBloka(obracunID, otkupID)
+    If Len(idDok) = 0 Then Exit Function
+    DopObuhvatBloka = Trim$(NzToText(LookupValue(TBL_DOPLATA, COL_DOP_ID, idDok, COL_DOP_OBUHVAT)))
+End Function
+
+' Opis greske strogog citaoca doplate, "" kad prolazi.
+Private Function DopCitalacGreska() As String
+    Dim r As Variant
+    On Error Resume Next
+    r = modDoplata.DoplataStavkeRedovi()
+    DopCitalacGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' Obuhvat AKTIVNOG dokumenta doplate za blok, u bilo kom obracunu; "NEMA" kad
+' blok nema aktivan dokument. Cita ga kroz citaoca (kolona 21), kao produkcija.
+Private Function DopObuhvatOtkupa(ByVal otkupID As String) As String
+    Dim r As Variant, i As Long
+    DopObuhvatOtkupa = "NEMA"
+    r = modDoplata.DoplataStavkeRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If CStr(r(i, 16)) = otkupID Then
+            DopObuhvatOtkupa = CStr(r(i, 21))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ============================================================
+' 352. DOP-ODL-31: OBUHVAT NA EKRANU -- POLJE, DOLAZAK SA KARTICE, PITANJE, UPIS.
+' ============================================================
+' Tekst ukucan u polje "Samo kooperant" bez izbora iz liste NIJE "svi": pregled
+' i knjizenje staju. Dugme "Doplata kooperantu" na kartici ide PRAVIM putem --
+' klik kroz ljusku (UiEvent), prelazak ekrana, pa obuhvat -- i ostavlja ekran
+' Doplata sa obuhvatom kooperanta cija je kartica prikazana. U tom obuhvatu
+' pregled nosi samo njega, pitanje ga imenuje, upis pise obuhvat i ne dira
+' tudje blokove, a posle knjizenja obuhvat je prazan (sledeci obracun je nov).
+' Tok (juce, klasa I): A o1 10 kg, B o3 6 kg; stopa 10 din/kg.
+' Sta test NE meri: da li se dugme vidi samo na kartici kooperanta i da li polje
+' staje u red -- izgled forme, rucna provera.
+' SABOTAZE: dop-obuhvat-ekran-nerazresen-prolazi, dop-obuhvat-kartica-ne-predaje,
+'   dop-obuhvat-ekran-pregled-bez-obuhvata, dop-obuhvat-pitanje-bez-imena,
+'   dop-obuhvat-ekran-ne-ide-piscu, dop-obuhvat-ostaje-posle-knjizenja.
+Private Sub T_Doplata_ObuhvatNaEkranu()
+    Dim f As frmOtkupUI
+    Dim b As String, vr As String, kul As String, kA As String, kB As String
+    Dim o1 As String, o3 As String, naziv As String, stopa As String
+    Dim zastoj As String, knjizioBez As Boolean, redovaBez As Long, n0 As Long
+    Dim ekranKart As String, ekranPosle As String, obuhvatPosle As String, listaPosle As String
+    Dim pregled As String, redPlana As String, d As Variant, redovi As Variant
+    Dim klik As Boolean, pitanje As String, knjizeno As Boolean
+    Dim obuhvatDok As String, tudjDok As String, obuhvatNaKraju As String
+    Dim errNum As Long, errDesc As String
+
+    modScrDoplata.Scr_DopTestReset
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    naziv = "Dop " & b & "-A"
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    o3 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 6, 0)
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    DopVremeUnosa o3, DateAdd("n", -1, Now)
+
+    stopa = modScrDoplata.Scr_DopStopaTestDodaj(vr, "S1", KLASA_I, 10)
+    modScrDoplata.Scr_DopUnosTestSet Format$(Date, "dd.mm.yyyy"), _
+        Format$(DopJuceOd(), "dd.mm.yyyy"), "00:00", Format$(DopJuceOd(), "dd.mm.yyyy"), "23:59", _
+        "test 352"
+
+    ' (1) Ukucan a neizabran kooperant: ni pregled ni knjizenje.
+    modScrDoplata.Scr_DopObuhvatTestSet "", True
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    zastoj = modScrDoplata.Scr_DopPregledTest()
+    knjizioBez = modScrDoplata.Scr_DopKnjiziTest(False)
+    redovaBez = DopBrojRedova(TBL_DOPLATA) - n0
+
+    ' (2) Dolazak sa kartice, pravim putem: klik na dugme u zoni Izvestaja.
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, kA, CDbl(Date - 1), CDbl(Date)
+    Set f = NewOtkupUIForm()
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    ekranKart = modOtkupUI.AktivanEkran()
+    modOtkupUI.UiEvent "scrIzDoplata", "Click", Empty
+    ekranPosle = modOtkupUI.AktivanEkran()
+    obuhvatPosle = modScrDoplata.Scr_DopObuhvat()
+    listaPosle = modScrDoplata.Scr_Lista()
+
+    ' (3) Pregled, pitanje i upis u obuhvatu sa kartice.
+    pregled = modScrDoplata.Scr_DopPregledTest()
+    d = modScrDoplata.Scr_Rows("sve", "")
+    If IsArray(d) Then
+        If CLng(d(2)) > 0 Then
+            redovi = d(1)
+            redPlana = CStr(CLng(d(2))) & "|" & NzToText(redovi(1, 1)) & "|" & _
+                       Format$(NzD2(redovi(1, 6)), "0.00")
+        End If
+    End If
+    klik = modScrDoplata.Scr_DopKnjiziKlikTest()
+    pitanje = modScrDoplata.Scr_DopPitanjeTest()
+    knjizeno = modScrDoplata.Scr_DopKnjiziTest(False)
+    obuhvatDok = DopObuhvatOtkupa(o1)
+    tudjDok = DopObuhvatOtkupa(o3)
+    obuhvatNaKraju = modScrDoplata.Scr_DopObuhvat()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrIzvestaji.Scr_IzTestReset
+    modScrDoplata.Scr_DopTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Doplata_ObuhvatNaEkranu", errDesc
+
+    AssertEq stopa & "|" & zastoj & "|" & CStr(knjizioBez) & "|" & CStr(redovaBez), _
+             "|" & Poruka("OTKUI_ERR_DOP_KOOP_NERAZRESEN") & "|" & CStr(False) & "|0", _
+             "ekran: ukucan a neizabran kooperant zaustavlja pregled i knjizenje"
+    AssertEq ekranKart & "|" & ekranPosle & "|" & obuhvatPosle & "|" & listaPosle, _
+             "IZVESTAJI|DOPLATA|" & kA & "|STOPE", _
+             "kartica: dugme Doplata otvara ekran Doplata sa obuhvatom tog kooperanta"
+    AssertEq pregled & "|" & redPlana, "|1|" & naziv & "|" & Format$(10, "0.00"), _
+             "ekran: pregled u obuhvatu nosi samo tog kooperanta"
+    AssertEq (klik = False And _
+              InStr(1, pitanje, Poruka("OTKUI_LBL_DOP_SAMO_KOOP") & " " & naziv, vbBinaryCompare) > 0 And _
+              InStr(1, pitanje, kA, vbBinaryCompare) > 0), True, _
+             "ekran: pitanje pred knjizenje imenuje kooperanta obuhvata"
+    AssertEq CStr(knjizeno) & "|" & obuhvatDok & "|" & tudjDok, CStr(True) & "|" & kA & "|NEMA", _
+             "ekran: knjizenje pise obuhvat i ne dira blokove drugog kooperanta"
+    AssertEq obuhvatNaKraju, "", "ekran: posle knjizenja obuhvat je prazan"
+End Sub

@@ -108,14 +108,24 @@ Public Const KO_KAPIJA_TUDJ As String = "TUDJ"
 ' ukljucujuci hladnjacke blokove. Kilogrami i cena otkupa su sa STAVKI
 ' (StavkeOtkupaRedovi, strog citac kanona) -- isti izvor koji citaju kartica i
 ' saldo.
+'
+' kooperantID (DOP-ODL-31): prazno = obracun za sve kooperante. Zadat = obracun
+' SAMO za tog kooperanta: tudji blokovi ne ulaze u plan ni u jednom koraku, pa
+' stopa koja ne pogadja nijedan NJEGOV blok ide u outBezOtkupa iako pogadja
+' tudje, a blok drugog kooperanta na granicnom danu bez poznatog sata ne obara
+' ovaj obracun.
 Public Function DoplataPlan(ByVal periodOd As Date, ByVal periodDo As Date, _
                             ByVal stope As Collection, _
                             Optional ByRef outBezOtkupa As String, _
-                            Optional ByVal nacin As Long = DOP_NACIN_PO_KG) As Variant
+                            Optional ByVal nacin As Long = DOP_NACIN_PO_KG, _
+                            Optional ByVal kooperantID As String = "") As Variant
     Const SRC As String = "modDoplata.DoplataPlan"
 
     DoplataPlan = Empty
     outBezOtkupa = ""
+
+    Dim obuhvat As String
+    obuhvat = Trim$(kooperantID)
 
     RequirePeriod periodOd, periodDo, SRC
     RequireNacin nacin, SRC
@@ -155,7 +165,7 @@ Public Function DoplataPlan(ByVal periodOd As Date, ByVal periodDo As Date, _
     Dim i As Long, oid As String, vs As String
     For i = 1 To UBound(d, 1)
         vs = KljucVrstaSorta(d(i, cVr), d(i, cSo))
-        If vrsteSorte.Exists(vs) Then
+        If vrsteSorte.Exists(vs) And UObuhvatu(d(i, cKoop), obuhvat) Then
             oid = Trim$(NzToText(d(i, cId)))
             If OtkupUPeriodu(d(i, cDat), d(i, cSrc), d(i, cCre), periodOd, periodDo, _
                              oid, NzToText(d(i, cBr)), SRC) Then
@@ -273,13 +283,15 @@ End Function
 ' koji imenuje ranije doplate. Vazi u oba nacina unosa -- i u nacinu 2, gde plan
 ' ranije doplaceno vec oduzima, operater treba da zna da se blok doplacuje opet.
 ' izabrani: kao u KnjiziDoplatu_TX (Nothing = svi blokovi plana sa doplatom).
+' kooperantID: obuhvat obracuna, kao u DoplataPlan (DOP-ODL-31).
 Public Function DoplataPreklapanja(ByVal periodOd As Date, ByVal periodDo As Date, _
                                    ByVal stope As Collection, _
                                    Optional ByVal nacin As Long = DOP_NACIN_PO_KG, _
-                                   Optional ByVal izabrani As Object = Nothing) As String
+                                   Optional ByVal izabrani As Object = Nothing, _
+                                   Optional ByVal kooperantID As String = "") As String
     Const SRC As String = "modDoplata.DoplataPreklapanja"
     Dim plan As Variant, bez As String
-    plan = DoplataPlan(periodOd, periodDo, stope, bez, nacin)
+    plan = DoplataPlan(periodOd, periodDo, stope, bez, nacin, kooperantID)
     If Not IsArray(plan) Then Exit Function
     DoplataPreklapanja = PonavljanjaUPlanu(PlanZaKnjizenje(plan, izabrani, SRC, False))
 End Function
@@ -431,6 +443,11 @@ End Function
 ' nacin         DOP_NACIN_PO_KG ili DOP_NACIN_KONACNA (DOP-ODL-15)
 ' izabrani      Scripting.Dictionary OtkupID -> True: blokovi koje operater
 '               knjizi; Nothing = svi blokovi plana sa doplatom (v. PlanZaKnjizenje)
+' kooperantID   obuhvat obracuna (DOP-ODL-31): prazno = svi kooperanti; zadat =
+'               obracun samo za tog kooperanta. Plan se racuna u TOM obuhvatu, pa
+'               izabran blok drugog kooperanta obara knjizenje po imenu (isti
+'               put kao blok koji vise nije u obracunu), a obuhvat se upisuje na
+'               svaki dokument (COL_DOP_OBUHVAT, DOP-12).
 '
 ' Kapije pre ijednog upisa (DOP-ODL-10): period je zatvoren i vec prosao, a
 ' datum knjizenja nije pre kraja perioda ni posle danas -- zaduzenje ne sme da
@@ -445,7 +462,8 @@ Public Function KnjiziDoplatu_TX(ByVal datum As Date, _
                                  Optional ByRef outGreska As String, _
                                  Optional ByRef outErrNum As Long, _
                                  Optional ByVal nacin As Long = DOP_NACIN_PO_KG, _
-                                 Optional ByVal izabrani As Object = Nothing) As String
+                                 Optional ByVal izabrani As Object = Nothing, _
+                                 Optional ByVal kooperantID As String = "") As String
     Const SRC As String = "modDoplata.KnjiziDoplatu_TX"
 
     Dim tx As clsTransaction
@@ -461,8 +479,16 @@ Public Function KnjiziDoplatu_TX(ByVal datum As Date, _
 
     RequireDatumKnjizenja datum, periodDo, SRC
 
+    ' Obuhvat je identitet, ne tekst: kooperant mora da postoji TACNO jednom.
+    ' Nepoznat ID bi inace dao prazan plan i poruku "nema otkupa" umesto razloga.
+    Dim obuhvat As String
+    obuhvat = Trim$(kooperantID)
+    If Len(obuhvat) > 0 Then
+        RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, obuhvat, "KooperantID (obuhvat obracuna)", SRC
+    End If
+
     Dim plan As Variant, bezOtkupa As String
-    plan = DoplataPlan(periodOd, periodDo, stope, bezOtkupa, nacin)
+    plan = DoplataPlan(periodOd, periodDo, stope, bezOtkupa, nacin, obuhvat)
 
     If Len(bezOtkupa) > 0 Then
         Err.Raise DOP_ERR_BASE + 30, SRC, _
@@ -489,7 +515,7 @@ Public Function KnjiziDoplatu_TX(ByVal datum As Date, _
     tx.AddTableSnapshot TBL_DOPLATA
     tx.AddTableSnapshot TBL_DOPLATA_STAVKE
 
-    KnjiziDoplatu_TX = KnjiziPlan(datum, periodOd, periodDo, plan, napomena, nacin, SRC)
+    KnjiziDoplatu_TX = KnjiziPlan(datum, periodOd, periodDo, plan, napomena, nacin, obuhvat, SRC)
 
     tx.CommitTx
     Set tx = Nothing
@@ -545,12 +571,15 @@ End Function
 ' istog bloka uzastopne: jedan prolaz pravi jedan dokument po bloku.
 ' Broj = broj bloka + "-0" + redni broj doplate na tom bloku (DOP-ODL-30); redni
 ' broj se racuna preko SVIH ranijih dokumenata bloka, i storniranih.
+' obuhvat: "" ili KooperantID za koga je obracun radjen (DOP-ODL-31); ide na
+' svako zaglavlje, a dokument drugog kooperanta pod tim obuhvatom je greska.
 Private Function KnjiziPlan(ByVal datum As Date, _
                             ByVal periodOd As Date, _
                             ByVal periodDo As Date, _
                             ByVal plan As Variant, _
                             ByVal napomena As String, _
                             ByVal nacin As Long, _
+                            ByVal obuhvat As String, _
                             ByVal sourceName As String) As String
     Dim obracunID As String
     obracunID = NewEntityID("DOB-")
@@ -581,6 +610,14 @@ Private Function KnjiziPlan(ByVal datum As Date, _
         If StrComp(CStr(plan(i, PL_OTKUP)), tekuci, vbTextCompare) <> 0 Then
             tekuci = CStr(plan(i, PL_OTKUP))
             koop = CStr(plan(i, PL_KOOP))
+            ' DOP-12, kapija PISCA: plan je vec suzen na obuhvat (DoplataPlan),
+            ' ali upis ne veruje pozivaocu -- dokument tudjeg kooperanta pod
+            ' ovim obuhvatom bi signalu osnovice sakrio njegove blokove.
+            If Not UObuhvatu(koop, obuhvat) Then
+                Err.Raise DOP_ERR_BASE + 36, sourceName, _
+                          "Blok " & tekuci & " pripada kooperantu " & koop & _
+                          ", a obracun je samo za kooperanta " & obuhvat & "."
+            End If
             If Not proveren.Exists(koop) Then
                 RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, koop, "KooperantID", sourceName
                 proveren.Add koop, True
@@ -638,6 +675,7 @@ Private Function KnjiziPlan(ByVal datum As Date, _
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_STANICA, plan(i, PL_STANICA), sourceName
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_NACIN, nacin, sourceName
             SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_SPEC, specKoop(koop), sourceName
+            SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_OBUHVAT, obuhvat, sourceName
 
             If AppendRow(TBL_DOPLATA, rowData) <= 0 Then
                 Err.Raise DOP_ERR_BASE + 42, sourceName, _
@@ -681,18 +719,22 @@ End Function
 ' CITACI
 ' ============================================================
 
-' Stavke AKTIVNIH dokumenata doplate, sa zaglavljem. 2D niz (1..n, 1..20):
+' Stavke AKTIVNIH dokumenata doplate, sa zaglavljem. 2D niz (1..n, 1..21):
 '   1 DoplataID | 2 BrojDokumenta | 3 Datum | 4 KooperantID | 5 ObracunID
 '   6 StanicaID | 7 VrstaVoca | 8 SortaVoca | 9 Klasa | 10 Kolicina
 '   11 Cena (bruto doplata po kg) | 12 Iznos | 13 DoplataStavkaID
 '   14 PeriodOd | 15 PeriodDo | 16 OtkupID (blok) | 17 CenaOtkupa
 '   18 KonacnaCena (nacin 2; inace prazno) | 19 NacinUnosa
 '   20 BrojSpecifikacije (prazno za dokument knjizen pre P3)
+'   21 ObuhvatKooperantID (prazno = obracun za sve kooperante; DOP-ODL-31)
 ' redosledom tabele stavki. Empty kad nema nijedne aktivne stavke.
 '
 ' STROG, kao StavkeOtkupaRedovi: dupli DoplataID, stavka bez zaglavlja i
 ' aktivno zaglavlje bez stavki padaju PO IMENU -- tiha nula bi sakrila dug firme
 ' prema kooperantu. Stavka storniranog zaglavlja nije aktivna (DOP-03).
+' DOP-12: obuhvat je osobina OBRACUNA -- svi dokumenti obracuna nose isti, a
+' zadat obuhvat je kooperant dokumenta. Odstupanje pada po imenu: signal
+' osnovice bi inace gledao pogresnog kooperanta.
 Public Function DoplataStavkeRedovi() As Variant
     Const SRC As String = "modDoplata.DoplataStavkeRedovi"
 
@@ -727,6 +769,8 @@ Public Function DoplataStavkeRedovi() As Variant
     cOtk = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OTKUP, SRC)
     cNac = RequireColumnIndex(TBL_DOPLATA, COL_DOP_NACIN, SRC)
     cSpec = RequireColumnIndex(TBL_DOPLATA, COL_DOP_SPEC, SRC)
+    Dim cObuh As Long
+    cObuh = RequireColumnIndex(TBL_DOPLATA, COL_DOP_OBUHVAT, SRC)
 
     ' Specifikacija je par (ObracunID, KooperantID); broj je njena oznaka i mora
     ' biti jedan po paru i ne sme da pripada dvama parovima -- i preko storniranih
@@ -736,6 +780,11 @@ Public Function DoplataStavkeRedovi() As Variant
     parSpec.CompareMode = vbTextCompare
     Set specPar = CreateObject("Scripting.Dictionary")
     specPar.CompareMode = vbTextCompare
+
+    ' obrObuh: ObracunID -> obuhvat (DOP-12), i preko storniranih dokumenata.
+    Dim obrObuh As Object, obuh As String, obrID As String
+    Set obrObuh = CreateObject("Scripting.Dictionary")
+    obrObuh.CompareMode = vbTextCompare
 
     Dim i As Long, id As String
     If IsArray(hd) Then
@@ -771,6 +820,26 @@ Public Function DoplataStavkeRedovi() As Variant
                     specPar.Add spec, par
                 End If
             End If
+
+            obuh = Trim$(NzToText(hd(i, cObuh)))
+            obrID = Trim$(NzToText(hd(i, cObr)))
+            If Len(obuh) > 0 Then
+                If StrComp(obuh, Trim$(NzToText(hd(i, cKoop))), vbTextCompare) <> 0 Then
+                    Err.Raise DOP_ERR_BASE + 59, SRC, _
+                              "Dokument doplate " & id & " je kooperanta " & _
+                              Trim$(NzToText(hd(i, cKoop))) & ", a obracun je samo za " & _
+                              "kooperanta " & obuh & "."
+                End If
+            End If
+            If obrObuh.Exists(obrID) Then
+                If StrComp(CStr(obrObuh(obrID)), obuh, vbTextCompare) <> 0 Then
+                    Err.Raise DOP_ERR_BASE + 60, SRC, _
+                              "Dokumenti istog obracuna nose razlicit obuhvat ('" & _
+                              CStr(obrObuh(obrID)) & "' / '" & obuh & "'), dokument " & id & "."
+                End If
+            Else
+                obrObuh.Add obrID, obuh
+            End If
         Next i
 
         Dim akt As Variant
@@ -781,7 +850,7 @@ Public Function DoplataStavkeRedovi() As Variant
                     Array(NzToText(akt(i, cBr)), akt(i, cDat), Trim$(NzToText(akt(i, cKoop))), _
                           Trim$(NzToText(akt(i, cObr))), akt(i, cOd), akt(i, cDo), _
                           Trim$(NzToText(akt(i, cOtk))), akt(i, cNac), _
-                          Trim$(NzToText(akt(i, cSpec))))
+                          Trim$(NzToText(akt(i, cSpec))), Trim$(NzToText(akt(i, cObuh))))
             Next i
         End If
     End If
@@ -851,7 +920,7 @@ Public Function DoplataStavkeRedovi() As Variant
     If n = 0 Then Exit Function
 
     Dim res() As Variant
-    ReDim res(1 To n, 1 To 20)
+    ReDim res(1 To n, 1 To 21)
     n = 0
     For i = 1 To UBound(sd, 1)
         id = Trim$(NzToText(sd(i, sDop)))
@@ -879,6 +948,7 @@ Public Function DoplataStavkeRedovi() As Variant
             res(n, 18) = sd(i, sKon)
             res(n, 19) = h(7)
             res(n, 20) = h(8)
+            res(n, 21) = h(9)
         End If
     Next i
 
@@ -1596,6 +1666,10 @@ End Function
 '     05.11.2026, review P1 DOP-P1-REV-04; test 337).
 ' Blok koji je postojao pri knjizenju a operater ga je iskljucio (DOP-ODL-16)
 ' NIJE nalaz: plan se zato ne racuna ponovo nad celim periodom.
+' Obracun radjen SAMO ZA JEDNOG kooperanta (DOP-ODL-31) trazi retro unos samo
+' medju NJEGOVIM blokovima -- isto pravilo obuhvata kao plan (UObuhvatu). Tudji
+' blok tom obracunu nikad nije pripadao, pa ni na granicnom danu bez poznatog
+' sata ne daje "osnovica se ne moze proveriti".
 '
 ' 2D niz (1..n, 1..6): 1 broj doplate ("" za retro unos) | 2 KooperantID |
 ' 3 kljuc ("vrsta sorta klasa @ stanica (blok broj)") | 4 kg knjizeno |
@@ -1626,7 +1700,8 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
     ' knjizeno: "DoplataID|KLASA" -> Array(kg, broj, koop, opis, ObracunID,
     '           "OtkupID|KLASA") -- po DOKUMENTU, ne po bloku (v. gore)
     ' blokovi:  "OtkupID|KLASA" koji imaju bar jedan aktivan dokument
-    ' obr:      ObracunID -> Array(periodOd, periodDo, kljucevi vs|KLASA, knjizeno u)
+    ' obr:      ObracunID -> Array(periodOd, periodDo, kljucevi vs|KLASA, knjizeno u,
+    '                              obuhvat)
     Dim knj As Object, blokovi As Object, obr As Object, o As Variant, kl As Object, k As String
     Set knj = CreateObject("Scripting.Dictionary")
     knj.CompareMode = vbTextCompare
@@ -1652,7 +1727,7 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
             kl.CompareMode = vbTextCompare
             cr = Empty
             If kad.Exists(CStr(r(i, 1))) Then cr = kad(CStr(r(i, 1)))
-            obr.Add CStr(r(i, 5)), Array(r(i, 14), r(i, 15), kl, cr)
+            obr.Add CStr(r(i, 5)), Array(r(i, 14), r(i, 15), kl, cr, CStr(r(i, 21)))
         End If
         o = obr(CStr(r(i, 5)))
         Set kl = o(2)
@@ -1729,6 +1804,8 @@ Public Function DoplataOdstupanjaOsnovice() As Variant
             ' Nastao pre knjizenja = postojao je, pa ga je operater svesno
             ' iskljucio (ili nije bio u kljucu). Isti sekund se racuna kao posle.
             If CDate(z(2)) < CDate(o(3)) Then GoTo SledeciOtkup
+            ' Van obuhvata obracuna (DOP-ODL-31): nije mu pripadao, nije nalaz.
+            If Not UObuhvatu(z(3), CStr(o(4))) Then GoTo SledeciOtkup
             If Not kls.Exists(CStr(oid)) Then GoTo SledeciOtkup
             Set nove = New Collection
             delovi = Split(CStr(kls(CStr(oid))), ";")
@@ -2117,6 +2194,17 @@ Private Function KljucPoretka(ByVal koop As String, ByVal stanica As String, _
     KljucPoretka = UCase$(koop) & Chr$(1) & UCase$(stanica) & Chr$(1) & _
                    Format$(datumBloka, "yyyymmdd") & Chr$(1) & Format$(redBloka, "0000000") & _
                    Chr$(1) & rang
+End Function
+
+' Da li kooperant ulazi u obuhvat obracuna (DOP-ODL-31): prazan obuhvat = svi.
+' JEDNO pravilo za plan, pisca i signal osnovice -- inace bi obracun knjizio
+' jedne blokove, a signal trazio retro unos medju drugima.
+Private Function UObuhvatu(ByVal kooperantID As Variant, ByVal obuhvat As String) As Boolean
+    If Len(obuhvat) = 0 Then
+        UObuhvatu = True
+    Else
+        UObuhvatu = (StrComp(Trim$(NzToText(kooperantID)), obuhvat, vbTextCompare) = 0)
+    End If
 End Function
 
 Private Sub RequireNacin(ByVal nacin As Long, ByVal sourceName As String)

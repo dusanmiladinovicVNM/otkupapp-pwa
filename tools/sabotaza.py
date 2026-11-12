@@ -11877,6 +11877,126 @@ SABOTAZE = {
         "T_Doplata_BrojeviBezSlova",
         "blok iz poziva: dve vrste dokumenata traze rucno mapiranje",
     ),
+    # DOP-ODL-31: plan ne suzava na kooperanta obuhvata.
+    "dop-obuhvat-plan-bez-filtera": (
+        "modDoplata.bas",
+        "        If vrsteSorte.Exists(vs) And UObuhvatu(d(i, cKoop), obuhvat) Then\n",
+        "        If vrsteSorte.Exists(vs) Then   ' SABOTAZA: plan ne gleda obuhvat\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "plan sa obuhvatom nosi samo blokove tog kooperanta",
+    ),
+    # DOP-ODL-31: pisac racuna plan bez obuhvata (zaustavlja ga kapija u KnjiziPlan).
+    "dop-obuhvat-pisac-plan-bez-obuhvata": (
+        "modDoplata.bas",
+        "    plan = DoplataPlan(periodOd, periodDo, stope, bezOtkupa, nacin, obuhvat)\n",
+        "    plan = DoplataPlan(periodOd, periodDo, stope, bezOtkupa, nacin)   ' SABOTAZA: plan pisca bez obuhvata\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "obracun sa obuhvatom knjizi samo dokumente tog kooperanta",
+    ),
+    # DOP-12: pisac ne upisuje obuhvat na dokument.
+    "dop-obuhvat-ne-upisuje-se": (
+        "modDoplata.bas",
+        "            SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_OBUHVAT, obuhvat, sourceName\n",
+        "            SetRowValueByColumn rowData, TBL_DOPLATA, COL_DOP_OBUHVAT, \"\", sourceName   ' SABOTAZA: obuhvat se ne upisuje\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "pisac upisuje obuhvat na svaki dokument obracuna",
+    ),
+    # DOP-ODL-31: nepostojeci kooperant obuhvata prolazi kapiju pisca.
+    "dop-obuhvat-nepostojeci-prolazi": (
+        "modDoplata.bas",
+        "        RequireTacnoJedan TBL_KOOPERANTI, COL_KOOP_ID, obuhvat, \"KooperantID (obuhvat obracuna)\", SRC\n",
+        "        ' SABOTAZA: nepostojeci kooperant obuhvata prolazi kapiju\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "nepostojeci kooperant obuhvata obara knjizenje po imenu",
+    ),
+    # DOP-ODL-31: signal osnovice trazi retro unos medju svim kooperantima.
+    "dop-obuhvat-signal-gleda-sve": (
+        "modDoplata.bas",
+        "            If Not UObuhvatu(z(3), CStr(o(4))) Then GoTo SledeciOtkup\n",
+        "            If False Then GoTo SledeciOtkup   ' SABOTAZA: signal ne gleda obuhvat obracuna\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "retro blok drugog kooperanta nije nalaz obracuna sa obuhvatom, a jeste obracuna bez obuhvata",
+    ),
+    # DOP-ODL-31: obracun sa obuhvatom uopste nema retro signal.
+    "dop-obuhvat-signal-gasi-retro": (
+        "modDoplata.bas",
+        "            If Not UObuhvatu(z(3), CStr(o(4))) Then GoTo SledeciOtkup\n",
+        "            If Len(CStr(o(4))) > 0 Then GoTo SledeciOtkup   ' SABOTAZA: obracun sa obuhvatom nema retro signal\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "retro blok kooperanta obuhvata jeste nalaz tog obracuna",
+    ),
+    # DOP-12: citalac ne poredi obuhvat sa kooperantom dokumenta.
+    "dop-obuhvat-citalac-tudj-kooperant": (
+        "modDoplata.bas",
+        "                If StrComp(obuh, Trim$(NzToText(hd(i, cKoop))), vbTextCompare) <> 0 Then\n",
+        "                If False Then   ' SABOTAZA: citalac ne poredi obuhvat sa kooperantom dokumenta\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "citalac: dokument ciji obuhvat nije njegov kooperant pada po imenu",
+    ),
+    # DOP-12: citalac ne poredi obuhvat dokumenata istog obracuna.
+    "dop-obuhvat-citalac-razlicit": (
+        "modDoplata.bas",
+        "                If StrComp(CStr(obrObuh(obrID)), obuh, vbTextCompare) <> 0 Then\n",
+        "                If False Then   ' SABOTAZA: citalac ne poredi obuhvat unutar obracuna\n",
+        "T_Doplata_ObuhvatKooperanta",
+        "citalac: dokumenti istog obracuna sa razlicitim obuhvatom padaju po imenu",
+    ),
+    # DOP-ODL-31: tekst u polju bez izbora iz liste prolazi kao "svi kooperanti".
+    "dop-obuhvat-ekran-nerazresen-prolazi": (
+        "modScrDoplata.bas",
+        "    If mObuhvatNerazresen Then ObuhvatProblem = Poruka(\"OTKUI_ERR_DOP_KOOP_NERAZRESEN\")\n",
+        "    If False Then ObuhvatProblem = Poruka(\"OTKUI_ERR_DOP_KOOP_NERAZRESEN\")   ' SABOTAZA: neizabran kooperant prolazi kao svi\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "ekran: ukucan a neizabran kooperant zaustavlja pregled i knjizenje",
+    ),
+    # DOP-ODL-31: dugme na kartici prelazi na ekran, ali ne predaje kooperanta.
+    "dop-obuhvat-kartica-ne-predaje": (
+        "modScrIzvestaji.bas",
+        "    razlog = modScrDoplata.Scr_DopOtvoriZaKooperanta(koop)\n",
+        "    razlog = \"\"   ' SABOTAZA: kartica ne predaje kooperanta ekranu Doplata\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "kartica: dugme Doplata otvara ekran Doplata sa obuhvatom tog kooperanta",
+    ),
+    # DOP-ODL-31: pregled na ekranu ne salje obuhvat motoru.
+    "dop-obuhvat-ekran-pregled-bez-obuhvata": (
+        "modScrDoplata.bas",
+        "    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez, Nacin(), mObuhvat)\n",
+        "    mPlan = modDoplata.DoplataPlan(pOd, pDo, Stope(), mPlanBez, Nacin())   ' SABOTAZA: pregled ne salje obuhvat\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "ekran: pregled u obuhvatu nosi samo tog kooperanta",
+    ),
+    # DOP-ODL-31: pitanje pred knjizenje ne imenuje kooperanta.
+    "dop-obuhvat-pitanje-bez-imena": (
+        "modScrDoplata.bas",
+        "    If Len(mObuhvat) > 0 Then\n"
+        "        PitanjeKnjizenja = Poruka(\"OTKUI_LBL_DOP_SAMO_KOOP\") & \" \" & ObuhvatNaziv() & \". \"\n",
+        "    If False Then   ' SABOTAZA: pitanje ne imenuje kooperanta\n"
+        "        PitanjeKnjizenja = Poruka(\"OTKUI_LBL_DOP_SAMO_KOOP\") & \" \" & ObuhvatNaziv() & \". \"\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "ekran: pitanje pred knjizenje imenuje kooperanta obuhvata",
+    ),
+    # DOP-ODL-31: ekran ne salje obuhvat piscu -- dokument ostaje bez obuhvata.
+    "dop-obuhvat-ekran-ne-ide-piscu": (
+        "modScrDoplata.bas",
+        "                                      izbor, mObuhvat)\n",
+        "                                      izbor, \"\")   ' SABOTAZA: ekran ne salje obuhvat piscu\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "ekran: knjizenje pise obuhvat i ne dira blokove drugog kooperanta",
+    ),
+    # DOP-ODL-31: obuhvat ostaje posle knjizenja.
+    "dop-obuhvat-ostaje-posle-knjizenja": (
+        "modScrDoplata.bas",
+        "    mObuhvatTest = False\n"
+        "    PostaviObuhvat \"\", False\n"
+        "    ObuhvatUPolje\n"
+        "    mLista = DOP_KNJIZENO\n",
+        "    mObuhvatTest = False\n"
+        "    ' SABOTAZA: obuhvat ostaje posle knjizenja\n"
+        "    ObuhvatUPolje\n"
+        "    mLista = DOP_KNJIZENO\n",
+        "T_Doplata_ObuhvatNaEkranu",
+        "ekran: posle knjizenja obuhvat je prazan",
+    ),
     # P4: kartica grupise po dokumentu umesto po obracunu.
     "dop-kartica-po-dokumentu": (
         "modDoplata.bas",
@@ -12190,8 +12310,8 @@ SABOTAZE = {
     # P2: ekran ne salje piscu izbor -- pisac knjizi sve blokove sa doplatom.
     "dop-ekran-izbor-ne-ide-piscu": (
         "modScrDoplata.bas",
-        "                                      izbor)\n",
-        "                                      Nothing)   ' SABOTAZA: ekran ne salje izbor piscu\n",
+        "                                      izbor, mObuhvat)\n",
+        "                                      Nothing, mObuhvat)   ' SABOTAZA: ekran ne salje izbor piscu\n",
         "T_Doplata_EkranNacinIBlokovi",
         "ekran: knjizi se tacno ukljuceni blokovi, Knjizeno je zbirno po kooperantu",
     ),

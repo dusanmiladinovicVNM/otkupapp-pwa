@@ -19,6 +19,13 @@
 > nije provereno:** mapiranje stavke izvoda na specifikaciju, štampa
 > specifikacije iz kartice, poziv na broj u CSV-u naloga (probni nalog kroz
 > e-banking). Otvoreno iz §8.
+>
+> **U `main`-u** od 06.11.2026 (PR #460 = `95f07e6`; pravila u `.claude/rules`
+> kroz #470 = `1caa86f`).
+>
+> **Doplata samo za jednog kooperanta** (DOP-ODL-31, 12.11.2026): u kodu, na
+> grani `claude/cool-bohr-68hi14`; statičke kapije zelene, **Excel prolaz
+> neverifikovan** (§7a, na kraju).
 
 ## 1) Šta je doplata
 
@@ -92,6 +99,7 @@ produkciji (PR #460, draft), pa se kanon šeme sme menjati.
 | **DOP-ODL-28** *(05.11.2026)* | **Raspodela po specifikaciji**: iznos ide na otvorene dokumente specifikacije **od najstarijeg bloka** (datum bloka, pa broj bloka); svaki red novca je vezan za svoj dokument i nosi **stanicu bloka**; višak je avans na matičnoj stanici. **Gotovina** po specifikaciji raspoređuje **samo na dokumente čiji je blok na stanici isplate**; ostali ostaju otvoreni. |
 | **DOP-ODL-29** *(05.11.2026)* | Specifikacija je cilj plaćanja i u **ručnom mapiranju izvoda** (lista ciljeva kooperanta) i u **primeni avansa** (nalozi) — ista raspodela kao DOP-ODL-28. Redosled rada: rez A = automatski izvod + nalozi; rez B = ručno mapiranje, gotovina, avans. |
 | **DOP-ODL-30** *(06.11.2026; zamenjuje oblik broja iz DOP-ODL-17 i DOP-ODL-23/24)* | **Brojevi bez slova.** Dokument doplate = **broj bloka + `-0z`**, z = redni broj doplate na tom bloku (`5/250626-13-01`, `-02`…; prvi blok dana `5/280626` → `5/280626-01`). Specifikacija = **`x/ddmmyy-00y`**: x broj matične stanice kooperanta, ddmmyy datum knjiženja, y redni broj specifikacije te stanice tog dana (`5/051126-001`). Storno ne oslobađa broj. Vrste razdvaja **nula posle datuma**: broj bloka posle datuma nema sufiks ili ima `-2`, `-3`… (nikad nulu), doplata ima `-0` + cifra 1–9, specifikacija `-00`; razlika ostaje i kad banka iz poziva izbaci separatore. Uvoz izvoda traži **tačno jedan pogodak** preko blokova, dokumenata doplate i specifikacija; poziv koji pogodi dve vrste ide na ručno. Stari brojevi sa `D`/`S` (samo u test sveskama) ostaju čitljivi kao zauzeti. |
+| **DOP-ODL-31** *(12.11.2026; dopunjuje 03 i 16)* | **Obračun može biti samo za jednog kooperanta (obuhvat).** Podrazumevano obuhvat ostaje „svi aktivni otkupi" (DOP-ODL-03). Kad je zadat kooperant, plan se računa **samo nad njegovim blokovima**: tuđi ne ulaze ni u jedan korak, pa stopa koja ne pogađa nijedan njegov blok pada kao stopa bez otkupa (DOP-ODL-10) iako pogađa tuđe, a izabran tuđ blok obara knjiženje po imenu. Obuhvat je **osobina obračuna** i piše se na svaki njegov dokument (`tblDoplata.ObuhvatKooperantID`, na kraju tabele; prazno = svi). **Signal promene osnovice** (DOP-ODL-07) za takav obračun traži retro unos samo među blokovima tog kooperanta — kasnije unet blok drugog kooperanta mu nikad nije pripadao. Obuhvat se **ne izvodi iz podataka**: običan obračun koji je pogodio samo jednog kooperanta ostaje obračun za sve. Dva ulaza, jedan mehanizam: polje „Samo kooperant" na ekranu Doplata i dugme „Doplata kooperantu" na kartici kooperanta u Izveštajima (samo prelazak — Izveštaji i dalje ništa ne upisuju). Tekst u polju koji nije izabran iz liste **nije „svi"**: pregled i knjiženje staju. Posle knjiženja obuhvat se prazni, kao stope. „Uključi filtrirane" ostaje; takav obračun nema obuhvat. |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 
@@ -139,6 +147,7 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Slobodan avans se na KO primenjuje **istim motorom** kao na blok (`VeziSlobodanAvans`). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 328, 329, 331 |
 | **DOP-11** | **Jedna kapija i jedna veza za sve pisce novca nad KO** — izvod (auto i ručno), gotovina, primena avansa: KO postoji tačno jednom, aktivan je i kooperantov (`modDoplata.KOKapija`), a veza se piše samo kroz `modNovac.VeziNovacZaKO`. Gotovina ide **samo na stanicu bloka** (od P1; ranije matična) i najviše do trenutnog ostatka (`IsplataKOProblem`, u modulu unosa i u piscu). Izabran plaćen KO u ručnom mapiranju se ne knjiži (protivrečnost, ne avans). | `KOKapija`, `VeziNovacZaKO`, `modNovac.IsplataKOProblem`, `modDokumenta.SaveOMUlaz_TX`, `modBankaMapiranje.MapBankaImportAsKooperantBlockCore` · 331, 332, 333 |
 | **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 325, 326 |
+| **DOP-12** | **Obuhvat je osobina obračuna**: svi dokumenti jednog obračuna nose isti `ObuhvatKooperantID`, a kad nije prazan, jednak je `KooperantID`-u dokumenta. Piše ga samo pisac doplate, pri knjiženju; storno ga ne menja. | pisac `modDoplata.KnjiziPlan` (kapija `DOP_ERR_BASE + 36` iza plana suženog u `DoplataPlan`), strog čitalac `DoplataStavkeRedovi` (`+59` tuđ kooperant, `+60` različit obuhvat u obračunu), jedno pravilo obuhvata `UObuhvatu` za plan, pisca i signal · 351 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
 stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
@@ -500,6 +509,51 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
   sabotaža `dop-ponavljanje-van-kataloga`. Excel 06.11.2026: 349/0, dokaz
   DOKAZANO (u istom prolazu kao DOP-ODL-30); tekst na ekranu ručno nije pregledan.
+- **Doplata samo za jednog kooperanta (DOP-ODL-31, DOP-12; pre-flight 12.11.2026).**
+  Zahtev operatera: sa kartice kooperanta u Izveštajima dati doplatu samo njemu,
+  bez dupliranja koda. Nema novog ekrana, pisca ni plana:
+  - **Šema:** `tblDoplata.ObuhvatKooperantID` na kraju (kanon `schema.json` →
+    `modSchema`, otisak `4CCA6C14` → `A2A085EB`); bez ugovora o formatu, ID nije
+    vrednost koju Excel konvertuje. Postojeća sveska dobija kolonu kroz
+    `EnsureAllTables` na startu (isti put kao `BrojSpecifikacije`).
+  - **Motor (`modDoplata`):** opcioni `kooperantID` na kraju `DoplataPlan`,
+    `DoplataPreklapanja` i `KnjiziDoplatu_TX`; filter je jedan uslov u prvoj
+    petlji plana (`UObuhvatu`), pre provere perioda — tuđ blok na graničnom danu
+    bez poznatog sata ne obara ovaj obračun. Pisac proverava da kooperant
+    postoji tačno jednom, računa plan u obuhvatu i upisuje ga na zaglavlje;
+    `KnjiziPlan` ne veruje pozivaocu (`+36`). Čitalac nosi kolonu 21 i dve
+    provere DOP-12. `DoplataOdstupanjaOsnovice` preskače otkupe van obuhvata.
+  - **Ekran (`modScrDoplata`):** polje „Samo kooperant" u redu A (lista sa
+    ID-em u prikazu — dva kooperanta istog imena se razlikuju); stanje prati
+    polje u trenutku pregleda i knjiženja (`ObuhvatSaPolja`, čita izabranu
+    stavku, ne tekst); promena poništava pregled i izbor blokova; tri postojeća
+    poziva motora prosleđuju obuhvat; pitanje pred knjiženje imenuje kooperanta;
+    `Scr_ResetCache` osvežava listu kooperanata. Liste, zbirovi i izbor blokova
+    nisu menjani — plan već nosi samo njegove blokove.
+  - **Kartica (`modScrIzvestaji`):** dugme „Doplata kooperantu" na finansijskoj
+    kartici, samo za tip Kooperant i samo uz pravo na ekran Doplata. Redosled
+    kao kod predaje ispravke (`modScrStorno.OtvoriIspravku`): prvo
+    `IdiNaEkran "DOPLATA"`, pa `Scr_DopOtvoriZaKooperanta(KooperantID)`, pa
+    `RefreshFromData` (ljuska posle radnje koja promeni ekran ne osvežava
+    ništa). Putuje ID kartice koja je prikazana, ne ime. Ako polje ne može da
+    pokaže kooperanta, obuhvat se ne postavlja — prazno polje bi „samo ovaj"
+    tiho pretvorilo u „svi".
+  - **Ljuska (`modOtkupUI`):** `PanelIzboraMiruj` — javni gard za programski
+    upis u combo ekrana (isti koji ljuska koristi za svoja punjenja, `mPopMute`).
+    ⚠ PLATFORM UNKNOWN: da li bi bez garda panel izbora ostao otvoren posle
+    dolaska sa kartice nije izmereno; gard je uveden da ishod ne zavisi od toga.
+  - Testovi 351 (`T_Doplata_ObuhvatKooperanta`: plan, pisac, signal, čitalac) i
+    352 (`T_Doplata_ObuhvatNaEkranu`: neizabran kooperant, dolazak sa kartice
+    pravim klikom kroz ljusku, pregled, pitanje, upis, pražnjenje); 14 sabotaža
+    `dop-obuhvat-*`; presidrena `dop-ekran-izbor-ne-ide-piscu`. Kapija u
+    `KnjiziPlan` (`+36`) je odbrana u dubinu i nema svoju sabotažu — sama se
+    testom ne može oboriti. Katalog 1265 → 1279.
+  - **Ne meri se testom (ručno):** da li polje staje u red A, da li se dugme
+    vidi samo na kartici kooperanta, i da li postojeća sveska dobije kolonu po
+    restartu.
+  - `STANJE_REFAKTORA.md` namerno nije diran: otvoren PR #469 je rezervisao
+    stavke 324–327.
+  **Statičke kapije zelene; Excel prolaz neverifikovan.**
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
@@ -526,10 +580,9 @@ sve / Isključi sve" na listi Blokovi.
 3. ~~DOP-ODL-12 je predlog.~~ Potvrđeno 06.11.2026 (grupa FINANSIJE, pravo Fakturisanje).
 4. ~~Ikonica `IC_DOPLATA` nije proverena na pravom fontu.~~ Vidi se u meniju i u
    zaglavlju ekrana (snimak 06.11.2026).
-5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
-   ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
-   Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
-   naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
+5. ~~`.claude/rules/testovi.md` (32 člana u testu 239) i `.claude/rules/banka.md`
+   (doplata i specifikacija kao dokumenti naloga, `DoplataID` u pravilu
+   avansa).~~ Urađeno zasebnim process PR-om #470 (`1caa86f`, 06.11.2026).
 6. **~~RELEASE KAPIJA — slovo u pozivu na broj.~~ Rešeno brojevima bez slova
    (DOP-ODL-30, 06.11.2026).** Poziv sada nosi samo cifre, `/` i `-`, kao broj
    bloka; probni nalog kroz e-banking ostaje kao opšta provera izvoza naloga.
