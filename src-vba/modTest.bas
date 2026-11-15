@@ -462,6 +462,7 @@ Public Sub RunAllTests()
     RunOne 350
     RunOne 351
     RunOne 352
+    RunOne 353
     RunOne 13
     RunOne 14
     RunOne 15
@@ -1124,6 +1125,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 350: TestName = "T_KUL1_KulturaListaPoSorti"
         Case 351: TestName = "T_Doplata_ObuhvatKooperanta"
         Case 352: TestName = "T_Doplata_ObuhvatNaEkranu"
+        Case 353: TestName = "T_Doplata_ObuhvatZastoj"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1484,6 +1486,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 350: T_KUL1_KulturaListaPoSorti
         Case 351: T_Doplata_ObuhvatKooperanta
         Case 352: T_Doplata_ObuhvatNaEkranu
+        Case 353: T_Doplata_ObuhvatZastoj
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -31325,4 +31328,125 @@ CleanUp:
     AssertEq CStr(knjizeno) & "|" & obuhvatDok & "|" & tudjDok, CStr(True) & "|" & kA & "|NEMA", _
              "ekran: knjizenje pise obuhvat i ne dira blokove drugog kooperanta"
     AssertEq obuhvatNaKraju, "", "ekran: posle knjizenja obuhvat je prazan"
+End Sub
+
+' ============================================================
+' 353. DOP-ODL-31: OBUHVAT SE NE SIRI BEZ OPERATERA (review PR #475, P1).
+' ============================================================
+' Operater je trazio doplatu za JEDNOG kooperanta. Kad to ne moze da se postavi
+' ili odrzi, ekran ne sme da ostane spreman za obracun SVIH -- ostaje nerazresen,
+' pa pregled i knjizenje odbijaju i imenuju trazenog kooperanta:
+'   (a) ulaz sa kartice sa kooperantom koga nema;
+'   (b) pravi klik na kartici, a polje ne moze da pokaze kooperanta;
+'   (c) polje izgubi izbor a da ga operater nije dirao (punjenje koje je palo).
+' Na "svi" vraca samo operater: (e) kad ON isprazni polje, promena stize ekranu
+' istim putem kojim je salje ljuska (Scr_Event "chg:..."), i pregled nosi oba
+' kooperanta.
+' Tok (juce, klasa I): A o1 10 kg, B o3 6 kg; stopa 10 din/kg.
+' Sta test NE meri: tekst "? ime" koji polje pokazuje u zastoju i toast razloga
+' -- izgled forme, rucna provera.
+' SABOTAZE: dop-obuhvat-zastoj-nepostojeci-otvara-sve,
+'   dop-obuhvat-zastoj-poruka-bez-imena, dop-obuhvat-zastoj-prazno-polje-je-svi,
+'   dop-obuhvat-zastoj-predaja-pusta-sve, dop-obuhvat-zastoj-operater-ne-otpusta.
+Private Sub T_Doplata_ObuhvatZastoj()
+    Dim f As frmOtkupUI
+    Dim b As String, vr As String, kul As String, kA As String, kB As String
+    Dim o1 As String, o3 As String, stopa As String, nema As String, n0 As Long
+    Dim razlogA As String, pregledA As String, knjizioA As Boolean, redovaA As Long
+    Dim ekranB As String, obuhvatB As String, pregledB As String
+    Dim knjizioB As Boolean, redovaB As Long
+    Dim obuhvatE As String, pregledE As String, redovaPlanaE As Long, d As Variant
+    Dim otvorenoC As String, obuhvatC As String, pregledC As String
+    Dim knjizioC As Boolean, redovaC As Long
+    Dim errNum As Long, errDesc As String
+
+    modScrDoplata.Scr_DopTestReset
+    b = DopJedinstven()
+    vr = "DOPV-" & b
+    kul = DopKultura(vr, "S1")
+    kA = DopKooperant(b & "-A")
+    kB = DopKooperant(b & "-B")
+    nema = "NEMA-" & b
+    o1 = DopOtkup(kA, FX_STANICA, kul, vr, "S1", 10, 0)
+    o3 = DopOtkup(kB, FX_STANICA, kul, vr, "S1", 6, 0)
+    DopVremeUnosa o1, DateAdd("n", -1, Now)
+    DopVremeUnosa o3, DateAdd("n", -1, Now)
+
+    stopa = modScrDoplata.Scr_DopStopaTestDodaj(vr, "S1", KLASA_I, 10)
+    modScrDoplata.Scr_DopUnosTestSet Format$(Date, "dd.mm.yyyy"), _
+        Format$(DopJuceOd(), "dd.mm.yyyy"), "00:00", Format$(DopJuceOd(), "dd.mm.yyyy"), "23:59", _
+        "test 353"
+
+    ' (a) Kooperant koga nema: ulaz odbija, ekran NIJE spreman za sve.
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    razlogA = modScrDoplata.Scr_DopOtvoriZaKooperanta(nema)
+    pregledA = modScrDoplata.Scr_DopPregledTest()
+    knjizioA = modScrDoplata.Scr_DopKnjiziTest(False)
+    redovaA = DopBrojRedova(TBL_DOPLATA) - n0
+
+    ' (b) Pravi klik na kartici, a polje ne moze da pokaze kooperanta.
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, kA, CDbl(Date - 1), CDbl(Date)
+    Set f = NewOtkupUIForm()
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    modScrDoplata.Scr_DopPoljeTestKvar "ODBIJ"
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    modOtkupUI.UiEvent "scrIzDoplata", "Click", Empty
+    ekranB = modOtkupUI.AktivanEkran()
+    obuhvatB = modScrDoplata.Scr_DopObuhvat()
+    pregledB = modScrDoplata.Scr_DopPregledTest()
+    knjizioB = modScrDoplata.Scr_DopKnjiziTest(False)
+    redovaB = DopBrojRedova(TBL_DOPLATA) - n0
+    modScrDoplata.Scr_DopPoljeTestKvar ""
+
+    ' (e) Operater isprazni polje: promena stize ekranu, obracun je opet za sve.
+    modScrDoplata.Scr_DopPoljeTestKvar "ISPRAZNI"
+    modScrDoplata.Scr_Event "chg:scrDopKoopT", "Change"
+    obuhvatE = modScrDoplata.Scr_DopObuhvat()
+    pregledE = modScrDoplata.Scr_DopPregledTest()
+    If Len(pregledE) = 0 Then
+        d = modScrDoplata.Scr_Rows("sve", "")
+        If IsArray(d) Then redovaPlanaE = CLng(d(2))
+    End If
+
+    ' (c) Obuhvat je postavljen i polje ga nosi, pa polje izgubi izbor a da
+    ' promena nije stigla ekranu -- operater ga nije dirao.
+    otvorenoC = modScrDoplata.Scr_DopOtvoriZaKooperanta(kA)
+    obuhvatC = modScrDoplata.Scr_DopObuhvat()
+    modScrDoplata.Scr_DopPoljeTestKvar "ISPRAZNI"
+    n0 = DopBrojRedova(TBL_DOPLATA)
+    pregledC = modScrDoplata.Scr_DopPregledTest()
+    knjizioC = modScrDoplata.Scr_DopKnjiziTest(False)
+    redovaC = DopBrojRedova(TBL_DOPLATA) - n0
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrIzvestaji.Scr_IzTestReset
+    modScrDoplata.Scr_DopTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Doplata_ObuhvatZastoj", errDesc
+
+    ' Redosled tvrdnji: (c) pre (b). Obe mere isto pravilo sa dve strane, a (c)
+    ' ne zavisi od toga da li je upis "? ime" u polje uspeo.
+    AssertEq stopa & "|" & CStr(Len(razlogA) > 0) & "|" & CStr(Len(pregledA) > 0) & "|" & _
+             CStr(knjizioA) & "|" & CStr(redovaA), _
+             "|" & CStr(True) & "|" & CStr(True) & "|" & CStr(False) & "|0", _
+             "kartica: kooperant koga nema ne ostavlja ekran spreman za sve"
+    AssertEq pregledA, Poruka("OTKUI_ERR_DOP_KOOP_ZASTOJ") & " [" & nema & "]", _
+             "ekran: zastoj imenuje trazenog kooperanta"
+    AssertEq otvorenoC & "|" & obuhvatC & "|" & _
+             CStr(InStr(1, pregledC, kA, vbBinaryCompare) > 0) & "|" & _
+             CStr(knjizioC) & "|" & CStr(redovaC), _
+             "|" & kA & "|" & CStr(True) & "|" & CStr(False) & "|0", _
+             "ekran: polje koje izgubi izbor bez operatera nije svi"
+    AssertEq ekranB & "|" & obuhvatB & "|" & _
+             CStr(InStr(1, pregledB, kA, vbBinaryCompare) > 0) & "|" & _
+             CStr(knjizioB) & "|" & CStr(redovaB), _
+             "DOPLATA||" & CStr(True) & "|" & CStr(False) & "|0", _
+             "kartica: polje koje ne moze da pokaze kooperanta zaustavlja pregled i knjizenje"
+    AssertEq obuhvatE & "|" & pregledE & "|" & CStr(redovaPlanaE), "||2", _
+             "ekran: operater koji isprazni polje vraca obracun na sve"
 End Sub

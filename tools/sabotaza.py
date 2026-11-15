@@ -11997,6 +11997,53 @@ SABOTAZE = {
         "T_Doplata_ObuhvatNaEkranu",
         "ekran: posle knjizenja obuhvat je prazan",
     ),
+    # Review PR #475, P1: ulaz sa kartice sa kooperantom koga nema ne ostavlja
+    # zastoj, pa ekran ostaje u obuhvatu koji je zatekao -- "svi".
+    "dop-obuhvat-zastoj-nepostojeci-otvara-sve": (
+        "modScrDoplata.bas",
+        "    ObuhvatUZastoj iD\n"
+        "    Scr_DopOtvoriZaKooperanta = Poruka(\"OTKUI_ERR_DOP_KOOP_NEMA\") & \" \" & errDesc\n",
+        "    ' SABOTAZA: neuspeo ulaz ne ostavlja zastoj\n"
+        "    Scr_DopOtvoriZaKooperanta = Poruka(\"OTKUI_ERR_DOP_KOOP_NEMA\") & \" \" & errDesc\n",
+        "T_Doplata_ObuhvatZastoj",
+        "kartica: kooperant koga nema ne ostavlja ekran spreman za sve",
+    ),
+    # Review PR #475, P1: zastoj staje, ali ne kaze KOGA obracun nije preuzeo.
+    "dop-obuhvat-zastoj-poruka-bez-imena": (
+        "modScrDoplata.bas",
+        "    If mObuhvatNerazresen And Len(mObuhvatTrazen) > 0 Then ObuhvatProblem = ZastojTekst()\n",
+        "    If False Then ObuhvatProblem = ZastojTekst()   ' SABOTAZA: zastoj ne imenuje trazenog kooperanta\n",
+        "T_Doplata_ObuhvatZastoj",
+        "ekran: zastoj imenuje trazenog kooperanta",
+    ),
+    # Review PR #475, P1/P2: prazno polje je "svi" i kad ga operater nije dirao.
+    "dop-obuhvat-zastoj-prazno-polje-je-svi": (
+        "modScrDoplata.bas",
+        "        If operaterMenja Or (Len(mObuhvat) = 0 And Not mObuhvatNerazresen) Then\n",
+        "        If True Then   ' SABOTAZA: prazno polje je uvek svi\n",
+        "T_Doplata_ObuhvatZastoj",
+        "ekran: polje koje izgubi izbor bez operatera nije svi",
+    ),
+    # Review PR #475, P1 (nalaz kako je prijavljen): polje ne moze da pokaze
+    # kooperanta, a ulaz vraca obuhvat na prazno -- ekran spreman za sve.
+    "dop-obuhvat-zastoj-predaja-pusta-sve": (
+        "modScrDoplata.bas",
+        "    If Not ObuhvatUPolje() Then\n"
+        "        ObuhvatUZastoj iD\n",
+        "    If Not ObuhvatUPolje() Then\n"
+        "        PostaviObuhvat \"\", False   ' SABOTAZA: neuspela predaja ostavlja obracun za sve\n",
+        "T_Doplata_ObuhvatZastoj",
+        "kartica: polje koje ne moze da pokaze kooperanta zaustavlja pregled i knjizenje",
+    ),
+    # Review PR #475, P1: operater isprazni polje, a zastoj ostaje -- nema puta
+    # nazad na obracun za sve.
+    "dop-obuhvat-zastoj-operater-ne-otpusta": (
+        "modScrDoplata.bas",
+        "            ObuhvatSaPolja True\n",
+        "            ObuhvatSaPolja   ' SABOTAZA: operaterova promena se cita kao da je nije bilo\n",
+        "T_Doplata_ObuhvatZastoj",
+        "ekran: operater koji isprazni polje vraca obracun na sve",
+    ),
     # P4: kartica grupise po dokumentu umesto po obracunu.
     "dop-kartica-po-dokumentu": (
         "modDoplata.bas",
