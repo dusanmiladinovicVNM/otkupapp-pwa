@@ -13079,6 +13079,9 @@ def _telo_podaci(telo: str):
     return literali, sabloni
 
 
+_KRAJ_TELA = re.compile(r"^End (?:Sub|Function)\b", re.M)
+
+
 def _tela_testova() -> dict:
     """ime testa -> (string-literali u malim slovima, sabloni tvrdnji).
 
@@ -13096,8 +13099,11 @@ def _tela_testova() -> dict:
         tekst = _procitaj(put)[0].replace("\r\n", "\n")
         for m in re.finditer(r"^(?:Public |Private )?(?:Sub|Function) (\w+)",
                              tekst, re.M):
-            k = re.search(r"^End (?:Sub|Function)\b", tekst[m.start():], re.M)
-            telo = tekst[m.start(): m.start() + (k.end() if k else len(tekst))]
+            # Pretraga od m.start(), ne nad isecakom tekst[m.start():]: isecak
+            # kopira ostatak fajla za svaku proceduru. `^` u re.M hvata i na
+            # pocetnoj poziciji, jer je m.start() pocetak reda.
+            k = _KRAJ_TELA.search(tekst, m.start())
+            telo = tekst[m.start(): k.end() if k else len(tekst)]
             tela[m.group(1)] = _telo_podaci(telo)
     return tela
 
@@ -13204,8 +13210,20 @@ _PROC_OTVARA = re.compile(
 _PROC_ZATVARA = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
 
 
+# BROJAC RADA provere sidara: koliko je bajtova teksta razlozeno u procedure.
+#
+# Cena provere se ne meri stopericom nego ovim brojem, jer on ne zavisi od
+# masine. Self-test ("rad provere sidara") tvrdi da je srazmeran SADRZAJU
+# kataloga -- svaki sabotiran fajl se razlaze jednom -- a ne broju unosa. Bez
+# toga je povratak na "razlozi ceo mutirani fajl po sabotazi" vidljiv samo kao
+# sporiji hook, a tako je cena vec jednom tiho narasla: 214 MB teksta po
+# prolazu nad 5,7 MB jedinstvenog (1265 unosa, 11.2026).
+_RAD = {"bajtova": 0}
+
+
 def _procedure_po_redu(tekst: str) -> list:
     """[(ime, vrsta, prvi_red, poslednji_red)] -- vrsta je sub/function/property."""
+    _RAD["bajtova"] += len(tekst)
     out, ime, vrsta, poc = [], None, None, 0
     for i, red in enumerate(tekst.split("\n")):
         t = red.strip()
@@ -13314,6 +13332,56 @@ def _lokalna_imena(redovi: list, a: int, b: int) -> set:
     return imena
 
 
+def _dogadjaj_reda(red: str):
+    """Da li red otvara ili zatvara proceduru -- isto pravilo kao _procedure_po_redu.
+
+    None, (True, vrsta, ime) za red koji otvara, (False, None, None) za red koji
+    zatvara.
+    """
+    t = red.strip()
+    m = _PROC_OTVARA.match(t)
+    if m:
+        return (True, m.group(1).lower(), m.group(2))
+    if _PROC_ZATVARA.match(t):
+        return (False, None, None)
+    return None
+
+
+_DOGADJAJI_KES: dict = {}
+
+
+def _dogadjaji_fajla(tekst: str) -> tuple:
+    """(redovi, dogadjaji) zdravog teksta -- jednom po SADRZAJU, ne po sabotazi.
+
+    Dogadjaj je (red, otvara, vrsta, ime) za svaki red koji otvara ili zatvara
+    proceduru. Kljuc kesa je sam tekst, pa kes ne moze da zastari: drugi sadrzaj
+    je drugi kljuc.
+    """
+    kes = _DOGADJAJI_KES.get(tekst)
+    if kes is None:
+        _RAD["bajtova"] += len(tekst)
+        redovi = tuple(tekst.split("\n"))
+        dogadjaji = []
+        for i, r in enumerate(redovi):
+            d = _dogadjaj_reda(r)
+            if d is not None:
+                dogadjaji.append((i,) + d)
+        kes = _DOGADJAJI_KES[tekst] = (redovi, tuple(dogadjaji))
+    return kes
+
+
+def _procedure_iz_dogadjaja(dogadjaji) -> list:
+    """Isti automat kao _procedure_po_redu, nad dogadjajima umesto nad redovima."""
+    out, ime, vrsta, poc = [], None, None, 0
+    for i, otvara, v, n in dogadjaji:
+        if otvara:
+            vrsta, ime, poc = v, n, i
+        elif ime:
+            out.append((ime, vrsta, poc, i))
+            ime, vrsta = None, None
+    return out
+
+
 def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
 
@@ -13334,6 +13402,13 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     idx = tekst.find("\n" + staro)
     if idx < 0:
         return None
+
+    # Nalaz daje samo linija ZAMENE koja dodeljuje imenu (petlja na kraju). Bez
+    # ijedne takve linije ishod je None sta god fajl sadrzao, pa se i ne razlaze
+    # -- to je vecina kataloga (856 od 1265 unosa, 11.2026).
+    dodele = [m for m in (_ZAMENA_DODELA.match(lin) for lin in novo.split("\n")) if m]
+    if not dodele:
+        return None
     red = tekst[:idx + 1].count("\n")
 
     # SIMBOLI SE CITAJU IZ MUTIRANOG KODA, ne iz zdravog.
@@ -13345,11 +13420,29 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     #   - zamena koja UVEDE `Dim Foo` daje legalan VBA, a checker bi ga prijavio
     #     (lazna uzbuna nad ispravnim kodom).
     #
-    # Kes nad originalnim tekstom je time otpao. 251 unos je premalo da bi
-    # ustedu vredelo platiti netacnoscu.
-    mutirani = tekst.replace("\n" + staro, "\n" + novo, 1)
-    procs = _procedure_po_redu(mutirani)
-    redovi = mutirani.split("\n")
+    # Zato se razlaze MUTIRANI tekst -- ali ne ceo, po sabotazi. Zdrav fajl se
+    # razlozi jednom (_dogadjaji_fajla, po sadrzaju); ponovo se klasifikuju samo
+    # redovi koje zamena dodiruje, a dogadjaji iza nje se pomere za razliku u
+    # broju redova. Redovi i procedure su isti kao da je razlozen ceo mutirani
+    # tekst; to tvrde _DODELA_CASES (sidro bez preloma, zamena koja dodaje i
+    # zamena koja brise redove).
+    redovi0, dog0 = _dogadjaji_fajla(tekst)
+    n_staro = staro.count("\n") + 1      # redovi zdravog teksta koje sidro dodiruje
+    kraj0 = red + n_staro                # prvi red zdravog teksta iza dodira
+    rep_poc = idx + 1 + len(staro)       # ostatak poslednjeg dodirnutog reda
+    rep_kraj = tekst.find("\n", rep_poc)
+    rep = tekst[rep_poc:] if rep_kraj < 0 else tekst[rep_poc:rep_kraj]
+    region = (novo + rep).split("\n")    # ti redovi, kakvi su u mutiranom tekstu
+    _RAD["bajtova"] += len(novo) + len(rep)
+    pomak = len(region) - n_staro
+    redovi = [*redovi0[:red], *region, *redovi0[kraj0:]]
+    dog = [d for d in dog0 if d[0] < red]
+    for k, r in enumerate(region):
+        d = _dogadjaj_reda(r)
+        if d is not None:
+            dog.append((red + k,) + d)
+    dog += [(d[0] + pomak,) + d[1:] for d in dog0 if d[0] >= kraj0]
+    procs = _procedure_iz_dogadjaja(dog)
     unutar, lokalna = None, set()
     for pime, _v, a, b in procs:
         if a <= red <= b:
@@ -13362,10 +13455,7 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     subovi = {p.lower() for p, v, _a, _b in procs if v == "sub"}
     funkcije = {p.lower() for p, v, _a, _b in procs if v == "function"}
 
-    for linija in novo.split("\n"):
-        m = _ZAMENA_DODELA.match(linija)
-        if not m:
-            continue
+    for m in dodele:
         n = m.group(1).lower()
         if n in lokalna:
             continue                       # lokalno ime ZAKLANJA proceduru
@@ -13730,6 +13820,29 @@ _DODELA_CASES = [
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P()\n    SIDRO\nEnd Sub\n",
      "    SIDRO\n", "    Dim Foo As Boolean\n    Foo = True\n"),
+    # Procedure mutiranog teksta se ne razlazu iz celog fajla, nego iz dogadjaja
+    # zdravog teksta pomerenih za razliku u broju redova (_dogadjaji_fajla).
+    # Sledeca tri slucaja mere bas taj racun:
+    #   - sidro BEZ preloma reda: ostatak reda pripada zameni;
+    #   - zamena koja BRISE redove: kraj procedure se pomera nazad, pa bi pogresan
+    #     pomak produzio P u Q i pokupio tudji `Dim Foo`;
+    #   - zamena koja DODAJE redove: kraj se pomera napred, pa bi pogresan pomak
+    #     skratio P i izgubio `Dim Foo` sa njenog kraja. (Da li VBA dozvoljava
+    #     Dim posle upotrebe ovde nije pitanje -- pravilo skuplja lokalna imena
+    #     iz cele procedure, i meri se da li je opseg tacan.)
+    ("sidro bez preloma reda", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO", "    Foo = 1"),
+    ("zamena brise redove", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    SIDRO\n    a = 1\n    b = 2\nEnd Sub\n"
+     "Sub Q()\n    Dim Foo As Long\n    Foo = 3\nEnd Sub\n",
+     "    SIDRO\n    a = 1\n    b = 2\n", "    Foo = 1\n"),
+    ("zamena dodaje redove", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\n    Dim Foo As Boolean\nEnd Sub\n",
+     "    SIDRO\n", "    a = 1\n    b = 2\n    Foo = True\n"),
 ]
 
 def _self_test() -> int:
@@ -13846,6 +13959,26 @@ def _self_test() -> int:
             print("SELF-TEST: dodela/%s: ocekivano %r, dobijeno %r"
                   % (naziv, ocekivano, dobijeno), file=sys.stderr)
             lose += 1
+
+    # RAD PROVERE SIDARA je srazmeran SADRZAJU kataloga, ne broju unosa: svaki
+    # sabotiran fajl se razlaze najvise jednom (v. _RAD). Meri se brojacem, ne
+    # stopericom, pa ishod ne zavisi od masine. Ide nad PRAVIM katalogom jer je
+    # to tvrdnja o njemu; kes se prazni da se ne racuna rad iz ranijih slucajeva.
+    n += 1
+    _DOGADJAJI_KES.clear()
+    _RAD["bajtova"] = 0
+    _nalazi(SABOTAZE, _imena_testova())
+    rad = _RAD["bajtova"]
+    jedinstveno = sum(
+        len(_procitaj(os.path.join(SRC_VBA, f))[0])
+        for f in sorted({unos[0] for unos in SABOTAZE.values()})
+        if os.path.exists(os.path.join(SRC_VBA, f)))
+    if jedinstveno and rad > 2 * jedinstveno:
+        print("SELF-TEST: rad provere sidara: razlozeno %d bajtova, a katalog "
+              "pokriva %d jedinstvenih (%.1fx; dozvoljeno najvise 2x) -- fajl se "
+              "razlaze po sabotazi umesto jednom"
+              % (rad, jedinstveno, rad / jedinstveno), file=sys.stderr)
+        lose += 1
 
     # ISTO STANJE MORA DA ODBIJE I `--vrati`, ne samo provera.
     #

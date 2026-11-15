@@ -55,6 +55,7 @@ import argparse
 import contextlib
 import io
 import importlib.util
+import itertools
 import os
 import re
 import shutil
@@ -126,6 +127,40 @@ MODULE_DECL = re.compile(
 _NASTAVAK = re.compile(r"\s_$")
 
 
+# --- tokenizeri: brza putanja + referentna petlja ----------------------------
+#
+# Cetiri tokenizera (granica izjave, skidanje komentara, skidanje literala,
+# deljenje naredbi) idu preko SVAKE linije src-vba, i to vise puta po prolazu.
+# Petlja znak po znak u Pythonu je bila najveci pojedinacni trosak hook-a.
+#
+# Svaka zato ima brzu putanju za cest slucaj (nema apostrofa, nema navodnika,
+# nema dvotacke), a za ostalo zove `*_petljom` -- ORIGINALNU petlju, nepromenjenu.
+# Petlja je i referenca: self-test (tokenizer_korpus) tvrdi da brza putanja daje
+# tacno isto sto i petlja nad svim kratkim kombinacijama znakova koji menjaju
+# ishod. Bez toga bi kvar u brzoj putanji tiho promenio nalaze -- izmereno je da
+# pokvaren `_strip_comment` ostavlja sve ostale slucajeve self-testa zelenim.
+def _izjava_granica_petljom(red: str) -> tuple:
+    """(kraj teksta pre komentara, da li je red zavrsen unutar stringa)."""
+    u_str = False
+    for i, c in enumerate(red):
+        if c == '"':
+            u_str = not u_str
+        elif c == "'" and not u_str:
+            return i, False
+    return len(red), u_str
+
+
+def _izjava_granica(red: str) -> tuple:
+    ap = red.find("'")
+    if ap < 0:
+        # Bez apostrofa nema komentara: petlja bi samo brojala navodnike.
+        return len(red), red.count('"') % 2 == 1
+    if '"' not in red[:ap]:
+        # Prvi apostrof stoji pre svakog navodnika, dakle van stringa.
+        return ap, False
+    return _izjava_granica_petljom(red)
+
+
 def _izjava_deo(red: str) -> tuple:
     """(tekst reda bez komentara, da li se izjava nastavlja u sledecem redu).
 
@@ -137,14 +172,7 @@ def _izjava_deo(red: str) -> tuple:
     error (`_` mora biti poslednji znak), pa je svejedno da li ga ovde tretiramo
     kao nastavak -- a ovako se ne gubi deklaracija zbog zaostalog komentara.
     """
-    u_str = False
-    kraj = len(red)
-    for i, c in enumerate(red):
-        if c == '"':
-            u_str = not u_str
-        elif c == "'" and not u_str:
-            kraj = i
-            break
+    kraj, u_str = _izjava_granica(red)
     tekst = red[:kraj].rstrip()
     nastavlja = not u_str and bool(_NASTAVAK.search(tekst))
     if nastavlja:
@@ -406,8 +434,7 @@ def collect_module_members(files: list[str]) -> dict[str, set[str]]:
     return out
 
 
-def _strip_comment(text: str) -> str:
-    """Odbaci prateci ' komentar, ali ne apostrof unutar stringa."""
+def _strip_comment_petljom(text: str) -> str:
     in_str = False
     for i, ch in enumerate(text):
         if ch == '"':
@@ -415,6 +442,16 @@ def _strip_comment(text: str) -> str:
         elif ch == "'" and not in_str:
             return text[:i].rstrip()
     return text
+
+
+def _strip_comment(text: str) -> str:
+    """Odbaci prateci ' komentar, ali ne apostrof unutar stringa."""
+    ap = text.find("'")
+    if ap < 0:
+        return text                      # nema apostrofa -- nema komentara
+    if '"' not in text[:ap]:
+        return text[:ap].rstrip()        # apostrof pre svakog navodnika
+    return _strip_comment_petljom(text)
 
 
 def _split_top_level(text: str) -> list[str]:
@@ -469,6 +506,14 @@ def _split_statements(text: str) -> list[tuple[str, bool]]:
     Ranije je checker preskakao SVAKU liniju sa dvotackom, pa mu je izmakao
     svaki poziv iza `Case N:` -- ukljucujuci ceo registar testova u modTest.
     """
+    if ":" not in text:
+        # Bez dvotacke nema razdvajanja: cela linija je jedna naredba.
+        t = text.strip()
+        return [(t, False)] if t else []
+    return _split_statements_petljom(text)
+
+
+def _split_statements_petljom(text: str) -> list[tuple[str, bool]]:
     parts: list[tuple[str, bool]] = []
     depth, in_str, cur = 0, False, ""
     for i, ch in enumerate(text):
@@ -488,6 +533,9 @@ def _split_statements(text: str) -> list[tuple[str, bool]]:
         cur += ch
     parts.append((cur.strip(), False))
     return [(p, lab) for p, lab in parts if p]
+
+
+_AR_KLJUCNA = re.compile(r"sub|function|property", re.IGNORECASE)
 
 
 def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
@@ -511,7 +559,15 @@ def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
             # je jedan red sa tri naredbe; bez ovoga bi lista parametara progutala
             # i argumente RGB-a, pa bi arnost bila 3 umesto 0 -- i svaki poziv
             # CLR() bio prijavljen kao pogresna arnost.
-            glava = _split_statements(line)[0][0] if _split_statements(line) else line
+            #
+            # PROC_DEF i DECLARE_DEF traze rec Sub, Function ili Property, a glava
+            # je isecak ove linije -- linija bez tih reci ne moze da pogodi, pa se
+            # i ne deli na naredbe. To je oko 95% linija src-vba.
+            if not _AR_KLJUCNA.search(line):
+                i += 1
+                continue
+            naredbe = _split_statements(line)
+            glava = naredbe[0][0] if naredbe else line
             m = PROC_DEF.match(glava) or DECLARE_DEF.match(glava)
             if m and "(" in glava:
                 params = _split_top_level(
@@ -908,6 +964,16 @@ TIPIZOVANA_DEKL = re.compile(r"^(\w+)\s*(\([^)]*\))?\s+As\s+(\w+)", re.IGNORECAS
 
 def _strip_strings(text: str) -> str:
     """Isprazni string literale (sadrzaj, ne navodnike)."""
+    if '"' not in text:
+        return text
+    # Delovi izmedju navodnika naizmenicno su van i unutar stringa (prvi je
+    # van); unutrasnji se prazne, a svi navodnici ostaju -- isto kao petlja.
+    delovi = text.split('"')
+    delovi[1::2] = [""] * len(delovi[1::2])
+    return '"'.join(delovi)
+
+
+def _strip_strings_petljom(text: str) -> str:
     out, in_str = [], False
     for ch in text:
         if ch == '"':
@@ -961,10 +1027,16 @@ def check_scalar_call(path: str, lines: list[str]) -> list[Finding]:
         while k < n and not PROC_END.match(lines[k]) and not PROC_DEF.match(lines[k]):
             k += 1
         body = lines[j + 1:k]
+        # Telo se cisti JEDNOM po proceduri, i to tek kad ima sta da se trazi --
+        # ne jednom po svakom skalarnom imenu (bilo je 8x vise ciscenja nego
+        # linija; trecina punog prolaza).
+        cisto = None
         for name, typ in _scalar_names(_strip_strings(header), body).items():
             hit = re.compile(r"(?<![\w.$])" + re.escape(name) + r"\s*\(", re.IGNORECASE)
-            for off, line in enumerate(body):
-                if hit.search(_clean(line)):
+            if cisto is None:
+                cisto = [_clean(line) for line in body]
+            for off, line in enumerate(cisto):
+                if hit.search(line):
                     out.append(Finding(
                         path, j + 2 + off, "ZAKLONJENO",
                         f"'{name} As {typ}' je skalar, a zove se sa zagradom u '{proc}' "
@@ -1355,6 +1427,11 @@ def check_amb_bind_vlasnik(src_dir: str | None = None) -> list[Finding]:
         with open(os.path.join(src_dir, ime_f), "r", encoding="ascii",
                   errors="replace") as fh:
             tekst = fh.read()
+        # Nalaz trazi rec BindSourceDocument u nekoj izjavi, a izjava je
+        # sastavljena od delova ovog teksta spojenih razmakom -- fajl bez te reci
+        # ne moze da ga da, pa se i ne razlaze. Rec ima 7 od 193 fajla (11.2026).
+        if "bindsourcedocument" not in tekst.lower():
+            continue
         proc = None
         for izjava, nred in logicke_izjave(tekst):
             go = izjava.strip()
@@ -3311,7 +3388,24 @@ Public Sub Malo()
     Radi 1
 End Sub
 """),
+    # Apostrof u STRINGU, pa pravi komentar sa zarezima. Komentar se mora skinuti
+    # (inace njegovi zarezi postaju argumenti), a apostrof u stringu ne sme da ga
+    # pocne (inace poziv ostane bez argumenata). Par ispod je isti red sa tacnom
+    # arnoscu. Ovaj oblik je bio rupa: pokvaren _strip_comment je ostavljao ceo
+    # self-test zelenim.
+    ("apostrof u stringu, pa komentar, premalo argumenata", {"ARNOST": 1}, {"radi"},
+     {"radi": (2, 2)}, """Option Explicit
+Public Sub Apostrof()
+    Radi "it's" ' komentar, sa, zarezima
+End Sub
+"""),
     # --- ne sme da zapisti ---
+    ("apostrof u stringu, pa komentar, tacna arnost", {}, {"radi"}, {"radi": (2, 2)},
+     """Option Explicit
+Public Sub Apostrof()
+    Radi "it's", 1 ' komentar, sa, zarezima
+End Sub
+"""),
     ("labela EH: nije poziv", {}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
 Public Sub SaLabelom()
     On Error GoTo EH
@@ -3616,8 +3710,47 @@ End Function
 ]
 
 
+# --- tokenizeri: brza putanja daje isto sto i petlja ------------------------
+#
+# Svaka kombinacija do cetiri znaka iz skupa koji menja ishod tokenizera
+# (navodnik, apostrof, dvotacka, jednako, zagrade, donja crta, razmak, slovo),
+# plus nekoliko stvarnih oblika iz repoa. Oko 7.400 redova po paru, ispod
+# desetinke sekunde.
+_TOKENIZER_ZNACI = ('"', "'", ":", "=", "(", ")", "_", " ", "a")
+TOKENIZER_REDOVI = (
+    'Radi "it\'s", 1 \' komentar, sa, zarezima',
+    'x = "a""b" \' c, d',
+    'Monitor_Error moduleName:="x", procedureName:="y": Exit Sub',
+    "Case 1: Radi 1, 2 ' Case 2: Drugo",
+    '    s = "rec \' u stringu" & x _',
+    '    \' ceo red je komentar "sa navodnikom" _',
+    'Dim a As String: a = "\'": b = 1',
+)
+
+
+def tokenizer_korpus() -> list[str]:
+    out = list(TOKENIZER_REDOVI)
+    for n in range(5):
+        out += ["".join(p) for p in itertools.product(_TOKENIZER_ZNACI, repeat=n)]
+    return out
+
+
+def tokenizer_parovi() -> tuple:
+    return (("_izjava_granica", _izjava_granica, _izjava_granica_petljom),
+            ("_strip_comment", _strip_comment, _strip_comment_petljom),
+            ("_split_statements", _split_statements, _split_statements_petljom),
+            ("_strip_strings", _strip_strings, _strip_strings_petljom))
+
+
 def self_test() -> int:
     palo = []
+
+    korpus = tokenizer_korpus()
+    for ime, brza, petlja in tokenizer_parovi():
+        razlike = [r for r in korpus if brza(r) != petlja(r)]
+        if razlike:
+            palo.append(f"  tokenizer {ime}: brza putanja se razlikuje od petlje u "
+                        f"{len(razlike)} od {len(korpus)} redova, npr. {razlike[0]!r}")
 
     # collect_arities nad jednolinijskom funkcijom: parametri se citaju do PARNE
     # zatvorene zagrade i samo iz PRVE naredbe reda. Ranije je uzimao poslednju
@@ -3874,7 +4007,7 @@ def self_test() -> int:
             fh.write(SELF_TEST_CASES[0][2])
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            rc = main([put])
+            rc = main([put], kapije_alata=False)
         izlaz = buf.getvalue()
         if rc != 2:
             palo.append(f"  {naziv}: ocekivan exit 2, dobijen {rc}")
@@ -3898,7 +4031,7 @@ def self_test() -> int:
                      "End Sub\n")
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
-            rc = main([put])
+            rc = main([put], kapije_alata=False)
         izlaz = buf.getvalue()
         if rc != 2:
             palo.append(f"  {naziv}: ocekivan exit 2, dobijen {rc}")
@@ -3908,6 +4041,41 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp3, ignore_errors=True)
 
+    # CEO CLI ZOVE KAPIJE NAD ALATIMA, i rc svake izlazi kao rc CLI-ja.
+    #
+    # Dva slucaja iznad ih gase (kapije_alata=False), jer bi svaki poziv ponovio
+    # katalog, popis i grupe nad pravim repoom. Ovde se meri samo VEZA: kapije se
+    # zamene stub-ovima, a CLI dobija putanju koja NIJE VBA fajl -- isti oblik
+    # kao izmena tools/sabotaza.py, posle koje `files` ostaje prazno, a kapije
+    # nad alatima i dalje moraju da se pitaju.
+    naziv = "ceo CLI zove kapije nad alatima"
+    imena_kapija = ("check_katalog_sabotaza", "check_dokaz_grupe", "check_popis_suita")
+    prave_kapije = {ime: globals()[ime] for ime in imena_kapija}
+
+    def _stub(ime, pozvane, crvena):
+        def kapija(tiho=False):
+            pozvane.append(ime)
+            return 2 if ime == crvena else 0
+        return kapija
+
+    for crvena in (None,) + imena_kapija:
+        pozvane: list[str] = []
+        for ime in imena_kapija:
+            globals()[ime] = _stub(ime, pozvane, crvena)
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                rc = main([os.path.join("tools", "sabotaza.py")])
+        finally:
+            globals().update(prave_kapije)
+        ocekivan = 0 if crvena is None else 2
+        if sorted(pozvane) != sorted(imena_kapija):
+            palo.append(f"  {naziv}: pozvane {sorted(pozvane)}, "
+                        f"ocekivane {sorted(imena_kapija)}")
+        elif rc != ocekivan:
+            palo.append(f"  {naziv}: crvena kapija {crvena}: ocekivan exit "
+                        f"{ocekivan}, dobijen {rc}")
+
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
@@ -3916,7 +4084,8 @@ def self_test() -> int:
               + len(KRAJ_REDA_CASES) + len(CLAN_FORME_CASES)
               + len(DUPLI_LOKAL_CASES)
               + len(ROLLBACK_TVRDNJA_CASES) + len(ROLLBACK_RED_CASES)
-              + len(AMB_BIND_CASES) + 3)
+              + len(AMB_BIND_CASES) + len(tokenizer_parovi())
+              + len(imena_kapija) + 4)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -4089,7 +4258,14 @@ def check_popis_suita(tiho: bool = False) -> int:
     return 2 if nalazi else 0
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], *, kapije_alata: bool = True) -> int:
+    """CLI. `kapije_alata=False` je samo za self-test (nema CLI prekidaca).
+
+    Dva self-test slucaja kroz ceo CLI mere provere nad FAJLOVIMA; kapije nad
+    alatima (katalog, grupe, popis) bi tamo samo ponovile rad nad pravim repoom,
+    po nekoliko sekundi svaki put. Da ih CLI zaista zove i da njihov rc izlazi
+    kao rc CLI-ja tvrdi zaseban slucaj ("ceo CLI zove kapije nad alatima").
+    """
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
     ap.add_argument("--hook", action="store_true", help="bez izlaza kad je cisto")
@@ -4112,9 +4288,11 @@ def main(argv: list[str]) -> int:
     # NIJE VBA fajl -- na primer bas `tools/sabotaza.py`, gde se greska u
     # katalogu i pravi -- i tada je `files` prazno, pa se izlazilo sa 0 pre
     # ijedne od ovih provera. Ovde se to vise ne moze zaobici.
-    rc_kat = check_katalog_sabotaza(args.hook)
-    rc_grupe = check_dokaz_grupe(args.hook)
-    rc_popis = check_popis_suita(args.hook)
+    rc_kat = rc_grupe = rc_popis = 0
+    if kapije_alata:
+        rc_kat = check_katalog_sabotaza(args.hook)
+        rc_grupe = check_dokaz_grupe(args.hook)
+        rc_popis = check_popis_suita(args.hook)
     rc_alata = rc_kat or rc_grupe or rc_popis
 
     if not files:
@@ -4136,8 +4314,9 @@ def main(argv: list[str]) -> int:
         findings += check_file(path, raw, lines, defined, arities, moduli)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
-        # pa isto ime u dve forme NIJE "Ambiguous name".
-        if path.lower().endswith(".bas"):
+        # pa isto ime u dve forme NIJE "Ambiguous name". Skuplja se samo kad se
+        # gleda ceo src-vba -- jedino tada se cita (DUPLIKAT ispod).
+        if not args.paths and path.lower().endswith(".bas"):
             for name, ln in collect_public(path, lines):
                 publics[name.lower()].append((path, ln))
 
