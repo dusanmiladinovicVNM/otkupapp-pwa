@@ -32,8 +32,10 @@
 > **Review PR #475 (nezavisni, 15.11.2026): CONDITIONAL GO.** P1 — neuspela
 > predaja sa kartice ostavljala je ekran spreman za obračun svih — ispravljen
 > u kodu (obuhvat se ne širi bez operatera; test 353, pet sabotaža).
-> **Excel za ovu ispravku: NEVERIFIKOVANO** dok se ne pusti suita i dokaz (§7a,
-> „Review PR #475").
+> Excel 15.11.2026: 12 suita zeleno (RunAllTests 353/0, BFP 3208/0); dokaz
+> 10/11 — jedna sabotaža je oborila susednu tvrdnju istog testa (kvar u testu
+> 353, ispravljen). **Ponovni dokaz pet sabotaža testa 353 i ručna provera:
+> čekaju** (§7a, „Review PR #475").
 
 ## 1) Šta je doplata
 
@@ -614,12 +616,27 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     `Scr_DopTestReset`). Pet sabotaža `dop-obuhvat-zastoj-*`; katalog 1279 → 1284.
   - **Ne meri se testom (ručno):** tekst „? ime" u polju i poruka u traci zone
     kad je obuhvat u zastoju.
-  - **Excel: NEVERIFIKOVANO.** Statičke kapije zelene (`vba_check`, sidra,
-    `gen_schema --check`, `who_writes --check` i `--check-ownership`, paritet,
-    self-update kapije, popis tvrdih); pet novih sabotaža i
-    `dop-obuhvat-ekran-nerazresen-prolazi` se primenjuju i vraćaju bajt-identično.
-    Ostaje: suita, dokaz (5 novih + 6 sabotaža testa 352, jer je menjan kod koji
-    test 352 meri), Compile i kratka ručna provera dolaska sa kartice.
+  - Statičke kapije zelene (`vba_check`, sidra, `gen_schema --check`,
+    `who_writes --check` i `--check-ownership`, paritet, self-update kapije,
+    popis tvrdih); pet novih sabotaža i `dop-obuhvat-ekran-nerazresen-prolazi`
+    se primenjuju i vraćaju bajt-identično.
+  - **Excel, 15.11.2026 (`a5a7a81`):** 12 suita zeleno — RunAllTests 353 / 0,
+    BFP 3208 / 0, Banka 241 / 0, Storno 111 / 0, Palete 115, Faktura 39 / 0,
+    Agrohemija 25 / 0; GREEN marker (izvor `82ea43d6aac2`).
+  - **Dokaz, prvi prolaz (grupno, 6 prolaza): 10 / 11**, izvor pre/posle
+    identičan `9cf04957cd181873`. Svih šest sabotaža testa 352 i četiri od pet
+    sabotaža testa 353 obaraju svoju tvrdnju.
+    `dop-obuhvat-zastoj-predaja-pusta-sve` → „PALA DRUGA TVRDNJA: ekran: polje
+    koje izgubi izbor bez operatera nije svi" (i u grupi i sama). Uzrok je u
+    **TESTU**, ne u kodu: pod tom sabotažom korak (b) pogrešno knjiži, uspešno
+    knjiženje isprazni stope, pa pregled u koraku (c) stane na „nema stopa" pre
+    nego što stigne do obuhvata — tvrdnja (c), koja je u redosledu ispred (b),
+    padne prva. Korak (c) sada sam obezbeđuje stopu ako je nema, pa ne zavisi
+    od ishoda (b). Pošto je test menjan, njegovih pet sabotaža se dokazuje
+    ponovo (`dop-obuhvat-zastoj-`); šest sabotaža testa 352 ostaju dokazane,
+    taj test nije diran.
+  - **Ostaje:** ponovni dokaz pet sabotaža testa 353, Compile i kratka ručna
+    provera dolaska sa kartice.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,

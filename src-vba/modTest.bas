@@ -31411,6 +31411,13 @@ Private Sub T_Doplata_ObuhvatZastoj()
 
     ' (c) Obuhvat je postavljen i polje ga nosi, pa polje izgubi izbor a da
     ' promena nije stigla ekranu -- operater ga nije dirao.
+    ' Korak NE SME da zavisi od ishoda (b). Ako (b) pogresno knjizi, uspesno
+    ' knjizenje isprazni stope, pa pregled ovde stane na "nema stopa" pre nego
+    ' sto stigne do obuhvata -- i padne tvrdnja (c) umesto tvrdnje (b) (prvi
+    ' dokaz, 15.11.2026: dop-obuhvat-zastoj-predaja-pusta-sve, PALA DRUGA TVRDNJA).
+    If modScrDoplata.Scr_DopBrojStopa() = 0 Then
+        modScrDoplata.Scr_DopStopaTestDodaj vr, "S1", KLASA_I, 10
+    End If
     otvorenoC = modScrDoplata.Scr_DopOtvoriZaKooperanta(kA)
     obuhvatC = modScrDoplata.Scr_DopObuhvat()
     modScrDoplata.Scr_DopPoljeTestKvar "ISPRAZNI"
