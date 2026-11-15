@@ -352,7 +352,10 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > izabran), a nacrt radnja odbija. `modOtkupUI.bas` se ne dira. **Zatečeno, izvedeno čitanjem,
 > nije reprodukovano:** dvoklik na izdatu u listi Otpremnice puni formu otkupnog lista redom
 > otpremnice (`LoadRowIntoForm`, broj otpremnice u polje broja lista); važilo je i pre ovog reza.
-> a2–a7 i deo (b) NEVERIFIKOVANO u Excelu.**
+> **Excel 15.11.2026:** BFP zelen na vrhu grane (`8d8db7fd`, RunID 20261115144955-3585, 3477/3477) —
+> svi testovi a2–a7 i dela (b); na `e8b3f492` (bez popravke KI-095 put 2) pali su samo očekivani
+> (RunID 20261115143613-6938). Čekaju: `RunAllTests`, dokaz `lncb`/`ki095`, Compile i ručna provera
+> F1/F8.**
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
 > ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
 > list koji ulazi ili se ispravlja. List **starog oblika** koji je već u otpremnici (bez stavki,
@@ -590,8 +593,10 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
 > §2); popravka je sledeći commit: `modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog` (proširen
 > `LncNedovrsenKontekstRazlog`, opcija `samoIspravkePrijemnice`), pozivi u
 > `modStornoDok.StornoRazlog` / `StornoIzvrsi` i `modStornoFlow.RunZbirnaCorrection` /
-> `RunPrijemnicaCorrection` (PONISTENJE), sabotaže `ki095-*`. Excel nije pokrenut — crvenilo na
-> `c0a1a3a7` i zelenilo posle popravke su NEVERIFIKOVANI.
+> `RunPrijemnicaCorrection` (PONISTENJE), sabotaže `ki095-*`. Posle rebase-a na `main` (`ed506dc7`)
+> commit testa je `e8b3f492`, a popravke `123e1f6c`. **Excel 15.11.2026, dokaz u oba smera:** crven na
+> `e8b3f492` (BFP RunID 20261115143613-6938: 7 padova, sve u (a), (b), (b2); kontrole zelene), zelen na
+> `8d8db7fd` (RunID 20261115144955-3585, 3477/3477). Dokaz sabotaža `ki095-*` čeka.
 
 **Problem.** F8 „Ispravi" prijemnice odmah stornira staru prijemnicu (palete ostaju na njoj), a
 red `tblStornoVeze` ostaje `PENDING` dok se zamena ne unese u F4
