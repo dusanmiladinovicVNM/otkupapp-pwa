@@ -26,7 +26,8 @@
 > **Doplata samo za jednog kooperanta** (DOP-ODL-31, 12.11.2026): u kodu, na
 > grani `claude/cool-bohr-68hi14`. Excel 15.11.2026: 12 suita zeleno
 > (RunAllTests 352/0, BFP 3208/0); dokaz 15/15 u dva prolaza (9 + 6 posle
-> ispravke testa 352). **Ručne provere još nisu urađene** (§7a, na kraju).
+> ispravke testa 352). Ručno 15.11.2026: Compile PASS, dugme na kartici, polje
+> i knjiženje u obuhvatu ispravni (§7a, na kraju).
 
 ## 1) Šta je doplata
 
@@ -570,8 +571,10 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   dokazane, njihovi testovi nisu dirani.
   **Ponovni dokaz (15.11.2026, `459905f`): 6 / 6 DOKAZANO**, baza RunAllTests
   352 / 0, izvor pre/posle identičan `636da7aebe2c69ce`. Ukupno 15 / 15.
-  **Ručne provere (Compile, dugme na kartici, panel izbora, polje u redu A,
-  kolona u postojećoj svesci): neverifikovano.**
+  **Ručno (operater, 15.11.2026):** Compile PASS; dugme na kartici, dolazak na
+  ekran Doplata, polje „Samo kooperant", pregled, pitanje i knjiženje u
+  obuhvatu — „sve radi kako treba". PLATFORM UNKNOWN o panelu izbora time je
+  zatvoren za ovaj put (sa gardom `PanelIzboraMiruj`; bez garda nije mereno).
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
