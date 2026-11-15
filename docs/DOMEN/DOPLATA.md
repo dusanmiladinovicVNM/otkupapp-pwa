@@ -34,8 +34,9 @@
 > u kodu (obuhvat se ne širi bez operatera; test 353, pet sabotaža).
 > Excel 15.11.2026: 12 suita zeleno (RunAllTests 353/0, BFP 3208/0); dokaz
 > 10/11 — jedna sabotaža je oborila susednu tvrdnju istog testa (kvar u testu
-> 353, ispravljen). **Ponovni dokaz pet sabotaža testa 353 i ručna provera:
-> čekaju** (§7a, „Review PR #475").
+> 353, ispravljen). Ručno 15.11.2026: Compile PASS, „sve radi". **Ponovni
+> dokaz pet sabotaža testa 353: izlaz nije priložen, ne vodi se kao dokazan**
+> (§7a, „Review PR #475").
 
 ## 1) Šta je doplata
 
@@ -635,8 +636,9 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     od ishoda (b). Pošto je test menjan, njegovih pet sabotaža se dokazuje
     ponovo (`dop-obuhvat-zastoj-`); šest sabotaža testa 352 ostaju dokazane,
     taj test nije diran.
-  - **Ostaje:** ponovni dokaz pet sabotaža testa 353, Compile i kratka ručna
-    provera dolaska sa kartice.
+  - **Ručno (operater, 15.11.2026, `192ec53`):** Compile PASS; „sve radi".
+  - **Ostaje:** ponovni dokaz pet sabotaža testa 353 (`python tools/dokaz.py
+    dop-obuhvat-zastoj`). Izlaz nije priložen, pa se ne vodi kao dokazan.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
