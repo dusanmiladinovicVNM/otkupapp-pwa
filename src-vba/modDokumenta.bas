@@ -3898,7 +3898,7 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
         LncPlanOtpremnice p, otpremnicaID, otkupID, "", False, SRC
     Else
         ' --- DODAJ. Hladnjacki CILJ prvi (LNC-ODL-14): njegov tekst daje jezgro, a
-        ' blok svake druge stanice bi inace pao tek na "drugom polju StanicaID".
+        ' blok svake druge stanice bi inace pao tek na razlici otkupnog mesta.
         If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then
             LncPlanOtpremnice p, otpremnicaID, "", otkupID, False, SRC
             Exit Function
@@ -3977,7 +3977,12 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
         Dim raz As String
         raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)
         If Len(raz) > 0 Then
-            p("razlog") = "Blok " & p("otkupBroj") & " ne moze u otpremnicu " & p("otpBroj") & ": " & raz
+            ' Kapija ostaje JEDNA (pisac); ovde se samo njen razlog kaze nazivima.
+            p("razlog") = LncDodajRazlogCitljiv(otpremnicaID, otkupID, kulVer, _
+                                                CStr(p("otpBroj")), CStr(p("otkupBroj")), SRC)
+            If Len(CStr(p("razlog"))) = 0 Then
+                p("razlog") = "Blok " & p("otkupBroj") & " ne moze u otpremnicu " & p("otpBroj") & ": " & raz
+            End If
             Exit Function
         End If
         LncPlanOtpremnice p, otpremnicaID, "", otkupID, False, SRC
@@ -4644,6 +4649,56 @@ EH:
                     "jednom potezu ne postoji (LNC-ODL-23)."
     End If
     LncPotezNadBlokom = False
+End Function
+
+' Citljiv razlog odbijanja "Dodaj" za tri neslaganja koja operater stvarno sretne
+' u listi "Bez otpremnice": otkupno mesto, kultura, tip gajbi (rucna provera
+' 15.11.2026: "Izvor OTK-... ima drugo polje StanicaID: ocekivano 'ST-...'").
+' Zove se SAMO kad je OtpIzvorRazlog vec odbio -- kapija ostaje jedna, ovo samo
+' imenuje razlog nazivima. Uslovi su isti kao u OtpProveriIzvor (isti redosled,
+' tip samo kad blok nosi gajbe). "" = nijedno od tri; tada ostaje tekst kapije.
+Private Function LncDodajRazlogCitljiv(ByVal otpID As String, ByVal otkupID As String, _
+                                       ByVal kulVer As String, ByVal otpBroj As String, _
+                                       ByVal otkBroj As String, ByVal src As String) As String
+    Dim a As String, b As String
+    a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA)))
+    If StrComp(a, b, vbTextCompare) <> 0 Then
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " je sa otkupnog mesta " & StanicaOpisZaPoruku(b) & _
+                                ", a otpremnica " & otpBroj & " sa otkupnog mesta " & _
+                                StanicaOpisZaPoruku(a) & " -- otpremnica nosi robu jednog " & _
+                                "otkupnog mesta, pa se blok ne dodaje."
+        Exit Function
+    End If
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA)))
+    If StrComp(kulVer, b, vbTextCompare) <> 0 Then
+        If Len(b) = 0 Then b = "bez kulture" Else b = KulturaOpisZaPoruku(b)
+        If Len(kulVer) = 0 Then a = "bez kulture" Else a = KulturaOpisZaPoruku(kulVer)
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " je druge kulture (" & b & ") od otpremnice " & _
+                                otpBroj & " (" & a & ") -- otpremnica nosi jednu kulturu, " & _
+                                "pa se blok ne dodaje."
+        Exit Function
+    End If
+    If OtpGajbeIzvora(otkupID, src) <= 0 Then Exit Function
+    a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB)))
+    If StrComp(a, b, vbTextCompare) <> 0 Then
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " nosi gajbe tipa " & b & ", a otpremnica " & _
+                                otpBroj & " tipa " & a & " -- otpremnica nosi jedan tip " & _
+                                "ambalaze, pa se blok ne dodaje."
+    End If
+End Function
+
+' Naziv otkupnog mesta za poruku; bez naziva ostaje ID (kao KulturaOpisZaPoruku).
+Private Function StanicaOpisZaPoruku(ByVal stanicaID As String) As String
+    Dim v As String
+    If Len(stanicaID) = 0 Then
+        StanicaOpisZaPoruku = "(bez otkupnog mesta)"
+        Exit Function
+    End If
+    v = Trim$(NzToText(LookupValue(TBL_STANICE, COL_STA_ID, stanicaID, "Naziv")))
+    If Len(v) = 0 Then v = stanicaID
+    StanicaOpisZaPoruku = v
 End Function
 
 ' LNC-INV-18 za "Dodaj": otpremnica' knjizi stanica -> vozac zbir gajbi svojih

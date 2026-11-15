@@ -7997,7 +7997,7 @@ SABOTAZE = {
         "Test_LNC_Blok_DodajOdbijen",
         "LNCD9 (f): blok kasniji od otpremnice se odbija (LNC-ODL-30)",
     ),
-    # Hladnjacki blok se ne prepoznaje -- pada tek na "drugom polju StanicaID".
+    # Hladnjacki blok se ne prepoznaje -- pada tek na razlici otkupnog mesta.
     "lncb-dodaj-bez-kapije-hladnjace": (
         "modDokumenta.bas",
         "        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
@@ -8031,7 +8031,36 @@ SABOTAZE = {
         "Test_LNC_Blok_DodajOdbijen",
         "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239",
     ),
-    # Hladnjacki cilj se meri tek u jezgru: blok druge stanice pada na StanicaID.
+    # Rucna provera 15.11.2026: Dodaj iz liste "Bez otpremnice" odbija blok druge
+    # stanice tekstom kapije ("Izvor OTK-... ima drugo polje StanicaID: ocekivano
+    # 'ST-...'"). Svaka grana citljivog prevoda ima svoju sabotazu i svoju tvrdnju.
+    "lncb-dodaj-stanica-tehnicki": (
+        "modDokumenta.bas",
+        "    If StrComp(a, b, vbTextCompare) <> 0 Then\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" je sa otkupnog mesta \" & StanicaOpisZaPoruku(b) & _\n",
+        "    If False Then   ' SABOTAZA: druga stanica tekstom kapije\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" je sa otkupnog mesta \" & StanicaOpisZaPoruku(b) & _\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (l): blok druge stanice se odbija citljivo, otkupno mesto po nazivu",
+    ),
+    "lncb-dodaj-kultura-tehnicki": (
+        "modDokumenta.bas",
+        "    If StrComp(kulVer, b, vbTextCompare) <> 0 Then\n",
+        "    If False Then   ' SABOTAZA: druga kultura tekstom kapije\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (d2): odbijenica za drugu kulturu imenuje kulture, ne KulturaID",
+    ),
+    "lncb-dodaj-tip-gajbi-tehnicki": (
+        "modDokumenta.bas",
+        "    If StrComp(a, b, vbTextCompare) <> 0 Then\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" nosi gajbe tipa \" & b & \", a otpremnica \" & _\n",
+        "    If False Then   ' SABOTAZA: drugi tip gajbi tekstom kapije\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" nosi gajbe tipa \" & b & \", a otpremnica \" & _\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (e): blok drugog tipa gajbi se odbija citljivo, tipovi po imenu",
+    ),
+    # Hladnjacki cilj se meri tek u jezgru: blok druge stanice pada na razlici
+    # otkupnog mesta.
     "lncb-dodaj-hladni-cilj": (
         "modDokumenta.bas",
         "        If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then\n",

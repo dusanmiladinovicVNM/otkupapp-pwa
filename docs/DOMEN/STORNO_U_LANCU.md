@@ -356,6 +356,16 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > svi testovi a2–a7 i dela (b); na `e8b3f492` (bez popravke KI-095 put 2) pali su samo očekivani
 > (RunID 20261115143613-6938). Čekaju: `RunAllTests`, dokaz `lncb`/`ki095`, Compile i ručna provera
 > F1/F8.**
+> **Ručna provera 15.11.2026 (slike operatera):** izbor cilja, lista „Blokovi otpremnice" uz cilj,
+> potvrda „Izvadi" u zbirni sa prijemnicom (PAZNJA, kg/gajbe tačni, „Ne" podrazumevano), „Dodaj u
+> otpremnicu" uz cilj i odbijanje hladnjačke otpremnice — kako je opisano. **Nalaz:** „Dodaj" bloka
+> druge stanice odbijao se tekstom kapije („Izvor OTK-… ima drugo polje StanicaID: očekivano
+> 'ST-…'"); isto su radili druga kultura (zaglavlje sa kulturom) i drugi tip gajbi. Popravka:
+> plan prevodi razlog kapije u nazive (`LncDodajRazlogCitljiv`, zove se **samo** kad je
+> `OtpIzvorRazlog` već odbio — kapija ostaje jedna); LNCD9 (d2), (e), (l) i tri sabotaže
+> `lncb-dodaj-*-tehnicki`. **NEVERIFIKOVANO u Excelu** do sledećeg BFP prolaza. Zatečeno, van ovog
+> reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
+> Kozmetika potvrde: skraćivanje (`LncDijalogTekst`, 1000 znakova) seče usred reči.
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
 > ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
 > list koji ulazi ili se ispravlja. List **starog oblika** koji je već u otpremnici (bez stavki,

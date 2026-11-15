@@ -29363,10 +29363,14 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
                "LNCD9 (b): blok druge izdate otpremnice se odbija i poruka je imenuje"
     AssertTrue LncDodajOdbijen(otpT, otkS, "je storniran"), _
                "LNCD9 (c): storniran blok se odbija"
-    AssertTrue LncDodajOdbijen(otpT, otkK, "KulturaID"), _
+    ' (d) meri SAMO odbijanje pre potvrde ("kultur" nose i tekst kapije i citljiv
+    ' tekst); (d2) meri da je odbijenica citljiva (rucna provera 15.11.2026).
+    AssertTrue LncDodajOdbijen(otpT, otkK, "kultur"), _
                "LNCD9 (d): blok druge kulture se odbija pre potvrde"
-    AssertTrue LncDodajOdbijen(otpT, otkG, "TipAmbalaze"), _
-               "LNCD9 (e): blok drugog tipa gajbi se odbija"
+    AssertTrue LncDodajOdbijen(otpT, otkK, "je druge kulture ("), _
+               "LNCD9 (d2): odbijenica za drugu kulturu imenuje kulture, ne KulturaID"
+    AssertTrue LncDodajOdbijen(otpT, otkG, "nosi gajbe tipa " & tipG & ", a otpremnica"), _
+               "LNCD9 (e): blok drugog tipa gajbi se odbija citljivo, tipovi po imenu"
     AssertTrue LncDodajOdbijen(otpT, otkL, "LNC-ODL-30"), _
                "LNCD9 (f): blok kasniji od otpremnice se odbija (LNC-ODL-30)"
     AssertTrue LncDodajOdbijen(otpN, otkF, "NACRT"), _
@@ -29382,7 +29386,7 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     Const STA_D9 As String = "ST-OGLTEST-90087"
     HldStanicaSaOznakom STA_D9, "Ne"
     otkM = HldBlok("LNCD9X-" & scenario, STA_D9, datT, 100#, 50#, 0, 0#, 0#, 0)
-    If Len(otkM) > 0 Then okL = LncDodajOdbijen(otpT, otkM, "StanicaID")
+    If Len(otkM) > 0 Then okL = LncDodajOdbijen(otpT, otkM, "je sa otkupnog mesta TEST STANICA " & STA_D9)
     ' (h) stari oblik: otpremnica bez tipa ambalaze, blok sa gajbama.
     S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otpT, COL_OTP_TIP_AMB, ""
     okH = LncDodajOdbijen(otpT, otkG, "nema tip ambalaze")
@@ -29413,7 +29417,7 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     tx.RollbackTx
     Set tx = Nothing
 
-    AssertTrue okL, "LNCD9 (l): blok druge stanice se odbija"
+    AssertTrue okL, "LNCD9 (l): blok druge stanice se odbija citljivo, otkupno mesto po nazivu"
     AssertTrue okH, "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239"
     AssertTrue okI, "LNCD9 (i): blok bez stavki se odbija"
     AssertTrue okJ, "LNCD9 (j): neizdat blok se odbija"
