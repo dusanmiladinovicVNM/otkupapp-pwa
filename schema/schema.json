@@ -164,7 +164,8 @@
         "OtkupID",
         "StanicaID",
         "NacinUnosa",
-        "BrojSpecifikacije"
+        "BrojSpecifikacije",
+        "ObuhvatKooperantID"
       ]
     },
     {

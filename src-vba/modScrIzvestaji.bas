@@ -584,6 +584,7 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
         Case "scrIzRezZ":    ObradiKlik = PostaviRezim(True)
         Case "scrIzPrint":   StampajIzvestaj
         Case "scrIzKartPdf": StampajKarticu
+        Case "scrIzDoplata": ObradiKlik = OtvoriDoplatu()
     End Select
 End Function
 
@@ -1906,6 +1907,10 @@ Public Sub Scr_Build(ByVal z As Object)
                   156, IZ_BTN_H, "primary"
     modUiKit.BtnV z, "scrIzKartPdf", Poruka("OTKUI_BTN_IZ_KARTPDF"), PAD + 164, IZ_Y_BTN, _
                   170, IZ_BTN_H, "soft"
+    ' Prelazak na ekran Doplata za kooperanta cija je kartica prikazana
+    ' (DOP-ODL-31); vidljivost daje raspored.
+    modUiKit.BtnV z, "scrIzDoplata", Poruka("OTKUI_BTN_IZ_DOPLATA"), PAD + 342, IZ_Y_BTN, _
+                  160, IZ_BTN_H, "soft"
 
     modUiKit.NewLbl z, "izLnB", "", 0, IZ_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
     Exit Sub
@@ -1974,6 +1979,11 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     modUiKit.MoveBtn z, "scrIzKartPdf", PAD, IZ_Y_BTN
     modUiKit.BoxShow z, "scrIzPrint", Not naKartici
     modUiKit.BoxShow z, "scrIzKartPdf", naKartici
+    ' "Doplata kooperantu" samo na FINANSIJSKOJ kartici kooperanta i samo
+    ' operateru koji ima pravo na ekran Doplata: dugme koje bi ljuska odbila
+    ' je gore od dugmeta kog nema.
+    modUiKit.MoveBtn z, "scrIzDoplata", PAD + 178, IZ_Y_BTN
+    modUiKit.BoxShow z, "scrIzDoplata", DoplataSeNudi()
 
     z.Controls("izLnB").width = w
 End Sub
@@ -2852,6 +2862,49 @@ Private Sub StampajKarticu()
         PrintKarticaPDF mCtxId, dOd, dDo
     End If
 End Sub
+
+' Da li se dugme "Doplata kooperantu" nudi: finansijska kartica kooperanta TAMO
+' GDE KARTICA POSTOJI (ista matrica koja odlucuje o listi -- u zbirnom rezimu
+' kartice nema, pa nema ni kome da se da doplata), i pravo na ekran Doplata
+' (isto pitanje koje ljuska postavlja pri prelasku).
+Private Function DoplataSeNudi() As Boolean
+    If Scr_Lista() <> IZ_KART Then Exit Function
+    If TrenutniTip() <> "Kooperant" Then Exit Function
+    If Not IzListaDostupna(IZ_KART, "Kooperant", mZbirni) Then Exit Function
+    DoplataSeNudi = modUiScreens.ScrDozvoljen("DOPLATA")
+End Function
+
+' "Doplata kooperantu" sa kartice (DOP-ODL-31): predji na ekran Doplata sa
+' obuhvatom "samo ovaj kooperant". Izvestaji i dalje NISTA ne upisuju -- ovo je
+' samo prelazak; racun, pitanja i upis ostaju na ekranu Doplata.
+'
+' Kooperant je onaj cija je kartica PRIKAZANA (mCtxId, kontekst snimka), ne
+' trenutni tekst u polju: operater daje doplatu onome koga gleda. Putuje ID, ne
+' ime. REDOSLED je obavezan, kao kod predaje ispravke
+' (modScrStorno.OtvoriIspravku): prvo prelazak -- gradi zonu ekrana i proverava
+' pravo -- pa tek onda obuhvat, da polje pokazuje isto sto stanje nosi.
+Private Function OtvoriDoplatu() As Boolean
+    Dim koop As String, razlog As String
+    If Not SnimakPostoji() Or mCtxTip <> "Kooperant" Or Len(mCtxId) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
+        Exit Function
+    End If
+    If Scr_Lista() <> IZ_KART Or mCtxZbirni Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
+        Exit Function
+    End If
+    koop = mCtxId
+    modOtkupUI.IdiNaEkran "DOPLATA"
+    ' Odbijen prelazak (pravo, modul) je vec javila ljuska; ostajemo na kartici.
+    If modOtkupUI.AktivanEkran() <> "DOPLATA" Then Exit Function
+    razlog = modScrDoplata.Scr_DopOtvoriZaKooperanta(koop)
+    If Len(razlog) > 0 Then modOtkupUI.ShowToast razlog, True
+    ' Ekran se promenio, pa ljuska posle ove radnje NE osvezava nista (UiClick,
+    ' grana "scr": osvezava samo kad je ekran ostao isti). Obuhvat je postavljen
+    ' posle ulaska na Doplatu, pa se njena lista i zona citaju jos jednom.
+    modOtkupUI.RefreshFromData
+    OtvoriDoplatu = True
+End Function
 
 ' "Stampaj dokument" nad izabranim redom: ruta po listi i po tipu dokumenta.
 ' Red bez dokumenta ODBIJA porukom -- agregatni red bez radnje nije greska,

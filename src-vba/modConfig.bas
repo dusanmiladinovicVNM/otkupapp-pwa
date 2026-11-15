@@ -523,6 +523,12 @@ Public Const COL_DOP_NACIN As String = "NacinUnosa"
 ' Broj specifikacije (DOP-ODL-21/23): isti na svim dokumentima jednog kooperanta
 ' u jednom obracunu; pise ga samo pisac doplate pri knjizenju.
 Public Const COL_DOP_SPEC As String = "BrojSpecifikacije"
+' Obuhvat obracuna (DOP-ODL-31): prazno = obracun za SVE kooperante; KooperantID
+' = obracun radjen samo za tog kooperanta. Osobina OBRACUNA, upisana na svaki
+' njegov dokument (kao period i nacin unosa); pise je samo pisac doplate. Cita
+' je signal promene osnovice: kasnije unet blok DRUGOG kooperanta nije nalaz za
+' obracun koji ga nije ni obuhvatao.
+Public Const COL_DOP_OBUHVAT As String = "ObuhvatKooperantID"
 Public Const COL_DOPS_CENA_OTKUPA As String = "CenaOtkupa"
 Public Const COL_DOPS_KONACNA As String = "KonacnaCena"
 ' Nacin unosa, jedan za ceo obracun (DOP-ODL-15). Cena stavke doplate je u oba

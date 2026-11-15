@@ -1896,6 +1896,22 @@ Private Sub ClosePopup()
     mFrm.Controls("zPop").Visible = False
 End Sub
 
+' PROGRAMSKI UPIS U COMBO EKRANA. Upis okida Change, a Change otvara panel
+' izbora kao da je operater kucao (UiChange, grana "scr"). Ljuska svoja punjenja
+' zato radi pod mPopMute; ekran nema pristup toj zastavici, a ima iste potrebe:
+' dolazak sa drugog ekrana sa vec izabranom stavkom i ponovno punjenje liste uz
+' cuvanje izbora (modScrDoplata, polje "Samo kooperant"). Ekran upis stavlja
+' izmedju dva poziva:
+'     pre = modOtkupUI.PanelIzboraMiruj(True)
+'     ... upis u combo ...
+'     modOtkupUI.PanelIzboraMiruj pre
+' Vraca PRETHODNO stanje, da ugnjezden poziv (upis unutar izbora iz panela, koji
+' je vec pod gardom) ne ukljuci panel pre vremena.
+Public Function PanelIzboraMiruj(ByVal miruj As Boolean) As Boolean
+    PanelIzboraMiruj = mPopMute
+    mPopMute = miruj
+End Function
+
 ' Hover red panela -- pozadinski label se boji centralno (v6-ui-188),
 ' jer lokalno bojenje klase vise ne pokriva ceo red (tekst je odvojen).
 Private Sub PopHoverRed(ByVal i As Long)

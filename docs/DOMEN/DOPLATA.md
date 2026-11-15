@@ -19,6 +19,24 @@
 > nije provereno:** mapiranje stavke izvoda na specifikaciju, štampa
 > specifikacije iz kartice, poziv na broj u CSV-u naloga (probni nalog kroz
 > e-banking). Otvoreno iz §8.
+>
+> **U `main`-u** od 06.11.2026 (PR #460 = `95f07e6`; pravila u `.claude/rules`
+> kroz #470 = `1caa86f`).
+>
+> **Doplata samo za jednog kooperanta** (DOP-ODL-31, 12.11.2026): u kodu, na
+> grani `claude/cool-bohr-68hi14`. Excel 15.11.2026: 12 suita zeleno
+> (RunAllTests 352/0, BFP 3208/0); dokaz 15/15 u dva prolaza (9 + 6 posle
+> ispravke testa 352). Ručno 15.11.2026: Compile PASS, dugme na kartici, polje
+> i knjiženje u obuhvatu ispravni (§7a, na kraju).
+>
+> **Review PR #475 (nezavisni, 15.11.2026): CONDITIONAL GO.** P1 — neuspela
+> predaja sa kartice ostavljala je ekran spreman za obračun svih — ispravljen
+> u kodu (obuhvat se ne širi bez operatera; test 353, pet sabotaža).
+> Excel 15.11.2026: 12 suita zeleno (RunAllTests 353/0, BFP 3208/0); dokaz
+> 10/11 — jedna sabotaža je oborila susednu tvrdnju istog testa (kvar u testu
+> 353, ispravljen). Ponovni dokaz pet sabotaža testa 353: 5/5 DOKAZANO —
+> ukupno 11/11. Ručno 15.11.2026: Compile PASS, „sve radi" (§7a, „Review PR
+> #475").
 
 ## 1) Šta je doplata
 
@@ -92,6 +110,7 @@ produkciji (PR #460, draft), pa se kanon šeme sme menjati.
 | **DOP-ODL-28** *(05.11.2026)* | **Raspodela po specifikaciji**: iznos ide na otvorene dokumente specifikacije **od najstarijeg bloka** (datum bloka, pa broj bloka); svaki red novca je vezan za svoj dokument i nosi **stanicu bloka**; višak je avans na matičnoj stanici. **Gotovina** po specifikaciji raspoređuje **samo na dokumente čiji je blok na stanici isplate**; ostali ostaju otvoreni. |
 | **DOP-ODL-29** *(05.11.2026)* | Specifikacija je cilj plaćanja i u **ručnom mapiranju izvoda** (lista ciljeva kooperanta) i u **primeni avansa** (nalozi) — ista raspodela kao DOP-ODL-28. Redosled rada: rez A = automatski izvod + nalozi; rez B = ručno mapiranje, gotovina, avans. |
 | **DOP-ODL-30** *(06.11.2026; zamenjuje oblik broja iz DOP-ODL-17 i DOP-ODL-23/24)* | **Brojevi bez slova.** Dokument doplate = **broj bloka + `-0z`**, z = redni broj doplate na tom bloku (`5/250626-13-01`, `-02`…; prvi blok dana `5/280626` → `5/280626-01`). Specifikacija = **`x/ddmmyy-00y`**: x broj matične stanice kooperanta, ddmmyy datum knjiženja, y redni broj specifikacije te stanice tog dana (`5/051126-001`). Storno ne oslobađa broj. Vrste razdvaja **nula posle datuma**: broj bloka posle datuma nema sufiks ili ima `-2`, `-3`… (nikad nulu), doplata ima `-0` + cifra 1–9, specifikacija `-00`; razlika ostaje i kad banka iz poziva izbaci separatore. Uvoz izvoda traži **tačno jedan pogodak** preko blokova, dokumenata doplate i specifikacija; poziv koji pogodi dve vrste ide na ručno. Stari brojevi sa `D`/`S` (samo u test sveskama) ostaju čitljivi kao zauzeti. |
+| **DOP-ODL-31** *(12.11.2026; dopunjuje 03 i 16)* | **Obračun može biti samo za jednog kooperanta (obuhvat).** Podrazumevano obuhvat ostaje „svi aktivni otkupi" (DOP-ODL-03). Kad je zadat kooperant, plan se računa **samo nad njegovim blokovima**: tuđi ne ulaze ni u jedan korak, pa stopa koja ne pogađa nijedan njegov blok pada kao stopa bez otkupa (DOP-ODL-10) iako pogađa tuđe, a izabran tuđ blok obara knjiženje po imenu. Obuhvat je **osobina obračuna** i piše se na svaki njegov dokument (`tblDoplata.ObuhvatKooperantID`, na kraju tabele; prazno = svi). **Signal promene osnovice** (DOP-ODL-07) za takav obračun traži retro unos samo među blokovima tog kooperanta — kasnije unet blok drugog kooperanta mu nikad nije pripadao. Obuhvat se **ne izvodi iz podataka**: običan obračun koji je pogodio samo jednog kooperanta ostaje obračun za sve. Dva ulaza, jedan mehanizam: polje „Samo kooperant" na ekranu Doplata i dugme „Doplata kooperantu" na kartici kooperanta u Izveštajima (samo prelazak — Izveštaji i dalje ništa ne upisuju). Tekst u polju koji nije izabran iz liste **nije „svi"**: pregled i knjiženje staju. **Obuhvat se ne širi bez operatera** *(dopuna 15.11.2026, review PR #475)*: kad obračun za jednog kooperanta ne može da se postavi ili održi (predaja sa kartice ne uspe, polje izgubi izbor a da ga operater nije dirao), obuhvat ostaje **nerazrešen** — pregled i knjiženje staju i imenuju traženog kooperanta; na „svi" vraća samo operater, kad sam isprazni polje. Posle knjiženja obuhvat se prazni, kao stope. „Uključi filtrirane" ostaje; takav obračun nema obuhvat. |
 
 ## 3) Struktura dokumenta (potvrđena 03.11.2026; **revidirana u §2a**)
 
@@ -139,6 +158,7 @@ koji u jednoj transakciji pravi po jedan KO za svakog kooperanta sa kg > 0.
 | **DOP-10** | KO se isplaćuje kao **obaveza po dokumentu**, kao otkupni blok: otvoreno = zbir stavki aktivnog KO − aktivan novac vezan `DoplataID`-em, u cent-domenu. Nalozi ga nose pod ključem bloka (`DoplataID`) sa **brojem KO kao pozivom na broj**; izvod sa tim pozivom je jak ključ na taj KO (plan `BIM_CILJ_DOPLATA`) i knjiži se istim piscem kao blok (`MapBankaImportAsKooperantBlockCore`, grana `doplataID`): KO dobija najviše otvoreno, višak je avans, plaćen KO ceo iznos šalje u avans. Slobodan avans se na KO primenjuje **istim motorom** kao na blok (`VeziSlobodanAvans`). | `modDoplata.OtvoreniKORedovi` / `OtvorenoNaKO` / `KOPoPozivu`, `modBankaExportPregled.BuildBlokIsplataList`, `modBankaMapiranje` · 328, 329, 331 |
 | **DOP-11** | **Jedna kapija i jedna veza za sve pisce novca nad KO** — izvod (auto i ručno), gotovina, primena avansa: KO postoji tačno jednom, aktivan je i kooperantov (`modDoplata.KOKapija`), a veza se piše samo kroz `modNovac.VeziNovacZaKO`. Gotovina ide **samo na stanicu bloka** (od P1; ranije matična) i najviše do trenutnog ostatka (`IsplataKOProblem`, u modulu unosa i u piscu). Izabran plaćen KO u ručnom mapiranju se ne knjiži (protivrečnost, ne avans). | `KOKapija`, `VeziNovacZaKO`, `modNovac.IsplataKOProblem`, `modDokumenta.SaveOMUlaz_TX`, `modBankaMapiranje.MapBankaImportAsKooperantBlockCore` · 331, 332, 333 |
 | **DOP-08** | Ekran nema svoju računicu: stopa prolazi istu proveru kao pisac (`DoplataStopeProblem` = `UcitajStope`), pregled je isti plan koji pisac izvršava (`DoplataPlan`), a upis i storno idu samo kroz `KnjiziDoplatu_TX` / `modStorno`. Svako pitanje (knjiženje, ponavljanje, storno) ide kroz `Pitaj` — u test režimu beleži i odgovara „Ne" (KI-015). | `modScrDoplata` · 325, 326 |
+| **DOP-12** | **Obuhvat je osobina obračuna**: svi dokumenti jednog obračuna nose isti `ObuhvatKooperantID`, a kad nije prazan, jednak je `KooperantID`-u dokumenta. Piše ga samo pisac doplate, pri knjiženju; storno ga ne menja. | pisac `modDoplata.KnjiziPlan` (kapija `DOP_ERR_BASE + 36` iza plana suženog u `DoplataPlan`), strog čitalac `DoplataStavkeRedovi` (`+59` tuđ kooperant, `+60` različit obuhvat u obračunu), jedno pravilo obuhvata `UObuhvatu` za plan, pisca i signal · 351 |
 
 **Prikaz i pisac dele jedan plan** (obrazac `BimAutoPlan`): `DoplataPlan` računa
 stavke bez upisa, ekran ga prikazuje (F3), `KnjiziDoplatu_TX` ga izvršava.
@@ -500,6 +520,126 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
   dijakritikom, isti u grešci pisca i u pitanju ekrana. Test 318 dopunjen,
   sabotaža `dop-ponavljanje-van-kataloga`. Excel 06.11.2026: 349/0, dokaz
   DOKAZANO (u istom prolazu kao DOP-ODL-30); tekst na ekranu ručno nije pregledan.
+- **Doplata samo za jednog kooperanta (DOP-ODL-31, DOP-12; pre-flight 12.11.2026).**
+  Zahtev operatera: sa kartice kooperanta u Izveštajima dati doplatu samo njemu,
+  bez dupliranja koda. Nema novog ekrana, pisca ni plana:
+  - **Šema:** `tblDoplata.ObuhvatKooperantID` na kraju (kanon `schema.json` →
+    `modSchema`, otisak `4CCA6C14` → `A2A085EB`); bez ugovora o formatu, ID nije
+    vrednost koju Excel konvertuje. Postojeća sveska dobija kolonu kroz
+    `EnsureAllTables` na startu (isti put kao `BrojSpecifikacije`).
+  - **Motor (`modDoplata`):** opcioni `kooperantID` na kraju `DoplataPlan`,
+    `DoplataPreklapanja` i `KnjiziDoplatu_TX`; filter je jedan uslov u prvoj
+    petlji plana (`UObuhvatu`), pre provere perioda — tuđ blok na graničnom danu
+    bez poznatog sata ne obara ovaj obračun. Pisac proverava da kooperant
+    postoji tačno jednom, računa plan u obuhvatu i upisuje ga na zaglavlje;
+    `KnjiziPlan` ne veruje pozivaocu (`+36`). Čitalac nosi kolonu 21 i dve
+    provere DOP-12. `DoplataOdstupanjaOsnovice` preskače otkupe van obuhvata.
+  - **Ekran (`modScrDoplata`):** polje „Samo kooperant" u redu A (lista sa
+    ID-em u prikazu — dva kooperanta istog imena se razlikuju); stanje prati
+    polje u trenutku pregleda i knjiženja (`ObuhvatSaPolja`, čita izabranu
+    stavku, ne tekst); promena poništava pregled i izbor blokova; tri postojeća
+    poziva motora prosleđuju obuhvat; pitanje pred knjiženje imenuje kooperanta;
+    `Scr_ResetCache` osvežava listu kooperanata. Liste, zbirovi i izbor blokova
+    nisu menjani — plan već nosi samo njegove blokove.
+  - **Kartica (`modScrIzvestaji`):** dugme „Doplata kooperantu" na finansijskoj
+    kartici, samo za tip Kooperant i samo uz pravo na ekran Doplata. Redosled
+    kao kod predaje ispravke (`modScrStorno.OtvoriIspravku`): prvo
+    `IdiNaEkran "DOPLATA"`, pa `Scr_DopOtvoriZaKooperanta(KooperantID)`, pa
+    `RefreshFromData` (ljuska posle radnje koja promeni ekran ne osvežava
+    ništa). Putuje ID kartice koja je prikazana, ne ime. Ako polje ne može da
+    pokaže kooperanta, obuhvat ostaje **nerazrešen** (zastoj). *(Prva verzija ga
+    je u tom slučaju vraćala na prazno, a prazno znači „svi" — nalaz P1 iz
+    review-a, v. „Review PR #475" niže.)*
+  - **Ljuska (`modOtkupUI`):** `PanelIzboraMiruj` — javni gard za programski
+    upis u combo ekrana (isti koji ljuska koristi za svoja punjenja, `mPopMute`).
+    ⚠ PLATFORM UNKNOWN: da li bi bez garda panel izbora ostao otvoren posle
+    dolaska sa kartice nije izmereno; gard je uveden da ishod ne zavisi od toga.
+  - Testovi 351 (`T_Doplata_ObuhvatKooperanta`: plan, pisac, signal, čitalac) i
+    352 (`T_Doplata_ObuhvatNaEkranu`: neizabran kooperant, dolazak sa kartice
+    pravim klikom kroz ljusku, pregled, pitanje, upis, pražnjenje); 14 sabotaža
+    `dop-obuhvat-*`; presidrena `dop-ekran-izbor-ne-ide-piscu`. Kapija u
+    `KnjiziPlan` (`+36`) je odbrana u dubinu i nema svoju sabotažu — sama se
+    testom ne može oboriti. Katalog 1265 → 1279.
+  - **Ne meri se testom (ručno):** da li polje staje u red A, da li se dugme
+    vidi samo na kartici kooperanta, i da li postojeća sveska dobije kolonu po
+    restartu.
+  - `STANJE_REFAKTORA.md` namerno nije diran: otvoren PR #469 je rezervisao
+    stavke 324–327.
+  **Excel, 15.11.2026 (grana čista, `15f80b2`):** 12 suita zeleno — RunAllTests
+  352 / 0, BFP 3208 / 0 (broj `main`-a posle #471–#473; ova grana BFP ne dira),
+  Banka 241 / 0, Storno 111 / 0, Palete 115, Faktura 39 / 0, Agrohemija 25 / 0;
+  GREEN marker (izvor `2f74e96bbd4f`). Nova kolona je stigla u test svesku bez
+  regenerisanja fixture-a.
+  **Dokaz, prvi prolaz: 14 / 15**, izvor pre/posle identičan `93b4e8950deb50f6`.
+  `dop-obuhvat-kartica-ne-predaje` → „PALA DRUGA TVRDNJA: Subscript out of
+  range": kad kartica ne preda kooperanta, pregled u testu 352 stane, aktivna
+  lista ostaje Stope (5 kolona), a test je iz nje čitao šestu — pao je greškom
+  pre tvrdnje. Kvar je bio u TESTU, ne u kodu: red plana se sada čita samo kad
+  je pregled prošao. Pošto je test menjan, njegovih šest sabotaža se dokazuje
+  ponovo (`dop-obuhvat-ekran-`, `-kartica-`, `-pitanje-`, `-ostaje-`); osam
+  sabotaža testa 351 i presidrena `dop-ekran-izbor-ne-ide-piscu` ostaju
+  dokazane, njihovi testovi nisu dirani.
+  **Ponovni dokaz (15.11.2026, `459905f`): 6 / 6 DOKAZANO**, baza RunAllTests
+  352 / 0, izvor pre/posle identičan `636da7aebe2c69ce`. Ukupno 15 / 15.
+  **Ručno (operater, 15.11.2026):** Compile PASS; dugme na kartici, dolazak na
+  ekran Doplata, polje „Samo kooperant", pregled, pitanje i knjiženje u
+  obuhvatu — „sve radi kako treba". PLATFORM UNKNOWN o panelu izbora time je
+  zatvoren za ovaj put (sa gardom `PanelIzboraMiruj`; bez garda nije mereno).
+  **Review PR #475 (nezavisni, 15.11.2026, HEAD `57ef7c1`): CONDITIONAL GO — jedna
+  P1 ispravka pre merge-a.**
+  - **P1 (potvrđen u kodu, ispravljen).** `Scr_DopOtvoriZaKooperanta` je na
+    neuspeh vraćao obuhvat na prazno, a prazno znači „svi": posle crvenog toasta
+    ekran je ostajao na Doplati, spreman za obračun svih. Isti razred greške
+    postojao je na još dva mesta: ulaz koji padne pre postavljanja (kooperant
+    koga nema, prazan ID) ostavljao je obuhvat koji je zatekao, a polje koje
+    izgubi izbor bez operatera čitalo se pri pregledu kao „svi".
+  - **Pravilo (jedno, za sva tri):** *obuhvat se ne širi bez operatera.* Prazno
+    polje znači „svi" samo kad ga je operater ispraznio (promena stiže iz ljuske,
+    `ObradiPromenu` → `ObuhvatSaPolja True`) ili kad obuhvata nije ni bilo. Sve
+    ostalo ide kroz **jedan izlaz**, `ObuhvatUZastoj`: stanje postaje nerazrešeno
+    — postojeće stanje `mObuhvatNerazresen`, koje pregled i knjiženje već odbijaju
+    — a traženi kooperant se pamti (`mObuhvatTrazen`) da ga poruka imenuje
+    (`OTKUI_ERR_DOP_KOOP_ZASTOJ`). Zastoj drži **stanje**, ne polje: upis „? ime"
+    u polje je samo prikaz i sme da ne uspe. Nema novog sloja ni nove tabele;
+    kartica (`modScrIzvestaji`) nije menjana.
+  - **P2 — tiha greška pri punjenju liste (rešeno istim izlazom).**
+    `PuniKooperante` pad sada beleži (`LogErr`, ranije `Debug.Print`), a polje
+    koje posle pada ostane bez izbora više ne proširuje obuhvat — čita se kao
+    zastoj. `ObuhvatUPolje` i dalje guta grešku, ali je njegov neuspeh vidljiv
+    pozivaocu (vraća False → zastoj).
+  - **P2 — isti zamrznut obuhvat za potvrdu i izvršenje: ODLOŽENO** (§8, stavka
+    9; review ga vodi kao hardening koji može kasnije).
+  - **P3 — zajednički RunAllTests posle spajanja drugih grana:** §8, stavka 10.
+  - **Test 353** (`T_Doplata_ObuhvatZastoj`): kooperant koga nema; pravi klik na
+    kartici uz polje koje ne može da pokaže kooperanta; polje koje izgubi izbor
+    bez operatera; operater koji isprazni polje vraća obračun na sve. Test 352
+    nije diran. Novi test seam `Scr_DopPoljeTestKvar` (samo kvari polje; gasi ga
+    `Scr_DopTestReset`). Pet sabotaža `dop-obuhvat-zastoj-*`; katalog 1279 → 1284.
+  - **Ne meri se testom (ručno):** tekst „? ime" u polju i poruka u traci zone
+    kad je obuhvat u zastoju.
+  - Statičke kapije zelene (`vba_check`, sidra, `gen_schema --check`,
+    `who_writes --check` i `--check-ownership`, paritet, self-update kapije,
+    popis tvrdih); pet novih sabotaža i `dop-obuhvat-ekran-nerazresen-prolazi`
+    se primenjuju i vraćaju bajt-identično.
+  - **Excel, 15.11.2026 (`a5a7a81`):** 12 suita zeleno — RunAllTests 353 / 0,
+    BFP 3208 / 0, Banka 241 / 0, Storno 111 / 0, Palete 115, Faktura 39 / 0,
+    Agrohemija 25 / 0; GREEN marker (izvor `82ea43d6aac2`).
+  - **Dokaz, prvi prolaz (grupno, 6 prolaza): 10 / 11**, izvor pre/posle
+    identičan `9cf04957cd181873`. Svih šest sabotaža testa 352 i četiri od pet
+    sabotaža testa 353 obaraju svoju tvrdnju.
+    `dop-obuhvat-zastoj-predaja-pusta-sve` → „PALA DRUGA TVRDNJA: ekran: polje
+    koje izgubi izbor bez operatera nije svi" (i u grupi i sama). Uzrok je u
+    **TESTU**, ne u kodu: pod tom sabotažom korak (b) pogrešno knjiži, uspešno
+    knjiženje isprazni stope, pa pregled u koraku (c) stane na „nema stopa" pre
+    nego što stigne do obuhvata — tvrdnja (c), koja je u redosledu ispred (b),
+    padne prva. Korak (c) sada sam obezbeđuje stopu ako je nema, pa ne zavisi
+    od ishoda (b). Pošto je test menjan, njegovih pet sabotaža se dokazuje
+    ponovo (`dop-obuhvat-zastoj-`); šest sabotaža testa 352 ostaju dokazane,
+    taj test nije diran.
+  - **Ručno (operater, 15.11.2026, `192ec53`):** Compile PASS; „sve radi".
+  - **Ponovni dokaz (15.11.2026, `192ec53`): 5 / 5 DOKAZANO**, baza RunAllTests
+    353 / 0, izvor pre/posle identičan `d7a62f918831fe19`. Sa šest sabotaža
+    testa 352 iz prvog prolaza: ukupno 11 / 11.
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
@@ -526,10 +666,9 @@ sve / Isključi sve" na listi Blokovi.
 3. ~~DOP-ODL-12 je predlog.~~ Potvrđeno 06.11.2026 (grupa FINANSIJE, pravo Fakturisanje).
 4. ~~Ikonica `IC_DOPLATA` nije proverena na pravom fontu.~~ Vidi se u meniju i u
    zaglavlju ekrana (snimak 06.11.2026).
-5. `.claude/rules/testovi.md` §4 još kaže „30 članova" za test 239 (sada 32) —
-   ide kroz zaseban process PR (izmene u `.claude/` se ne mešaju sa feature-om).
-   Isti process PR: `.claude/rules/banka.md` da pomene KO kao drugi dokument
-   naloga (poziv na broj = broj KO) i `DoplataID` u pravilu avansa.
+5. ~~`.claude/rules/testovi.md` (32 člana u testu 239) i `.claude/rules/banka.md`
+   (doplata i specifikacija kao dokumenti naloga, `DoplataID` u pravilu
+   avansa).~~ Urađeno zasebnim process PR-om #470 (`1caa86f`, 06.11.2026).
 6. **~~RELEASE KAPIJA — slovo u pozivu na broj.~~ Rešeno brojevima bez slova
    (DOP-ODL-30, 06.11.2026).** Poziv sada nosi samo cifre, `/` i `-`, kao broj
    bloka; probni nalog kroz e-banking ostaje kao opšta provera izvoza naloga.
@@ -556,3 +695,16 @@ sve / Isključi sve" na listi Blokovi.
    Isti ključ `OTKUI_NAV_DOPLATA` je i naslov ekrana (`modScrDoplata.Scr_Meta`,
    `naslov=`), pa skraćenje samo u meniju traži da naslov ekrana pređe na
    postojeći `OTKUI_SCRDOP_CAP`. Predlog: u meniju „Doplata".
+9. **Potvrda i izvršenje ne dele zamrznut obuhvat** (review PR #475, P2 —
+   hardening, odloženo 15.11.2026). `KnjiziKlik` pita sa obuhvatom iz stanja, a
+   `KnjiziJezgro` posle potvrde ponovo čita polje (`ObuhvatSaPolja`); ako se
+   obuhvat u međuvremenu promeni, plan se poništi i **ponovo izračuna bez novog
+   pitanja**. Pitanje je modalno, pa operater polje ne može da promeni između ta
+   dva koraka, a prazno polje posle ispravke P1 više ne znači „svi" bez operatera
+   — zato nije blokada. Ispravka (kad dođe na red): izvršenje odbija ako pregled
+   na koji je operater odgovorio više ne važi, umesto da ga tiho ponovi. Menja
+   premisu postojećih testova koji `KnjiziJezgro` zovu bez pregleda, pa ide kao
+   zaseban rez.
+10. **Zajednički RunAllTests posle spajanja drugih grana** (review PR #475, P3).
+    Grana KI-095/LNC i ova se spajaju bez konflikta u tekstu, ali zajedno nisu
+    puštene kroz Excel. Posle sledećeg merge-a: pun `python tools/run_vba.py`.
