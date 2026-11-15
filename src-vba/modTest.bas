@@ -31278,13 +31278,19 @@ Private Sub T_Doplata_ObuhvatNaEkranu()
     listaPosle = modScrDoplata.Scr_Lista()
 
     ' (3) Pregled, pitanje i upis u obuhvatu sa kartice.
+    ' Lista PLAN postoji samo kad je pregled PROSAO. Kad stane (npr. kartica nije
+    ' predala kooperanta, pa obuhvat ostaje neizabran), aktivna je i dalje lista
+    ' Stope sa 5 kolona -- citanje seste bi oborilo test GRESKOM, pre tvrdnje koja
+    ' treba da padne po imenu (prvi dokaz, 15.11.2026: "Subscript out of range").
     pregled = modScrDoplata.Scr_DopPregledTest()
-    d = modScrDoplata.Scr_Rows("sve", "")
-    If IsArray(d) Then
-        If CLng(d(2)) > 0 Then
-            redovi = d(1)
-            redPlana = CStr(CLng(d(2))) & "|" & NzToText(redovi(1, 1)) & "|" & _
-                       Format$(NzD2(redovi(1, 6)), "0.00")
+    If Len(pregled) = 0 Then
+        d = modScrDoplata.Scr_Rows("sve", "")
+        If IsArray(d) Then
+            If CLng(d(2)) > 0 Then
+                redovi = d(1)
+                redPlana = CStr(CLng(d(2))) & "|" & NzToText(redovi(1, 1)) & "|" & _
+                           Format$(NzD2(redovi(1, 6)), "0.00")
+            End If
         End If
     End If
     klik = modScrDoplata.Scr_DopKnjiziKlikTest()

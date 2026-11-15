@@ -24,8 +24,10 @@
 > kroz #470 = `1caa86f`).
 >
 > **Doplata samo za jednog kooperanta** (DOP-ODL-31, 12.11.2026): u kodu, na
-> grani `claude/cool-bohr-68hi14`; statičke kapije zelene, **Excel prolaz
-> neverifikovan** (§7a, na kraju).
+> grani `claude/cool-bohr-68hi14`. Excel 15.11.2026: 12 suita zeleno
+> (RunAllTests 352/0, BFP 3208/0); dokaz 14/15, jedna sabotaža je oborila svoj
+> test greškom umesto tvrdnjom — test ispravljen, **ponovni dokaz za test 352 i
+> ručne provere još nisu urađeni** (§7a, na kraju).
 
 ## 1) Šta je doplata
 
@@ -553,7 +555,21 @@ u ovom dokumentu su već novi; poruke commit-ova F1–F4b nose stare 309–327).
     restartu.
   - `STANJE_REFAKTORA.md` namerno nije diran: otvoren PR #469 je rezervisao
     stavke 324–327.
-  **Statičke kapije zelene; Excel prolaz neverifikovan.**
+  **Excel, 15.11.2026 (grana čista, `15f80b2`):** 12 suita zeleno — RunAllTests
+  352 / 0, BFP 3208 / 0 (broj `main`-a posle #471–#473; ova grana BFP ne dira),
+  Banka 241 / 0, Storno 111 / 0, Palete 115, Faktura 39 / 0, Agrohemija 25 / 0;
+  GREEN marker (izvor `2f74e96bbd4f`). Nova kolona je stigla u test svesku bez
+  regenerisanja fixture-a.
+  **Dokaz, prvi prolaz: 14 / 15**, izvor pre/posle identičan `93b4e8950deb50f6`.
+  `dop-obuhvat-kartica-ne-predaje` → „PALA DRUGA TVRDNJA: Subscript out of
+  range": kad kartica ne preda kooperanta, pregled u testu 352 stane, aktivna
+  lista ostaje Stope (5 kolona), a test je iz nje čitao šestu — pao je greškom
+  pre tvrdnje. Kvar je bio u TESTU, ne u kodu: red plana se sada čita samo kad
+  je pregled prošao. Pošto je test menjan, njegovih šest sabotaža se dokazuje
+  ponovo (`dop-obuhvat-ekran-`, `-kartica-`, `-pitanje-`, `-ostaje-`); osam
+  sabotaža testa 351 i presidrena `dop-ekran-izbor-ne-ide-piscu` ostaju
+  dokazane, njihovi testovi nisu dirani. **Ponovni dokaz i ručne provere:
+  neverifikovano.**
 **P2 — ekran.** Izbor načina unosa, zbirni pregled po kooperantu, lista „Blokovi"
 sa kvačicama, knjižena lista zbirno. Odobreno 05.11.2026: pet lista (Stope,
 Pregled zbirno, Blokovi sa ✓, Knjiženo zbirno po obračunu i kooperantu,
