@@ -364,6 +364,10 @@ traži), ovde dva procesa i dve mašine.
 - Skripta ima **tvrdi prekid** (`--timeout`, default 600 s): ako Excel prestane da
   odgovara, proces se ubija i run pada sa `FATAL`. Bez toga COM poziv ne puca —
   samo stoji zauvek.
+- **Prekid meri CEO prolaz, ne jednu suite** (`KI-096`). Pun prolaz od novembra
+  2026 traje duže od 600 s, pa ga prekid ubije usred BFP-a: `RPC call failed`,
+  ostale suite `RPC server is unavailable`, a `FATAL` lažno navodi break mode.
+  Pun prolaz zato ide sa `python tools/run_vba.py --timeout 1800`.
 - **Break mode** (`[break]` u naslovu VBE prozora) znači da je VBA stao usred
   izvršavanja. Najčešći uzrok je bio pokvaren import (header u kodu → naredba
   `End`), a drugi klik na **Debug** u dijalogu greške. Watchdog sada nikad ne

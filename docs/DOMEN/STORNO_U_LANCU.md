@@ -356,6 +356,11 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > svi testovi a2–a7 i dela (b); na `e8b3f492` (bez popravke KI-095 put 2) pali su samo očekivani
 > (RunID 20261115143613-6938). Čekaju: `RunAllTests`, dokaz `lncb`/`ki095`, Compile i ručna provera
 > F1/F8.**
+> **Excel 16.11.2026:** pun `run_vba` zelen — 12 suita, među njima `RunAllTests` i BFP 3477/3477
+> (RunID 20261116065649-4255, GREEN marker upisan), na izvoru `bd0c468c` (otisak `968b5268`, isti kao
+> `8d8db7fd`). Prethodni puni prolazi nisu pali na kodu nego na tvrdom prekidu alata od 600 s za
+> **ceo** prolaz (`KI-096`). Popravka čitljivog odbijanja „Dodaj" (`95caefe3`, otisak `f133e75d`) još
+> **nije izmerena**.
 > **Ručna provera 15.11.2026 (slike operatera):** izbor cilja, lista „Blokovi otpremnice" uz cilj,
 > potvrda „Izvadi" u zbirni sa prijemnicom (PAZNJA, kg/gajbe tačni, „Ne" podrazumevano), „Dodaj u
 > otpremnicu" uz cilj i odbijanje hladnjačke otpremnice — kako je opisano. **Nalaz:** „Dodaj" bloka
