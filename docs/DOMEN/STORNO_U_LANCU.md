@@ -732,7 +732,7 @@ traži prijemnicu po broju bez filtera storna, pa može imenovati baš storniran
 (`AutoLanacHladnjaca`) možda pravi novu prijemnicu za zbirnu čija je jedina prijemnica stornirana
 radi ispravke.
 
-## 12) Izmena izdate zbirne i prijemnice u lancu — plan (`LZP-ODL-01..14`)
+## 12) Izmena izdate zbirne i prijemnice u lancu — plan (`LZP-ODL-01..16`)
 
 > **Status: PLAN, odluke operatera 16.11.2026. Koda nema.** Analiza je čitanje koda nad `main` =
 > `6b601ee1` (posle PR #476): četiri istraživača po nivou lanca (zbirna, prijemnica, otpremnica,
@@ -762,7 +762,8 @@ radi ispravke.
     da je cilj aktivan, jednoznačan i iste robe (PRJ-ZBR-02), ali ne da je **izdat** ni **istog
     kupca i vozača** (to drži `ZbirnaRoditeljPrijemnice`, greške 1435 / 1437); lista ciljeva u
     Oporavku izbacuje samo stornirane, pa nudi i nacrte. Prijemnica kupca A bi mogla pod zbirnu
-    kupca B ili pod nacrt — a to je poslednji korak današnjeg ručnog puta.
+    kupca B ili pod nacrt — a to je poslednji korak današnjeg ručnog puta. **Nezavisni pregled
+    16.11.2026 potvrdio je uzrok čitanjem koda** (12.6); reprodukcija testom i dalje prva ide.
   - **P2** — F8 PONIŠTENJE zbirne pre dijaloga proverava samo preradu, ne fakturisanu prijemnicu;
     kaskada pada posle potvrde (`modStorno`, greška 74) i ostavlja FAILED red u Oporavku (ista
     klasa kao KI-039 / KI-040).
@@ -786,11 +787,13 @@ radi ispravke.
 | **`LZP-ODL-07`** | **R2 cilj:** samo IZDATA zbirna istog kupca i istog vozača (PRJ-ZBR-01). Ambalaža se tada ne menja. Isto pravilo dobija i Oporavak „Prevezi prijemnicu" (P1). |
 | **`LZP-ODL-08`** | **R2 ulaz:** F4, radnja nad redom prijemnice „Premesti na zbirnu", pa izbor ciljne izdate zbirne. |
 | **`LZP-ODL-09`** | **R3 trag:** `tblPrijemnica` dobija `IspravkaOdID` i `ZamenjenSaID` **na kraju** kanona (`schema/schema.json` → `tools/gen_schema_module.py`), kao `tblZbirna` (`LNC-ODL-16`), plus red u `tblStornoVeze`. |
-| **`LZP-ODL-10`** | **R3 broj:** nova verzija prijemnice nosi **isti broj** — broj je obično kupčev papir; identitet nosi `PrijemnicaID` (obrazac `GeneracijaID` iz `ZBR_IDENTITET.md`). Stara je stornirana, pa među aktivnima nema duplikata. |
+| **`LZP-ODL-10`** | **R3 broj (eksterni kupac):** nova verzija prijemnice nosi **isti broj** — broj je kupčev papir; identitet nosi `PrijemnicaID` (obrazac `GeneracijaID` iz `ZBR_IDENTITET.md`). Postojeće pravilo to već dozvoljava: za eksternog kupca broj drži samo AKTIVNA prijemnica (`modDokumenta.PrijemnicaBrojRazlog`, A2 t. 4). Zato se u transakciji **stara stornira pre upisa nove**; globalna provera duplikata ostaje netaknuta i bez izuzetka (dopuna posle pregleda 16.11.2026). |
 | **`LZP-ODL-11`** | **R3 palete:** ako nova verzija nema klasu koju palete nose, ili je paleta već u preradi, potez se odbija pre potvrde i imenuje palete; operater ih prvo rešava na ekranu Palete. |
 | **`LZP-ODL-12`** | **R3 ulaz i obim:** F4, radnja „Ispravi" nad redom otvara formu sa starim podacima (kao F1 „Ispravi blok"). Menjaju se kg, klase, cena, gajbe i datum. Zbirna je R2; kupac i vozač su van plana (R5). |
 | **`LZP-ODL-13`** | **P1 ide pre R1** kao mali rez: test koji pada (cilj nacrt / drugi kupac / drugi vozač), pa kapija vlasnika (`ZbirnaRoditeljPrijemnice`) u `ReassignPrijemnicaToZbirna_TX` i u listi ciljeva Oporavka. |
 | **`LZP-ODL-14`** | **P2 ide uz R1:** R1 upućuje na F8 PONIŠTENJE, pa taj put mora da odbije fakturisanu prijemnicu **pre** dijaloga i da je imenuje. Test koji prvo pada. |
+| **`LZP-ODL-15`** | **R3 ne važi za kupca hladnjaču** (odluka 16.11.2026, posle pregleda). Za kupca hladnjaču broj prijemnice je NAŠ niz (1/ddmmyy-n) i storno ga ne oslobađa (`PrijemnicaBrojRazlog`), pa „isti broj" tu nije moguć. Ispravka takve prijemnice se odbija pre potvrde i upućuje na današnji put; dosledno izuzimanju hladnjačkog lanca (`LNC-ODL-14`), slučaj ostaje za R6. |
+| **`LZP-ODL-16`** | **R3 odbija fakturisanu prijemnicu** (odluka 16.11.2026, posle pregleda). Linija fakture nosi `PrijemnicaStavkaID` (FAK-LIN-02), pa bi nova verzija sa novim stavkama izgledala kao nefakturisana roba, a faktura bi i dalje pokazivala na stare stavke. Dok postoji aktivna faktura nad prijemnicom, ispravka se odbija pre potvrde i imenuje fakturu. Korektivni postupak (knjižno odobrenje, SEF) ostaje van plana (12.4). Ovo se razlikuje od `LZP-ODL-04`: R1 i R2 prijemnicu samo prevezuju, stavke i faktura ostaju iste. |
 
 **Nasleđeno bez novih pitanja (§1–§11):** jedna transakcija (`LNC-ODL-01`); nova verzija zbirne sa
 brojem iz generatora, nasleđuje datum, vozača, kupca, `KupacHladnjaca` i pogon (`LNC-ODL-17`,
@@ -811,6 +814,18 @@ poteza (`LNC-ODL-23`).
 | **R1** | „Dodaj otpremnicu" / „Izvadi otpremnicu" u izdatoj zbirnoj, i uz aktivnu ili fakturisanu prijemnicu; premeštanje A → B kao dva poteza | kostur `LncPotezNadBlokom`; deo zbirne' iz `LncSastavi` izdvojen u zajedničko telo; `ZbrZaglavljeVerzije`; `CreateZbirna` sa postojećim kapijama izvora (izdata, nije u drugoj zbirnoj, isti vozač, ista vrsta/sorta/tip); `LncPrijemniceZbirne`, `LncPreveziPrijemnicu`; `LncKontekstPar(FLOW_DOC_ZBIRNA)`; `LncNedovrsenKontekstRazlog`, `ZbirnaCekaIspravkuPrijemniceRazlog`; `LncNapomenaKolicine`, `LncUpisiUpozorenjeUTrag`; seam `mPotvrdaLancaTest`; obrazac „cilj" iz `modScrDokumenti` | ne (zbirna ne knjiži gajbe, otpremnica ostaje izdata) / ne (`tblZbirna` već ima trag) | M |
 | **R2** | Aktivna (i fakturisana) prijemnica prelazi na pravu izdatu zbirnu istog kupca i vozača, po ID-u, bez storna; palete i faktura ostaju | `ReassignPrijemnicaToZbirna_TX` posle P1; `PoveziDeteNaZbirnu`; `LncNapomenaPrijemnice` za PAZNJA na obe zbirne; trag u `tblStornoVeze` | ne / ne | S–M |
 | **R3** | F4 „Ispravi" prijemnice jednim potezom: storno stare, nova verzija istog broja, palete prevezane i trag po ID-u u istoj transakciji — bez prozora i bez SAFE-STOP-a | `PrepoznajIspravkuPrijemnice`, `SavePrijemnicaDokument`, `StornoPrijemnica(…, tx, False)`, `ReassignPaleteToPrijemnica_TX` (varijanta sa tx), `PaletaAdjustPrompt`, odlaganje `AMB-10-ODL-40` prošireno na noge prijemnice, kapije `PrijemnicaRoditeljRazlog` / `PrijemnicaRobaRazlog` / `PrijemnicaBrojRazlog` | da (noge prijemnice, neto) / da (`LZP-ODL-09`) | L |
+
+**Uslovi prihvatanja koje je dodao pregled 16.11.2026:**
+- **R1:** test dokazuje da se posle uspešnog poteza **ne menja nijedna stavka fakture**, i da se
+  veze otpremnica, prijemnica i nove zbirne mogu rekonstruisati **samo preko identiteta** (ID-jevi i
+  trag u `tblStornoVeze`), bez poslovnog broja.
+- **R3 je HOLD za dizajn** dok pre-flight ne zatvori tri ugovora: (1) identitet i broj verzije
+  (`LZP-ODL-10`, `-15`); (2) fakturisane stavke (`LZP-ODL-16`); (3) **jedna transakcija** za storno
+  stare, upis nove, kontra-stav ambalaže, prevezivanje paleta i trag. Postojeći
+  `modPaletniList.ReassignPaleteToPrijemnica_TX` pravi **sopstvenu** transakciju i ne sme se zvati
+  kao nezavisno knjiženje usred poteza; treba varijanta koja prima zajednički `tx`, uz test: pad
+  posle prevezivanja paleta vraća sve — prijemnice, paletne stavke, ambalažu i trag.
+- R3 je zaseban ozbiljan domenski zahvat, ne „mali nastavak" LNC-a.
 
 **Predlog invarijanti R1** (potvrđuje pre-flight R1): `LZP-INV-01` izvađena otpremnica ostaje
 izdata, nestornirana i slobodna (čeka zbirnu); `LZP-INV-02` zbirna' nosi tačno preostale i dodate
@@ -841,3 +856,22 @@ ZBIRNE.
 - Trka malina sync-a između dva koraka premeštanja.
 - Učestalost na terenu, osim dva podatka iz C002.
 - Da li SEF API stvarno dozvoljava storno u statusima SEEN / PAID.
+
+### 12.6 Nezavisni pregled plana (16.11.2026)
+
+Spoljni pregled #477 (čitanje koda nad `6b601ee1`), ocena plana 8,7/10. Nalazi i kako su ugrađeni:
+
+| Nalaz | Verdikt pregleda | Ugrađeno |
+|---|---|---|
+| P1: `ReassignPrijemnicaToZbirna_TX` ne zove `ZbirnaRoditeljPrijemnice` | potvrđen uzrok čitanjem; fix pre R1/R2 | 12.1, `LZP-ODL-13` |
+| R3 „isti broj" i kupac hladnjača (`PrijemnicaBrojRazlog`: storno ne oslobađa naš broj) | HOLD za dizajn | `LZP-ODL-10` precizirano, `LZP-ODL-15` |
+| R3 i fakturisana prijemnica (linija fakture nosi `PrijemnicaStavkaID`) | prva verzija da odbija | `LZP-ODL-16` |
+| R3 atomarnost paleta (`ReassignPaleteToPrijemnica_TX` ima svoju transakciju) | obavezna zajednička transakcija i test povraćaja | 12.3, uslovi R3 |
+| R1 dokaz: faktura netaknuta, veze samo po identitetu | uslov prihvatanja | 12.3, uslovi R1 |
+| R1 nad izdatom zbirnom; poslednja otpremnica; R2 isti kupac i vozač; R2 bez storna | GO za pre-flight | bez izmene |
+| R1 uz fakturisanu prijemnicu | uslovni GO (dokazati sledljivost i upozorenje) | `LZP-ODL-04`, uslovi R1 |
+| R5 promena vozača/kupca | odložiti | 12.4 |
+
+Proveru tri tvrdnje o R3 (broj kod hladnjače, sopstvena transakcija paleta, veza fakture sa
+stavkom) ponovio sam u kodu: sve tri tačne. Pregled ne tvrdi da je §12 izvršno testiran — #477 je
+samo dokumentacija.
