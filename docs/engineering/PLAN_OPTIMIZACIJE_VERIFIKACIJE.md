@@ -140,6 +140,21 @@ izvan testova skoro nema skrivenog vremena.
   tri testa snimanja po 5,6 s i `T_TxRollback_NepotpunZatvaraUpisISnimanje`
   11,4 s. To su testovi samog snimanja, pa ih tihi režim (S-1) ne skraćuje.
 
+**S-1 izmeren (16.11.2026, Windows, grana `claude/s1-tihi-rezim` @`52e69af3`)**
+`[M]`. Tihi režim CSV dnevnika i zakazivanja AutoSave-a u `RunAllTests`-u i BFP-u,
+jedno merenje po stanju:
+
+| Suita | Pre | Posle | Razlika |
+|---|---|---|---|
+| `RunAllTests` | 230,9 s, 354 testa (234,9 s na osnovnoj grani `claude/run-vba-ugovor`) | 222,2 s, 355 | −8,7 do −12,7 s (−4 do −5%) |
+| BFP | 703,7 s, 414 testova, 3487 provera | 651,2 s, 415, 3488 | −52,5 s (−7,5%) |
+| Obe | 934,6 s | 873,4 s | −61,2 s (−6,5%) |
+
+Razlika kod `RunAllTests`-a je blizu šuma jednog merenja; kod BFP-a nije.
+`Test_OTP_AutoKvarGrupeNeObaraOstale` 75,2 → 69,5 s. Režija 5,9 s (zatvaranje
+2,5 s) je u šumu i ne pripisuje se S-1. Dvosmerni dokaz `s1-*`: 3/3, „DOKAZANO
+(izbor)". Isti dobitak važi po prolazu dokaza koji vrti obe suite.
+
 Analize se oko trajanja punog kataloga razilaze (40–100 h pojedinačno, 7–20 h
 grupno), zavisno od toga koja trajanja suita uzimaju. Ništa od toga nije mereno;
 plan nosi ceo raspon.
@@ -349,7 +364,7 @@ celog kataloga do commit-a, a F-2 i F-8 daju isto ubrzanje bez tog slabljenja.
 
 | ID | Stavka | Dobitak | Rizik | Trud | Gde | Kriterijum prihvatanja |
 |---|---|---|---|---|---|---|
-| **S-1** | Tihi režim journal-a i loga u `RunAllTests`, BFP i ostalim suitama; gašenje `OnTime` tajmera na kraju suite; jedan imenovan test tvrdi journal i zakazivanje, sa svojom sabotažom (`T-03`) | hipoteza 5–25% trajanja `[?]`; uklanja kandidata za „RPC failed" posle 10 min | nizak za journal (0 sabotaža usidreno u ta tri modula `[M]`); srednji za log: tihi režim loga danas ne postoji (nov prekidač u `modLogError`), a testovi koji tvrde AutoSave ili log moraju ga lokalno gasiti | S–M | W | isti skup imena i isti `TESTS`/`FAIL`; nov test pada na svoju sabotažu |
+| **S-1** | Tihi režim journal-a i loga u `RunAllTests`, BFP i ostalim suitama; gašenje `OnTime` tajmera na kraju suite; jedan imenovan test tvrdi journal i zakazivanje, sa svojom sabotažom (`T-03`). **Delom urađeno (16.11.2026):** journal i zakazivanje AutoSave-a u `RunAllTests` i BFP, test 355 i BFP provera, sabotaže `s1-*`; tihi režim loga (`modLogError`) i ostale suite nisu | hipoteza 5–25% trajanja `[?]`; **izmereno 6,5% obe suite, BFP 7,5%** `[M]` (§2.2); uklanja kandidata za „RPC failed" posle 10 min | nizak za journal (0 sabotaža usidreno u ta tri modula `[M]`); srednji za log: tihi režim loga danas ne postoji (nov prekidač u `modLogError`), a testovi koji tvrde AutoSave ili log moraju ga lokalno gasiti | S–M | W | isti skup imena i isti `TESTS`/`FAIL`; nov test pada na svoju sabotažu |
 | **S-2** | BFP log u memoriji umesto 7 ćelija po tvrdnji; VBE prozor se sakriva posle compile probe (`T-04`) | 1–5 s po BFP prolazu `[?]` | bafer se gubi ako Excel padne, zato M-4 pre; menja ugovor (N6) | S | W | list sa logom identičan po redovima; `last_run_bfp.txt` identičan |
 | **S-3** | „Neočekivan dijalog = pad" se sprovodi; `MsgBox` se preskače pod harnesom (`RV-10`) | pouzdanost; oko 11 dijaloga manje po FULL-u | dira 7 test modula; menja ugovor (N6) | S–M | L + W | dijalog u suiti sa `dialogs: False` → rc=2 po imenu; FULL bez reda `DIALOG` |
 | **S-4a** | Svaki ciljani test sam: `dokaz.py --izolacija` nad celim katalogom, noću (`T-09`, `P5`) | izmeren spisak testova koji sami ne prolaze; uslov da izbor postane podrazumevan | 545 podizanja Excela, oko 3,3 h `[I]` | S | W | spisak imena; namerno zavisan test je u njemu |
@@ -491,6 +506,9 @@ N-4 nije u talasima jer je odluka (O-1), a P-1 je isto što i F-6.
   fiksnog čekanja pri gašenju) i R-4 (paralelni radnici), a sledeća poluga su
   D-2 (izbor u rezu), S-1 (tihi režim) i najskuplji testovi iz merenja po testu
   (S-5): jedan BFP test od 75 s nosi 11% suite.
+  **S-1 posle G0 (16.11.2026):** −6,5% obe suite (§2.2), na donjoj granici
+  hipoteze. `Test_OTP_AutoKvarGrupeNeObaraOstale` (69,5 s, 10,7% BFP-a) je sam
+  skuplji od cele uštede S-1, pa je on prvi kandidat za S-5.
 - **G1, posle D-2 i S-4a.** Izbor postaje podrazumevan u rezu kad je razlika
   prema celoj suiti nula nad najmanje 50 sabotaža **i** kad postoji spisak testova
   koji sami ne prolaze. Za release (O-1, V2) traži se nula nad najmanje 100.
