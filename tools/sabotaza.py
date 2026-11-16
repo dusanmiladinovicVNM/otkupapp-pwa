@@ -72,9 +72,13 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 """
 
 import argparse
+import contextlib
+import io
 import os
 import re
+import shutil
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ESCN = "\n"
@@ -13441,40 +13445,70 @@ def _zameni(path: str, staro: str, novo: str) -> tuple[bool, int]:
     return True, 1
 
 
-def primeni(ime: str) -> int:
+# CILJ PRIMENE (D-6). Bez `src` se kvari radni `src-vba`, kao do sada -- to je
+# rucni dvosmerni dokaz iz CLAUDE.md. `dokaz.py` uvek daje `--src` sa SVOJOM
+# kopijom izvora, pa radno stablo tokom dokaza niko ne pise: operater sme da
+# radi, hook ostaje cist, a prekinut dokaz ne ostavlja pokvaren izvor.
+# SRC_VBA se cita tek pri pozivu, ne pri uvozu -- na tome stoji self-test.
+def primeni(ime: str, src: str = None) -> int:
+    src = src or SRC_VBA
     fajl, staro, novo, test, tvrdnja = SABOTAZE[ime]
-    path = os.path.join(SRC_VBA, fajl)
+    path = os.path.join(src, fajl)
 
     ok, pogodaka = _zameni(path, staro, novo)
     if not ok:
         razlog = ("sabotaza je vec primenjena" if pogodaka == 0
                   else "sidro nije jednoznacno")
         print(f"sabotaza '{ime}': sidro nadjeno {pogodaka} puta u {fajl}, a mora "
-              f"tacno jednom ({razlog}) -- proveri src-vba/{fajl} i sidro u "
+              f"tacno jednom ({razlog}) -- proveri {path} i sidro u "
               f"tools/sabotaza.py", file=sys.stderr)
         return 2
 
-    print(f"sabotaza '{ime}' primenjena u src-vba/{fajl}")
+    print(f"sabotaza '{ime}' primenjena u {path}")
     print(f"  ocekuj:  FAIL {test}")
     print(f"  tvrdnja: {tvrdnja}")
     print(f"  pokreni: python tools/run_vba.py --suite {_suita_testa(test)}")
-    print("  vrati:   python tools/sabotaza.py --vrati")
+    print("  vrati:   python tools/sabotaza.py --vrati"
+          + ("" if src == SRC_VBA else " --src " + src))
     return 0
 
 
-def vrati() -> int:
+def vrati(src: str = None) -> int:
     """Obrnuta zamena, ne git checkout (v. zamka 3)."""
+    src = src or SRC_VBA
     vraceno = []
     for ime, (fajl, staro, novo, _, _) in SABOTAZE.items():
-        ok, _ = _zameni(os.path.join(SRC_VBA, fajl), novo, staro)
+        path = os.path.join(src, fajl)
+        if not os.path.exists(path):
+            continue
+        ok, _ = _zameni(path, novo, staro)
         if ok:
             vraceno.append(ime)
 
     if not vraceno:
-        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u src-vba/")
+        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u %s" % src)
         return 0
     print("vraceno: " + ", ".join(vraceno))
     return 0
+
+
+def zatecene(src: str = None) -> list:
+    """Imena sabotaza cija ZAMENA vec stoji u `src` -- izvor je zatecen sabotiran.
+
+    Isto pravilo kao `vrati` (pogodak zamene vezan za pocetak reda), ali bez
+    upisa. `dokaz.py` ga pita nad svojim snimkom: sabotaza zaostala iz ranijeg
+    prekida inace bi usla u snimak i svaka mutacija bi se merila nad njom.
+    Fajl koga u `src` nema se preskace (kopija moze da nosi samo deo izvora).
+    """
+    src = src or SRC_VBA
+    tekstovi, nadjene = {}, []
+    for ime, (fajl, _staro, novo, _, _) in SABOTAZE.items():
+        if fajl not in tekstovi:
+            path = os.path.join(src, fajl)
+            tekstovi[fajl] = _procitaj(path)[0] if os.path.exists(path) else None
+        if tekstovi[fajl] is not None and _pogodaka(tekstovi[fajl], novo) > 0:
+            nadjene.append(ime)
+    return nadjene
 
 
 # --- staticka provera kataloga --------------------------------------------
@@ -14616,10 +14650,15 @@ def _self_test() -> int:
     # koje `--vrati` ne ume da vrati. Zove se BAS _zameni, ista funkcija koju
     # zove --vrati, i to nad KOPIJOM pravog fajla -- da self-test ni u jednom
     # ishodu ne moze da upise u src-vba.
+    #
+    # Kopija ide u PRIVREMENI folder, ne pored pravog fajla: dok postoji, fajl u
+    # src-vba bi menjao potpis izvora (dokaz.py, vba_gate), pa bi istovremen
+    # dokaz video "izvor se promenio" bez ijedne izmene koda.
     n += 1
     izvor = os.path.join(SRC_VBA, "modOtkupUI.bas")
     tekst_kopije, nl_kopije = _procitaj(izvor)
-    kopija = izvor + ".selftest.tmp"
+    privremeni = tempfile.mkdtemp(prefix="sabotaza_st_")
+    kopija = os.path.join(privremeni, "modOtkupUI.bas")
     _upisi(kopija, tekst_kopije, nl_kopije)
     try:
         ok_vise, k_vise = _zameni(kopija, _ST_PRAVI, "    Nesto = 2" + ESCN)
@@ -14628,7 +14667,7 @@ def _self_test() -> int:
                                   "    Nesto = 2" + ESCN)
         dirnuto = _procitaj(kopija)[0] != tekst_kopije
     finally:
-        os.remove(kopija)
+        shutil.rmtree(privremeni, ignore_errors=True)
     if ok_vise or k_vise < 2 or ok_nema or k_nema != 0 or dirnuto:
         print("SELF-TEST: _zameni prihvata stanje koje provera ne priznaje "
               "(visestruko=%r, nema=%r, upisano=%r)"
@@ -14682,11 +14721,67 @@ def _self_test() -> int:
         print("SELF-TEST: zamena kao podniz sidra nije prijavljena", file=sys.stderr)
         lose += 1
 
+    # --src (D-6): primena pise u ZADATI folder, nikad u SRC_VBA, i `zatecene`
+    # i `vrati` vide bas taj folder. Ide kroz main(), isti put kojim ga zove
+    # dokaz.py -- otkacen --src u main-u bi inace ostavio i ovaj slucaj zelen.
+    # SRC_VBA za to vreme pokazuje na MAMAC, pa ni crveni smer ne dira src-vba.
+    n += 1
+    problem = _self_test_src()
+    if problem:
+        print("SELF-TEST: SRC -- %s" % problem, file=sys.stderr)
+        lose += 1
+
     if lose:
         print("self-test: %d od %d slucajeva NE MERI" % (lose, n), file=sys.stderr)
         return 1
     print("self-test: cisto (%d slucajeva)" % n)
     return 0
+
+
+def _self_test_src() -> str:
+    """'' ili opis kvara: primena, zatecene i vrati nad --src, uz mamac SRC_VBA."""
+    global SRC_VBA
+    ime = fajl = None
+    for kandidat, (f, staro, _novo, _t, _tv) in SABOTAZE.items():
+        path = os.path.join(SRC_VBA, f)
+        if os.path.exists(path) and _pogodaka(_procitaj(path)[0], staro) == 1:
+            ime, fajl = kandidat, f
+            break
+    if ime is None:
+        return "nijedno sidro iz kataloga se ne primenjuje -- nema nad cim da se meri"
+
+    pravi = SRC_VBA
+    privremeni = tempfile.mkdtemp(prefix="sabotaza_src_")
+    try:
+        mamac = os.path.join(privremeni, "mamac")
+        cilj = os.path.join(privremeni, "cilj")
+        for d in (mamac, cilj):
+            os.makedirs(d)
+            shutil.copy2(os.path.join(pravi, fajl), d)
+        original = _procitaj(os.path.join(cilj, fajl))[0]
+        SRC_VBA = mamac
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            pre = zatecene(cilj)
+            rc = main([ime, "--src", cilj])
+            posle = zatecene(cilj)
+            mamac_dirnut = _procitaj(os.path.join(mamac, fajl))[0] != original
+            cilj_dirnut = _procitaj(os.path.join(cilj, fajl))[0] != original
+            rc_vrati = main(["--vrati", "--src", cilj])
+        vracen = _procitaj(os.path.join(cilj, fajl))[0] == original
+    finally:
+        SRC_VBA = pravi
+        shutil.rmtree(privremeni, ignore_errors=True)
+
+    if mamac_dirnut:
+        return "primena pise van --src (u SRC_VBA)"
+    if rc != 0 or not cilj_dirnut:
+        return "primena nije upisala u --src (rc=%r)" % rc
+    if pre or posle != [ime]:
+        return "zatecene ne vidi bas primenjenu sabotazu (pre=%r, posle=%r)" % (pre, posle)
+    if rc_vrati != 0 or not vracen:
+        return "vrati --src ne vraca zadati folder"
+    return ""
 
 
 def lista() -> int:
@@ -14707,7 +14802,13 @@ def main(argv: list[str]) -> int:
                     help="staticka provera kataloga (sidra, imena testova, zamke)")
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da svako pravilo provere stvarno meri")
+    ap.add_argument("--src", metavar="DIR",
+                    help="primeni/vrati u ovaj folder umesto u src-vba "
+                         "(dokaz.py daje svoju kopiju izvora)")
     args = ap.parse_args(argv)
+    if args.src is not None and not os.path.isdir(args.src):
+        print(f"--src {args.src}: folder ne postoji", file=sys.stderr)
+        return 2
 
     if args.self_test:
         return _self_test()
@@ -14716,7 +14817,7 @@ def main(argv: list[str]) -> int:
     if args.lista:
         return lista()
     if args.vrati:
-        return vrati()
+        return vrati(args.src)
     if not args.ime:
         ap.print_help()
         return 2
@@ -14724,7 +14825,7 @@ def main(argv: list[str]) -> int:
         print(f"nepoznata sabotaza '{args.ime}'. Poznate: {', '.join(SABOTAZE)}",
               file=sys.stderr)
         return 2
-    return primeni(args.ime)
+    return primeni(args.ime, args.src)
 
 
 if __name__ == "__main__":

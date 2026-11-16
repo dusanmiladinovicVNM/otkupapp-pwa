@@ -337,8 +337,8 @@ def _has_vb_header(path: str) -> bool:
     return "Attribute VB_Name" in first or first.lstrip().upper().startswith("VERSION")
 
 
-def report_orphan_components(wb, log: list[str]) -> None:
-    """Moduli koji postoje u svesci a NEMA ih u src-vba/.
+def report_orphan_components(wb, log: list[str], src: str = SRC_VBA) -> None:
+    """Moduli koji postoje u svesci a NEMA ih u src-vba/ (ili u `--src`).
 
     Import prepisuje samo ono sto repo ima; zaostao modul iz donora ostaje i
     izvrsava se. Ako nosi Public ime koje postoji i u svezem kodu, VBA to vidi kao
@@ -351,7 +351,7 @@ def report_orphan_components(wb, log: list[str]) -> None:
     """
     STD, CLS, FRM = 1, 2, 3          # vbext_ct_StdModule / ClassModule / MSForm
     have = {os.path.splitext(n)[0].lower()
-            for n in os.listdir(SRC_VBA)
+            for n in os.listdir(src)
             if os.path.splitext(n)[1] in (".bas", ".cls", ".frm")}
 
     orphans = []
@@ -372,9 +372,14 @@ def report_orphan_components(wb, log: list[str]) -> None:
                    f"(mogu da daju 'Ambiguous name'): " + ", ".join(sorted(orphans)))
 
 
-def import_src_vba(wb, log: list[str]) -> None:
+def import_src_vba(wb, log: list[str], src: str = SRC_VBA) -> None:
+    """Uvezi izvor iz `src` (podrazumevano src-vba/).
+
+    `src` drugaciji od src-vba daje dokaz.py (D-6): mutacija se primenjuje u
+    njegovoj kopiji izvora, pa radno stablo tokom dokaza niko ne pise.
+    """
     proj = wb.VBProject
-    files = sorted(os.listdir(SRC_VBA))
+    files = sorted(os.listdir(src))
 
     # 1) document moduli (.doccls) -- kod se MERGE-uje u postojecu komponentu
     #
@@ -394,7 +399,7 @@ def import_src_vba(wb, log: list[str]) -> None:
         cm = vbc.CodeModule
         if cm.CountOfLines > 0:
             cm.DeleteLines(1, cm.CountOfLines)
-        cm.AddFromString(_read_code_body(os.path.join(SRC_VBA, name)))
+        cm.AddFromString(_read_code_body(os.path.join(src, name)))
 
     if missing:
         log.append(f"SKIP {len(missing)} .doccls (nema komponente u svesci): "
@@ -407,9 +412,9 @@ def import_src_vba(wb, log: list[str]) -> None:
             continue
         if base.lower() == SELF_MODULE.lower():
             continue
-        path = os.path.join(SRC_VBA, name)
+        path = os.path.join(src, name)
 
-        if ext == ".frm" and not os.path.exists(os.path.join(SRC_VBA, base + ".frx")):
+        if ext == ".frm" and not os.path.exists(os.path.join(src, base + ".frx")):
             log.append(f"SKIP {name} (nema .frx para)")
             continue
 
@@ -466,14 +471,20 @@ def self_test() -> int:
     kraj = sopstveni.find("\ndef ", poc + 1)
     tudje = sopstveni[:poc] + sopstveni[kraj if kraj > 0 else len(sopstveni):]
     for tekst, opis in (
-            ('_gate.snimi_kontekst(sveska=fixture,\n'
+            ('_gate.snimi_kontekst(src_dir=src, sveska=fixture,\n'
              '                                               sveska_hes_iz=wbpath)',
              "main() ne snima kontekst dokaza PRE run-a, nad temp kopijom "
-             "sveske"),
+             "sveske i nad izvorom koji se stvarno uvozi (--src)"),
             ('_gate.zabelezi_prolaz(\n'
-             '                report, rc, args.no_import, kontekst=kontekst_dokaza)',
-             "main() ne predaje SNIMLJEN kontekst, nego pusta da se otisci "
-             "racunaju na kraju run-a"),
+             '                report, rc, args.no_import, kontekst=kontekst_dokaza, src_dir=src)',
+             "main() ne predaje SNIMLJEN kontekst, ili marker racuna otisak nad "
+             "src-vba umesto nad uvezenim izvorom (--src)"),
+            ('import_src_vba(wb, report["import"], src)\n'
+             '            report_orphan_components(wb, report["import"], src)',
+             "main() uvozi src-vba umesto izvora iz --src (D-6: dokaz bi merio "
+             "radno stablo, ne svoju kopiju)"),
+            ('    src, razlog = izvor_iz_argumenata(args)',
+             "main() ne proverava --src pre Excela"),
             ('lines.append(f"GREEN   {report[\'green\']}")',
              "izvestaj ne ispisuje red GREEN -- upis markera bi bio nevidljiv"),
     ):
@@ -482,6 +493,7 @@ def self_test() -> int:
 
     leaks.extend(_self_test_izbor(tudje))
     leaks.extend(_self_test_prekid(tudje))
+    leaks.extend(_self_test_src())
 
     for line in leaks:
         print(line, file=sys.stderr)
@@ -1106,6 +1118,143 @@ def create_blank_fixture(path: str, win32) -> None:
         pythoncom.CoUninitialize()
 
 
+# --- izvor (D-6) ---------------------------------------------------------------
+
+def izvor_iz_argumenata(args) -> tuple:
+    """(apsolutna putanja izvora, razlog odbijanja ili "").
+
+    Bez `--src` je to src-vba/. Folder bez ijednog .bas fajla nije izvor nego
+    greska u pozivu: uvoz bi prosao bez ijednog modula, a suite bi pala na
+    "Cannot run the macro" -- razlog bi pokazivao na VBA, ne na poziv.
+    """
+    if not getattr(args, "src", None):
+        return SRC_VBA, ""
+    src = os.path.abspath(args.src)
+    if not os.path.isdir(src):
+        return src, "--src %s: folder ne postoji" % src
+    if not any(n.lower().endswith(".bas") for n in os.listdir(src)):
+        return src, "--src %s: nema nijednog .bas fajla" % src
+    return src, ""
+
+
+def _self_test_src() -> list:
+    """--src (D-6): uvoz i trazenje siroceta citaju BAS zadati folder.
+
+    Lazna sveska belezi putanje koje joj se uvoze; SRC_VBA za to vreme pokazuje
+    na MAMAC sa istim imenima, pa uvoz iz pogresnog foldera pada po imenu.
+    """
+    nalazi = []
+    global SRC_VBA
+    uvezeno, tela = [], []
+
+    class _Kod:
+        CountOfLines = 0
+
+        def DeleteLines(self, *_a):
+            pass
+
+        def AddFromString(self, s):
+            tela.append(s)
+
+        def AddFromFile(self, p):
+            uvezeno.append(p)
+
+    class _Komp:
+        def __init__(self, ime, tip=1):
+            self.Name, self.Type, self.CodeModule = ime, tip, _Kod()
+
+    class _Komponente:
+        def __init__(self, imena):
+            self.d = {i.lower(): _Komp(i) for i in imena}
+            # dokument modul (Type 100): .doccls se u njega MERGE-uje
+            self.d["thisworkbook"] = _Komp("ThisWorkbook", 100)
+
+        def __call__(self, ime):
+            return self.d[ime.lower()]
+
+        def __iter__(self):
+            return iter(list(self.d.values()))
+
+        def Remove(self, _k):
+            pass
+
+        def Import(self, p):
+            uvezeno.append(p)
+
+        def Add(self, _tip):
+            return _Komp("novi")
+
+    class _Sveska:
+        def __init__(self, imena):
+            self.VBProject = type("P", (), {})()
+            self.VBProject.VBComponents = _Komponente(imena)
+
+    pravi = SRC_VBA
+    privremeni = tempfile.mkdtemp(prefix="run_vba_src_")
+    try:
+        cilj = os.path.join(privremeni, "cilj")
+        mamac = os.path.join(privremeni, "mamac")
+        # Mamac nosi DRUGACIJI skup modula (modStari umesto modB): sirocad
+        # racunata prema pogresnom folderu tako daju drugaciji spisak, pa se
+        # i ta zamena vidi -- sa istim imenima bi bila nevidljiva.
+        for d, imena in ((cilj, ("modA.bas", "modB.bas")),
+                         (mamac, ("modA.bas", "modStari.bas"))):
+            os.makedirs(d)
+            for ime in imena:
+                with open(os.path.join(d, ime), "w", newline="\r\n") as fh:
+                    fh.write('Attribute VB_Name = "%s"\n' % ime[:-4])
+            # .doccls ide drugim putem (merge u postojecu komponentu), pa ga
+            # telo razlikuje: uvoz iz pogresnog foldera nosi rec MAMAC.
+            with open(os.path.join(d, "ThisWorkbook.doccls"), "w",
+                      newline="\r\n") as fh:
+                fh.write("' %s\n" % ("CILJ" if d == cilj else "MAMAC"))
+        # Forma sa .frx parom SAMO u cilju: par trazen u pogresnom folderu
+        # daje "nema .frx para" i forma ispada iz uvoza.
+        with open(os.path.join(cilj, "frmA.frm"), "w", newline="\r\n") as fh:
+            fh.write("VERSION 5.00\n")
+        with open(os.path.join(cilj, "frmA.frx"), "wb") as fh:
+            fh.write(b"\0")
+        SRC_VBA = mamac
+        log: list = []
+        try:
+            import_src_vba(_Sveska([]), log, cilj)
+        except Exception as exc:            # noqa: BLE001 -- pad je nalaz, ne traceback
+            nalazi.append("SRC: uvoz iz --src je pukao (%s: %s) -- cita fajlove "
+                          "van zadatog foldera" % (type(exc).__name__, exc))
+        report_orphan_components(_Sveska(["modA", "modStari"]), log, cilj)
+        args = argparse.Namespace(src=cilj)
+        izv, razlog = izvor_iz_argumenata(args)
+        prazan = os.path.join(privremeni, "prazan")
+        os.makedirs(prazan)
+        _i, razlog_prazan = izvor_iz_argumenata(argparse.Namespace(src=prazan))
+        _i, razlog_nema = izvor_iz_argumenata(
+            argparse.Namespace(src=os.path.join(privremeni, "nema")))
+    finally:
+        SRC_VBA = pravi
+        shutil.rmtree(privremeni, ignore_errors=True)
+    bez, razlog_bez = izvor_iz_argumenata(argparse.Namespace(src=None))
+
+    if tela != ["' CILJ"]:
+        nalazi.append("SRC: .doccls se ne uvozi iz --src foldera (tela: %r)" % tela)
+    if not uvezeno or any(os.path.dirname(p) != cilj for p in uvezeno):
+        nalazi.append("SRC: uvoz ne cita zadati --src folder (uvezeno: %r)"
+                      % [os.path.basename(os.path.dirname(p)) for p in uvezeno])
+    if sorted(os.path.basename(p) for p in uvezeno) != ["frmA.frm", "modA.bas",
+                                                         "modB.bas"]:
+        nalazi.append("SRC: uvoz iz --src nije uvezao tacno modA, modB i frmA (%r)"
+                      % sorted(os.path.basename(p) for p in uvezeno))
+    sirocad = [r for r in log if r.startswith("ORPHAN")]
+    if len(sirocad) != 1 or "modStari" not in sirocad[0] or "modA" in sirocad[0]:
+        nalazi.append("SRC: sirocad se ne racunaju prema --src folderu (%r)" % sirocad)
+    if razlog or izv != cilj:
+        nalazi.append("SRC: ispravan --src je odbijen (%r)" % razlog)
+    if not razlog_prazan or not razlog_nema:
+        nalazi.append("SRC: --src bez .bas fajlova ili nepostojeci folder je prihvacen")
+    if razlog_bez or bez != pravi:
+        nalazi.append("SRC: bez --src izvor nije src-vba/")
+    return nalazi
+
+
 # --- Glavni tok --------------------------------------------------------------
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -1129,6 +1278,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--bez-markera", action="store_true",
                     help="ne upisuj marker zelenog (dokaz.py nad namerno pokvarenim "
                          "izvorom, KI-036)")
+    ap.add_argument("--src", metavar="DIR",
+                    help="uvezi izvor iz ovog foldera umesto iz src-vba/ (dokaz.py "
+                         "daje svoju kopiju, D-6); marker nosi otisak SADRZAJA, pa "
+                         "vazi za src-vba tacno kad je sadrzaj isti")
     ap.add_argument("--self-test", action="store_true",
                     help="provere koje ne traze Excel (radi i na Linux/macOS)")
     ap.add_argument("--ignore-fixture-sig", action="store_true",
@@ -1303,6 +1456,10 @@ def main(argv: list[str]) -> int:
     if razlog:
         print("IZBOR: " + razlog, file=sys.stderr)
         return 2
+    src, razlog = izvor_iz_argumenata(args)
+    if razlog:
+        print("IZVOR: " + razlog, file=sys.stderr)
+        return 2
 
     if os.name != "nt":
         print("run_vba.py radi samo na Windows-u (Excel COM).", file=sys.stderr)
@@ -1374,12 +1531,14 @@ def main(argv: list[str]) -> int:
             "_vba_gate_za_run", os.path.join(ROOT, "tools", "vba_gate.py"))
         _gate = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_gate)
-        kontekst_dokaza = _gate.snimi_kontekst(sveska=fixture,
+        kontekst_dokaza = _gate.snimi_kontekst(src_dir=src, sveska=fixture,
                                                sveska_hes_iz=wbpath)
     except Exception as exc:                # noqa: BLE001
         kontekst_greska = "snimak konteksta nije uzet -- %s" % exc
 
     report: dict = {"workbook": fixture, "import": [], "compile": None, "suites": [], "dialogs": []}
+    if src != SRC_VBA:
+        report["izvor_dir"] = src
     rc = 2
     xl = None
     pid = None
@@ -1412,8 +1571,8 @@ def main(argv: list[str]) -> int:
         zabelezi_fazu("otvaranje sveske")
 
         if not args.no_import:
-            import_src_vba(wb, report["import"])
-            report_orphan_components(wb, report["import"])
+            import_src_vba(wb, report["import"], src)
+            report_orphan_components(wb, report["import"], src)
             zabelezi_fazu("uvoz src-vba")
 
         # COMPILE PROBA SAMO UZ --compile-only.
@@ -1612,7 +1771,7 @@ def main(argv: list[str]) -> int:
             report["green"] = "marker nije upisan: " + kontekst_greska
         else:
             report["green"] = _gate.zabelezi_prolaz(
-                report, rc, args.no_import, kontekst=kontekst_dokaza)
+                report, rc, args.no_import, kontekst=kontekst_dokaza, src_dir=src)
     except Exception as exc:                # noqa: BLE001
         report["green"] = "marker nije upisan: %s" % exc
 
@@ -1678,6 +1837,8 @@ def _write_report(report: dict, rc: int) -> None:
         json.dump(report, fh, ensure_ascii=False, indent=2)
 
     lines = []
+    if report.get("izvor_dir"):
+        lines.append(f"IZVOR   {report['izvor_dir']}")
     for msg in report["import"]:
         lines.append(f"IMPORT  {msg}")
 
