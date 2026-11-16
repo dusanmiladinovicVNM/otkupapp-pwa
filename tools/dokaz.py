@@ -116,12 +116,29 @@ def _suite_izbor() -> set:
     return {ime for ime, meta in modul.SUITES.items() if meta.get("izbor")}
 
 
-def _run_suite(suite: str, testovi=None) -> tuple:
-    """Argumenti za `run_vba.py`: cela suite, ili samo `testovi` iz nje."""
+def _run_suite(suite: str, testovi=None, bez_markera: bool = False) -> tuple:
+    """Argumenti za `run_vba.py`: cela suite, ili samo `testovi` iz nje.
+
+    `bez_markera` je za prolaz nad MUTIRANIM izvorom (KI-036): zelen prolaz u
+    kome sabotaza ne obori nista inace upise marker zelenog nad izvorom koji
+    nije cist.
+    """
     a = (sys.executable, "tools/run_vba.py", "--suite", suite)
     for test in testovi or ():
         a += ("--test", test)
+    if bez_markera:
+        a += ("--bez-markera",)
     return a
+
+
+def _fatal(izlaz: str) -> str:
+    """Tekst reda FATAL iz izlaza run_vba, ili "" -- Excel je ubijen ili pukao.
+
+    Bez ovoga je ubijen prolaz izgledao kao "NE OBARA NISTA" (nema FAIL redova)
+    ili kao "nema oznacenog reda TESTS", a razlog (faza, dijalog) se gubio.
+    """
+    m = re.search(r"^FATAL\s+(.*)$", izlaz, re.M)
+    return m.group(1).strip() if m else ""
 
 
 def _otisak() -> str:
@@ -208,6 +225,9 @@ def _baza_zelena(suite: str, testovi=None) -> tuple:
     except subprocess.TimeoutExpired:
         return False, f"{suite}: timeout"
     izlaz = r.stdout + r.stderr
+    fatal = _fatal(izlaz)
+    if fatal:
+        return False, f"{suite}: EXCEL UBIJEN -- {fatal[:160]}"
 
     # Red je oznacen imenom suite-a, pa se dve suite u istom run-u ne mesaju.
     m = re.search(r"TESTS\s+" + re.escape(suite) + r": (\d+) ukupno, (\d+) palo",
@@ -431,8 +451,15 @@ def _prolaz(clanovi: list, pre: str, grupno: bool, izbor=frozenset(),
     try:
         # Izbor je isti kao u bazi (svi clanovi, i oni ciji se sidro nije
         # primenilo): baza je merila TAJ spisak, pa se meri on.
-        run = _pusti(*_run_suite(suite, testovi))
-        pali = _pali(run.stdout + run.stderr, suite)
+        run = _pusti(*_run_suite(suite, testovi, bez_markera=True))
+        izlaz = run.stdout + run.stderr
+        fatal = _fatal(izlaz)
+        if fatal:
+            # Prolaz nije stigao do kraja, pa njegovi FAIL redovi (ili njihov
+            # izostanak) ne kazu nista o tvrdnji -- isto kao timeout.
+            greska = "EXCEL UBIJEN -- %s" % fatal[:160]
+        else:
+            pali = _pali(izlaz, suite)
     except subprocess.TimeoutExpired:
         greska = "TIMEOUT suite"
     except KeyboardInterrupt:
@@ -999,6 +1026,34 @@ def _self_test(tiho: bool = False) -> int:
     tvrdi(rez["stop"].startswith("REVERT-FAIL")
           and not any(p for _s2, p, _st, _c in rez["ishodi"]),
           "PROLAZ: nevracen izvor ne zaustavlja dokaz niti gasi priznanja")
+
+    # --- KI-036: prolaz nad mutiranim izvorom ne pise marker zelenog ---------
+    _rez, pozivi = prolaz([g3[0]], SVE, grupno=False)
+    tvrdi([("--bez-markera" in r) for r in suita(pozivi)] == [True],
+          "KI-036: prolaz nad mutiranim izvorom moze da upise marker zelenog")
+    tvrdi("--bez-markera" not in _run_suite(SUITE_ALL)
+          and "--bez-markera" not in _run_suite(SUITE_ALL, ["T_A"]),
+          "KI-036: bazni prolaz (cist izvor) ne sme da gasi upis markera")
+
+    # --- FATAL iz run_vba: ubijen prolaz nije ishod sabotaze -----------------
+    UBIJEN = ("FATAL   Excel se nije vratio 15s posle dijaloga u fazi "
+              "'RunAllTests' -- proces je ubijen.\n")
+    rez, _p = prolaz([g3[0]], UBIJEN, grupno=False)
+    tvrdi([(s["ime"], p, st.split(" --")[0]) for s, p, st, _c in rez["ishodi"]]
+          == [("a", False, "EXCEL UBIJEN")],
+          "FATAL: ubijen prolaz se ocenjuje kao ishod sabotaze (NE OBARA NISTA)")
+    rez, _p = prolaz(g3, UBIJEN)
+    tvrdi(sorted(s["ime"] for s, _r in rez["ostatak"]) == ["a", "b", "c"]
+          and not rez["ishodi"],
+          "FATAL: ubijen grupni prolaz se ne rastura na pojedinacna merenja")
+    pravi_pusti = _pusti
+    globals()["_pusti"] = lambda *a, **kw: _LazniOdgovor(2, UBIJEN)
+    try:
+        ok, opis = _baza_zelena(SUITE_ALL)
+    finally:
+        globals()["_pusti"] = pravi_pusti
+    tvrdi(not ok and "EXCEL UBIJEN" in opis,
+          "FATAL: ubijena baza se prijavljuje kao 'nema reda TESTS' umesto razloga")
 
     # --- izbor: samo ciljani testovi, uz bazu nad ISTIM izborom -------------
     #
