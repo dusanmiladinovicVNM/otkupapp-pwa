@@ -29313,7 +29313,7 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     Dim otpT As String, otpN As String, otpI As String, otpH As String
     Dim blokH As String, blokC As String, r As Collection, k As Long
     Dim okH As Boolean, okI As Boolean, okJ As Boolean, okK As Boolean, okM As Boolean, okN As Boolean
-    Dim okL As Boolean
+    Dim okL As Boolean, okI2 As Boolean, nmStT As String, idStT As String
     Dim tx As clsTransaction
     Dim errNum As Long, errDesc As String
 
@@ -29367,7 +29367,11 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     ' tekst); (d2) meri da je odbijenica citljiva (rucna provera 15.11.2026).
     AssertTrue LncDodajOdbijen(otpT, otkK, "kultur"), _
                "LNCD9 (d): blok druge kulture se odbija pre potvrde"
-    AssertTrue LncDodajOdbijen(otpT, otkK, "je druge kulture ("), _
+    ' Nazivi obe kulture (sifarnik: KUL-90002 = vrsta bez sorte, KUL-90001 = vrsta i
+    ' sorta) -- ID umesto naziva na bilo kojoj strani obara tvrdnju.
+    AssertTrue LncDodajOdbijen(otpT, otkK, "je druge kulture (" & TEST_VRSTA_BEZ_SORTE & _
+                               ") od otpremnice " & LncOtpPolje(otpT, COL_OTP_BROJ) & " (" & _
+                               TEST_VRSTA & " " & TEST_SORTA & ") --"), _
                "LNCD9 (d2): odbijenica za drugu kulturu imenuje kulture, ne KulturaID"
     AssertTrue LncDodajOdbijen(otpT, otkG, "nosi gajbe tipa " & tipG & ", a otpremnica"), _
                "LNCD9 (e): blok drugog tipa gajbi se odbija citljivo, tipovi po imenu"
@@ -29386,7 +29390,15 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     Const STA_D9 As String = "ST-OGLTEST-90087"
     HldStanicaSaOznakom STA_D9, "Ne"
     otkM = HldBlok("LNCD9X-" & scenario, STA_D9, datT, 100#, 50#, 0, 0#, 0#, 0)
-    If Len(otkM) > 0 Then okL = LncDodajOdbijen(otpT, otkM, "je sa otkupnog mesta TEST STANICA " & STA_D9)
+    ' Obe strane po nazivu; naziv otkupnog mesta otpremnice se cita iz sifarnika i
+    ' mora da se razlikuje od ID-a, inace igla ne bi razlikovala naziv od ID-a.
+    idStT = LncOtpPolje(otpT, COL_OTP_STANICA)
+    nmStT = Trim$(NzToText(LookupValue(TBL_STANICE, COL_STA_ID, idStT, "Naziv")))
+    If Len(otkM) > 0 And Len(nmStT) > 0 And StrComp(nmStT, idStT, vbTextCompare) <> 0 Then
+        okL = LncDodajOdbijen(otpT, otkM, "je sa otkupnog mesta TEST STANICA " & STA_D9 & _
+                              ", a otpremnica " & LncOtpPolje(otpT, COL_OTP_BROJ) & _
+                              " sa otkupnog mesta " & nmStT & " --")
+    End If
     ' (h) stari oblik: otpremnica bez tipa ambalaze, blok sa gajbama.
     S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otpT, COL_OTP_TIP_AMB, ""
     okH = LncDodajOdbijen(otpT, otkG, "nema tip ambalaze")
@@ -29397,6 +29409,10 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
         RequireUpdateCell TBL_OTKUP_STAVKE, CLng(r(k)), COL_OKS_OTKUP_ID, "LNCD9-NEMA-" & scenario, SRC
     Next k
     okI = LncDodajOdbijen(otpT, otkZ, "nema stavke")
+    ' (i2) isti blok i sa druge stanice: kapija staje na stavkama (1289), pa
+    ' odbijenica nosi BAS taj razlog -- prevod nazivima vazi samo za 1239.
+    S6K4Postavi TBL_OTKUP, COL_OTK_ID, otkZ, COL_OTK_STANICA, STA_D9
+    okI2 = LncDodajOdbijen(otpT, otkZ, "nema stavke")
     ' Odmah nazad: strogi citac stavki (StavkeOtkupaRedovi) pada nad CELOM tabelom
     ' cim jedna stavka nema zaglavlje -- (n) pravi otpremnicu kroz njega.
     For k = 1 To r.count
@@ -29420,6 +29436,7 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
     AssertTrue okL, "LNCD9 (l): blok druge stanice se odbija citljivo, otkupno mesto po nazivu"
     AssertTrue okH, "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239"
     AssertTrue okI, "LNCD9 (i): blok bez stavki se odbija"
+    AssertTrue okI2, "LNCD9 (i2): blok bez stavki sa druge stanice -- odbijenica nosi pravi razlog kapije, ne prevod"
     AssertTrue okJ, "LNCD9 (j): neizdat blok se odbija"
     AssertTrue okK, "LNCD9 (k): neizvesnost (blok bez otkupnog mesta) odbija, fail-closed"
     AssertTrue okM, "LNCD9 (m): hladnjacki blok se ne dodaje rucno"

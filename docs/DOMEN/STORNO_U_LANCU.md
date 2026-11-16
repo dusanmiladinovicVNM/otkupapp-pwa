@@ -369,7 +369,15 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > 'ST-…'"); isto su radili druga kultura (zaglavlje sa kulturom) i drugi tip gajbi. Popravka:
 > plan prevodi razlog kapije u nazive (`LncDodajRazlogCitljiv`, zove se **samo** kad je
 > `OtpIzvorRazlog` već odbio — kapija ostaje jedna); LNCD9 (d2), (e), (l) i tri sabotaže
-> `lncb-dodaj-*-tehnicki`. BFP zelen 16.11.2026 (3478/3478); dokaz sabotaža čeka. Zatečeno, van ovog
+> `lncb-dodaj-*-tehnicki`. BFP zelen 16.11.2026 (3478/3478, `95caefe3`). **Review 16.11.2026 (4×
+> P3, sva četiri potvrđena):** (1) prevod je radio za SVAKO odbijanje kapije, pa je blok bez stavki
+> sa druge stanice dobijao razlog „otkupno mesto" umesto „nema stavke" — sada se prevodi samo razlog
+> `1239` (`RequireIstoPolje`: otkupno mesto, kultura, tip gajbi), pa je prvo neslaganje u prevodu
+> tačno ono na kome je kapija stala, a uslov gajbi u prevodu više ne treba; (2)–(3) (d2) i (l) su
+> merili okvir rečenice, ne nazive — sada mere nazive obe strane; (4) neproveren uslov gajbi je
+> uklonjen sa (1). Nova tvrdnja (i2), sabotaža `lncb-dodaj-prevod-svake-odbijenice`, a
+> `-stanica-` i `-kultura-tehnicki` sada vraćaju ID umesto naziva. **Čeka ponovni pun `run_vba` i
+> dokaz.** Zatečeno, van ovog
 > reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
 > Kozmetika potvrde: skraćivanje (`LncDijalogTekst`, 1000 znakova) seče usred reči.
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije

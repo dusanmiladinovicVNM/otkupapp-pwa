@@ -8009,7 +8009,7 @@ SABOTAZE = {
     # (LNC-INV-18).
     "lncb-dodaj-kapija-samo-u-tx": (
         "modDokumenta.bas",
-        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)\n",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)\n",
         "        raz = \"\"   ' SABOTAZA: kapije izvora samo u piscu\n",
         "Test_LNC_Blok_DodajOdbijen",
         "LNCD9 (d): blok druge kulture se odbija pre potvrde",
@@ -8018,8 +8018,8 @@ SABOTAZE = {
     # kulture odbija i blok iste kulture, koji bi pisac primio.
     "lncb-dodaj-kultura-zaglavlja": (
         "modDokumenta.bas",
-        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)\n",
-        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True)   ' SABOTAZA: meri prema zaglavlju\n",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)\n",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv)   ' SABOTAZA: meri prema zaglavlju\n",
         "Test_LNC_Blok_DodajStaraBezKulture",
         "LNCDK: blok iste kulture ulazi u staru otpremnicu bez kulture",
     ),
@@ -8033,22 +8033,32 @@ SABOTAZE = {
     ),
     # Rucna provera 15.11.2026: Dodaj iz liste "Bez otpremnice" odbija blok druge
     # stanice tekstom kapije ("Izvor OTK-... ima drugo polje StanicaID: ocekivano
-    # 'ST-...'"). Svaka grana citljivog prevoda ima svoju sabotazu i svoju tvrdnju.
+    # 'ST-...'"). Review 16.11.2026: tvrdnje mere NAZIVE na obe strane, a prevod
+    # vazi samo za razlog 1239 -- svaka sabotaza obara svoju tvrdnju.
+    # Otkupno mesto se pokazuje kao ID (obe strane poruke).
     "lncb-dodaj-stanica-tehnicki": (
         "modDokumenta.bas",
-        "    If StrComp(a, b, vbTextCompare) <> 0 Then\n"
-        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" je sa otkupnog mesta \" & StanicaOpisZaPoruku(b) & _\n",
-        "    If False Then   ' SABOTAZA: druga stanica tekstom kapije\n"
-        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" je sa otkupnog mesta \" & StanicaOpisZaPoruku(b) & _\n",
+        "    v = Trim$(NzToText(LookupValue(TBL_STANICE, COL_STA_ID, stanicaID, \"Naziv\")))\n",
+        "    v = \"\"   ' SABOTAZA: otkupno mesto kao ID\n",
         "Test_LNC_Blok_DodajOdbijen",
         "LNCD9 (l): blok druge stanice se odbija citljivo, otkupno mesto po nazivu",
     ),
+    # Kultura bloka se pokazuje kao KulturaID.
     "lncb-dodaj-kultura-tehnicki": (
         "modDokumenta.bas",
-        "    If StrComp(kulVer, b, vbTextCompare) <> 0 Then\n",
-        "    If False Then   ' SABOTAZA: druga kultura tekstom kapije\n",
+        "        If Len(b) = 0 Then b = \"bez kulture\" Else b = KulturaOpisZaPoruku(b)\n",
+        "        If Len(b) = 0 Then b = \"bez kulture\"   ' SABOTAZA: kultura bloka kao ID\n",
         "Test_LNC_Blok_DodajOdbijen",
         "LNCD9 (d2): odbijenica za drugu kulturu imenuje kulture, ne KulturaID",
+    ),
+    # Prevod i kad kapija odbija DRUGIM razlogom (nema stavke): operater vidi
+    # neslaganje otkupnog mesta umesto razloga na kome je kapija stala.
+    "lncb-dodaj-prevod-svake-odbijenice": (
+        "modDokumenta.bas",
+        "            If errIzv = vbObjectError + 1239 Then\n",
+        "            If True Then   ' SABOTAZA: prevod i za razlog koji nije 1239\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (i2): blok bez stavki sa druge stanice -- odbijenica nosi pravi razlog kapije, ne prevod",
     ),
     "lncb-dodaj-tip-gajbi-tehnicki": (
         "modDokumenta.bas",

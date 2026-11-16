@@ -3974,12 +3974,16 @@ Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As Strin
         End If
         ' Sve ostale kapije izvora -- ISTO telo kao pisac (OtpProveriIzvor): izdat,
         ' stavke, stanica, kultura, tip ambalaze, slobodan.
-        Dim raz As String
-        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, , kulVer)
+        Dim raz As String, errIzv As Long
+        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)
         If Len(raz) > 0 Then
-            ' Kapija ostaje JEDNA (pisac); ovde se samo njen razlog kaze nazivima.
-            p("razlog") = LncDodajRazlogCitljiv(otpremnicaID, otkupID, kulVer, _
-                                                CStr(p("otpBroj")), CStr(p("otkupBroj")), SRC)
+            ' Kapija ostaje JEDNA (pisac). Nazivima se kaze SAMO njen razlog "drugo
+            ' polje" (1239, RequireIstoPolje: otkupno mesto, kultura, tip gajbi);
+            ' svaki drugi (nema stavke, nije izdat) ostaje tekst kapije.
+            If errIzv = vbObjectError + 1239 Then
+                p("razlog") = LncDodajRazlogCitljiv(otpremnicaID, otkupID, kulVer, _
+                                                    CStr(p("otpBroj")), CStr(p("otkupBroj")))
+            End If
             If Len(CStr(p("razlog"))) = 0 Then
                 p("razlog") = "Blok " & p("otkupBroj") & " ne moze u otpremnicu " & p("otpBroj") & ": " & raz
             End If
@@ -4654,12 +4658,15 @@ End Function
 ' Citljiv razlog odbijanja "Dodaj" za tri neslaganja koja operater stvarno sretne
 ' u listi "Bez otpremnice": otkupno mesto, kultura, tip gajbi (rucna provera
 ' 15.11.2026: "Izvor OTK-... ima drugo polje StanicaID: ocekivano 'ST-...'").
-' Zove se SAMO kad je OtpIzvorRazlog vec odbio -- kapija ostaje jedna, ovo samo
-' imenuje razlog nazivima. Uslovi su isti kao u OtpProveriIzvor (isti redosled,
-' tip samo kad blok nosi gajbe). "" = nijedno od tri; tada ostaje tekst kapije.
+' Zove se SAMO kad je kapija (OtpIzvorRazlog) odbila sa 1239 -- RequireIstoPolje u
+' OtpProveriIzvor, cija su jedina tri poredjenja na tom putu otkupno mesto,
+' kultura (prema kulturi nove verzije) i tip gajbi, tim redom. Prvo neslaganje
+' ovde je zato tacno ono na kome je kapija stala; tip je kapija merila samo jer
+' blok nosi gajbe, pa uslov gajbi ovde ne treba. Kapija ostaje jedna, ovo samo
+' imenuje njen razlog nazivima. "" = nijedno od tri; tada ostaje tekst kapije.
 Private Function LncDodajRazlogCitljiv(ByVal otpID As String, ByVal otkupID As String, _
                                        ByVal kulVer As String, ByVal otpBroj As String, _
-                                       ByVal otkBroj As String, ByVal src As String) As String
+                                       ByVal otkBroj As String) As String
     Dim a As String, b As String
     a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
     b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA)))
@@ -4679,7 +4686,6 @@ Private Function LncDodajRazlogCitljiv(ByVal otpID As String, ByVal otkupID As S
                                 "pa se blok ne dodaje."
         Exit Function
     End If
-    If OtpGajbeIzvora(otkupID, src) <= 0 Then Exit Function
     a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
     b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB)))
     If StrComp(a, b, vbTextCompare) <> 0 Then
