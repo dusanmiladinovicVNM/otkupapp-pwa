@@ -85,7 +85,8 @@ A13 već drži za otpremnicu (S3c).
 > pokreće sa **izvora** — storno ili ispravka otkupnog lista u izdatoj otpremnici i
 > zbirnoj, jedan potez: nova verzija otpremnice i zbirne, prijemnice prevezane po ID-u.
 > F8 nad zbirnom i dalje nudi samo `DUPLI` / `PONIŠTENJE`. U kodu od PR #471
-> (`modDokumenta.StornoListaULancu_TX` / `IspravkaListaULancu_TX`), NEVERIFIKOVANO u Excelu.
+> (`modDokumenta.StornoListaULancu_TX` / `IspravkaListaULancu_TX`); BFP zelen 08.11.2026
+> (3208/3208), Compile zelen 08.11.2026 — stanje u indeksu niže i u `STORNO_U_LANCU.md`.
 
 **ZBR-KANON-04 — izvedena činjenica živi tačno koliko i njen izvor (odluka
 operatera, 22.09.2026).** `VrstaVoca`, `SortaVoca` i `TipAmbalaze` na nacrtu
@@ -442,7 +443,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
 | Funkcionalne bele zone i product roadmap | `docs/DOMEN/FUNKCIONALNE_BELE_ZONE_I_ROADMAP.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
-| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..21`, `LNC-INV-01..11`); **§10: „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici** (`LNC-ODL-22..38`, `LNC-INV-12..21`) | `docs/DOMEN/STORNO_U_LANCU.md` — **§1–§9 u kodu (PR #471, #473); BFP zelen 08.11.2026 (3208/3208), RunAllTests 349/349, Compile zelen 08.11.2026; dokaz zelen za `lnc-stara-otp-*`, `lnc-neuskladjena-*` i `ki089-*`; dokaz ostalih `lnc-*`/`odl40-*` i rucna provera dijaloga cekaju. §10: pre-flight 08.11.2026; deo (a), jezgro u `modDokumenta` (`LncPlanBlok`, `IzvadiBlokULancu_TX`, `DodajBlokULancu_TX`, BFP `Test_LNC_Blok_*`), u kodu 10.11.2026; deo (b), ekran F1 (cilj, „Izvadi" / „Dodaj"), u kodu 10.11.2026; BFP zelen 15.11.2026 (3477/3477); pun `run_vba` (12 suita, i `RunAllTests`) zelen 16.11.2026 na `95caefe3` (BFP 3478/3478); dokaz novih sabotaža 87/87 zelen 16.11.2026 (na `95caefe3`); posle review-a 16.11.2026 (4× P3, `3f251d46`) pun prolaz zelen (BFP 3479/3479), čeka dokaz `lncb-dodaj`. §11 (KI-095 put 2): dokaz crveno → zeleno 15.11.2026** |
+| **Storno i ispravka otkupnog lista u lancu** — nova verzija otpremnice i zbirne, prijemnice prevezane (`LNC-ODL-01..21`, `LNC-INV-01..11`); **§10: „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici** (`LNC-ODL-22..38`, `LNC-INV-12..21`) | `docs/DOMEN/STORNO_U_LANCU.md` — **§1–§9 u kodu (PR #471, #473); BFP zelen 08.11.2026 (3208/3208), RunAllTests 349/349, Compile zelen 08.11.2026; dokaz zelen za `lnc-stara-otp-*`, `lnc-neuskladjena-*`, `ki089-*` i (16.11.2026) `lnc-f1-bez-potvrde`; dokaz ostalih `lnc-*`/`odl40-*` i rucna provera dijaloga cekaju. §10: pre-flight 08.11.2026; deo (a), jezgro u `modDokumenta` (`LncPlanBlok`, `IzvadiBlokULancu_TX`, `DodajBlokULancu_TX`, BFP `Test_LNC_Blok_*`), u kodu 10.11.2026; deo (b), ekran F1 (cilj, „Izvadi" / „Dodaj"), u kodu 10.11.2026; BFP zelen 15.11.2026 (3477/3477); pun `run_vba` (12 suita, i `RunAllTests`) zelen 16.11.2026 na `95caefe3` (BFP 3478/3478); dokaz novih sabotaža 87/87 (svaka sabotaža oborila svoj test) 16.11.2026 (na `95caefe3`); posle review-a 16.11.2026 (4× P3, `3f251d46`) pun prolaz zelen (BFP 3479/3479), čeka dokaz `lncb-dodaj`; Compile i ručna provera (operater) 16.11.2026. §11 (KI-095 put 2): test crveno → zeleno 15.11.2026, sabotaže `ki095-*` 9/9 16.11.2026 (u dokazu 87/87)** |
 | Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | **Faktura — identitet, linija, storno i SEF** (`FAK-IDENT-01/02`, `FAK-ODL-01..05`) | `docs/DOMEN/FAKTURA.md` |
