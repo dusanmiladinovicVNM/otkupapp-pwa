@@ -1937,6 +1937,27 @@ End Sub
 ' Sta ovaj test NE meri: da RunAllTests zaista zove PreuzmiIzbor. To se ne moze
 ' izmeriti iznutra (test radi usred tog prolaza), pa ga tvrdi
 ' `run_vba.py --self-test` nad izvorom.
+Private Sub T_TestIzbor_TacnoImeIJednokratno()
+    Dim zahtev As String
+
+    AssertEq NormalizujIzbor(" T_A, ,T_B "), ",T_A,T_B,", _
+             "izbor se normalizuje u ,ime,ime,"
+    AssertEq NormalizujIzbor(" , "), "", "spisak bez imena je prazan izbor"
+
+    AssertEq IzborSadrzi(",T_A,T_B,", "T_B"), True, "izbor nalazi svoje ime"
+    AssertEq IzborSadrzi(",T_AB,", "T_A"), False, "izbor T_AB ne pusta T_A"
+    AssertEq IzborSadrzi(",T_A,", "T_AB"), False, "izbor T_A ne pusta T_AB"
+
+    AssertEq IzborNepusteni(",T_A,T_B,", ",T_A,"), "T_B", _
+             "nepusten test iz izbora se imenuje"
+    AssertEq IzborNepusteni(",T_A,", ",T_A,"), "", "pusten izbor nema nepustenih"
+
+    zahtev = ",T_X,"
+    AssertEq PreuzmiIzbor(zahtev), ",T_X,", "prolaz preuzima zahtevan izbor"
+    AssertEq PreuzmiIzbor(zahtev), "", _
+             "izbor traje jedan prolaz -- sledeci RunAllTests je pun"
+End Sub
+
 ' TIHI REZIM GASI ZAKAZIVANJE, A BEZ NJEGA COMMIT ZAKAZUJE AUTOSAVE (S-1).
 '
 ' RunAllTests i BFP rade u tihom rezimu dnevnika, pa nijedan njihov commit vise
@@ -1981,27 +2002,6 @@ EH:
     modJournaling.SetTestModeQuiet bioTih
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_Journal_TihiRezimGasiZakazivanje", errDesc
-End Sub
-
-Private Sub T_TestIzbor_TacnoImeIJednokratno()
-    Dim zahtev As String
-
-    AssertEq NormalizujIzbor(" T_A, ,T_B "), ",T_A,T_B,", _
-             "izbor se normalizuje u ,ime,ime,"
-    AssertEq NormalizujIzbor(" , "), "", "spisak bez imena je prazan izbor"
-
-    AssertEq IzborSadrzi(",T_A,T_B,", "T_B"), True, "izbor nalazi svoje ime"
-    AssertEq IzborSadrzi(",T_AB,", "T_A"), False, "izbor T_AB ne pusta T_A"
-    AssertEq IzborSadrzi(",T_A,", "T_AB"), False, "izbor T_A ne pusta T_AB"
-
-    AssertEq IzborNepusteni(",T_A,T_B,", ",T_A,"), "T_B", _
-             "nepusten test iz izbora se imenuje"
-    AssertEq IzborNepusteni(",T_A,", ",T_A,"), "", "pusten izbor nema nepustenih"
-
-    zahtev = ",T_X,"
-    AssertEq PreuzmiIzbor(zahtev), ",T_X,", "prolaz preuzima zahtevan izbor"
-    AssertEq PreuzmiIzbor(zahtev), "", _
-             "izbor traje jedan prolaz -- sledeci RunAllTests je pun"
 End Sub
 
 ' ID PARCELE JE SKRIVENA DRUGA KOLONA combo-a, kao kod svih ostalih dropdown-a
