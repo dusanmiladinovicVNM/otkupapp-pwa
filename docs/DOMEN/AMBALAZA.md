@@ -3213,7 +3213,7 @@ manjak stanice pre potvrde `LncDodajManjakStanice`; BFP `Test_LNC_Blok_IzvadiAmb
 `Test_LNC_Blok_DodajAmbalaza` zelen u punom `run_vba` 16.11.2026 na `3f251d46` (3479/3479, RunID
 20261116124815-8803); sabotaže `lncb-izvadi-meri-usred`, `lncb-izvadi-bez-poruke-odl23`,
 `lncb-dodaj-meri-usred`, `lncb-dodaj-manjak-samo-u-tx` u dokazu 87/87 (svaka sabotaža oborila svoj
-test) na `95caefe3`; `lncb-dodaj-*` čekaju ponovni dokaz.
+test) na `95caefe3`, a `lncb-dodaj-*` ponovo 17/17 na `3f251d46` (16.11.2026).
 
 ### 6.15 Cena — posteno
 

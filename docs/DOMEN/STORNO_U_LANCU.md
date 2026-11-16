@@ -385,8 +385,8 @@ i (16.11.2026, u dokazu 87/87, §10) `lnc-f1-bez-potvrde`; ostali `lnc-*` / `odl
 > `lnc-f1-bez-potvrde`, `lnc-stara-otp-ispravka-bez-lista`; grupno 81, pojedinačno 6 (dve koje u
 > grupi nisu oborile svoju tvrdnju sam su oborile); izvor pre/posle identičan. Na `3f251d46` pun
 > `run_vba` zelen 16.11.2026 — 12 suita, BFP 3479/3479 (RunID 20261116124815-8803, GREEN marker,
-> izvor `c745f687`); čeka ponovni dokaz `lncb-dodaj` (17), jer su `Test_LNC_Blok_DodajOdbijen` i pet
-> sabotaža menjani (nova `-prevod-svake-odbijenice`; `-stanica-` i `-kultura-tehnicki` vraćaju ID;
+> izvor `c745f687`); posle izmene `Test_LNC_Blok_DodajOdbijen` i pet sabotaža ponovljen je
+> dokaz `lncb-dodaj` 17/17 (svaka sabotaža oborila svoj test) 16.11.2026 na `3f251d46` (potpis `6e37b116`, grupno 11, pojedinačno 6, izvor identičan) -- menjane sabotaže (nova `-prevod-svake-odbijenice`; `-stanica-` i `-kultura-tehnicki` vraćaju ID;
 > pomereno sidro `-kapija-samo-u-tx`, `-kultura-zaglavlja`). Compile i ručna provera: operater,
 > 16.11.2026. Zatečeno, van ovog
 > reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
@@ -592,7 +592,7 @@ ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri 
 **Izmereno u Excelu:** BFP zelen 15.11.2026 (`8d8db7fd`, 3477/3477); pun `run_vba` (12 suita)
 zelen 16.11.2026 na `3f251d46` (BFP 3479/3479, `RunAllTests` 353/0, RunID 20261116124815-8803);
 dokaz 87/87 (svaka sabotaža oborila svoj test) na `95caefe3`; Compile i ručna provera (operater)
-16.11.2026. Čeka: ponovni dokaz `lncb-dodaj` (17).
+16.11.2026; dokaz `lncb-dodaj` 17/17 (svaka sabotaža oborila svoj test) 16.11.2026 na `3f251d46` (potpis `6e37b116`, grupno 11, pojedinačno 6, izvor identičan). Čeka merge.
 
 **Ručna provera (UAT), posle oba dela:** (1) premeštanje A → B u malina režimu sa sync-om između
 koraka — da li poruka kaže šta da se uradi i koliko se to dešava (okidač `LNC-ODL-23`); (2) operater
