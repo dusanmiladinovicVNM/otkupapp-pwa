@@ -199,6 +199,19 @@ def _pripremi_radni(sab, koren_src: str = None) -> tuple:
            "snimak": os.path.join(radni, "snimak", "src-vba"),
            "kopija": os.path.join(radni, "r1", "src-vba"),
            "alat": os.path.join(radni, "alat", "sabotaza.py")}
+    # Citanje ili kopiranje koje pukne je STOP sa razlogom, ne traceback; svaki
+    # drugi izlaz (i Ctrl+C usred kopiranja) brise polu-napravljen folder.
+    try:
+        return ctx, _napuni_radni(ctx, sab, koren_src)
+    except (OSError, UnicodeDecodeError) as exc:
+        return ctx, "priprema snimka nije uspela -- %s: %s" % (type(exc).__name__, exc)
+    except BaseException:
+        shutil.rmtree(radni, ignore_errors=True)
+        raise
+
+
+def _napuni_radni(ctx: dict, sab, koren_src: str) -> str:
+    """Telo pripreme; vraca problem ili ""."""
     for _pokusaj in (1, 2):
         shutil.rmtree(ctx["snimak"], ignore_errors=True)
         koren_pre = _otisak(koren_src)
@@ -206,20 +219,51 @@ def _pripremi_radni(sab, koren_src: str = None) -> tuple:
         if _otisak(ctx["snimak"]) == koren_pre == _otisak(koren_src):
             break
     else:
-        return ctx, ("src-vba se menjao dok se pravio snimak -- pusti dokaz "
-                     "ponovo kad izmena stane")
+        return ("src-vba se menjao dok se pravio snimak -- pusti dokaz ponovo "
+                "kad izmena stane")
     zatecene = sab.zatecene(ctx["snimak"])
     if zatecene:
-        return ctx, ("izvor je ZATECEN SABOTIRAN (%s%s) -- svaka mutacija bi se "
-                     "merila nad tom. Vrati: python tools/sabotaza.py --vrati"
-                     % (", ".join(zatecene[:5]),
-                        ", ..." if len(zatecene) > 5 else ""))
+        return ("izvor je ZATECEN SABOTIRAN (%s%s) -- svaka mutacija bi se merila "
+                "nad tom. Vrati: python tools/sabotaza.py --vrati"
+                % (", ".join(zatecene[:5]), ", ..." if len(zatecene) > 5 else ""))
     os.makedirs(os.path.dirname(ctx["alat"]))
     shutil.copy2(os.path.join(ROOT, "tools", "sabotaza.py"), ctx["alat"])
     shutil.copytree(ctx["snimak"], ctx["kopija"])
     if not _van_radnog_stabla(ctx["kopija"], ctx):
-        return ctx, "STRAZA: kopija za mutacije je u radnom stablu ili u snimku"
-    return ctx, ""
+        return "STRAZA: kopija za mutacije je u radnom stablu ili u snimku"
+    return ""
+
+
+def _koren_menjan(snimak: str, tokom, posle: str) -> bool:
+    """Da li se src-vba menjao OD SNIMKA: tokom nekog prolaza ili do kraja.
+
+    Poredi se sa potpisom snimka, ne sa uzorkom uzetim kasnije: priprema je
+    tvrdila da su snimak i src-vba isti u trenutku kopiranja, pa izmena tokom
+    baza (minuti) mora da se racuna -- uzorak posle baza bi je vec sadrzao i
+    proglasio stablo "nepromenjenim".
+    """
+    return any(k and k != snimak for k in tokom) or posle != snimak
+
+
+def _vrati_kopiju(ctx: dict, fajlovi, pre: str) -> str:
+    """Obnovi kopiju iz snimka i vrati njen potpis (jednak `pre` = uspeh).
+
+    Prvo samo `fajlovi`; ako potpis ne legne (zakljucan fajl, mutacija van
+    svog fajla) -- cela kopija, pa jos jednom.
+    """
+    sada = ""
+    try:
+        _obnovi(ctx, fajlovi)
+        sada = _otisak(ctx["kopija"])
+    except OSError:
+        sada = ""
+    if sada != pre:
+        try:
+            _obnovi(ctx, None)
+            sada = _otisak(ctx["kopija"])
+        except OSError as exc:
+            sada = "nije obnovljena: %s" % exc
+    return sada
 
 
 def _obnovi(ctx: dict, fajlovi=None) -> None:
@@ -528,8 +572,14 @@ def _prolaz(clanovi: list, pre: str, grupno: bool, izbor=frozenset(),
                 (s, False, "APPLY-FAIL -- v. sabotaza.py --proveri-sidra", False))
 
     if not primenjeni:
-        # Nista nije upisano u kopiju, pa nema ni sta da se vraca ni sta da se
-        # meri -- `primeni` je ili zamenio tacno jednom ili nije dirao fajl.
+        # Nista se nije PRIJAVILO kao primenjeno -- ali rc != 0 ne dokazuje da
+        # fajl nije pisan (npr. ispis posle upisa koji pukne). Kopija se zato
+        # vraca i ovde: mutacija koja ostane u njoj bila bi temelj svih sledecih
+        # prolaza.
+        sada = _vrati_kopiju(ctx, {s["fajl"] for s in clanovi}, pre)
+        if sada != pre:
+            rez["stop"] = ("REVERT-FAIL: kopija se ne vraca iz snimka (potpis %s)"
+                           % sada)
         return rez
 
     # Radno stablo POSLE primene: dokaz tvrdi da ga ne pise, pa to i meri.
@@ -562,22 +612,9 @@ def _prolaz(clanovi: list, pre: str, grupno: bool, izbor=frozenset(),
         greska = "PREKID"
     finally:
         # Kopija se vraca iz SNIMKA i kad je run pukao: fajlovi svih clanova
-        # (i onih ciji se sidro nije primenilo -- `primeni` tada nije pisao, pa
-        # je obnova bez stete). Snimak je istina, ne obrnuta zamena.
-        sada = ""
-        try:
-            _obnovi(ctx, {s["fajl"] for s in clanovi})
-            sada = _otisak(ctx["kopija"])
-        except OSError:
-            sada = ""
-        if sada != pre:
-            # Obnova po fajlu nije vratila potpis (zakljucan fajl, sabotaza koja
-            # pise van svog fajla): cela kopija iz snimka, pa jos jednom.
-            try:
-                _obnovi(ctx, None)
-                sada = _otisak(ctx["kopija"])
-            except OSError as exc:
-                sada = "nije obnovljena: %s" % exc
+        # (i onih ciji se sidro nije primenilo -- obnova je tada bez stete).
+        # Snimak je istina, ne obrnuta zamena.
+        sada = _vrati_kopiju(ctx, {s["fajl"] for s in clanovi}, pre)
 
     if sada != pre:
         rez["stop"] = "REVERT-FAIL: kopija se ne vraca iz snimka (potpis %s)" % sada
@@ -781,7 +818,9 @@ def main(argv: list) -> int:
             return 2
 
     pre = _otisak(ctx["snimak"])
-    koren_pre = _otisak()
+    # src-vba je bio jednak snimku u trenutku kopiranja (tvrdi _pripremi_radni);
+    # izmena tokom baza zato mora da se vidi -- ne uzima se nov uzorak.
+    koren_pre = pre
     koren_tokom = set()
     print("potpis izvora: %s (snimak; src-vba se ne pise)" % pre, flush=True)
 
@@ -895,9 +934,7 @@ def main(argv: list) -> int:
     lose = ostali
 
     posle = _otisak(ctx["snimak"])
-    koren_posle = _otisak()
-    koren_tokom.discard(koren_pre)
-    koren_menjan = bool(koren_tokom) or koren_posle != koren_pre
+    koren_menjan = _koren_menjan(pre, koren_tokom, _otisak())
     # PRIZNAT NALAZ SE VADI I IZ IMENIOCA, ne samo iz spiska problema.
     #
     # Bez toga priznanje radi samo za polovinu vrsta nalaza: "PALA DRUGA TVRDNJA"
@@ -1012,9 +1049,13 @@ def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
                        else tuple(sorted(fajlovi))))
         stanje["mutirano"] = False
 
+    # Potpis ZAVISI OD PUTANJE: `potpis` vazi samo za kopiju, sve ostalo
+    # (src-vba, snimak) je "P". Provera koja bi merila pogresno stablo -- npr.
+    # src-vba umesto kopije -- tako bi videla "P" i propustila nevracenu kopiju.
+    kopija = (ctx or _LAZNI_CTX)["kopija"]
     pravi = _pusti, _otisak, _obnovi
     globals()["_pusti"] = lazni_pusti
-    globals()["_otisak"] = lambda *a: potpis
+    globals()["_otisak"] = lambda put=None: potpis if put == kopija else "P"
     globals()["_obnovi"] = lazna_obnova
     try:
         rez = _prolaz(clanovi, "P", grupno, izbor, baze, ctx or _LAZNI_CTX)
@@ -1053,6 +1094,45 @@ def _self_test_d6(prolaz, suita) -> list:
         _rez, pozivi = prolaz([g2[0]], OBA, grupno=False, **kw)
         tvrdi(pozivi and pozivi[-1] == ("<obnova>", ("modA.bas",)),
               "D-6: kopija se ne vraca iz snimka posle %s" % opis)
+
+    # rc != 0 ne dokazuje da fajl nije pisan: kopija se vraca i kad se NIJEDNA
+    # primena ne prijavi, a nevracena kopija i tada zaustavlja dokaz.
+    rez, pozivi = prolaz(g2, OBA, pukli=("a", "b"))
+    tvrdi(not suita(pozivi) and pozivi[-1] == ("<obnova>", ("modA.bas", "modB.bas"))
+          and not rez["stop"],
+          "D-6: kopija se ne vraca kad nijedna primena nije prijavljena")
+    rez, _p = prolaz(g2, OBA, pukli=("a", "b"), potpis="DRUGI")
+    tvrdi(rez["stop"].startswith("REVERT-FAIL"),
+          "D-6: nevracena kopija bez prijavljene primene ne zaustavlja dokaz")
+
+    # Baza izbora i izolacija takodje mere KOPIJU.
+    IZB = frozenset({SUITE_ALL})
+    _rez, pozivi = prolaz(g2, OBA, izbor=IZB, baze={},
+                          izlaz_baze="TESTS   RunAllTests: 2 ukupno, 0 palo\n")
+    runovi = suita(pozivi)
+    tvrdi(len(runovi) == 2 and all(r[-2:] == ("--src", K) for r in runovi),
+          "D-6: baza izbora ne uvozi kopiju (--src), nego src-vba")
+    izol = []
+    pravi_pusti = _pusti
+    globals()["_pusti"] = lambda *a, **kw: (izol.append(a[1:]) or _LazniOdgovor(
+        0, "TESTS   RunAllTests: 1 ukupno, 0 palo\n"))
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            _izolacija([_s("a")], {SUITE_ALL}, K)
+    finally:
+        globals()["_pusti"] = pravi_pusti
+    tvrdi(izol and all(r[-2:] == ("--src", K) for r in izol),
+          "D-6: izolacija ne uvozi kopiju (--src), nego src-vba")
+
+    # Radno stablo se poredi sa SNIMKOM (izmena tokom baza mora da se vidi).
+    for opis, tokom, posle, ocekivano in (
+            ("nepromenjeno", {"S"}, "S", False),
+            ("promena tokom prolaza", {"S", "X"}, "S", True),
+            ("promena tokom baza (svaki uzorak je vec nov)", {"X"}, "X", True),
+            ("promena posle poslednjeg prolaza", {"S"}, "X", True),
+            ("prolaz bez primene (prazan uzorak)", {""}, "S", False)):
+        tvrdi(_koren_menjan("S", tokom, posle) == ocekivano,
+              "D-6: radno stablo -- %s -- daje %r" % (opis, not ocekivano))
 
     # Straza: cilj mutacije nikad nije src-vba ni snimak.
     tvrdi(not _van_radnog_stabla(SRC_VBA)
@@ -1105,6 +1185,21 @@ def _self_test_d6(prolaz, suita) -> list:
             tvrdi(_van_radnog_stabla(ctx["kopija"], ctx)
                   and not _u_stablu(ctx["kopija"], ctx["snimak"]),
                   "D-6: kopija je u snimku")
+            # PRAVA obnova nad pravim folderom: po fajlu, pa cela posle
+            # obrisanog fajla. Snimak se pri tome ne sme promeniti.
+            snimak_pre = _otisak(ctx["snimak"])
+            with open(os.path.join(ctx["kopija"], "modA.bas"), "a") as fh:
+                fh.write("' mutacija\n")
+            sada_fajl = _vrati_kopiju(ctx, {"modA.bas"}, snimak_pre)
+            os.remove(os.path.join(ctx["kopija"], "modB.bas"))
+            with open(os.path.join(ctx["kopija"], "modA.bas"), "a") as fh:
+                fh.write("' mutacija\n")
+            sada_cela = _vrati_kopiju(ctx, {"modA.bas"}, snimak_pre)
+            tvrdi(sada_fajl == snimak_pre and sada_cela == snimak_pre
+                  and _otisak(ctx["snimak"]) == snimak_pre,
+                  "D-6: prava obnova ne vraca kopiju u stanje snimka (po fajlu "
+                  "%s, cela %s), ili dira snimak" % (sada_fajl == snimak_pre,
+                                                     sada_cela == snimak_pre))
         finally:
             shutil.rmtree(ctx["radni"], ignore_errors=True)
         ctx, problem = _pripremi_radni(_LazniSab(["s-zaostala"]), koren)
@@ -1119,6 +1214,9 @@ def _self_test_d6(prolaz, suita) -> list:
     izvor_main = inspect.getsource(main)
     tvrdi("ctx, problem = _pripremi_radni(sab)" in izvor_main,
           "D-6: main ne pravi snimak i kopiju pre prve baze")
+    tvrdi("koren_pre = pre\n" in izvor_main
+          and "_koren_menjan(pre, koren_tokom, _otisak())" in izvor_main,
+          "D-6: main poredi radno stablo sa kasnijim uzorkom umesto sa snimkom")
     for ime, igla in (("_prolaz(", "ctx"), ("_baza_zelena(", 'src=ctx["kopija"]'),
                       ("_izolacija(", 'ctx["kopija"]')):
         redovi = [r for r in izvor_main.splitlines() if ime in r]

@@ -13464,13 +13464,22 @@ def primeni(ime: str, src: str = None) -> int:
               f"tools/sabotaza.py", file=sys.stderr)
         return 2
 
-    print(f"sabotaza '{ime}' primenjena u {path}")
+    # Ispis POSLE upisa ne sme da pukne: putanja kopije je pod %TEMP%, a izlaz
+    # prema dokaz.py je cev u kodnoj strani konzole -- "Đ" u imenu profila bi
+    # dao UnicodeEncodeError i rc != 0 uz vec upisanu mutaciju. Zato ASCII.
+    cilj = "src-vba" if src == SRC_VBA else _ascii(src)
+    print(f"sabotaza '{ime}' primenjena u {cilj}/{fajl}")
     print(f"  ocekuj:  FAIL {test}")
     print(f"  tvrdnja: {tvrdnja}")
     print(f"  pokreni: python tools/run_vba.py --suite {_suita_testa(test)}")
     print("  vrati:   python tools/sabotaza.py --vrati"
-          + ("" if src == SRC_VBA else " --src " + src))
+          + ("" if src == SRC_VBA else " --src " + cilj))
     return 0
+
+
+def _ascii(tekst: str) -> str:
+    """Tekst koji se sigurno ispisuje u bilo kojoj kodnoj strani."""
+    return tekst.encode("ascii", "backslashreplace").decode("ascii")
 
 
 def vrati(src: str = None) -> int:
@@ -13486,27 +13495,45 @@ def vrati(src: str = None) -> int:
             vraceno.append(ime)
 
     if not vraceno:
-        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u %s" % src)
+        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u %s"
+              % _ascii(src))
         return 0
     print("vraceno: " + ", ".join(vraceno))
     return 0
 
 
 def zatecene(src: str = None) -> list:
-    """Imena sabotaza cija ZAMENA vec stoji u `src` -- izvor je zatecen sabotiran.
+    """Imena sabotaza koje su PRIMENJENE u `src` -- izvor je zatecen sabotiran.
 
-    Isto pravilo kao `vrati` (pogodak zamene vezan za pocetak reda), ali bez
-    upisa. `dokaz.py` ga pita nad svojim snimkom: sabotaza zaostala iz ranijeg
-    prekida inace bi usla u snimak i svaka mutacija bi se merila nad njom.
+    `dokaz.py` ga pita nad svojim snimkom: sabotaza zaostala iz ranijeg prekida
+    inace bi usla u snimak i svaka mutacija bi se merila nad njom.
+
+    Primenjena je samo ako bi je `--vrati` vratio u stanje koje `primeni`
+    prihvata: zamena stoji TACNO jednom, a posle obrnute zamene sidro stoji
+    TACNO jednom. "Zamena se negde pojavljuje" nije dovoljno -- oko 120 zamena
+    je obican kod, pa bi legitimna kopija tog reda u zdravom izvoru bila
+    prijavljena, a savet `--vrati` bi je prepisao u sidro i pokvario izvor.
+    Sudar zamene sa zdravim kodom je nalaz kataloga (`--proveri-sidra`), ne ovaj.
+
     Fajl koga u `src` nema se preskace (kopija moze da nosi samo deo izvora).
+    Cita se uz `errors="replace"`: sabotaze su ASCII, pa ne-ASCII bajt u tudjem
+    fajlu ne menja odgovor -- a strogo citanje bi ga pretvorilo u traceback.
     """
     src = src or SRC_VBA
     tekstovi, nadjene = {}, []
-    for ime, (fajl, _staro, novo, _, _) in SABOTAZE.items():
+    for ime, (fajl, staro, novo, _, _) in SABOTAZE.items():
         if fajl not in tekstovi:
             path = os.path.join(src, fajl)
-            tekstovi[fajl] = _procitaj(path)[0] if os.path.exists(path) else None
-        if tekstovi[fajl] is not None and _pogodaka(tekstovi[fajl], novo) > 0:
+            tekst = None
+            if os.path.exists(path):
+                with open(path, "r", encoding="ascii", errors="replace",
+                          newline="") as fh:
+                    tekst = fh.read().replace("\r\n", "\n")
+            tekstovi[fajl] = tekst
+        t = tekstovi[fajl]
+        if t is None or _pogodaka(t, novo) != 1:
+            continue
+        if _pogodaka(t.replace("\n" + novo, "\n" + staro), staro) == 1:
             nadjene.append(ime)
     return nadjene
 
@@ -14751,16 +14778,21 @@ def _self_test_src() -> str:
         return "nijedno sidro iz kataloga se ne primenjuje -- nema nad cim da se meri"
 
     pravi = SRC_VBA
+    _f, staro, novo, _t, _tv = SABOTAZE[ime]
     privremeni = tempfile.mkdtemp(prefix="sabotaza_src_")
+    izlaz = io.StringIO()
     try:
         mamac = os.path.join(privremeni, "mamac")
-        cilj = os.path.join(privremeni, "cilj")
+        # Ne-ASCII u imenu cilja (kao "Đorđe" u putanji profila): ispis posle
+        # upisa mora ostati ASCII, inace bi dokaz.py video rc != 0 uz upisanu
+        # mutaciju.
+        cilj = os.path.join(privremeni, "cilj_\u0111")
         for d in (mamac, cilj):
             os.makedirs(d)
             shutil.copy2(os.path.join(pravi, fajl), d)
         original = _procitaj(os.path.join(cilj, fajl))[0]
         SRC_VBA = mamac
-        with contextlib.redirect_stdout(io.StringIO()), \
+        with contextlib.redirect_stdout(izlaz), \
                 contextlib.redirect_stderr(io.StringIO()):
             pre = zatecene(cilj)
             rc = main([ime, "--src", cilj])
@@ -14769,9 +14801,22 @@ def _self_test_src() -> str:
             cilj_dirnut = _procitaj(os.path.join(cilj, fajl))[0] != original
             rc_vrati = main(["--vrati", "--src", cilj])
         vracen = _procitaj(os.path.join(cilj, fajl))[0] == original
+        # Legitimna kopija ZAMENE u zdravom izvoru (sidro i dalje stoji) nije
+        # primenjena sabotaza: --vrati bi je prepisao u sidro.
+        put = os.path.join(cilj, fajl)
+        tekst, nl = _procitaj(put)
+        _upisi(put, tekst + novo, nl)
+        lazna = zatecene(cilj)
     finally:
         SRC_VBA = pravi
         shutil.rmtree(privremeni, ignore_errors=True)
+
+    try:
+        izlaz.getvalue().encode("ascii")
+    except UnicodeEncodeError:
+        return "ispis primene nije ASCII -- pukao bi u kodnoj strani konzole"
+    if ime in lazna:
+        return "legitimna kopija zamene uz zivo sidro se prijavljuje kao zatecena"
 
     if mamac_dirnut:
         return "primena pise van --src (u SRC_VBA)"
