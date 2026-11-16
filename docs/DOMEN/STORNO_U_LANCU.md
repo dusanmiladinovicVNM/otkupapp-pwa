@@ -359,8 +359,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > **Excel 16.11.2026:** pun `run_vba` zelen — 12 suita, među njima `RunAllTests` i BFP 3477/3477
 > (RunID 20261116065649-4255, GREEN marker upisan), na izvoru `bd0c468c` (otisak `968b5268`, isti kao
 > `8d8db7fd`). Prethodni puni prolazi nisu pali na kodu nego na tvrdom prekidu alata od 600 s za
-> **ceo** prolaz (`KI-096`). Popravka čitljivog odbijanja „Dodaj" (`95caefe3`, otisak `f133e75d`) još
-> **nije izmerena**.
+> **ceo** prolaz (`KI-096`). **Isti dan i na `95caefe3`** (čitljivo odbijanje „Dodaj", otisak
+> `f133e75d`): pun `run_vba` zelen, 12 suita, BFP 3478/3478 (RunID 20261116073849-9901, GREEN marker
+> upisan). Čekaju: dokaz `lncb`/`ki095`, Compile i ostatak ručne provere.
 > **Ručna provera 15.11.2026 (slike operatera):** izbor cilja, lista „Blokovi otpremnice" uz cilj,
 > potvrda „Izvadi" u zbirni sa prijemnicom (PAZNJA, kg/gajbe tačni, „Ne" podrazumevano), „Dodaj u
 > otpremnicu" uz cilj i odbijanje hladnjačke otpremnice — kako je opisano. **Nalaz:** „Dodaj" bloka
@@ -368,7 +369,7 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > 'ST-…'"); isto su radili druga kultura (zaglavlje sa kulturom) i drugi tip gajbi. Popravka:
 > plan prevodi razlog kapije u nazive (`LncDodajRazlogCitljiv`, zove se **samo** kad je
 > `OtpIzvorRazlog` već odbio — kapija ostaje jedna); LNCD9 (d2), (e), (l) i tri sabotaže
-> `lncb-dodaj-*-tehnicki`. **NEVERIFIKOVANO u Excelu** do sledećeg BFP prolaza. Zatečeno, van ovog
+> `lncb-dodaj-*-tehnicki`. BFP zelen 16.11.2026 (3478/3478); dokaz sabotaža čeka. Zatečeno, van ovog
 > reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
 > Kozmetika potvrde: skraćivanje (`LncDijalogTekst`, 1000 znakova) seče usred reči.
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
