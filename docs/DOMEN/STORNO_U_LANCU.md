@@ -379,8 +379,9 @@ parity, self-update kapije. **Excel nije pokrenut:** `RunBusinessFlowProSuite`, 
 > `-stanica-` i `-kultura-tehnicki` sada vraćaju ID umesto naziva. **Dokaz 16.11.2026 na `95caefe3`**
 > (potpis `4affec09`, pre ispravki iz review-a): 87/87 crveno — `lncb-*`, `ki095-*`,
 > `lnc-f1-bez-potvrde`, `lnc-stara-otp-ispravka-bez-lista`; grupno 81, pojedinačno 6 (dve koje u
-> grupi nisu oborile svoju tvrdnju sam su oborile); izvor pre/posle identičan. Posle `3f251d46` čeka
-> pun `run_vba` i ponovni dokaz `lncb-dodaj` (17), jer su taj test i tri sabotaže menjani. Zatečeno, van ovog
+> grupi nisu oborile svoju tvrdnju sam su oborile); izvor pre/posle identičan. Na `3f251d46` pun
+> `run_vba` zelen 16.11.2026 — 12 suita, BFP 3479/3479 (RunID 20261116124815-8803, GREEN marker,
+> izvor `c745f687`); čeka ponovni dokaz `lncb-dodaj` (17), jer su taj test i tri sabotaže menjani. Zatečeno, van ovog
 > reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
 > Kozmetika potvrde: skraćivanje (`LncDijalogTekst`, 1000 znakova) seče usred reči.
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
