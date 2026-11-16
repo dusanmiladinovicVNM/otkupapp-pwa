@@ -13402,6 +13402,38 @@ SABOTAZE = {
         "Test_BFP_IzborBiraCeloIme",
         "BFP izbor traje jedan prolaz -- sledeci prolaz je pun",
     ),
+    # S-1. Tihi rezim dnevnika vise ne gasi zakazivanje AutoSave-a: svaki commit
+    # u suite-u opet zakazuje OnTime. Nijedan drugi test to ne vidi -- suite
+    # ostaje zelena, samo sporija. Pada POSLEDNJA tvrdnja kapije; prve tri
+    # (rezim upaljen, preduslov, smer "bez tihog") moraju da prodju.
+    "s1-tihi-rezim-zakazuje": (
+        "modJournaling.bas",
+        "    If m_TestModeQuiet Then Exit Sub            ' test-mode: ne zakazuj AutoSave\n",
+        "    ' SABOTAZA: tihi rezim ne gasi zakazivanje AutoSave-a\n",
+        "T_Journal_TihiRezimGasiZakazivanje",
+        "tihi rezim ne zakazuje AutoSave",
+    ),
+    # S-1. RunAllTests ne pali tihi rezim -- suite opet pise CSV journal i
+    # zakazuje AutoSave po commit-u. Zelena bi ostala, samo sporija.
+    "s1-runalltests-nije-tih": (
+        "modTest.bas",
+        "    prevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    modJournaling.SetTestModeQuiet True\n",
+        "    prevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    ' SABOTAZA: RunAllTests ne pali tihi rezim\n",
+        "T_Journal_TihiRezimGasiZakazivanje",
+        "RunAllTests radi u tihom rezimu dnevnika",
+    ),
+    # S-1. Isto za BFP (BeginRun).
+    "s1-bfp-nije-tih": (
+        "modBusinessFlowProTests.bas",
+        "    m_BfpPrevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    modJournaling.SetTestModeQuiet True\n",
+        "    m_BfpPrevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    ' SABOTAZA: BFP ne pali tihi rezim\n",
+        "Test_BFP_TihiRezimDnevnika",
+        "BFP radi u tihom rezimu dnevnika do kraja suite",
+    ),
 }
 
 

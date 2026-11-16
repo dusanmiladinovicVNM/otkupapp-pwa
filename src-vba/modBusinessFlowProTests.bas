@@ -70,6 +70,10 @@ Private m_BfpVreme As String
 Private m_BfpKorak As String
 Private m_BfpKorakT0 As Single
 
+' Tihi rezim dnevnika zatecen pre suite (S-1). Pali ga BeginRun, vraca EndRun --
+' a EndRun zove svaki runner i na putu greske.
+Private m_BfpPrevQuiet As Boolean
+
 Private Const TEST_ST_ID As String = "ST-90001"
 Private Const TEST_KOOP_ID As String = "KOOP-90001"
 Private Const TEST_VOZ_ID As String = "VOZ-90001"
@@ -260,6 +264,8 @@ Public Sub RunBusinessFlowProSuite()
     If BfpIzabran("Test_OTP_OtkupOtpremnicaIDNetaknut") Then Test_OTP_OtkupOtpremnicaIDNetaknut
 
     If BfpIzabran("Test_BFP_IzborBiraCeloIme") Then Test_BFP_IzborBiraCeloIme
+    ' POSLEDNJI namerno: meri da je tihi rezim drzao do kraja, ne samo na pocetku.
+    If BfpIzabran("Test_BFP_TihiRezimDnevnika") Then Test_BFP_TihiRezimDnevnika
 
     ' Trazen a nepusten test je PAD, ne tisina (v. modTest.ProveriIzbor).
     BfpProveriIzbor
@@ -758,6 +764,15 @@ Private Sub Test_BFP_IzborBiraCeloIme()
     AssertEquals ",Test_X,", BfpPreuzmiIzbor(zahtev), "BFP prolaz preuzima zahtevan izbor"
     AssertEquals "", BfpPreuzmiIzbor(zahtev), _
                  "BFP izbor traje jedan prolaz -- sledeci prolaz je pun"
+End Sub
+
+' BFP RADI U TIHOM REZIMU DNEVNIKA (S-1) -- isti ugovor kao prva tvrdnja
+' modTest.T_Journal_TihiRezimGasiZakazivanje. Pusta se POSLEDNJI, pa meri i da
+' ga nijedan test usput nije ugasio. Samo cita zastavicu. Kapiju samog
+' zakazivanja meri modTest (ista kapija, jedno mesto).
+Private Sub Test_BFP_TihiRezimDnevnika()
+    AssertTrue modJournaling.IsTestModeQuiet(), _
+               "BFP radi u tihom rezimu dnevnika do kraja suite"
 End Sub
 
 Public Sub RunBusinessFlowProSeedOnly()
@@ -3280,6 +3295,15 @@ End Function
 ' ============================================================
 
 Private Sub BeginRun(ByVal suiteName As String)
+    ' TIHI REZIM DNEVNIKA (S-1), isto kao RunAllTests: CSV journal, zakazivanje
+    ' AutoSave-a i red loga po svakom commit-u nijedna tvrdnja ove suite ne meri.
+    ' Kad sveska posle suite ne bude snimljena, journal bi na sledecem startu
+    ' prijavio test redove kao moguc gubitak podataka (CheckJournalForRecovery
+    ' poredi broj redova). PRVO, pre ijedne naredbe koja moze da pukne: EH
+    ' runnera zove EndRun, a on vraca ovde zapamcen rezim.
+    m_BfpPrevQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
+
     ResetCounters
     InitTestLog
 
@@ -3309,6 +3333,16 @@ End Sub
 
 Private Sub EndRun()
     Dim summary As String
+
+    ' PRVO vrati tihi rezim i otkazi tajmere -- pre MsgBox-a i pre Err.Raise
+    ' verdikta, koji iskace iz procedure. Warm kes storna zakazuje svaki commit
+    ' (tihi rezim ga ne gasi); OnTime opali cim Excel predahne -- izmedju dve
+    ' suite -- a posle zatvaranja svesku ponovo otvori.
+    On Error Resume Next
+    modJournaling.SetTestModeQuiet m_BfpPrevQuiet
+    modJournaling.StopAutoSaveTimer
+    modStornoWarm.StopStornoWarm
+    On Error GoTo 0
 
     summary = "RunID=" & m_RunID & _
               " | Total=" & m_Total & _

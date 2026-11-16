@@ -440,6 +440,16 @@ traži), ovde dva procesa i dve mašine.
   toga se `Initialize` ne okine). Bez `.Show`. `modTestMode.SetTestMode True` gasi
   sve što čeka operatera; kad naiđeš na `MsgBox`/`InputBox` na testiranoj putanji,
   gard ide istim oblikom.
+- **`RunAllTests` i BFP rade u tihom režimu dnevnika** (`modJournaling.SetTestModeQuiet`).
+  `AppendRow` tada ne dopisuje CSV journal, a commit ne zakazuje AutoSave i ne
+  piše red loga o tome — posao koji nijedna tvrdnja ne meri, a plaćao se u svakom
+  prolazu i dokazu. Na kraju se vraća zatečen režim (BFP u `EndRun`, i na putu
+  greške) i otkazuju se tajmeri koje je suite zakazala (AutoSave, warm keš
+  storna): `OnTime` inače opali čim Excel predahne između dve suite. **Test koji
+  meri sam dnevnik ili zakazivanje gasi tihi režim lokalno** i vraća ga i na putu
+  greške — obrazac je `T_Journal_TihiRezimGasiZakazivanje`. Režim mere taj test i
+  `Test_BFP_TihiRezimDnevnika`; sabotaže `s1-*`. Da se režim na kraju **vraća**
+  ne meri nijedna tvrdnja — to se vidi tek posle suite.
 - **Čišćenje ide u `EH` granu, ne na zelenu putanju.** `CleanupPosleTesta` se zove
   iz `EH`, a `Err` se čita **pre** njega (`OtkupUI_Release` je pod
   `On Error Resume Next`, što briše `Err`). Test koji padne inače ostavlja `mFrm`,
