@@ -391,6 +391,41 @@ i (16.11.2026, u dokazu 87/87, §10) `lnc-f1-bez-potvrde`; ostali `lnc-*` / `odl
 > 16.11.2026. Zatečeno, van ovog
 > reza: „Veži" u nacrt (`VeziZaAktivnu` → `DodajOtpremnicaIzvor_TX`) i dalje vraća tekst kapije.
 > Kozmetika potvrde: skraćivanje (`LncDijalogTekst`, 1000 znakova) seče usred reči.
+> **Završna ručna provera 16.11.2026 (operater, slike, kopija sveske, kod `3f251d46`).** Operater je
+> proveru proglasio dovoljnom za merge. **Provereno:**
+> - čitljivo odbijanje „Dodaj": druga stanica (Rača / Kaluđerske Bare), druga kultura (Malina
+>   Meeker / Malina Willamette teren), drugi tip gajbi (0,5kg / 0,4kg), kasniji datum (17.11 /
+>   16.11, odbija bez pitanja);
+> - „Izvadi" sa „Da" u zbirni bez prijemnice: poruka stari → novi broj otpremnice i zbirne, traka
+>   prati naslednika, blok u „Bez otpremnice" sa „bila u"; Oporavak dobija `IZGUBLJEN_BLOK`
+>   (po 10.6) i gubi ga kad se blok doda;
+> - premeštanje A → B u zbirnu sa aktivnom prijemnicom: PAZNJA, „No" izabrano, brojevi tačni
+>   (zbirna 480 + 80 = 560, prijemnica 470, razlika 90; gajbe 350 / 300 / 50); „bila u" nosi
+>   istoriju bloka;
+> - „Dodaj" sa „Da" (blok istog datuma — red o datumu se tačno ne pojavljuje);
+> - „Izvadi" poslednjeg bloka: otpremnica bez naslednika, cilj nestaje, lista na Otpremnice;
+> - promena otkupnog mesta na drugo pušta cilj; brisanje polja (prazno) ga ne pušta — isto kao
+>   nacrt (`NapustiOtpremnicu` se za prazno mesto ne zove);
+> - F1 „Ispravi blok" u zbirni sa prijemnicom: PAZNJA, „No" izabrano, X iz polja forme (560 → 570),
+>   posle „Da" nove verzije lista, otpremnice i zbirne, prijemnica prevezana, cilj prati naslednika;
+> - ranije (15.11): izbor cilja, lista „Blokovi otpremnice", odbijanje hladnjačke otpremnice;
+>   Compile čist (operater).
+>
+> **Nije provereno ručno** (meri BFP, ili ostaje otvoreno): da Enter na PAZNJA dijalogu zaista ne
+> upisuje ništa (viđeno je samo da je „No" izabrano); trag u `tblStornoVeze` („Potvrdjeno
+> upozorenje", „Blok … ulazi/izlazi"); red o dva datuma uz blok ranijeg datuma; isto otkupno mesto
+> ne pušta cilj; nov list dok je izabran cilj ide u „Bez otpremnice"; nacrt („Veži", „Ukloni",
+> „Izdaj", izbor cilja napušta nacrt); F8 storno zbirne uz nedovršenu ispravku prijemnice kroz
+> ekran (KI-095); isplata bloka na kartici kooperanta; prijemnica u F4 na novom broju zbirne;
+> malina sync između dva koraka premeštanja.
+>
+> **Uočeno, zatečeno, van ovog reza:** pločice „Danas otkupljeno", „N otpr" i „N dokumenata danas"
+> broje i stornirane redove (namerno od S14.7, `modOtkup.KgOtkupaZaDan`, `modOtkupUI.CountForDate`),
+> pa rastu sa svakim potezom u lancu (890 → 1.060 posle ispravke od +10 kg) — traži odluku
+> operatera; poruka posle snimanja lista prikazuje interni `OTK-…` ID; Oporavak za
+> `IZGUBLJEN_BLOK` upućuje samo na „Veži"; polje BROJ ZBIRNE u formi bilo je popunjeno brojem
+> S2/161126-8 bez izabrane otpremnice (verovatno „aktivna zbirna" ljuske,
+> `modOtkupUI.ApplyAktivnaZbirna`) — poreklo nije utvrđeno.
 > **Zatečeno ograničenje (review a7, 10.11.2026), nije uvedeno ovim rezom:** pisac nove verzije
 > ponovo meri **sve** listove otpremnice' (`LncSastavi` → `OtpRequireIzvorValjan`), a plan meri samo
 > list koji ulazi ili se ispravlja. List **starog oblika** koji je već u otpremnici (bez stavki,
