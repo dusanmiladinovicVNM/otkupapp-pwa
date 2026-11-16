@@ -564,6 +564,13 @@ def _self_test_prekid(tudje: str) -> list:
     tvrdi("RunAllTests" in poruka_prekida(pr.stanje)
           and "Syntax error" in poruka_prekida(pr.stanje),
           "FATAL posle kobnog dijaloga ne imenuje fazu i dijalog")
+    # Izmereno 16.11.2026: VBA tekst dijaloga nosi prelome ("Compile error:\n\n
+    # Syntax error"), a dokaz.py cita samo red FATAL -- razlog mora biti u njemu.
+    lomljen = dict(pr.stanje, dijalog="Microsoft Visual Basic for Applications | "
+                                      "Compile error:\r\n\r\nSyntax error")
+    tvrdi("\n" not in poruka_prekida(lomljen)
+          and "Compile error: Syntax error" in poruka_prekida(lomljen),
+          "FATAL sa lomljenim tekstom dijaloga nije u jednom redu")
     pr.naoruzaj("RunBusinessFlowProSuite")
     tvrdi(svi[-1].sekundi == 1800.0 and not svi[-1].otkazan,
           "posle kobnog dijaloga sledeca faza ne dobija pun budzet")
@@ -1615,11 +1622,19 @@ def main(argv: list[str]) -> int:
     return rc
 
 
+def jedan_red(tekst: str) -> str:
+    """Tekst dijaloga u jednom redu: VBA ga lomi ("Compile error:\n\nSyntax error"),
+    a citaci izvestaja (dokaz.py, FATAL) citaju red po red -- pa bi bez ovoga
+    ostali bez razloga."""
+    return " ".join((tekst or "").split())
+
+
 def poruka_prekida(stanje: dict) -> str:
     """FATAL tekst iz Prekid.stanje: imenuje fazu, a uz koban dijalog i dijalog."""
     if stanje.get("dijalog"):
         return (f"Excel se nije vratio {stanje['sekundi']:g}s posle dijaloga u fazi "
-                f"'{stanje['faza']}' -- proces je ubijen. Dijalog: {stanje['dijalog']}. "
+                f"'{stanje['faza']}' -- proces je ubijen. Dijalog: "
+                f"{jedan_red(stanje['dijalog'])}. "
                 "Najcesci uzrok: kod se ne kompajlira ili je VBE u break mode-u.")
     return (f"Faza '{stanje['faza']}' je trajala duze od {stanje['sekundi']:g}s -- "
             "proces je ubijen. Uzrok je break mode u VBE-u ILI faza duza od --timeout "
@@ -1721,7 +1736,7 @@ def _write_report(report: dict, rc: int) -> None:
                      + f"  -> rezija {sum(f['sekundi'] for f in faze):.1f}s")
 
     for d in report.get("dialogs", []):
-        lines.append(f"DIALOG  {d}")
+        lines.append(f"DIALOG  {jedan_red(d)}")
 
     if "fatal" in report:
         lines.append(f"FATAL   {report['fatal']}")
