@@ -409,13 +409,15 @@ i (16.11.2026, u dokazu 87/87, §10) `lnc-f1-bez-potvrde`; ostali `lnc-*` / `odl
 > - F1 „Ispravi blok" u zbirni sa prijemnicom: PAZNJA, „No" izabrano, X iz polja forme (560 → 570),
 >   posle „Da" nove verzije lista, otpremnice i zbirne, prijemnica prevezana, cilj prati naslednika;
 > - ranije (15.11): izbor cilja, lista „Blokovi otpremnice", odbijanje hladnjačke otpremnice;
->   Compile čist (operater).
+>   „Izvadi" jedinog bloka koji je jedini izvor zbirne sa aktivnom prijemnicom se odbija i upućuje
+>   na F8 PONIŠTENJE (`LNC-ODL-25` = `-07`); izbor cilja napušta aktivan nacrt (nacrt nestaje iz
+>   trake, forma se prazni); Compile čist (operater).
 >
 > **Nije provereno ručno** (meri BFP, ili ostaje otvoreno): da Enter na PAZNJA dijalogu zaista ne
 > upisuje ništa (viđeno je samo da je „No" izabrano); trag u `tblStornoVeze` („Potvrdjeno
 > upozorenje", „Blok … ulazi/izlazi"); red o dva datuma uz blok ranijeg datuma; isto otkupno mesto
 > ne pušta cilj; nov list dok je izabran cilj ide u „Bez otpremnice"; nacrt („Veži", „Ukloni",
-> „Izdaj", izbor cilja napušta nacrt); F8 storno zbirne uz nedovršenu ispravku prijemnice kroz
+> „Izdaj"); F8 storno zbirne uz nedovršenu ispravku prijemnice kroz
 > ekran (KI-095); isplata bloka na kartici kooperanta; prijemnica u F4 na novom broju zbirne;
 > malina sync između dva koraka premeštanja.
 >
@@ -627,7 +629,7 @@ ne meri kroz `Otkup.OtpremnicaID` ni broj otpremnice; pravilo datuma se ne meri 
 **Izmereno u Excelu:** BFP zelen 15.11.2026 (`8d8db7fd`, 3477/3477); pun `run_vba` (12 suita)
 zelen 16.11.2026 na `3f251d46` (BFP 3479/3479, `RunAllTests` 353/0, RunID 20261116124815-8803);
 dokaz 87/87 (svaka sabotaža oborila svoj test) na `95caefe3`; Compile i ručna provera (operater)
-16.11.2026; dokaz `lncb-dodaj` 17/17 (svaka sabotaža oborila svoj test) 16.11.2026 na `3f251d46` (potpis `6e37b116`, grupno 11, pojedinačno 6, izvor identičan). Čeka merge.
+16.11.2026; dokaz `lncb-dodaj` 17/17 (svaka sabotaža oborila svoj test) 16.11.2026 na `3f251d46` (potpis `6e37b116`, grupno 11, pojedinačno 6, izvor identičan). Spojeno u `main` 16.11.2026 (PR #476).
 
 **Ručna provera (UAT), posle oba dela:** (1) premeštanje A → B u malina režimu sa sync-om između
 koraka — da li poruka kaže šta da se uradi i koliko se to dešava (okidač `LNC-ODL-23`); (2) operater
