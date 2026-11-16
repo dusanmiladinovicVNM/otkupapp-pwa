@@ -6508,6 +6508,42 @@ SABOTAZE = {
         "Test_OTP_AutoKvarGrupeNeObaraOstale",
         "AUTO kvar: razlog IMENUJE stanicu",
     ),
+    # S-5. Pala grupa se broji kao NAPRAVLJENA. Dok je test zatecao tudje
+    # blokove, "n > 0" je to propustao (zdrava grupa sama daje n > 0); tacan
+    # broj je moguc tek uz kontrolisanu populaciju.
+    "auto-otpremnica-broji-pale": (
+        "modMasterSync.bas",
+        "        If Len(otpID) > 0 Then\n"
+        "            n = n + 1\n"
+        "        Else\n",
+        "        n = n + 1   ' SABOTAZA: i pala grupa se broji kao napravljena\n"
+        "        If Len(otpID) > 0 Then\n"
+        "        Else\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: tacno jedna zdrava grupa je obradjena",
+    ),
+    # S-5. Nacrt otkupa ulazi u batch. Pisac ga odbije (1330, poslovno), pa
+    # nijedan dokument ne nastane -- ali operater dobije razlog za blok koji nije
+    # ni trebalo da bude ponudjen. Meri se nad SOPSTVENIM nacrtom testa.
+    "auto-otpremnica-izdatost-ne-filtrira": (
+        "modMasterSync.bas",
+        "                If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then\n",
+        "                If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Or True Then"
+        "   ' SABOTAZA: izdatost ne filtrira prolaz\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: imenovana je SAMO pokvarena grupa",
+    ),
+    # S-5. Vezan blok ulazi u batch. Pisac ga odbije (1291), pa druga otpremnica
+    # ne nastaje i stara tvrdnja ostaje zelena -- izbor i pisac izgledaju isto.
+    # Razlikuje ih tek prazan razlog ponovljenog prolaza.
+    "auto-otpremnica-ne-gleda-vezanost": (
+        "modMasterSync.bas",
+        "            If slobodni.Exists(UCase$(oid)) Then\n",
+        "            If slobodni.Exists(UCase$(oid)) Or True Then"
+        "   ' SABOTAZA: vezan blok ulazi u prolaz\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: ponovljen prolaz ne bira vezan blok",
+    ),
     # Pravilo "sta je izdato" ima JEDNO telo. Sabotaza vraca kopiju u pisca --
     # stroza za PROSLEDJENO, pa dokument koji su citaoci i stampa vec brojali
     # kao izdat pisac odbija.

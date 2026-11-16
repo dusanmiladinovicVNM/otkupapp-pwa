@@ -13574,6 +13574,45 @@ Private Sub AutoOtpSnimak(ByVal tx As clsTransaction)
     tx.AddTableSnapshot TBL_VOZACI
 End Sub
 
+' TUDJI NEVEZANI IZDATI OTKUPI -> DRAFT, u transakciji pozivaoca (S-5).
+'
+' Batch sa praznim filterom uzima svaki nevezan IZDAT otkup u svesci. Test koji
+' meri PUN prolaz nad svojim grupama tako placa i sve sto je sesija ostavila.
+' Nacrt batch preskace (GrupeZaAutoOtpremnicu), pa posle ovoga prolaz vidi samo
+' blokove koje pozivalac napravi POSLE poziva. Pise isti status kroz isti kanal
+' kao fault injection u Test_OTP_ProslednjenOtkupJeIzdatIzvor; IzdatoStatus
+' otkupa citaju samo dva batch-a i provera pisca nad SVOJIM izvorom
+' (OtpProveriIzvor), pa pisac zdrave grupe tudje nacrte ne vidi.
+'
+' Snimak je PRE prvog upisa, pa rollback pozivaoca vraca i ove redove. Vraca
+' broj utisanih redova.
+Private Function AutoOtpUtisajTudjeBlokove(ByVal tx As clsTransaction) As Long
+    Const SRC As String = "AutoOtpUtisajTudjeBlokove"
+
+    tx.AddTableSnapshot TBL_OTKUP        ' vec ga ima AutoOtpSnimak; drugi poziv ne menja snimak
+
+    Dim slobodni As Object
+    Set slobodni = modDokumenta.NevezaniOtkupi()
+    If slobodni.count = 0 Then Exit Function
+
+    Dim otk As Variant
+    otk = GetTableData(TBL_OTKUP)
+    If Not IsArray(otk) Then Exit Function
+
+    Dim cId As Long, cIzd As Long, i As Long, n As Long
+    cId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cIzd = RequireColumnIndex(TBL_OTKUP, COL_TRACE_IZDATO_STATUS, SRC)
+    For i = 1 To UBound(otk, 1)
+        If slobodni.Exists(UCase$(Trim$(NzToText(otk(i, cId))))) Then
+            If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then
+                RequireUpdateCell TBL_OTKUP, i, COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT, SRC
+                n = n + 1
+            End If
+        End If
+    Next i
+    AutoOtpUtisajTudjeBlokove = n
+End Function
+
 ' KLASA VISE NIJE KLJUC GRUPISANJA -- I TO JE CEO POENT REZA.
 '
 ' Zatecena auto-otpremnica je grupisala StanicaID|Datum|VozacID|KLASA, jer je
@@ -13738,6 +13777,20 @@ End Sub
 '
 ' Uz to meri i izbor izvora: otkup koji je VEC u aktivnoj otpremnici batch ne
 ' sme ponovo da uzme (NevezaniOtkupi je jedini citac te cinjenice).
+'
+' POPULACIJA JE KONTROLISANA (S-5). Prolaz je PUN -- isti poziv sa praznim
+' filterom kao u orkestratoru -- ali bez tudjih blokova: AutoOtpUtisajTudjeBlokove
+' tudje nevezane IZDATE otkupe u transakciji testa prebaci u DRAFT, a rollback ih
+' vraca. Bez toga je batch obradjivao svaki blok koji je sesija ostavila (u punom
+' prolazu ~150 grupa, ~63 od 69 s testa), nijedna tvrdnja ih nije merila, a
+' "n > 0" je prolazio i kad bi pala grupa bila brojana kao napravljena. Zato su
+' tvrdnje sada TACNE: jedna napravljena otpremnica, jedan imenovan razlog.
+'
+' Semanticki nivo brojanja: n = broj napravljenih otpremnica (logicki dokument),
+' jedna po zdravoj grupi; razlog = jedna pala grupa. Fixture: zdrav blok je
+' normalno stanje; FANTOM stanica, utisani tudji blokovi i sopstveni nacrt su
+' fault injection. Izbor kroz NevezaniOtkupi test NE meri -- pomocnik bira istim
+' citacem kao batch.
 Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     Dim tx As clsTransaction
     Dim prevMode As String
@@ -13754,6 +13807,10 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     tx.BeginTx
     AutoOtpSnimak tx
 
+    ' PRE sopstvenih blokova: utisava se sve sto je zateceno, pa nema spiska
+    ' izuzetaka koji bi mogao da zastari.
+    AutoOtpUtisajTudjeBlokove tx
+
     Const FANTOM As String = "ST-NEPOSTOJI-90999"
 
     Dim datum As Date
@@ -13765,6 +13822,16 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     otkZdrav = AutoOtpFixture(datum, TEST_ST_ID, TEST_PREFIX & "-OTK-KZ-" & scenario, _
                               KLASA_I, 300#, 250#, 15#, TEST_TIP_AMB_B)
 
+    ' Sopstveni NACRT u svojoj grupi (svoj dan): filter izdatosti se tako meri
+    ' nad podacima testa, ne nad tudjim ostacima -- i u izboru, kad ostataka nema.
+    Dim otkNacrt As String
+    otkNacrt = AutoOtpFixture(NextTestDate(), TEST_ST_ID, _
+                              TEST_PREFIX & "-OTK-KN-" & scenario, _
+                              KLASA_I, 200#, 250#, 10#, TEST_TIP_AMB)
+    RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkNacrt)(1), _
+                      COL_TRACE_IZDATO_STATUS, IZDATO_DRAFT, _
+                      "Test_OTP_AutoKvarGrupeNeObaraOstale"
+
     ' Preduslov: nepostojeca stanica stvarno ne postoji, inace test ne meri nista.
     AssertEquals "0", CStr(FindRows(TBL_STANICE, "StanicaID", FANTOM).count), _
                  "AUTO kvar preduslov: fantomska stanica ne postoji"
@@ -13775,7 +13842,7 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     Dim greske As String, n As Long
     n = modMasterSync.AutoCreateOtpremniceFromPWA_TX("", greske)
 
-    AssertTrue n > 0, "AUTO kvar: zdrave grupe su obradjene (n=" & CStr(n) & ")"
+    AssertEquals "1", CStr(n), "AUTO kvar: tacno jedna zdrava grupa je obradjena"
     AssertTrue Len(modDokumenta.OtpremnicaZaOtkup(otkZdrav)) > 0, _
                "AUTO kvar: ZDRAV blok je dobio otpremnicu uprkos pokvarenoj grupi"
 
@@ -13789,6 +13856,12 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     AssertTrue Len(greske) > 0, "AUTO kvar: batch je prijavio razlog: " & greske
     AssertTrue InStr(1, greske, FANTOM, vbTextCompare) > 0, _
                "AUTO kvar: razlog IMENUJE stanicu"
+    ' Kljuc grupe pocinje stanicom ("STANICA|dan|kultura|tip: razlog"), a razlozi
+    ' se spajaju sa "; " (SpojiRazloge). Razlog FANTOM grupe taj niz ne sadrzi;
+    ' kad bi ga neki razlog sadrzao, ishod je lazno CRVENO, ne lazno zeleno.
+    AssertTrue StrComp(Left$(greske, Len(FANTOM) + 1), FANTOM & "|", vbTextCompare) = 0 _
+               And InStr(1, greske, "; ", vbBinaryCompare) = 0, _
+               "AUTO kvar: imenovana je SAMO pokvarena grupa"
 
     ' Ponovljen prolaz: vezani blok se vise ne uzima, pa druga otpremnica ne
     ' nastaje. Kapija izbora je NevezaniOtkupi, ne pisac.
@@ -13798,6 +13871,9 @@ Private Sub Test_OTP_AutoKvarGrupeNeObaraOstale()
     Call modMasterSync.AutoCreateOtpremniceFromPWA_TX(otkZdrav, greske)
     AssertEquals UCase$(otpZdrav), UCase$(modDokumenta.OtpremnicaZaOtkup(otkZdrav)), _
                  "AUTO kvar: ponovljen prolaz ne pravi drugu otpremnicu za isti blok"
+    ' Prazan razlog znaci da vezan blok nije ni USAO u prolaz. Bez ove tvrdnje
+    ' izbor i pisac izgledaju isto: pisac vezan izvor ionako odbije.
+    AssertEquals "", greske, "AUTO kvar: ponovljen prolaz ne bira vezan blok"
 
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
