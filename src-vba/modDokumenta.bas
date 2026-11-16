@@ -41,6 +41,12 @@ Public Const ZBR_RES_AMBIGUOUS As String = "CURRENT_AMBIGUOUS"
 ' dijalozi potvrde (F8, F1) biraju "Ne" kao podrazumevano (LncTekstImaUpozorenje).
 Private Const LNC_UPOZORENJE As String = "PAZNJA:"
 
+' Potezi nad blokom IZDATE otpremnice (STORNO_U_LANCU.md S10): blok se ne stornira,
+' menja se samo clanstvo -- nova verzija otpremnice (i zbirne). Ekran ih prosledjuje
+' kao vrstu poteza (LncPlanBlok, IzvadiBlokULancu_TX, DodajBlokULancu_TX).
+Public Const LNC_IZVADI As String = "IZVADI"
+Public Const LNC_DODAJ As String = "DODAJ"
+
 ' Razlog odbijanja novog unosa. Kod, ne poruka: modDokumenta je sloj podataka i
 ' ne nosi korisnicki tekst (prevod je u modDokUnos.ZbirnaGatePoruka).
 Public Const ZBR_GATE_INTEGRITET As String = "INTEGRITET"
@@ -3759,29 +3765,15 @@ End Function
 '                 koji se ispravlja (nov list nosi njegovu kulturu)
 '   stornoRazlog -- samo za STORNO: poslednji izvor uz aktivnu prijemnicu
 '                   (LNC-ODL-07). Ispravka list zamenjuje, pa za nju ne vazi.
+' Nedovrsen kontekst nad otpremnicom ili zbirnom (LNC-ODL-37, KI-095) je razlog,
+' za storno i za ispravku podjednako.
 Public Function LncPlanLista(ByVal otkupID As String, _
                              Optional ByVal zaIspravku As Boolean = False) As Object
     Const SRC As String = "LncPlanLista"
 
     Dim p As Object
-    Set p = CreateObject("Scripting.Dictionary")
+    Set p = LncPlanPrazan(otkupID)
     Set LncPlanLista = p
-
-    p.Add "otkupID", Trim$(otkupID)
-    p.Add "otkupBroj", ""
-    p.Add "uLancu", False
-    p.Add "otpID", ""
-    p.Add "otpBroj", ""
-    p.Add "otpIzdata", False
-    p.Add "otpPreostali", New Collection
-    p.Add "zbrID", ""
-    p.Add "zbrBroj", ""
-    p.Add "zbrIzdata", False
-    p.Add "zbrSestre", New Collection
-    p.Add "prijemnice", New Collection
-    p.Add "zbrSaPWA", False
-    p.Add "razlog", ""
-    p.Add "stornoRazlog", ""
 
     otkupID = Trim$(otkupID)
     If Len(otkupID) = 0 Then
@@ -3803,6 +3795,230 @@ Public Function LncPlanLista(ByVal otkupID As String, _
     otpID = OtpremnicaZaOtkup(otkupID)
     If Len(otpID) = 0 Then Exit Function          ' van lanca: obican storno
 
+    ' Ostatak je jezgro po otpremnici (LNC-ODL-28): list izlazi iz otpremnice',
+    ' a u ispravci se meri i njegova kultura (nov list je nasledjuje).
+    LncPlanOtpremnice p, otpID, otkupID, "", zaIspravku, SRC
+End Function
+
+' Prazan plan -- isti kljucevi za plan lista i plan bloka (v. LncPlanLista).
+Private Function LncPlanPrazan(ByVal otkupID As String) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p.Add "otkupID", Trim$(otkupID)
+    p.Add "otkupBroj", ""
+    p.Add "uLancu", False
+    p.Add "otpID", ""
+    p.Add "otpBroj", ""
+    p.Add "otpIzdata", False
+    p.Add "otpPreostali", New Collection
+    p.Add "zbrID", ""
+    p.Add "zbrBroj", ""
+    p.Add "zbrIzdata", False
+    p.Add "zbrSestre", New Collection
+    p.Add "prijemnice", New Collection
+    p.Add "zbrSaPWA", False
+    p.Add "razlog", ""
+    p.Add "stornoRazlog", ""
+    Set LncPlanPrazan = p
+End Function
+
+' PLAN POTEZA NAD BLOKOM IZDATE OTPREMNICE (STORNO_U_LANCU.md S10). Isti kljucevi
+' kao LncPlanLista, plus "vrsta" (LNC_IZVADI / LNC_DODAJ). Identitet putuje redom
+' (LNC-ODL-34): cilj je OtpremnicaID, blok je OtkupID ("otkupID"), nista se ne
+' razresava po broju; cilj ili blok koji se u medjuvremenu promenio odbija potez.
+' Blok se NE stornira (LNC-ODL-22, -26). Samo CITA; isti plan cita potvrda i, ponovo,
+' transakcija (LNC-ODL-28).
+Public Function LncPlanBlok(ByVal otpremnicaID As String, ByVal otkupID As String, _
+                            ByVal vrsta As String) As Object
+    Const SRC As String = "LncPlanBlok"
+    Dim p As Object, putGreska As String, gde As String, zamena As String
+    Set p = LncPlanPrazan(otkupID)
+    Set LncPlanBlok = p
+    p.Add "vrsta", vrsta
+    otpremnicaID = Trim$(otpremnicaID)
+    otkupID = Trim$(otkupID)
+
+    If vrsta <> LNC_IZVADI And vrsta <> LNC_DODAJ Then
+        p("razlog") = "Nepoznat potez nad blokom: " & vrsta
+        Exit Function
+    End If
+
+    ' --- cilj: tacno jedna otpremnica, aktivna (LNC-ODL-34)
+    If Len(otpremnicaID) = 0 Or FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID).count <> 1 Then
+        p("razlog") = "Otpremnica nije pronadjena jednoznacno: " & otpremnicaID
+        Exit Function
+    End If
+    p("otpBroj") = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_BROJ)))
+    Dim ciljStorniran As Boolean
+    ciljStorniran = (UCase$(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, _
+                                                       COL_STORNIRANO)))) = "DA")
+    If ciljStorniran Then
+        zamena = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, _
+                                            COL_TRACE_ZAMENJEN_SA_ID)))
+        p("razlog") = "Otpremnica " & p("otpBroj") & " je u medjuvremenu stornirana" & _
+                      IIf(Len(zamena) > 0, " (zamenjena novom verzijom)", "") & _
+                      " -- izaberi aktivnu otpremnicu ponovo."
+        Exit Function
+    End If
+
+    ' --- blok: tacno jedan, nije storniran
+    If Len(otkupID) = 0 Or FindRows(TBL_OTKUP, COL_OTK_ID, otkupID).count <> 1 Then
+        p("razlog") = "Blok nije pronadjen jednoznacno: " & otkupID
+        Exit Function
+    End If
+    p("otkupBroj") = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BR_DOK)))
+    If UCase$(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_STORNIRANO)))) = "DA" Then
+        p("razlog") = "Blok " & p("otkupBroj") & " je storniran."
+        Exit Function
+    End If
+
+    If vrsta = LNC_IZVADI Then
+        ' Blok mora biti BAS u ovoj otpremnici -- stanje sa liste ne sme da zastari.
+        gde = OtpremnicaZaOtkup(otkupID)
+        If StrComp(gde, otpremnicaID, vbTextCompare) <> 0 Then
+            p("razlog") = "Blok " & p("otkupBroj") & " vise nije u otpremnici " & p("otpBroj") & _
+                          " -- osvezi listu."
+            Exit Function
+        End If
+        ' PRAVI hladnjacki lanac (vozac = ogledalo stanice) ide na PONISTENJE -- to kaze
+        ' jezgro (LNC-ODL-14). N1 je RUCNA otpremnica stanice koja je POSLE oznacena kao
+        ' hladnjaca: njen blok se ne vadi, nego stornira na F8 (storno lista u lancu,
+        ' koja takvu otpremnicu ne vidi kao lanac). Neizvesnost odbija (fail-closed).
+        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then
+            If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then
+                p("razlog") = "Blok " & p("otkupBroj") & " je blok stanice oznacene kao hladnjaca " & _
+                              "(N1) -- ne vadi se, nego stornira na F8 (storno lista u lancu)."
+                Exit Function
+            End If
+            If Len(putGreska) > 0 Then
+                p("razlog") = putGreska
+                Exit Function
+            End If
+        End If
+        LncPlanOtpremnice p, otpremnicaID, otkupID, "", False, SRC
+    Else
+        ' --- DODAJ. Hladnjacki CILJ prvi (LNC-ODL-14): njegov tekst daje jezgro, a
+        ' blok svake druge stanice bi inace pao tek na razlici otkupnog mesta.
+        If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then
+            LncPlanOtpremnice p, otpremnicaID, "", otkupID, False, SRC
+            Exit Function
+        End If
+        ' Blok mora biti SLOBODAN (LNC-ODL-29). Iz nacrta ili druge izdate
+        ' otpremnice se prvo vadi -- premestanje su dva poteza (LNC-ODL-23).
+        gde = OtpremnicaZaOtkup(otkupID)
+        If Len(gde) > 0 Then
+            p("razlog") = "Blok " & p("otkupBroj") & " je vec u otpremnici " & _
+                          Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, gde, COL_OTP_BROJ))) & _
+                          " -- prvo ga izvadi iz nje (iz nacrta: ""ukloni"")."
+            Exit Function
+        End If
+        ' Hladnjacki blok ide u svoj lanac 1:1 (HLD-LANAC-01); neizvesnost odbija.
+        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then
+            p("razlog") = "Blok " & p("otkupBroj") & " je blok stanice oznacene kao hladnjaca -- " & _
+                          "ide u svoj lanac, ne dodaje se rucno."
+            Exit Function
+        End If
+        If Len(putGreska) > 0 Then
+            p("razlog") = putGreska
+            Exit Function
+        End If
+        ' LNC-ODL-30: roba kupljena POSLE polaska kamiona nije mogla njime da putuje.
+        Dim datBlok As Date, datOtp As Date
+        If Not LncDatumCelije(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_DATUM), datBlok) Then
+            p("razlog") = "Blok " & p("otkupBroj") & " nema citljiv datum -- ne dodaje se."
+            Exit Function
+        End If
+        If Not LncDatumCelije(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_DATUM), datOtp) Then
+            p("razlog") = "Otpremnica " & p("otpBroj") & " nema citljiv datum -- blok se ne dodaje."
+            Exit Function
+        End If
+        p.Add "datumBloka", datBlok
+        p.Add "datumOtp", datOtp
+        If Int(datBlok) > Int(datOtp) Then
+            p("razlog") = "Blok " & p("otkupBroj") & " je od " & Format$(datBlok, "dd.mm.yyyy") & _
+                          ", a otpremnica " & p("otpBroj") & " od " & Format$(datOtp, "dd.mm.yyyy") & _
+                          " -- roba kupljena posle polaska kamiona nije mogla njime da putuje (LNC-ODL-30)."
+            Exit Function
+        End If
+        ' Gajbe u otpremnicu bez tipa ambalaze: citljivo, ne tehnicka 1239 (LNC-ODL-29).
+        If OtpGajbeIzvora(otkupID, SRC) > 0 And _
+           Len(Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_TIP_AMB)))) = 0 Then
+            p("razlog") = "Otpremnica " & p("otpBroj") & " nema tip ambalaze, a blok " & p("otkupBroj") & _
+                          " nosi gajbe -- dodaje se samo u otpremnicu sa tipom ambalaze."
+            Exit Function
+        End If
+        ' Kultura nove verzije: zaglavlje, a kod stare otpremnice bez kulture --
+        ' listovi nove verzije, ukljucujuci ovaj (isto kao pisac, OtpZaglavljeVerzije).
+        Dim kulVer As String, razKul As String, merKul As Collection, clKul As Collection
+        Dim ik As Long
+        Set clKul = OtpClanovi(otpremnicaID, SRC)
+        Set merKul = New Collection
+        For ik = 1 To clKul.count
+            merKul.Add CStr(clKul(ik))
+        Next ik
+        merKul.Add otkupID
+        kulVer = OtpKulturaVerzije(otpremnicaID, merKul, razKul)
+        If Len(razKul) > 0 Then
+            ' Listovi otpremnice su slozni, a blok nije: kriv je blok, ne lanac --
+            ' savet "rasturi lanac" iz OtpKulturaVerzije ovde ne vazi.
+            Dim kulStara As String, razStara As String, kulBloka As String
+            kulBloka = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA)))
+            If clKul.count > 0 Then kulStara = OtpKulturaVerzije(otpremnicaID, clKul, razStara)
+            If Len(razStara) = 0 And Len(kulStara) > 0 And Len(kulBloka) > 0 Then
+                razKul = "Blok " & p("otkupBroj") & " je druge kulture (" & KulturaOpisZaPoruku(kulBloka) & _
+                         ") od listova otpremnice " & p("otpBroj") & " (" & KulturaOpisZaPoruku(kulStara) & _
+                         ") -- otpremnica nosi jednu kulturu, pa se blok ne dodaje."
+            End If
+            p("razlog") = razKul
+            Exit Function
+        End If
+        ' Sve ostale kapije izvora -- ISTO telo kao pisac (OtpProveriIzvor): izdat,
+        ' stavke, stanica, kultura, tip ambalaze, slobodan.
+        Dim raz As String, errIzv As Long
+        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)
+        If Len(raz) > 0 Then
+            ' Kapija ostaje JEDNA (pisac). Nazivima se kaze SAMO njen razlog "drugo
+            ' polje" (1239, RequireIstoPolje: otkupno mesto, kultura, tip gajbi);
+            ' svaki drugi (nema stavke, nije izdat) ostaje tekst kapije.
+            If errIzv = vbObjectError + 1239 Then
+                p("razlog") = LncDodajRazlogCitljiv(otpremnicaID, otkupID, kulVer, _
+                                                    CStr(p("otpBroj")), CStr(p("otkupBroj")))
+            End If
+            If Len(CStr(p("razlog"))) = 0 Then
+                p("razlog") = "Blok " & p("otkupBroj") & " ne moze u otpremnicu " & p("otpBroj") & ": " & raz
+            End If
+            Exit Function
+        End If
+        LncPlanOtpremnice p, otpremnicaID, "", otkupID, False, SRC
+        If Len(CStr(p("razlog"))) = 0 And CBool(p("otpIzdata")) Then
+            p("razlog") = LncDodajManjakStanice(otpremnicaID, p("otpPreostali"), SRC)
+        End If
+    End If
+
+    ' LNC-ODL-28: nacrt se menja postojecim "vezi" / "ukloni", ne ovim potezom.
+    If Len(CStr(p("razlog"))) = 0 And Not CBool(p("otpIzdata")) Then
+        p("razlog") = "Otpremnica " & p("otpBroj") & " je NACRT -- blokovi nacrta se menjaju " & _
+                      "radnjama ""vezi"" i ""ukloni"" u F1."
+    End If
+End Function
+
+' JEZGRO PLANA PO OTPREMNICI (LNC-ODL-28): sve sto potez u lancu treba da zna o
+' otpremnici i zbirni iznad nje -- status, hladnjaca, nedovrseni konteksti
+' (LNC-ODL-37), listovi otpremnice', kultura, zbirna, sestre, prijemnice i
+' poslednji izvor. Puni plan p (kljucevi iz LncPlanLista); p("razlog") = "" znaci
+' da potez sme.
+'   izlazi       -- OtkupID koji izlazi iz otpremnice' (storno / ispravka lista,
+'                   "Izvadi blok"); "" kad nijedan ne izlazi
+'   ulazi        -- OtkupID koji ulazi u otpremnicu' ("Dodaj blok"); "" inace
+'   meriIzlazeci -- kultura nove verzije meri i list koji izlazi (ispravka: nov
+'                   list nosi njegovu kulturu)
+' Zove ga i plan lista i plan bloka, pa postoji JEDAN odgovor na "sta potez radi".
+Private Sub LncPlanOtpremnice(ByVal p As Object, ByVal otpID As String, _
+                              ByVal izlazi As String, ByVal ulazi As String, _
+                              ByVal meriIzlazeci As Boolean, ByVal SRC As String)
+    Dim otkupID As String
+    otkupID = izlazi
+
     p("uLancu") = True
     p("otpID") = otpID
     p("otpBroj") = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
@@ -3818,28 +4034,47 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         p("otpIzdata") = True
     Else
         p("razlog") = "Otpremnica " & p("otpBroj") & " nema poznat status (" & st & ")."
-        Exit Function
+        Exit Sub
     End If
 
     ' HLD-LANAC-01: hladnjacki blok je ceo lanac 1:1 -- ostaje na PONISTENJU
     ' (LNC-ODL-14).
-    If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpID) Then
+    Dim hladna As Boolean
+    hladna = modAutoHladnjaca.OtpremnicaJeHladnjacka(otpID)
+    If hladna And p.Exists("vrsta") Then
+        p("razlog") = "Otpremnica " & p("otpBroj") & " je deo hladnjackog lanca (1:1). Taj " & _
+                      "lanac se ponistava na F8 nad zbirnom (PONISTENJE); blokovi mu se ne " & _
+                      "vade ni dodaju."
+        Exit Sub
+    End If
+    If hladna Then
         p("razlog") = "List je deo hladnjackog lanca (otpremnica " & p("otpBroj") & _
                       "). Taj lanac se ponistava na F8 nad zbirnom (PONISTENJE), pa se " & _
                       "list stornira posle toga."
-        Exit Function
+        Exit Sub
+    End If
+
+    ' LNC-ODL-37: potez ne zamenjuje otpremnicu nad kojom stoji nedovrsen kontekst.
+    ' Spisak se cita JEDNOM po planu (LNC-INV-21) i sluzi obema proverama.
+    Dim ktx As Collection, ktxGreska As String, razlogKtx As String
+    Set ktx = modStornoContext.GetPendingCorrections(ktxGreska)
+    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, otpID, CStr(p("otpBroj")), "", "")
+    If Len(razlogKtx) > 0 Then
+        p("razlog") = razlogKtx
+        Exit Sub
     End If
 
     Dim clanovi As Collection, k As Long
     Set clanovi = OtpClanovi(otpID, SRC)
     For k = 1 To clanovi.count
-        If StrComp(CStr(clanovi(k)), otkupID, vbTextCompare) <> 0 Then
+        If StrComp(CStr(clanovi(k)), izlazi, vbTextCompare) <> 0 Then
             p("otpPreostali").Add CStr(clanovi(k))
         End If
     Next k
+    If Len(ulazi) > 0 Then p("otpPreostali").Add ulazi
 
     ' Nacrt otpremnice ne ulazi u zbirnu (RequireOtpValidanIzvorZbirne).
-    If Not CBool(p("otpIzdata")) Then Exit Function
+    If Not CBool(p("otpIzdata")) Then Exit Sub
 
     ' Stara otpremnica bez kulture na zaglavlju (rucna provera 07.11.2026): nova
     ' verzija se vodi kulturom preostalih listova. Ako je nemaju jednu, potez se
@@ -3852,19 +4087,19 @@ Public Function LncPlanLista(ByVal otkupID As String, _
     For k = 1 To p("otpPreostali").count
         mereni.Add CStr(p("otpPreostali")(k))
     Next k
-    If zaIspravku Then mereni.Add otkupID
+    If meriIzlazeci Then mereni.Add otkupID
     If mereni.count > 0 Then
         OtpKulturaVerzije otpID, mereni, razlogKulture
         If Len(razlogKulture) > 0 Then
             p("razlog") = razlogKulture
-            Exit Function
+            Exit Sub
         End If
     End If
 
 
     Dim zbrID As String
     zbrID = AktivnaZbirnaZaOtpremnicu(otpID)
-    If Len(zbrID) = 0 Then Exit Function
+    If Len(zbrID) = 0 Then Exit Sub
 
     p("zbrID") = zbrID
     p("zbrBroj") = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
@@ -3879,7 +4114,15 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         p("zbrIzdata") = True
     Else
         p("razlog") = "Zbirna " & p("zbrBroj") & " nema poznat status (" & st & ")."
-        Exit Function
+        Exit Sub
+    End If
+
+    ' LNC-ODL-37 (KI-095): ni zbirnu nad kojom stoji nedovrsen kontekst, ni zbirnu
+    ' cija je ispravka prijemnice zapoceta a nije zavrsena.
+    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, "", "", zbrID, CStr(p("zbrBroj")))
+    If Len(razlogKtx) > 0 Then
+        p("razlog") = razlogKtx
+        Exit Sub
     End If
 
     Dim izv As Collection
@@ -3894,14 +4137,14 @@ Public Function LncPlanLista(ByVal otkupID As String, _
         End If
     Next k
 
-    If Not CBool(p("zbrIzdata")) Then Exit Function
+    If Not CBool(p("zbrIzdata")) Then Exit Sub
 
     Dim razlogPrj As String
     Dim prj As Collection
     Set prj = LncPrijemniceZbirne(zbrID, CStr(p("zbrBroj")), razlogPrj)
     If Len(razlogPrj) > 0 Then
         p("razlog") = razlogPrj
-        Exit Function
+        Exit Sub
     End If
     For k = 1 To prj.count
         p("prijemnice").Add CStr(prj(k))
@@ -3913,18 +4156,311 @@ Public Function LncPlanLista(ByVal otkupID As String, _
     ostaje = p("zbrSestre").count
     If p("otpPreostali").count > 0 Then ostaje = ostaje + 1
     If ostaje = 0 And p("prijemnice").count > 0 Then
-        p("stornoRazlog") = "List je jedini izvor zbirne " & p("zbrBroj") & ", a ona ima " & _
+        p("stornoRazlog") = IIf(p.Exists("vrsta"), "Blok", "List") & " je jedini izvor zbirne " & _
+                      p("zbrBroj") & ", a ona ima " & _
                       "aktivnu prijemnicu. Zbirna bez izvora nema naslednika, pa bi " & _
                       "prijemnica ostala bez roditelja -- lanac se ponistava na F8 " & _
                       "nad zbirnom (PONISTENJE)."
     End If
+End Sub
+
+' KI-095 put (2) (STORNO_U_LANCU.md S11, KI95-ODL-01..04): F8 storno zbirne --
+' obican, DUPLI, PONISTENJE zbirne i PONISTENJE prijemnice koje kaskadno stornira
+' zbirnu -- ne sme da ostavi zapocetu ispravku prijemnice bez roditelja. ISTO telo
+' kao kapija poteza u lancu (LncNedovrsenKontekstRazlog), USKO (odluka operatera
+' 11.11.2026): odbija samo nedovrsena ispravka prijemnice (PENDING, zamena nije
+' uneta); podsetnik ili pao kontekst nad samom zbirnom se i dalje resava u F8.
+' "" = nema prepreke. Zovu je F8 pre potvrde (StornoRazlog) i pisci pre reda
+' konteksta (StornoIzvrsi, RunZbirnaCorrection, RunPrijemnicaCorrection).
+Public Function ZbirnaCekaIspravkuPrijemniceRazlog(ByVal zbrID As String, _
+                                                   ByVal zbrBroj As String) As String
+    Dim ktx As Collection, g As String
+    On Error GoTo EH
+    zbrID = Trim$(zbrID)
+    If Len(zbrID) = 0 Then Exit Function
+    Set ktx = modStornoContext.GetPendingCorrections(g)
+    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, "", "", zbrID, _
+                                                                    Trim$(zbrBroj), True)
+    Exit Function
+EH:
+    ZbirnaCekaIspravkuPrijemniceRazlog = "Zapocete ispravke prijemnica ne mogu da se provere, " & _
+        "pa se storno zbirne odbija: [" & Err.Number & "] " & Err.description
+End Function
+
+' LNC-ODL-37 (KI-095): potez u lancu ne zamenjuje otpremnicu ni zbirnu nad kojom
+' stoji NEDOVRSEN kontekst (tblStornoVeze, NeedsRecovery = Da): F8 "Resi kasnije",
+' PONISTENJE / DUPLI koji je pao ili ceka rucno. Posle poteza bi taj podsetnik
+' pokazivao na storniranu verziju, a Oporavak bi nudio samo "Odbaci". Kapija gleda
+' NeedsRecovery, ne Status: MANUAL_REQUIRED i FAILED cekaju isto kao PENDING.
+'
+' Isto za ISPRAVKU PRIJEMNICE te zbirne kojoj zamena NIJE UNETA (PENDING): F8
+' "Ispravi" odmah stornira staru prijemnicu, pa je LncPrijemniceZbirne ne vidi i
+' LNC-ODL-07 ne bi zaustavio storno poslednjeg izvora -- zamena bi ostala bez
+' zbirne (ZBR_PARENT_NEMA). Ovde Status ODLUCUJE: MANUAL_REQUIRED znaci da je zamena
+' vec uneta (palete nisu prevezane, modDokUnos.PreveziPaleteIspravke), pa je ona
+' aktivna i prevezuje se po ID-u kao svaka druga; F4 je ne bi ni prepoznao kao
+' ispravku (NadjiIspravku trazi PENDING). Podsetnik ili pala ispravka nad AKTIVNOM
+' prijemnicom ne smeta (LNC-INV-07).
+'
+' Stari oblik podataka se ne pusta tiho: red bez OldDocID-a i prijemnica bez
+' ZbirnaRoditeljID-a se porede po broju, a poklapanje ODBIJA (fail-closed, isti
+' smer kao LncPrijemniceZbirne) i odbijenica kaze da je poklopljeno po broju.
+' Spisak koji ne moze da se procita, i red koji ne moze da se proveri, odbija
+' potez -- odbijenica tada imenuje TAJ red, da ga operater nadje u Oporavku.
+'
+' Plan je zove dvaput nad ISTIM spiskom: jednom za otpremnicu, jednom za zbirnu
+' (drugi par je prazan). "" = nema prepreke.
+Private Function LncNedovrsenKontekstRazlog(ByVal konteksti As Collection, ByVal greska As String, _
+                                            ByVal otpID As String, ByVal otpBroj As String, _
+                                            ByVal zbrID As String, ByVal zbrBroj As String, _
+                                            Optional ByVal samoIspravkePrijemnice As Boolean = False) As String
+    Const SRC As String = "LncNedovrsenKontekstRazlog"
+    Const SAVET As String = ". Prvo ga resi ili odbaci (ekran Oporavak, lista Nedovrseno)."
+    Const PO_BROJU As String = " (stari red bez OldDocID, poklopljen po BROJU -- proveri " & _
+                               "ciji je dokument pre nego sto ga odbacis)"
+    Dim d As Object, k As Long, tip As String, oldID As String, oldBroj As String
+    Dim stKtx As String, poBroju As Boolean
+    On Error GoTo EH
+
+    If Len(greska) > 0 Or konteksti Is Nothing Then
+        LncNedovrsenKontekstRazlog = "Nedovrseni konteksti (tblStornoVeze) ne mogu da se " & _
+            "procitaju, pa se potez odbija: " & greska
+        Exit Function
+    End If
+
+    For k = 1 To konteksti.count
+        Set d = konteksti(k)
+        tip = CStr(d("oldDocType"))
+        oldID = CStr(d("oldDocID"))
+        oldBroj = CStr(d("oldBroj"))
+        stKtx = CStr(d("status"))
+        If Len(otpID) > 0 And StrComp(tip, FLOW_DOC_OTPREMNICA, vbTextCompare) = 0 Then
+            If LncKontekstPogadja(oldID, oldBroj, stKtx, otpID, otpBroj, poBroju) Then
+                LncNedovrsenKontekstRazlog = "Nad otpremnicom " & otpBroj & _
+                    " stoji nedovrsen kontekst " & LncKontekstOpis(d) & _
+                    IIf(poBroju, PO_BROJU, "") & SAVET
+                Exit Function
+            End If
+        End If
+        If Len(zbrID) > 0 Then
+            If StrComp(tip, FLOW_DOC_ZBIRNA, vbTextCompare) = 0 And Not samoIspravkePrijemnice Then
+                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) Then
+                    LncNedovrsenKontekstRazlog = "Nad zbirnom " & zbrBroj & _
+                        " stoji nedovrsen kontekst " & LncKontekstOpis(d) & _
+                        IIf(poBroju, PO_BROJU, "") & SAVET
+                    Exit Function
+                End If
+            ElseIf StrComp(tip, FLOW_DOC_PRIJEMNICA, vbTextCompare) = 0 And _
+                   StrComp(CStr(d("mode")), SV_MODE_ISPRAVKA, vbTextCompare) = 0 And _
+                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then
+                If LncPrijemnicaCekaIspravku(oldID, CStr(d("parentBroj")), zbrID, zbrBroj, SRC) Then
+                    LncNedovrsenKontekstRazlog = "Ispravka prijemnice " & oldBroj & _
+                        " (zbirna " & zbrBroj & ") nije zavrsena " & LncKontekstOpis(d) & _
+                        ": stara prijemnica je stornirana, a zamena nije uneta. Zavrsi " & _
+                        "ispravku u F4 (nova prijemnica) ili je odbaci (ekran Oporavak) -- " & _
+                        "inace bi zamena ostala bez zbirne."
+                    Exit Function
+                End If
+            End If
+        End If
+    Next k
+    Exit Function
+EH:
+    LncNedovrsenKontekstRazlog = "Nedovrseni konteksti ne mogu da se provere, pa se potez " & _
+        "odbija: [" & Err.Number & "] " & Err.description
+    If Not d Is Nothing Then
+        LncNedovrsenKontekstRazlog = LncNedovrsenKontekstRazlog & " -- kontekst " & _
+                                     LncKontekstOpis(d) & SAVET
+    End If
+    LogErr SRC, LncNedovrsenKontekstRazlog
+End Function
+
+' Red konteksta pogadja dokument po ID-u. Red STAROG oblika, bez OldDocID-a, pogadja
+' po broju -- poklapanje odbija potez (fail-closed; broj nije identitet, pa sudar
+' brojeva odbija vise, nikad manje) i javlja se kroz poBroju. Takve redove su pisali
+' zbirni modovi pre bdc1b586 (05.08.2026), a "Resi kasnije" nad dvosmislenim brojem
+' do S4-2a; danasnji pisci uvek nose ID.
+'
+' Izuzetak: stari MANUAL_REQUIRED je uvek upisan POSLE storna svoje zbirne
+' (bdc1b586^, DUPLI: StornoZbirnaIDetach_TX pa MarkCorrectionManual), pa njegov
+' dokument nije aktivan i ne moze biti ovaj -- po broju bi pogodio tudju zbirnu.
+Private Function LncKontekstPogadja(ByVal oldID As String, ByVal oldBroj As String, _
+                                    ByVal stKtx As String, _
+                                    ByVal docID As String, ByVal docBroj As String, _
+                                    ByRef poBroju As Boolean) As Boolean
+    poBroju = False
+    If Len(oldID) > 0 Then
+        LncKontekstPogadja = (StrComp(oldID, docID, vbTextCompare) = 0)
+    ElseIf Len(oldBroj) > 0 And Len(docBroj) > 0 Then
+        If StrComp(stKtx, SV_STATUS_MANUAL, vbTextCompare) = 0 Then Exit Function
+        LncKontekstPogadja = BrojJednak(oldBroj, docBroj)
+        poBroju = LncKontekstPogadja
+    End If
+End Function
+
+' LNC-ODL-38: potvrdjeno upozorenje (LNC-ODL-21, -24) postaje TRAJAN trag poteza --
+' dopisuje se u Message korenskog reda tblStornoVeze, u ISTOJ transakciji, uz opis
+' poteza (ne umesto njega). Log posle commit-a ostaje; on se rotira, ovaj red ne.
+' Neuspeh upisa obara potez: potvrdjena razlika bez traga je ono sto ovo zatvara.
+Private Sub LncUpisiUpozorenjeUTrag(ByVal rootCid As String, ByVal napomena As String, _
+                                    ByVal src As String)
+    If Len(napomena) = 0 Then Exit Sub
+    If Not modStornoContext.DopisiPorukuKonteksta(rootCid, "Potvrdjeno upozorenje: " & _
+                                                  Replace(napomena, vbCrLf, " | ")) Then
+        Err.Raise vbObjectError + 1993, src, "Upozorenje nije upisano u trag poteza: " & rootCid
+    End If
+End Sub
+
+' "(COR-000123, RESI_KASNIJE, PENDING)" -- identitet konteksta za odbijenicu; po
+' njemu ga operater nalazi u Oporavku.
+Private Function LncKontekstOpis(ByVal d As Object) As String
+    LncKontekstOpis = "(" & CStr(d("id")) & ", " & CStr(d("mode")) & ", " & _
+                      CStr(d("status")) & ")"
+End Function
+
+' Prijemnica ceka zamenu: STORNIRANA je (ispravka ju je oborila) i pripada ovoj
+' zbirni -- po ZbirnaRoditeljID-u, koji storno ne brise (T21 to meri). Aktivna
+' prijemnica ne ceka nista: pala ispravka je ostavila nju samu.
+'
+' Stari oblik ide po broju, fail-closed: prijemnica bez ZbirnaRoditeljID-a po svom
+' BrojZbirne (isto kao LncPrijemniceZbirne), red konteksta bez PrijemnicaID-a po
+' ParentBroj (broj zbirne u trenutku ispravke).
+Private Function LncPrijemnicaCekaIspravku(ByVal prjID As String, ByVal parentBroj As String, _
+                                           ByVal zbrID As String, ByVal zbrBroj As String, _
+                                           ByVal src As String) As Boolean
+    If Len(prjID) = 0 Then
+        If Len(parentBroj) > 0 And Len(zbrBroj) > 0 Then
+            LncPrijemnicaCekaIspravku = BrojJednak(parentBroj, zbrBroj)
+        End If
+        Exit Function
+    End If
+
+    ' Kolone se traze glasno: kolona koje nema bi dala "", a "" bi kapiju tiho
+    ' otvorilo. Greska ide u EH pozivaoca, koji potez odbija.
+    RequireColumnIndex TBL_PRIJEMNICA, COL_STORNIRANO, src
+    RequireColumnIndex TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, src
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, src
+    If FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjID).count <> 1 Then
+        Err.Raise vbObjectError + 1990, src, "Prijemnica iz konteksta ispravke nije " & _
+                  "pronadjena jednoznacno: " & prjID
+    End If
+
+    If UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, _
+                                         COL_STORNIRANO)))) <> "DA" Then Exit Function
+    Dim rod As String
+    rod = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_DETE_ZBIRNA_ROD)))
+    If Len(rod) > 0 Then
+        LncPrijemnicaCekaIspravku = (StrComp(rod, zbrID, vbTextCompare) = 0)
+    ElseIf Len(zbrBroj) > 0 Then
+        LncPrijemnicaCekaIspravku = BrojJednak(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, _
+                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj)
+    End If
+End Function
+
+' Posledice po zbirnoj -- isti tekst za potez nad listom i nad blokom. imaOtpNova:
+' nastaje otpremnica' (ostaje bar jedan list, ili ispravka). Svaki red pocinje
+' vbCrLf.
+Private Function LncOpisZbirne(ByVal p As Object, ByVal imaOtpNova As Boolean) As String
+    Dim m As String
+    If Len(CStr(p("zbrID"))) = 0 Then Exit Function
+    If Not CBool(p("zbrIzdata")) Then
+        If imaOtpNova Then
+            m = m & vbCrLf & "Nacrt zbirne " & p("zbrBroj") & " prima novu verziju otpremnice."
+        Else
+            m = m & vbCrLf & "Otpremnica izlazi iz nacrta zbirne " & p("zbrBroj") & " (bez zamene)."
+        End If
+    ElseIf p("zbrSestre").count > 0 Or imaOtpNova Then
+        m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
+    Else
+        m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira bez naslednika."
+    End If
+    If p("prijemnice").count > 0 Then
+        m = m & vbCrLf & "Prijemnica se prevezuje na novu zbirnu: " & _
+                CStr(p("prijemnice").count) & " (kolicine se ne menjaju)."
+    End If
+    If CBool(p("zbrSaPWA")) Then
+        m = m & vbCrLf & "Zbirna je stigla sa vozacevog telefona -- telefon ce i dalje " & _
+                "prikazivati stari broj."
+    End If
+    LncOpisZbirne = m
+End Function
+
+' POSLEDICE POTEZA NAD BLOKOM ZA POTVRDU (LNC-ODL-35) -- iz ISTOG plana koji potez
+' izvrsava. Kad potez ne sme: "Potez nije moguc: " & razlog. Recima poteza: blok
+' IZLAZI / ULAZI, ne stornira se, isplate ostaju na listu. Imenuje i posledice
+' koje operater ne vidi (10.6): broj zbirne za prijemnicu koja jos nije uneta,
+' vozacevu zbirnu sa telefona, i u malina rezimu sledeci sync (LNC-ODL-36).
+Public Function LncPlanOpisZaBlok(ByVal otpremnicaID As String, ByVal otkupID As String, _
+                                  ByVal vrsta As String) As String
+    Dim p As Object, m As String, razlog As String, imaOtpNova As Boolean
+    On Error GoTo EH
+
+    Set p = LncPlanBlok(otpremnicaID, otkupID, vrsta)
+    razlog = CStr(p("razlog"))
+    If Len(razlog) = 0 Then razlog = CStr(p("stornoRazlog"))
+    If Len(razlog) > 0 Then
+        LncPlanOpisZaBlok = "Potez nije moguc: " & razlog
+        Exit Function
+    End If
+
+    m = LncNapomenaKolicine(p, False)
+    If Len(m) > 0 Then m = m & vbCrLf & vbCrLf
+
+    imaOtpNova = (p("otpPreostali").count > 0)
+    ' Recenice koje traze RADNJU operatera idu odmah posle upozorenja: potvrda je
+    ' MsgBox (~1024 znaka), a LncDijalogTekst skracuje KRAJ opisa.
+    Dim hitno As String
+    If Len(CStr(p("zbrID"))) = 0 Then
+        hitno = "Ako vozac na telefonu sastavlja zbirnu sa ovom otpremnicom, ta zbirna " & _
+                "se nece uvesti -- sastavlja je ponovo posle sledeceg sync-a."
+    ElseIf CBool(p("zbrIzdata")) And (p("zbrSestre").count > 0 Or imaOtpNova) Then
+        hitno = "Prijemnica koja jos nije uneta ide na NOVI broj zbirne (dobija ga " & _
+                "ovim potezom), ne na broj sa papira."
+    End If
+    If vrsta = LNC_IZVADI And modMasterSync.AutoOtpremnicaDostupna() Then
+        If Len(hitno) > 0 Then hitno = hitno & vbCrLf
+        hitno = hitno & "MALINA: sledeci sync od slobodnog bloka sam pravi novu otpremnicu " & _
+                "-- ako ga premestas, dodaj ga u drugu otpremnicu odmah, pre sledeceg sync-a."
+    End If
+    If Len(hitno) > 0 Then m = m & hitno & vbCrLf
+
+    If vrsta = LNC_DODAJ Then
+        m = m & "Blok " & p("otkupBroj") & " ulazi u otpremnicu " & p("otpBroj") & _
+                " (isplate ostaju na listu)."
+        If p.Exists("datumBloka") Then
+            If Int(CDate(p("datumBloka"))) <> Int(CDate(p("datumOtp"))) Then
+                m = m & vbCrLf & "Blok je od " & Format$(CDate(p("datumBloka")), "dd.mm.yyyy") & _
+                        ", a otpremnica od " & Format$(CDate(p("datumOtp")), "dd.mm.yyyy") & _
+                        " -- nova verzija nosi datum otpremnice."
+            End If
+        End If
+    Else
+        m = m & "Blok " & p("otkupBroj") & " izlazi iz otpremnice " & p("otpBroj") & _
+                " i ostaje SLOBODAN: ne stornira se, isplate ostaju na listu. Za premestanje " & _
+                "ga dodaj u drugu otpremnicu posebnim potezom (premestanje u jednom potezu ne postoji)."
+    End If
+    If imaOtpNova Then
+        m = m & vbCrLf & "Otpremnica " & p("otpBroj") & " se stornira i dobija NOVU VERZIJU " & _
+                "sa novim brojem (isti datum)."
+    Else
+        m = m & vbCrLf & "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (bio je " & _
+                "poslednji blok)."
+    End If
+    m = m & LncOpisZbirne(p, imaOtpNova)
+
+    LncPlanOpisZaBlok = m
+    Exit Function
+EH:
+    LncPlanOpisZaBlok = LNC_UPOZORENJE & " posledice poteza nisu dostupne, pa ce potez " & _
+                        "verovatno biti odbijen: " & Err.description
 End Function
 
 ' POSLEDICE POTEZA ZA POTVRDU (LNC-ODL-05 na F8, LNC-ODL-11 u F1) -- iz ISTOG
 ' plana koji potez izvrsava. "" = list nije u lancu (ili je, za ispravku, u nacrtu
 ' otpremnice: to je obicna ispravka). Kad potez ne sme, opis kaze i zasto.
 Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
-                                   Optional ByVal zaIspravku As Boolean = False) As String
+                                   Optional ByVal zaIspravku As Boolean = False, _
+                                   Optional ByVal noveStavke As Collection = Nothing) As String
     Dim p As Object, m As String, placeno As Double, razlog As String
     On Error GoTo EH
 
@@ -3940,7 +4476,7 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
     End If
 
     ' LNC-ODL-21: upozorenje o promeni kolicine ide na VRH posledica.
-    m = LncNapomenaKolicine(p, zaIspravku)
+    m = LncNapomenaKolicine(p, zaIspravku, noveStavke)
     If Len(m) > 0 Then m = m & vbCrLf & vbCrLf
 
     If Not CBool(p("otpIzdata")) Then
@@ -3951,27 +4487,7 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
         m = m & "Otpremnica " & p("otpBroj") & " se stornira bez naslednika (nema drugih listova)."
     End If
 
-    If Len(CStr(p("zbrID"))) > 0 Then
-        If Not CBool(p("zbrIzdata")) Then
-            If p("otpPreostali").count > 0 Or zaIspravku Then
-                m = m & vbCrLf & "Nacrt zbirne " & p("zbrBroj") & " prima novu verziju otpremnice."
-            Else
-                m = m & vbCrLf & "Otpremnica izlazi iz nacrta zbirne " & p("zbrBroj") & " (bez zamene)."
-            End If
-        ElseIf p("zbrSestre").count > 0 Or p("otpPreostali").count > 0 Or zaIspravku Then
-            m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira i dobija NOVU VERZIJU sa novim brojem."
-        Else
-            m = m & vbCrLf & "Zbirna " & p("zbrBroj") & " se stornira bez naslednika."
-        End If
-        If p("prijemnice").count > 0 Then
-            m = m & vbCrLf & "Prijemnica se prevezuje na novu zbirnu: " & _
-                    CStr(p("prijemnice").count) & " (kolicine se ne menjaju)."
-        End If
-        If CBool(p("zbrSaPWA")) Then
-            m = m & vbCrLf & "Zbirna je stigla sa vozacevog telefona -- telefon ce i dalje " & _
-                    "prikazivati stari broj."
-        End If
-    End If
+    m = m & LncOpisZbirne(p, p("otpPreostali").count > 0 Or zaIspravku)
 
     placeno = modNovac.GetIsplataForOtkup(otkupID)
     If placeno > 0 Then
@@ -3987,7 +4503,10 @@ Public Function LncPlanOpisZaOtkup(ByVal otkupID As String, _
     LncPlanOpisZaOtkup = m
     Exit Function
 EH:
-    LncPlanOpisZaOtkup = "Posledice poteza nisu dostupne: " & Err.description
+    ' Pod oznakom PAZNJA, da dijalog ponudi "Ne": potez ciji plan ne moze da se
+    ' izracuna transakcija bi ionako odbila (review a4).
+    LncPlanOpisZaOtkup = LNC_UPOZORENJE & " posledice poteza nisu dostupne, pa ce potez " & _
+                         "verovatno biti odbijen: " & Err.description
 End Function
 
 ' STORNO OTKUPNOG LISTA U LANCU -- jedan potez. Vraca True kad je sve upisano;
@@ -4030,6 +4549,7 @@ Public Function StornoListaULancu_TX(ByVal otkupID As String, _
     Dim rootCid As String
     rootCid = LncKontekstKoren(SV_MODE_PONISTENJE, p, "", "", SRC)
     Set rez = LncSastavi(p, "", rootCid, tx, SRC)
+    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (storno)
 
     modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
 
@@ -4046,6 +4566,188 @@ EH:
     outGreska = OtpPadTransakcije(tx, SRC, otkupID)
     modAmbalaza.AmbOdloziInvarijanteOtkazi tx
     StornoListaULancu_TX = False
+End Function
+
+' POTEZI NAD BLOKOM IZDATE OTPREMNICE (STORNO_U_LANCU.md S10, LNC-ODL-22): blok
+' IZLAZI ("Izvadi", ostaje slobodan) ili ULAZI ("Dodaj"). Blok se ne stornira --
+' novac i zurnal se ne diraju (LNC-ODL-26). Skelet je StornoListaULancu_TX bez
+' koraka lista: stara zbirna i otpremnica padaju, otpremnica' nastaje od blokova
+' nove verzije, zbirna' od sestara + otpremnica', prijemnice se prevezuju po ID-u.
+' Koren traga je par OTPREMNICE (LNC-ODL-27) -- na blok se CorrectionID ne pise,
+' pa njegov kasniji obican storno ostaje povratan. Poslednji blok (Izvadi) =
+' otpremnica bez naslednika (LNC-ODL-25). Ambalaza se meri posle cele zamene
+' (LNC-ODL-31, AMB-10-ODL-40). Jedna transakcija; plan se racuna ponovo unutar nje.
+Public Function IzvadiBlokULancu_TX(ByVal otpremnicaID As String, ByVal otkupID As String, _
+                                    Optional ByRef outGreska As String, _
+                                    Optional ByRef outPoruka As String) As Boolean
+    IzvadiBlokULancu_TX = LncPotezNadBlokom(LNC_IZVADI, otpremnicaID, otkupID, outGreska, outPoruka)
+End Function
+
+Public Function DodajBlokULancu_TX(ByVal otpremnicaID As String, ByVal otkupID As String, _
+                                   Optional ByRef outGreska As String, _
+                                   Optional ByRef outPoruka As String) As Boolean
+    DodajBlokULancu_TX = LncPotezNadBlokom(LNC_DODAJ, otpremnicaID, otkupID, outGreska, outPoruka)
+End Function
+
+Private Function LncPotezNadBlokom(ByVal vrsta As String, ByVal otpremnicaID As String, _
+                                   ByVal otkupID As String, ByRef outGreska As String, _
+                                   ByRef outPoruka As String) As Boolean
+    Dim SRC As String
+    Dim tx As clsTransaction
+    Dim p As Object, rez As Object, napomenaKol As String, rootCid As String, tragBloka As String
+
+    outGreska = ""
+    outPoruka = ""
+    On Error GoTo EH
+    If vrsta = LNC_DODAJ Then SRC = "DodajBlokULancu_TX" Else SRC = "IzvadiBlokULancu_TX"
+
+    otpremnicaID = Trim$(otpremnicaID)
+    otkupID = Trim$(otkupID)
+    LncSemaSpremna SRC
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    LncSnimi tx
+    modAmbalaza.AmbOdloziInvarijantePocni tx, SRC
+
+    Set p = LncPlanBlok(otpremnicaID, otkupID, vrsta)
+    LncRequirePlan p, SRC
+    napomenaKol = LncNapomenaKolicine(p, False)
+
+    LncRasturi p, tx, SRC
+    Set rez = LncSastavi(p, "", "", tx, SRC)
+    rootCid = CStr(rez("rootCid"))
+    If Len(rootCid) = 0 Then
+        Err.Raise vbObjectError + 1994, SRC, "Potez nad blokom nema koren traga (par otpremnice)."
+    End If
+    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (blok)
+    If vrsta = LNC_DODAJ Then
+        tragBloka = "Blok " & p("otkupBroj") & " ulazi u otpremnicu."
+    Else
+        tragBloka = "Blok " & p("otkupBroj") & " izlazi iz otpremnice i ostaje slobodan."
+    End If
+    If Not modStornoContext.DopisiPorukuKonteksta(rootCid, tragBloka) Then
+        Err.Raise vbObjectError + 1995, SRC, "Blok nije upisan u trag poteza: " & rootCid
+    End If
+
+    modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
+
+    tx.CommitTx
+    Set tx = Nothing
+
+    outPoruka = LncPorukaBlok(p, rez)
+    LogInfo SRC, outPoruka
+    If Len(napomenaKol) > 0 Then LogWarn SRC, "LNC-ODL-21/24, potvrdjeno: " & Replace(napomenaKol, vbCrLf, " | ")
+    LncPotezNadBlokom = True
+    Exit Function
+
+EH:
+    outGreska = OtpPadTransakcije(tx, SRC, otkupID)
+    modAmbalaza.AmbOdloziInvarijanteOtkazi tx
+    ' LNC-ODL-23: medjustanje premestanja je commit-ovano, pa ambalaza meri odmah
+    ' posle "Izvadi" -- odbijenica kaze zasto i da jednog poteza nema. Za "Dodaj"
+    ' manjak stanice meri plan pre potvrde (LncDodajManjakStanice); AMB-INV-07 na
+    ' kraju tada imenuje nalog sam (vozac, kod otpremnice neuskladjene sa listovima).
+    If vrsta = LNC_IZVADI And InStr(1, outGreska, "AMB-INV-07", vbBinaryCompare) > 0 Then
+        outGreska = outGreska & " Gajbe ovog bloka su vec predate dalje; premestanje u " & _
+                    "jednom potezu ne postoji (LNC-ODL-23)."
+    End If
+    LncPotezNadBlokom = False
+End Function
+
+' Citljiv razlog odbijanja "Dodaj" za tri neslaganja koja operater stvarno sretne
+' u listi "Bez otpremnice": otkupno mesto, kultura, tip gajbi (rucna provera
+' 15.11.2026: "Izvor OTK-... ima drugo polje StanicaID: ocekivano 'ST-...'").
+' Zove se SAMO kad je kapija (OtpIzvorRazlog) odbila sa 1239 -- RequireIstoPolje u
+' OtpProveriIzvor, cija su jedina tri poredjenja na tom putu otkupno mesto,
+' kultura (prema kulturi nove verzije) i tip gajbi, tim redom. Prvo neslaganje
+' ovde je zato tacno ono na kome je kapija stala; tip je kapija merila samo jer
+' blok nosi gajbe, pa uslov gajbi ovde ne treba. Kapija ostaje jedna, ovo samo
+' imenuje njen razlog nazivima. "" = nijedno od tri; tada ostaje tekst kapije.
+Private Function LncDodajRazlogCitljiv(ByVal otpID As String, ByVal otkupID As String, _
+                                       ByVal kulVer As String, ByVal otpBroj As String, _
+                                       ByVal otkBroj As String) As String
+    Dim a As String, b As String
+    a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_STANICA)))
+    If StrComp(a, b, vbTextCompare) <> 0 Then
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " je sa otkupnog mesta " & StanicaOpisZaPoruku(b) & _
+                                ", a otpremnica " & otpBroj & " sa otkupnog mesta " & _
+                                StanicaOpisZaPoruku(a) & " -- otpremnica nosi robu jednog " & _
+                                "otkupnog mesta, pa se blok ne dodaje."
+        Exit Function
+    End If
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_KULTURA)))
+    If StrComp(kulVer, b, vbTextCompare) <> 0 Then
+        If Len(b) = 0 Then b = "bez kulture" Else b = KulturaOpisZaPoruku(b)
+        If Len(kulVer) = 0 Then a = "bez kulture" Else a = KulturaOpisZaPoruku(kulVer)
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " je druge kulture (" & b & ") od otpremnice " & _
+                                otpBroj & " (" & a & ") -- otpremnica nosi jednu kulturu, " & _
+                                "pa se blok ne dodaje."
+        Exit Function
+    End If
+    a = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    b = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_TIP_AMB)))
+    If StrComp(a, b, vbTextCompare) <> 0 Then
+        LncDodajRazlogCitljiv = "Blok " & otkBroj & " nosi gajbe tipa " & b & ", a otpremnica " & _
+                                otpBroj & " tipa " & a & " -- otpremnica nosi jedan tip " & _
+                                "ambalaze, pa se blok ne dodaje."
+    End If
+End Function
+
+' Naziv otkupnog mesta za poruku; bez naziva ostaje ID (kao KulturaOpisZaPoruku).
+Private Function StanicaOpisZaPoruku(ByVal stanicaID As String) As String
+    Dim v As String
+    If Len(stanicaID) = 0 Then
+        StanicaOpisZaPoruku = "(bez otkupnog mesta)"
+        Exit Function
+    End If
+    v = Trim$(NzToText(LookupValue(TBL_STANICE, COL_STA_ID, stanicaID, "Naziv")))
+    If Len(v) = 0 Then v = stanicaID
+    StanicaOpisZaPoruku = v
+End Function
+
+' LNC-INV-18 za "Dodaj": otpremnica' knjizi stanica -> vozac zbir gajbi svojih
+' listova (OtpKnjiziAmbalazu), a PrenesiAmbalazu manjak stanice odbija ODMAH --
+' AMB-10-ODL-40 odlaze samo kontra-stav. Plan zato meri isto sto ce pisac videti:
+' saldo stanice BEZ redova stare otpremnice (kontra-stav ih vraca) prema gajbama
+' nove verzije. U knjizi uskladjenoj sa listovima manjka nema -- pune gajbe
+' slobodnog bloka stoje na stanici -- pa ovo hvata stari oblik (otpremnica koja je
+' knjizila vise nego sto listovi nose). "" = nema manjka.
+Private Function LncDodajManjakStanice(ByVal otpID As String, ByVal izvori As Collection, _
+                                       ByVal src As String) As String
+    Dim tipAmb As String, stanicaID As String, gajbe As Double, manjak As Double, k As Long
+    tipAmb = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    If Len(tipAmb) = 0 Then Exit Function
+    For k = 1 To izvori.count
+        gajbe = gajbe + OtpGajbeIzvora(CStr(izvori(k)), src)
+    Next k
+    If gajbe <= 0 Then Exit Function
+    stanicaID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA)))
+    manjak = modAmbalaza.AmbDeficitZaPrenos(AMB_NALOG_STANICA, stanicaID, tipAmb, gajbe, _
+                                            DOK_TIP_OTPREMNICA, otpID)
+    If manjak > 0 Then
+        LncDodajManjakStanice = "Stanica nema gajbe za ovaj potez: nova verzija otpremnice " & _
+            Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ))) & _
+            " bi nosila " & Fmt2Zbr(gajbe) & " gajbi '" & tipAmb & "', a stanica ih bez nje drzi " & _
+            Fmt2Zbr(gajbe - manjak) & " (manjak " & Fmt2Zbr(manjak) & "). Gajbe bloka su otisle " & _
+            "drugim putem -- prvo uskladi knjigu gajbi stanice."
+    End If
+End Function
+
+' Datum iz celije: Date, ili serijski broj (celija bez formata datuma) -- isto
+' pravilo kao modUiData.CellDate. Prazno i tekst koji nije datum: False.
+Private Function LncDatumCelije(ByVal v As Variant, ByRef outDatum As Date) As Boolean
+    If IsEmpty(v) Or IsNull(v) Then Exit Function
+    If VarType(v) <> vbString And IsNumeric(v) Then
+        If Not modUiData.DatumSerijskiValidan(CDbl(v)) Then Exit Function
+        outDatum = CDate(CDbl(v))
+    ElseIf IsDate(v) Then
+        outDatum = CDate(v)
+    Else
+        Exit Function
+    End If
+    LncDatumCelije = True
 End Function
 
 ' ISPRAVKA OTKUPNOG LISTA U LANCU -- jedan potez (LNC-ODL-06, -12).
@@ -4097,7 +4799,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     LncRequirePlan p, SRC, False
     ' LNC-ODL-21: upozorenje se meri PRE izmena, a u log ide tek posle commit-a.
     Dim napomenaKol As String
-    napomenaKol = LncNapomenaKolicine(p, True)
+    napomenaKol = LncNapomenaKolicine(p, True, stavke)
     If Not CBool(p("otpIzdata")) Then
         Err.Raise vbObjectError + 1987, SRC, _
                   "List je u NACRTU otpremnice " & p("otpBroj") & " -- nacrt se ispravlja " & _
@@ -4118,6 +4820,7 @@ Public Function IspravkaListaULancu_TX(ByVal stariOtkupID As String, _
     End If
 
     Set rez = LncSastavi(p, noviID, rootCid, tx, SRC)
+    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (ispravka)
 
     modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC
 
@@ -4239,8 +4942,10 @@ Private Sub LncRasturi(ByVal p As Object, ByVal tx As clsTransaction, ByVal src 
 End Sub
 
 ' SASTAVI: nove verzije odozdo. noviOtkupID je naslednik lista (ispravka) ili
-' prazan (storno). rootCid je red lista u tblStornoVeze (koren poteza).
-' Vraca: otpNovaID, otpNovaBroj, zbrNovaID, zbrNovaBroj, prijemnica (broj).
+' prazan (storno). rootCid je red lista u tblStornoVeze (koren poteza); prazan
+' rootCid (potez bez para lista, LNC-ODL-27) cini red para otpremnice korenom.
+' Vraca: otpNovaID, otpNovaBroj, zbrNovaID, zbrNovaBroj, prijemnica (broj),
+' rootCid (koren poteza -- za trag upozorenja, LNC-ODL-38).
 Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
                             ByVal rootCid As String, ByVal tx As clsTransaction, _
                             ByVal src As String) As Object
@@ -4251,6 +4956,7 @@ Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
     rez.Add "zbrNovaID", ""
     rez.Add "zbrNovaBroj", ""
     rez.Add "prijemnica", 0&
+    rez.Add "rootCid", rootCid
     Set LncSastavi = rez
 
     Dim otpStara As String, zbrStara As String, k As Long
@@ -4293,9 +4999,14 @@ Private Function LncSastavi(ByVal p As Object, ByVal noviOtkupID As String, _
         rez("otpNovaID") = otpNova
         rez("otpNovaBroj") = CStr(h("BrojOtpremnice"))
     End If
-    LncKontekstPar DOK_TIP_OTPREMNICA, otpStara, CStr(p("otpBroj")), _
-                   otpNova, CStr(rez("otpNovaBroj")), TBL_OTPREMNICA, COL_OTP_ID, _
-                   rootCid, src
+    Dim cidOtp As String
+    cidOtp = LncKontekstPar(DOK_TIP_OTPREMNICA, otpStara, CStr(p("otpBroj")), _
+                            otpNova, CStr(rez("otpNovaBroj")), TBL_OTPREMNICA, COL_OTP_ID, _
+                            rootCid, src)
+    If Len(rootCid) = 0 Then
+        rootCid = cidOtp
+        rez("rootCid") = rootCid
+    End If
 
     If Len(zbrStara) = 0 Then Exit Function
 
@@ -4515,12 +5226,13 @@ End Function
 
 ' Red para (otpremnica ili zbirna) pod korenom poteza. Bez naslednika je
 ' PONISTENJE, sa naslednikom ISPRAVKA. Kontekst se zavrsava u ISTOJ transakciji
-' (LNC-INV-10), a CorrectionID para ide na oba dokumenta.
-Private Sub LncKontekstPar(ByVal docTip As String, ByVal staraID As String, _
-                           ByVal stariBroj As String, ByVal novaID As String, _
-                           ByVal noviBroj As String, ByVal tbl As String, _
-                           ByVal idCol As String, ByVal rootCid As String, _
-                           ByVal src As String)
+' (LNC-INV-10), a CorrectionID para ide na oba dokumenta. Vraca CorrectionID para.
+' Prazan rootCid znaci da je OVAJ red koren (LNC-ODL-27: potez bez para lista).
+Private Function LncKontekstPar(ByVal docTip As String, ByVal staraID As String, _
+                                ByVal stariBroj As String, ByVal novaID As String, _
+                                ByVal noviBroj As String, ByVal tbl As String, _
+                                ByVal idCol As String, ByVal rootCid As String, _
+                                ByVal src As String) As String
     Dim cid As String, mode As String
     If Len(novaID) > 0 Then mode = SV_MODE_ISPRAVKA Else mode = SV_MODE_PONISTENJE
 
@@ -4539,7 +5251,8 @@ Private Sub LncKontekstPar(ByVal docTip As String, ByVal staraID As String, _
     If Not modStornoContext.CompleteCorrectionContext(cid, novaID, noviBroj) Then
         Err.Raise vbObjectError + 1983, src, "Correction context nije zavrsen: " & cid
     End If
-End Sub
+    LncKontekstPar = cid
+End Function
 
 ' CorrectionID para na dokument. Tabela je IMENOVANA, ne iz promenljive: upis iz
 ' promenljive mapa vlasnistva (who_writes.py) ne vidi, a ovaj ga pise modDokumenta
@@ -4568,6 +5281,24 @@ Private Function LncPoruka(ByVal p As Object, ByVal rez As Object, _
     Else
         m = "List " & p("otkupBroj") & " je storniran."
     End If
+    LncPoruka = m & LncPorukaLanca(p, rez)
+End Function
+
+' Poruka posle poteza nad blokom (LNC-ODL-35): blok izlazi / ulazi, ne stornira se.
+Private Function LncPorukaBlok(ByVal p As Object, ByVal rez As Object) As String
+    Dim m As String
+    If CStr(p("vrsta")) = LNC_DODAJ Then
+        m = "Blok " & p("otkupBroj") & " je dodat u otpremnicu."
+    Else
+        m = "Blok " & p("otkupBroj") & " je izvadjen iz otpremnice i ostaje slobodan."
+    End If
+    LncPorukaBlok = m & LncPorukaLanca(p, rez)
+End Function
+
+' Zajednicki deo poruke posle poteza: stari -> novi broj otpremnice i zbirne,
+' prijemnice, telefon vozaca, papir. Pocinje razmakom.
+Private Function LncPorukaLanca(ByVal p As Object, ByVal rez As Object) As String
+    Dim m As String
     If CBool(p("otpIzdata")) Then
         If Len(CStr(rez("otpNovaBroj"))) > 0 Then
             m = m & " Otpremnica " & p("otpBroj") & " -> " & rez("otpNovaBroj") & "."
@@ -4589,12 +5320,17 @@ Private Function LncPoruka(ByVal p As Object, ByVal rez As Object, _
             m = m & " Zbirna " & p("zbrBroj") & " je stornirana (bez preostalih otpremnica)."
         End If
         If CBool(p("zbrSaPWA")) Then
-            m = m & " Zbirna je stigla sa vozacevog telefona: telefon i dalje prikazuje " & _
-                    "stari broj " & p("zbrBroj") & "."
+            If Len(CStr(rez("zbrNovaBroj"))) > 0 Then
+                m = m & " Zbirna je stigla sa vozacevog telefona: telefon i dalje prikazuje " & _
+                        "stari broj " & p("zbrBroj") & "."
+            Else
+                m = m & " Zbirna je stigla sa vozacevog telefona: telefon i dalje prikazuje " & _
+                        "zbirnu " & p("zbrBroj") & ", koja je sada stornirana."
+            End If
         End If
     End If
     m = m & " Papir nove verzije se stampa iz Izvestaja."
-    LncPoruka = m
+    LncPorukaLanca = m
 End Function
 
 ' Read-model panela: ocekivano / povezano / preostalo po klasi.
@@ -5544,6 +6280,8 @@ End Sub
 
 ' Sve sto izvor mora da zadovolji. Zove se i iz Dodaj i iz Izdaj -- izdavanje NE
 ' veruje onome sto je Dodaj proverio, jer izmedju njih prolazi vreme.
+' Clanstvo se pise SAMO u nacrt (RequireOtpDraft); sve ostalo je OtpProveriIzvor,
+' ISTO telo koje plan "Dodaj blok" meri nad izdatom otpremnicom (LNC-ODL-29).
 Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
                                   ByVal otkupID As String, _
                                   ByVal src As String, _
@@ -5556,6 +6294,44 @@ Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
     rOtp = OtpRedHeadera(otpremnicaID, src)
     RequireOtpDraft otpremnicaID, rOtp, src
 
+    OtpProveriIzvor otpremnicaID, otkupID, src, traziSlobodan
+End Sub
+
+' Razlog-oblik iste provere, za plan pre potvrde (LNC-ODL-29): "" = izvor je
+' valjan za ovu otpremnicu (nacrt ili izdatu); inace tekst i broj greske koju bi
+' pisac digao. Jedno telo, dva pozivaoca (.claude/rules/testovi.md S5).
+' kulturaVerzije: kultura koju ce nova verzija nositi (OtpKulturaVerzije). Plan
+' meri izvor prema NOVOJ verziji, kao pisac (LncSastavi meri nad otpremnicom');
+' kod stare otpremnice bez kulture u zaglavlju ona nije prazna. "" = zaglavlje.
+Private Function OtpIzvorRazlog(ByVal otpremnicaID As String, ByVal otkupID As String, _
+                                ByVal src As String, ByVal traziSlobodan As Boolean, _
+                                Optional ByRef outErrNum As Long, _
+                                Optional ByVal kulturaVerzije As String = "") As String
+    outErrNum = 0
+    On Error GoTo EH
+    If Len(otkupID) = 0 Then
+        Err.Raise vbObjectError + 1287, src, "Prazan OtkupID."
+    End If
+    OtpRedHeadera otpremnicaID, src
+    OtpProveriIzvor otpremnicaID, otkupID, src, traziSlobodan, kulturaVerzije
+    Exit Function
+EH:
+    ' Sistemski pad (sema, citanje) nije poslovni razlog: ide dalje, glasno.
+    If modSchemaGuard.JeSistemskiPad(Err.Number) Then
+        Err.Raise Err.Number, Err.Source, Err.description
+    End If
+    outErrNum = Err.Number
+    OtpIzvorRazlog = Err.description
+End Function
+
+' Telo provere izvora BEZ uslova "nacrt": otkup, stavke, stanica, kultura, izdat,
+' tip ambalaze (kad nosi gajbe) i kanonsko clanstvo. Dize gresku sa brojem.
+' Prazan OtkupID i zaglavlje otpremnice proverava pozivalac (jednom, ne po izvoru).
+Private Sub OtpProveriIzvor(ByVal otpremnicaID As String, _
+                            ByVal otkupID As String, _
+                            ByVal src As String, _
+                            ByVal traziSlobodan As Boolean, _
+                            Optional ByVal kulturaVerzije As String = "")
     RequireTacnoJedan TBL_OTKUP, COL_OTK_ID, otkupID, "OtkupID", src
 
     If StrComp(Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
@@ -5581,9 +6357,13 @@ Private Sub OtpRequireIzvorValjan(ByVal otpremnicaID As String, _
                                                 COL_OTK_STANICA))), _
                      "StanicaID", otkupID, src
 
-    ' Kultura je relaciona istina; vrsta/sorta se poklapaju posledicno.
-    RequireIstoPolje Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
-                                                otpremnicaID, COL_OTP_KULTURA))), _
+    ' Kultura je relaciona istina; vrsta/sorta se poklapaju posledicno. Plan
+    ' poteza nad izdatom meri prema kulturi NOVE verzije (OtpIzvorRazlog).
+    If Len(kulturaVerzije) = 0 Then
+        kulturaVerzije = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                    otpremnicaID, COL_OTP_KULTURA)))
+    End If
+    RequireIstoPolje kulturaVerzije, _
                      Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, _
                                                 COL_OTK_KULTURA))), _
                      "KulturaID", otkupID, src
@@ -6235,12 +7015,13 @@ End Function
 ' zbira izvora, pa se razlika ne moze preneti: operater je vidi PRE poteza i
 ' odlucuje Da/Ne (ne odbijanje). Sve razlike, po klasi, za kg i gajbe, i za
 ' otpremnicu i za izdatu zbirnu koja dobija novu verziju. "" = nema razlike.
-Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Boolean) As String
+Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Boolean, _
+                                     Optional ByVal noveStavke As Collection = Nothing) As String
     Const SRC As String = "LncNapomenaKolicine"
     Dim ocek As Object, ocekAmb As Object
     Dim pov As Object, povAmb As Object, povBruto As Object, povBrutoPun As Object
     Dim zOcek As Object, zOcekAmb As Object, zPov As Object, zPovAmb As Object
-    Dim otpDeo As String, zbrDeo As String, s As String, m As String
+    Dim otpDeo As String, zbrDeo As String, prjDeo As String, s As String, m As String
 
     If Not CBool(p("otpIzdata")) Then Exit Function
 
@@ -6283,24 +7064,163 @@ Private Function LncNapomenaKolicine(ByVal p As Object, ByVal zaIspravku As Bool
         End If
     End If
 
-    If Len(otpDeo) = 0 And Len(zbrDeo) = 0 Then Exit Function
+    ' LNC-ODL-24: zbirna sa aktivnom prijemnicom -- posle LNC-ODL-21 delova, pod
+    ' istom (jednom) oznakom PAZNJA.
+    prjDeo = LncNapomenaPrijemnice(p, zaIspravku, noveStavke)
+
+    If Len(otpDeo) = 0 And Len(zbrDeo) = 0 And Len(prjDeo) = 0 Then Exit Function
 
     m = LNC_UPOZORENJE & " potez menja prijavljene kolicine."
     If Len(otpDeo) > 0 Then
         m = m & vbCrLf & "- Otpremnica " & p("otpBroj") & " se ne slaze sa svojim listovima (pre poteza) -- " & _
             otpDeo & ". Nova verzija otpremnice nosi zbir svojih listova" & _
-            IIf(zaIspravku, " (sa ispravljenim listom)", " (bez storniranog lista)") & _
+            LncNapomenaSufiks(p, zaIspravku) & _
             ", a ne kolicinu sa otpremnice."
     End If
     If Len(zbrDeo) > 0 Then
         m = m & vbCrLf & "- Zbirna " & p("zbrBroj") & " se ne slaze sa zbirom svojih izvora (ostale " & _
             "otpremnice i listovi ove otpremnice, pre poteza) -- " & zbrDeo & _
             ". Nova verzija zbirne nosi taj zbir" & _
-            IIf(zaIspravku, " (sa ispravljenim listom)", " (bez storniranog lista)") & "."
+            LncNapomenaSufiks(p, zaIspravku) & "."
     End If
+    If Len(prjDeo) > 0 Then m = m & vbCrLf & prjDeo
     m = m & vbCrLf & "Bruto se uvek racuna iz listova. Nastavi samo ako su zbirovi tacni."
     LncNapomenaKolicine = m
 End Function
+
+' Sta nova verzija nosi, recima poteza (LNC-ODL-35): blok se ne stornira, pa se ne
+' kaze "bez storniranog lista".
+Private Function LncNapomenaSufiks(ByVal p As Object, ByVal zaIspravku As Boolean) As String
+    If p.Exists("vrsta") Then
+        If CStr(p("vrsta")) = LNC_DODAJ Then
+            LncNapomenaSufiks = " (sa dodatim blokom)"
+        Else
+            LncNapomenaSufiks = " (bez izvadjenog bloka)"
+        End If
+    ElseIf zaIspravku Then
+        LncNapomenaSufiks = " (sa ispravljenim listom)"
+    Else
+        LncNapomenaSufiks = " (bez storniranog lista)"
+    End If
+End Function
+
+' LNC-ODL-24 (operater 09.11.2026): zbirna sa AKTIVNOM prijemnicom -- kupac je robu
+' vec izmerio, a prijemnica se ne menja (LNC-ODL-02). Potvrda SVAKOG poteza u lancu
+' kaze koliko ce nositi nova verzija zbirne (X) i koliko prijemnice (Y), za kg i
+' gajbe; oznaka PAZNJA tada daje "Ne" kao podrazumevano (LncTekstImaUpozorenje).
+' Klasa se ne poredi: kupac je procenjuje pri prijemu (PRJ-ZBR-02).
+'
+' X se racuna kao pisac zbirne: stavke sestara (ZbrUcitajPovezano, isti primitiv
+' StavkeZaOtpremnicu kao CreateZbirna) + listovi otpremnice' (preostali, uz nove
+' stavke ispravke). Ispravka bez novih stavki (potvrda bez forme) kaze X bez njih.
+' Y je zbir stavki prijemnica koje je plan izabrao po ZbirnaRoditeljID, nikad po
+' labeli. "" = nema aktivne prijemnice, ili zbirna' ne nastaje (LNC-ODL-07 odbija).
+Private Function LncNapomenaPrijemnice(ByVal p As Object, ByVal zaIspravku As Boolean, _
+                                       ByVal noveStavke As Collection) As String
+    Const SRC As String = "LncNapomenaPrijemnice"
+    Dim xKg As Double, xAmb As Double, aKg As Double, aAmb As Double
+    Dim yKg As Double, yAmb As Double, lKg As Double, lAmb As Double
+    Dim zPov As Object, zPovAmb As Object, zOcek As Object, zOcekAmb As Object
+    Dim sestre As Collection, zbir As Object, rec As Variant, v As Variant
+    Dim k As Long, pid As String, lista As String, m As String, bezNovih As Boolean
+
+    If Not CBool(p("zbrIzdata")) Then Exit Function
+    If p("prijemnice").count = 0 Then Exit Function
+    If p("zbrSestre").count = 0 And p("otpPreostali").count = 0 And Not zaIspravku Then Exit Function
+
+    Set sestre = New Collection
+    For k = 1 To p("zbrSestre").count
+        sestre.Add CStr(p("zbrSestre")(k))
+    Next k
+    ZbrUcitajPovezano CStr(p("zbrID")), sestre, zPov, zPovAmb, SRC
+    For Each v In zPov.keys
+        xKg = xKg + CDbl(zPov(v))
+        xAmb = xAmb + CDbl(zPovAmb(v))
+    Next v
+    LncZbirListova p("otpPreostali"), lKg, lAmb
+    xKg = xKg + lKg
+    xAmb = xAmb + lAmb
+    bezNovih = zaIspravku And (noveStavke Is Nothing)
+    If zaIspravku And Not bezNovih Then
+        Dim st As Object
+        For k = 1 To noveStavke.count
+            Set st = noveStavke(k)
+            xKg = xKg + CDbl(st("Kolicina"))
+            xAmb = xAmb + CDbl(st("KolAmbalaze"))
+        Next k
+    End If
+
+    ZbrUcitajOcekivano CStr(p("zbrID")), zOcek, zOcekAmb, SRC
+    For Each v In zOcek.keys
+        aKg = aKg + CDbl(zOcek(v))
+        aAmb = aAmb + CDbl(zOcekAmb(v))
+    Next v
+
+    Set zbir = ZbirStavkiPoPrijemnici()
+    For k = 1 To p("prijemnice").count
+        pid = CStr(p("prijemnice")(k))
+        rec = ZbirStavkiZaPrijemnicu(zbir, pid, SRC)
+        yKg = yKg + CDbl(rec(0))
+        yAmb = yAmb + CDbl(rec(2))
+        If Len(lista) > 0 Then lista = lista & ", "
+        lista = lista & Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_PRJ_BROJ))) & _
+                " " & LncFmt(CDbl(rec(0)), False) & " kg"
+    Next k
+
+    ' JEDAN red, kratak: potvrda je MsgBox (granica ~1024 znaka, LncDijalogTekst).
+    m = "- Zbirna " & p("zbrBroj") & " ima aktivnu prijemnicu"
+    m = m & " (kupac je robu izmerio; prijemnica se ne menja). Nova zbirna: " & _
+        LncFmt(xKg, False) & " kg" & IIf(bezNovih, " + ispravljen list", "") & _
+        " (sada " & LncFmt(aKg, False) & "), prijemnice: " & lista & ", ukupno " & _
+        LncFmt(yKg, False) & " kg"
+    If Not bezNovih Then m = m & ", razlika " & LncFmt(xKg - yKg, False) & " kg"
+    m = m & "; gajbe " & LncFmt(xAmb, True) & IIf(bezNovih, " + ispravljen list", "") & _
+        " (sada " & LncFmt(aAmb, True) & "), prijemnice " & LncFmt(yAmb, True)
+    If Not bezNovih Then m = m & ", razlika " & LncFmt(xAmb - yAmb, True)
+    LncNapomenaPrijemnice = m & "."
+End Function
+
+' MsgBox prikazuje oko 1024 znaka i TIHO odseca ostatak (modVbaTools). Potvrda
+' poteza u lancu zato ne sme da preraste granicu: uvod (pitanje F8 / F1 "Storno")
+' i pitanje na kraju (F1 "Ispravi blok") se uvek vide, a predugacak opis se
+' skracuje NA KRAJU, uz napomenu -- oznaka PAZNJA i brojevi su na njegovom pocetku.
+' Pun tekst ide u trag poteza (LNC-ODL-38) i u log. Jedno telo za sva tri dijaloga.
+Public Function LncDijalogTekst(ByVal uvod As String, ByVal opis As String, _
+                                Optional ByVal pitanje As String = "") As String
+    Const MAX_DIJALOG As Long = 1000
+    Const SKRACENO As String = " ... (skraceno; pun tekst ide u trag poteza i u log)"
+    Dim okvir As Long, mesta As Long
+    okvir = Len(uvod)
+    If Len(pitanje) > 0 Then okvir = okvir + Len(pitanje) + 4
+    If okvir + Len(opis) > MAX_DIJALOG Then
+        mesta = MAX_DIJALOG - okvir - Len(SKRACENO)
+        If mesta < 0 Then mesta = 0
+        opis = Left$(opis, mesta) & SKRACENO
+    End If
+    LncDijalogTekst = uvod & opis
+    If Len(pitanje) > 0 Then LncDijalogTekst = LncDijalogTekst & vbCrLf & vbCrLf & pitanje
+End Function
+
+' Zbir kg i gajbi stavki zadatih listova -- kanonski strog citac otkupa
+' (modOtkup.StavkeOtkupaRedovi: 1 OtkupID | 3 Klasa | 4 Kolicina | 6 KolAmbalaze).
+Private Sub LncZbirListova(ByVal listovi As Collection, ByRef kg As Double, ByRef amb As Double)
+    Dim sve As Variant, skup As Object, i As Long, k As Long
+    kg = 0
+    amb = 0
+    If listovi.count = 0 Then Exit Sub
+    Set skup = CreateObject("Scripting.Dictionary")
+    For k = 1 To listovi.count
+        skup(UCase$(CStr(listovi(k)))) = True
+    Next k
+    sve = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(sve) Then Exit Sub
+    For i = 1 To UBound(sve, 1)
+        If skup.Exists(UCase$(CStr(sve(i, 1)))) Then
+            kg = kg + CDbl(sve(i, 4))
+            amb = amb + CDbl(sve(i, 6))
+        End If
+    Next i
+End Sub
 
 ' cilj(klasa) += izvor(klasa), za svaku klasu izvora.
 Private Sub LncDodajPoKlasi(ByVal cilj As Object, ByVal izvor As Object)

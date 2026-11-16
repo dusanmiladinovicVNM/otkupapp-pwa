@@ -3199,8 +3199,21 @@ završetak odbija `clsTransaction.CommitTx`.
 *Provera:* BFP `Test_AMB_ODL40_MeriPosleZamene` (A → B: bez odlaganja pada, sa odlaganjem i
 pokrićem prolazi), `_BezPokricaPadaNaKraju`, `_CommitBezZavrsetkaOdbijen`, `_UgovorPocetka` ·
 sabotaže `odl40-zavrsi-bez-inv07`, `odl40-kontra-meri-odmah`, `odl40-commit-bez-kapije` ·
-sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. **NEVERIFIKOVANO u Excelu**
-(web sesija).
+sabotaža `amb-storno-bez-inv07` sada pogađa i odloženi put. BFP zelen 08.11.2026 (3208/3208) i
+16.11.2026 na `3f251d46` (3479/3479); dokaz `odl40-*` i `amb-storno-bez-inv07` čeka.
+
+**Proširenje (pre-flight 08.11.2026, `STORNO_U_LANCU.md` §10, `LNC-ODL-31`).** Isto važi za
+„Dodaj blok" i „Izvadi blok" nad izdatom otpremnicom: to je ista zamena verzije u jednoj
+transakciji, samo bez lista. Neto po nalozima, za otpremnicu usklađenu sa listovima: „Izvadi k" —
+stanica +k, vozač −k; „Dodaj k" — stanica −k, vozač +k; kooperant i kupac 0 (`LNC-INV-17`);
+neusklađena pomera i razliku između knjiženih gajbi i zbira listova (`LNC-ODL-21`). Premeštanje A → B su **dve**
+transakcije, pa se međustanje posle „Izvadi" meri i može da odbije (`LNC-ODL-23`). U kodu od
+10.11.2026: `modDokumenta.LncPotezNadBlokom` (ulazi `IzvadiBlokULancu_TX` / `DodajBlokULancu_TX`),
+manjak stanice pre potvrde `LncDodajManjakStanice`; BFP `Test_LNC_Blok_IzvadiAmbalaza` /
+`Test_LNC_Blok_DodajAmbalaza` zelen u punom `run_vba` 16.11.2026 na `3f251d46` (3479/3479, RunID
+20261116124815-8803); sabotaže `lncb-izvadi-meri-usred`, `lncb-izvadi-bez-poruke-odl23`,
+`lncb-dodaj-meri-usred`, `lncb-dodaj-manjak-samo-u-tx` u dokazu 87/87 (svaka sabotaža oborila svoj
+test) na `95caefe3`, a `lncb-dodaj-*` ponovo 17/17 na `3f251d46` (16.11.2026).
 
 ### 6.15 Cena — posteno
 

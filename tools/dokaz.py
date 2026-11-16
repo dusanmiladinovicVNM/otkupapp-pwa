@@ -89,7 +89,10 @@ def _otisak() -> str:
     return h.hexdigest()[:16]
 
 
-def _pusti(*a, timeout=1200):
+# Mora biti VECE od tvrdog prekida run_vba-a (--timeout, 1800 s): inace proces
+# run_vba ubije ovaj poziv pre nego sto run_vba sam prijavi FATAL, pa se umesto
+# razloga vidi samo "timeout" (KI-096).
+def _pusti(*a, timeout=2400):
     return subprocess.run(a, cwd=ROOT, capture_output=True, text=True,
                           timeout=timeout)
 

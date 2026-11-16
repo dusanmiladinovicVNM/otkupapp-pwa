@@ -7538,7 +7538,7 @@ SABOTAZE = {
     # promenilo otpremnicu i zbirnu bez pitanja.
     "lnc-f1-bez-potvrde": (
         "modScrDokumenti.bas",
-        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True)\n",
+        "    opis = modDokumenta.LncPlanOpisZaOtkup(otkupID, True, nove)\n",
         "    opis = \"\"   ' SABOTAZA: ispravka u lancu bez potvrde\n",
         "Test_LNC_F1IspravkaULancu",
         "LNC F1: snimanje ispravke u lancu trazi potvrdu sa posledicama",
@@ -7618,7 +7618,7 @@ SABOTAZE = {
     # Plan ispravke meri samo preostale listove: F1 otvara formu, a snimanje pada.
     "lnc-stara-otp-ispravka-bez-lista": (
         "modDokumenta.bas",
-        "    If zaIspravku Then mereni.Add otkupID\n",
+        "    If meriIzlazeci Then mereni.Add otkupID\n",
         "    ' SABOTAZA: ispravka ne meri list koji se ispravlja\n",
         "Test_LNC_StaraOtpremnicaBezKulture",
         "LNC stara otpremnica: ispravka meri i list koji se ispravlja",
@@ -7655,6 +7655,735 @@ SABOTAZE = {
         "            s = \"\"   ' SABOTAZA: gajbe zbirne se ne porede\n",
         "Test_LNC_OtpremnicaNeuskladjenaSaListovima",
         "LNC neuskladjena zbirna: razlika u gajbama zbirne se prijavljuje",
+    ),
+    # LNC-ODL-37 / KI-095 (T21): kapija nedovrsenog konteksta. Zbirna se ne meri:
+    # potez zamenjuje zbirnu nad kojom stoji "Resi kasnije", a podsetnik posle
+    # poteza pokazuje na storniranu verziju.
+    "lncb-pending-zbirna-bez-kapije": (
+        "modDokumenta.bas",
+        "    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, \"\", \"\", zbrID, CStr(p(\"zbrBroj\")))\n",
+        "    razlogKtx = \"\"   ' SABOTAZA: zbirna bez kapije konteksta\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (b): plan odbija PRE potvrde i imenuje podsetnik nad zbirnom",
+    ),
+    # Otpremnica se ne meri: kontekst nad otpremnicom ne zaustavlja potez.
+    "lncb-pending-otpremnica-bez-kapije": (
+        "modDokumenta.bas",
+        "    razlogKtx = LncNedovrsenKontekstRazlog(ktx, ktxGreska, otpID, CStr(p(\"otpBroj\")), \"\", \"\")\n",
+        "    razlogKtx = \"\"   ' SABOTAZA: otpremnica bez kapije konteksta\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e1): kontekst nad otpremnicom odbija potez pre potvrde",
+    ),
+    # Nedovrsena ispravka prijemnice se ne vidi (stara je stornirana): storno
+    # jedinog lista obara zbirnu, a zamena ostaje bez roditelja (KI-095, put 1).
+    "lncb-pending-prijemnica-nevidljiva": (
+        "modDokumenta.bas",
+        "                If LncPrijemnicaCekaIspravku(oldID, CStr(d(\"parentBroj\")), zbrID, zbrBroj, SRC) Then\n",
+        "                If False Then   ' SABOTAZA: nedovrsena ispravka prijemnice se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (a): plan odbija PRE potvrde i imenuje nedovrsenu ispravku prijemnice",
+    ),
+    # Kapija nad zbirnom gleda samo Status = PENDING: podsetnik u MANUAL_REQUIRED
+    # (ili pao FAILED) vise ne odbija, iako i dalje ceka u Oporavku.
+    "lncb-pending-samo-pending": (
+        "modDokumenta.bas",
+        "                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) Then\n",
+        "                If LncKontekstPogadja(oldID, oldBroj, stKtx, zbrID, zbrBroj, poBroju) And stKtx = SV_STATUS_PENDING Then   ' SABOTAZA: samo PENDING\n",
+        "Test_LNC_NedovrsenKontekstOdbija",
+        "LNC21 (b): podsetnik u MANUAL_REQUIRED i dalje odbija",
+    ),
+    # Ispravka prijemnice odbija u SVAKOM statusu: kad je zamena vec uneta
+    # (MANUAL_REQUIRED, palete nisu prevezane) potez se pogresno odbija i salje
+    # operatera u F4, gde bi napravio duplu prijemnicu.
+    "lncb-pending-prijemnica-svaki-status": (
+        "modDokumenta.bas",
+        "                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
+        "                   True Then   ' SABOTAZA: ispravka prijemnice u svakom statusu\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (d): zamena vec uneta (MANUAL_REQUIRED) ne zaustavlja potez",
+    ),
+    # Kapija ne gleda da li je prijemnica stornirana: ispravka nad AKTIVNOM
+    # prijemnicom (prevezuje se po ID-u) pogresno odbija potez.
+    "lncb-pending-aktivna-prijemnica": (
+        "modDokumenta.bas",
+        "                                         COL_STORNIRANO)))) <> \"DA\" Then Exit Function\n",
+        "                                         COL_STORNIRANO)))) = \"NIKAD\" Then Exit Function   ' SABOTAZA: i aktivna prijemnica ceka\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (c3): ispravka nad AKTIVNOM prijemnicom ne zaustavlja potez",
+    ),
+    # Red konteksta STAROG oblika (bez OldDocID-a) se tiho pusta umesto da se
+    # poredi po broju.
+    "lncb-pending-bez-broja": (
+        "modDokumenta.bas",
+        "        LncKontekstPogadja = BrojJednak(oldBroj, docBroj)\n",
+        "        LncKontekstPogadja = False   ' SABOTAZA: red bez OldDocID se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e2): kontekst starog oblika (bez OldDocID) odbija po broju",
+    ),
+    # Prijemnica STAROG oblika (bez ZbirnaRoditeljID) se tiho pusta: storno jedinog
+    # lista obara zbirnu, a zamena ostaje bez roditelja (KI-095 nad starim podacima).
+    "lncb-pending-prijemnica-bez-roda": (
+        "modDokumenta.bas",
+        "                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj)\n",
+        "                                                           COL_PRJ_BROJ_ZBIRNE), zbrBroj) And False   ' SABOTAZA: prijemnica bez roda se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (f): prijemnica bez ZbirnaRoditeljID se nalazi po broju zbirne",
+    ),
+    # Ispravka prijemnice STAROG oblika (red bez OldDocID-a) se tiho pusta umesto
+    # da se poredi po ParentBroj.
+    "lncb-pending-prijemnica-bez-id": (
+        "modDokumenta.bas",
+        "            LncPrijemnicaCekaIspravku = BrojJednak(parentBroj, zbrBroj)\n",
+        "            LncPrijemnicaCekaIspravku = False   ' SABOTAZA: red ispravke bez OldDocID se ne vidi\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e3): ispravka prijemnice starog oblika (bez OldDocID) odbija po ParentBroj",
+    ),
+    # Stari MANUAL_REQUIRED (uvek upisan POSLE storna svoje zbirne) po broju
+    # pogadja tudju, zivu zbirnu istog broja i pogresno odbija potez.
+    "lncb-pending-stari-manual": (
+        "modDokumenta.bas",
+        "        If StrComp(stKtx, SV_STATUS_MANUAL, vbTextCompare) = 0 Then Exit Function\n",
+        "        ' SABOTAZA: i stari MANUAL red odbija po broju\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (e2b): stari MANUAL red (posle storna) ne odbija po broju",
+    ),
+    # Ispravka prijemnice koja ne moze da se proveri (prijemnice nema) se tiho
+    # pusta umesto da odbije potez i imenuje svoj red.
+    "lncb-pending-prijemnica-nepoznata": (
+        "modDokumenta.bas",
+        "    If FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prjID).count <> 1 Then\n",
+        "    If False Then   ' SABOTAZA: nepoznata prijemnica se tiho pusta\n",
+        "Test_LNC_NedovrsenKontekstGranice",
+        "LNC21G (g): kontekst koji ne moze da se proveri odbija i imenuje svoj red",
+    ),
+    # LNC-ODL-38 (T23): potvrdjeno upozorenje storna u lancu ostaje samo u logu.
+    "lncb-trag-storno-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (storno)\n",
+        "    ' SABOTAZA: storno bez upozorenja u tragu\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (a): trag storna nosi potvrdjeno upozorenje",
+    ),
+    # Isto za ispravku u lancu (koren pravi modOtkup, ne LncKontekstKoren).
+    "lncb-trag-ispravka-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (ispravka)\n",
+        "    ' SABOTAZA: ispravka bez upozorenja u tragu\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (b): trag ispravke nosi potvrdjeno upozorenje",
+    ),
+    # Dodatak prepisuje opis poteza umesto da ide iza njega.
+    "lncb-trag-prepisuje-opis": (
+        "modStornoContext.bas",
+        "    novo = IIf(Len(staro) > 0, staro & \" | \", \"\") & dodatak\n",
+        "    novo = dodatak   ' SABOTAZA: dodatak brise opis\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (a): trag zadrzava opis poteza",
+    ),
+    # Trag dobija "upozorenje" i kad ga nije bilo.
+    "lncb-trag-uvek": (
+        "modDokumenta.bas",
+        "    If Len(napomena) = 0 Then Exit Sub\n",
+        "    ' SABOTAZA: upozorenje se pise i kad ga nema\n",
+        "Test_LNC_UpozorenjeUTragu",
+        "LNC23 (c): bez upozorenja trag je samo opis poteza",
+    ),
+    # LNC-ODL-24 (T22): upozorenje o aktivnoj prijemnici izostaje -- operater
+    # potvrdjuje promenu zbirne koju je kupac vec izmerio, bez ijedne reci.
+    "lncb-upozorenje-samo-novi": (
+        "modDokumenta.bas",
+        "    prjDeo = LncNapomenaPrijemnice(p, zaIspravku, noveStavke)\n",
+        "    prjDeo = \"\"   ' SABOTAZA: bez upozorenja o prijemnici\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (a): storno uz prijemnicu pocinje upozorenjem",
+    ),
+    # X ne racuna listove otpremnice': potvrda imenuje drugi broj od pisca.
+    "lncb-x-bez-preostalih": (
+        "modDokumenta.bas",
+        "    LncZbirListova p(\"otpPreostali\"), lKg, lAmb\n",
+        "    lKg = 0   ' SABOTAZA: X bez listova otpremnice'\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (a): upozorenje nosi X (nova zbirna) i sadasnju zbirnu",
+    ),
+    # X ispravke ne ukljucuje nov list.
+    "lncb-x-bez-novog-lista": (
+        "modDokumenta.bas",
+        "            xKg = xKg + CDbl(st(\"Kolicina\"))\n",
+        "            ' SABOTAZA: X bez novog lista\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (b): ispravka racuna X sa novim listom",
+    ),
+    # Transakcija ispravke racuna upozorenje bez novih stavki: trag (LNC-ODL-38)
+    # nosi drugi X od zbirne' koju je upisala.
+    "lncb-tx-ispravka-bez-stavki": (
+        "modDokumenta.bas",
+        "    napomenaKol = LncNapomenaKolicine(p, True, stavke)\n",
+        "    napomenaKol = LncNapomenaKolicine(p, True)   ' SABOTAZA: TX bez novih stavki\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (d): X iz potvrde je zbir nove zbirne posle commit-a",
+    ),
+    # F1 potvrda ispravke ne vidi polja forme: X bez novog lista.
+    "lncb-f1-bez-polja": (
+        "modScrDokumenti.bas",
+        "    If Not polja Is Nothing Then Set nove = modOtkupUnos.OtkupStavkeIzForme(polja)\n",
+        "    ' SABOTAZA: F1 potvrda bez polja forme\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (c): F1 potvrda racuna X iz polja forme",
+    ),
+    # Upozorenje o prijemnici i kad prijemnice nema: "Ne" postaje podrazumevano
+    # na svakom potezu, a operater nauci da ga preskace.
+    "lncb-upozorenje-bez-prijemnice": (
+        "modDokumenta.bas",
+        "    If p(\"prijemnice\").count = 0 Then Exit Function\n",
+        "    ' SABOTAZA: upozorenje i bez prijemnice\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (e): bez prijemnice nema upozorenja",
+    ),
+    # F1 "Sacuvaj" ne salje polja forme u potvrdu: operater vidi X bez novog lista.
+    "lncb-f1-save-bez-polja": (
+        "modScrDokumenti.bas",
+        "        If Not PotvrdiIspravkuULancu(ispravkaID, p) Then\n",
+        "        If Not PotvrdiIspravkuULancu(ispravkaID) Then   ' SABOTAZA: Sacuvaj bez polja forme\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (c): F1 Sacuvaj salje polja forme u potvrdu",
+    ),
+    # X ne racuna sestre: potvrda imenuje drugi broj od zbirne' koju pisac pravi.
+    "lncb-x-bez-sestara": (
+        "modDokumenta.bas",
+        "        xKg = xKg + CDbl(zPov(v))\n",
+        "        ' SABOTAZA: X bez sestara\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (d): plan racuna X sa sestrom",
+    ),
+    # Deo o prijemnici dobija svoju oznaku PAZNJA: dve oznake u jednoj potvrdi.
+    "lncb-upozorenje-druga-oznaka": (
+        "modDokumenta.bas",
+        "    m = \"- Zbirna \" & p(\"zbrBroj\") & \" ima aktivnu prijemnicu\"\n",
+        "    m = LNC_UPOZORENJE & \" - Zbirna \" & p(\"zbrBroj\") & \" ima aktivnu prijemnicu\"   ' SABOTAZA: druga oznaka PAZNJA\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (f): jedna oznaka PAZNJA, prijemnica posle neslaganja otpremnice",
+    ),
+    # Dijalog bez granice: MsgBox tiho odseca kraj (pitanje F1, novac, posledice).
+    "lncb-dijalog-bez-granice": (
+        "modDokumenta.bas",
+        "    If okvir + Len(opis) > MAX_DIJALOG Then\n",
+        "    If False Then   ' SABOTAZA: bez granice dijaloga\n",
+        "Test_LNC_UpozorenjePrijemniceSviPotezi",
+        "LNC22 (g): dijalog ostaje ispod granice MsgBox-a, pitanje se vidi",
+    ),
+    # LNC S10 a6 -- "Izvadi blok". Potez stornira blok umesto da ga ostavi slobodnog.
+    "lncb-izvadi-stornira-blok": (
+        "modDokumenta.bas",
+        "    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    modStorno.StornoOtkup otkupID, tx: Set rez = LncSastavi(p, \"\", \"\", tx, SRC)   ' SABOTAZA: Izvadi stornira blok\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: blok nije storniran",
+    ),
+    # CorrectionID korena se pise na blok (LNC-ODL-27). Obara samo tvrdnju nad
+    # poljem: UNDO (LancaRazlog) gleda OldDocID korena, a koren je par otpremnice.
+    "lncb-koren-na-bloku": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (blok)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC: RequireUpdateCell TBL_OTKUP, FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)(1), COL_TRACE_CORRECTION_ID, rootCid, SRC   ' SABOTAZA: koren na bloku\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: na blok se CorrectionID ne pise (LNC-ODL-27)",
+    ),
+    # Blok iz tudje otpremnice: identitet sa liste nije proveren u planu.
+    "lncb-izvadi-tudji-blok": (
+        "modDokumenta.bas",
+        "        If StrComp(gde, otpremnicaID, vbTextCompare) <> 0 Then\n",
+        "        If False Then   ' SABOTAZA: blok iz tudje otpremnice\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (b): blok koji nije u cilju se odbija po ID-u",
+    ),
+    # Nacrt kao cilj se ne odbija: potez bi izvadio blok iz nacrta u mestu.
+    "lncb-izvadi-nacrt": (
+        "modDokumenta.bas",
+        "    If Len(CStr(p(\"razlog\"))) = 0 And Not CBool(p(\"otpIzdata\")) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt kao cilj\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (a): nacrt kao cilj se odbija pre potvrde",
+    ),
+    # Hladnjacki blok (N1) se vadi kao obican.
+    "lncb-izvadi-n1": (
+        "modDokumenta.bas",
+        "            If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
+        "            If False Then   ' SABOTAZA: hladnjacki blok se vadi\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (d): hladnjacki blok (N1) se ne vadi",
+    ),
+    # Zastareo cilj (otpremnica zamenjena posle liste) se ne prepoznaje kao takav.
+    "lncb-zastareo-cilj": (
+        "modDokumenta.bas",
+        "    If ciljStorniran Then\n",
+        "    If False Then   ' SABOTAZA: zastareo cilj\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (c): zastareo cilj (zamenjena otpremnica) se odbija po ID-u",
+    ),
+    # Koren poteza ide na LIST (kao storno lista): red LANAC sa OldDocID = blok, pa
+    # UNDO kasnijeg obicnog storna bloka biva odbijen (LNC-ODL-27, T15).
+    "lncb-izvadi-koren-lista": (
+        "modDokumenta.bas",
+        "    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    rootCid = LncKontekstKoren(SV_MODE_PONISTENJE, p, \"\", \"\", SRC): Set rez = LncSastavi(p, \"\", rootCid, tx, SRC)   ' SABOTAZA: koren na listu\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2 (T15): obican storno izvadjenog bloka ostaje povratan",
+    ),
+    # Pravi hladnjacki lanac se tretira kao N1: operater ide na F8 storno lista,
+    # koji isti blok odbija i salje na PONISTENJE.
+    "lncb-izvadi-lanac-kao-n1": (
+        "modDokumenta.bas",
+        "        If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then\n",
+        "        If True Then   ' SABOTAZA: pravi lanac kao N1\n",
+        "Test_LNC_Blok_IzvadiOdbijen",
+        "LNCB10 (e): blok pravog hladnjackog lanca upucuje na PONISTENJE",
+    ),
+    # Potvrdjeno upozorenje Izvadi ostaje samo u logu.
+    "lncb-trag-izvadi-bez-upozorenja": (
+        "modDokumenta.bas",
+        "    LncUpisiUpozorenjeUTrag rootCid, napomenaKol, SRC   ' LNC-ODL-38 (blok)\n",
+        "    LncUpisiUpozorenjeUTrag rootCid, \"\", SRC   ' SABOTAZA: izvadi bez upozorenja\n",
+        "Test_LNC_Blok_IzvadiPoslednji",
+        "LNCB3 (T8): trag Izvadi nosi potvrdjeno upozorenje",
+    ),
+    # Red zbirne nije dete korena: trag poteza se raspada na dva korena.
+    "lncb-izvadi-dete-bez-korena": (
+        "modDokumenta.bas",
+        "                   zbrNova, CStr(rez(\"zbrNovaBroj\")), TBL_ZBIRNA, COL_ZBR_ID, _\n                   rootCid, src\n",
+        "                   zbrNova, CStr(rez(\"zbrNovaBroj\")), TBL_ZBIRNA, COL_ZBR_ID, _\n                   \"\", src   ' SABOTAZA: zbirna bez korena\n",
+        "Test_LNC_Blok_IzvadiUZbirni",
+        "LNCBZ: red zbirne je dete korena otpremnice",
+    ),
+    # Recnik storna u upozorenju Izvadi ("bez storniranog lista").
+    "lncb-sufiks-izvadi": (
+        "modDokumenta.bas",
+        "            LncNapomenaSufiks = \" (bez izvadjenog bloka)\"\n",
+        "            LncNapomenaSufiks = \" (bez storniranog lista)\"   ' SABOTAZA: recnik storna\n",
+        "Test_LNC_Blok_IzvadiNeuskladjena",
+        "LNCB14: neslaganje se kaze recima poteza (bez izvadjenog bloka)",
+    ),
+    # Ambalaza se meri USRED zamene (posle rasturanja): medjukorak vozaca u minusu
+    # obara potez ciji je kraj ispravan (LNC-ODL-31).
+    "lncb-izvadi-meri-usred": (
+        "modDokumenta.bas",
+        "    LncRasturi p, tx, SRC\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    LncRasturi p, tx, SRC: modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC: modAmbalaza.AmbOdloziInvarijantePocni tx, SRC   ' SABOTAZA: meri usred zamene\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "Test_LNC_Blok_IzvadiAmbalaza",
+        "LNCB11 (c): Izvadi prolazi jer se ambalaza meri posle cele zamene",
+    ),
+    # Odbijenica ambalaze ne kaze da premestanja u jednom potezu nema (LNC-ODL-23).
+    "lncb-izvadi-bez-poruke-odl23": (
+        "modDokumenta.bas",
+        "    If vrsta = LNC_IZVADI And InStr(1, outGreska, \"AMB-INV-07\", vbBinaryCompare) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: bez LNC-ODL-23 recenice\n",
+        "Test_LNC_Blok_IzvadiAmbalaza",
+        "LNCB11 (b): ambalaza na kraju odbija Izvadi i odbijenica kaze da jednog poteza nema",
+    ),
+    # --- a7: "Dodaj blok" (STORNO_U_LANCU.md S10) ---------------------------------
+    # Zauzet blok (nacrt ili druga izdata) ne odbija citljivo: pisac bi ga odbio
+    # tehnickom 1291, bez imena otpremnice (LNC-ODL-29).
+    "lncb-dodaj-zauzet": (
+        "modDokumenta.bas",
+        "        gde = OtpremnicaZaOtkup(otkupID)\n        If Len(gde) > 0 Then\n",
+        "        gde = OtpremnicaZaOtkup(otkupID)\n        If False Then   ' SABOTAZA: zauzet blok bez imena otpremnice\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (a): blok iz nacrta se odbija i poruka imenuje nacrt",
+    ),
+    # Datum se ne meri: roba kupljena posle polaska kamiona ulazi (LNC-ODL-30).
+    "lncb-dodaj-bez-datuma": (
+        "modDokumenta.bas",
+        "        If Int(datBlok) > Int(datOtp) Then\n",
+        "        If False Then   ' SABOTAZA: datum se ne meri\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (f): blok kasniji od otpremnice se odbija (LNC-ODL-30)",
+    ),
+    # Hladnjacki blok se ne prepoznaje -- pada tek na razlici otkupnog mesta.
+    "lncb-dodaj-bez-kapije-hladnjace": (
+        "modDokumenta.bas",
+        "        If modAutoHladnjaca.LanacVaziZaBlok(otkupID, putGreska) Then\n",
+        "        If False Then   ' SABOTAZA: hladnjacki blok se dodaje\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (m): hladnjacki blok se ne dodaje rucno",
+    ),
+    # Kapije izvora samo u piscu: potvrda se nudi, a transakcija posle "Da" odbija
+    # (LNC-INV-18).
+    "lncb-dodaj-kapija-samo-u-tx": (
+        "modDokumenta.bas",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)\n",
+        "        raz = \"\"   ' SABOTAZA: kapije izvora samo u piscu\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (d): blok druge kulture se odbija pre potvrde",
+    ),
+    # Plan meri prema zaglavlju, ne prema novoj verziji: stara otpremnica bez
+    # kulture odbija i blok iste kulture, koji bi pisac primio.
+    "lncb-dodaj-kultura-zaglavlja": (
+        "modDokumenta.bas",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv, kulVer)\n",
+        "        raz = OtpIzvorRazlog(otpremnicaID, otkupID, SRC, True, errIzv)   ' SABOTAZA: meri prema zaglavlju\n",
+        "Test_LNC_Blok_DodajStaraBezKulture",
+        "LNCDK: blok iste kulture ulazi u staru otpremnicu bez kulture",
+    ),
+    # Otpremnica bez tipa uz blok sa gajbama pada tehnickom 1239 ("ocekivano ''").
+    "lncb-dodaj-tip-tehnicki": (
+        "modDokumenta.bas",
+        "        If OtpGajbeIzvora(otkupID, SRC) > 0 And _\n",
+        "        If False And OtpGajbeIzvora(otkupID, SRC) > 0 And _\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (h): gajbe u otpremnicu bez tipa se odbijaju citljivo, ne tehnickom 1239",
+    ),
+    # Rucna provera 15.11.2026: Dodaj iz liste "Bez otpremnice" odbija blok druge
+    # stanice tekstom kapije ("Izvor OTK-... ima drugo polje StanicaID: ocekivano
+    # 'ST-...'"). Review 16.11.2026: tvrdnje mere NAZIVE na obe strane, a prevod
+    # vazi samo za razlog 1239 -- svaka sabotaza obara svoju tvrdnju.
+    # Otkupno mesto se pokazuje kao ID (obe strane poruke).
+    "lncb-dodaj-stanica-tehnicki": (
+        "modDokumenta.bas",
+        "    v = Trim$(NzToText(LookupValue(TBL_STANICE, COL_STA_ID, stanicaID, \"Naziv\")))\n",
+        "    v = \"\"   ' SABOTAZA: otkupno mesto kao ID\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (l): blok druge stanice se odbija citljivo, otkupno mesto po nazivu",
+    ),
+    # Kultura bloka se pokazuje kao KulturaID.
+    "lncb-dodaj-kultura-tehnicki": (
+        "modDokumenta.bas",
+        "        If Len(b) = 0 Then b = \"bez kulture\" Else b = KulturaOpisZaPoruku(b)\n",
+        "        If Len(b) = 0 Then b = \"bez kulture\"   ' SABOTAZA: kultura bloka kao ID\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (d2): odbijenica za drugu kulturu imenuje kulture, ne KulturaID",
+    ),
+    # Prevod i kad kapija odbija DRUGIM razlogom (nema stavke): operater vidi
+    # neslaganje otkupnog mesta umesto razloga na kome je kapija stala.
+    "lncb-dodaj-prevod-svake-odbijenice": (
+        "modDokumenta.bas",
+        "            If errIzv = vbObjectError + 1239 Then\n",
+        "            If True Then   ' SABOTAZA: prevod i za razlog koji nije 1239\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (i2): blok bez stavki sa druge stanice -- odbijenica nosi pravi razlog kapije, ne prevod",
+    ),
+    "lncb-dodaj-tip-gajbi-tehnicki": (
+        "modDokumenta.bas",
+        "    If StrComp(a, b, vbTextCompare) <> 0 Then\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" nosi gajbe tipa \" & b & \", a otpremnica \" & _\n",
+        "    If False Then   ' SABOTAZA: drugi tip gajbi tekstom kapije\n"
+        "        LncDodajRazlogCitljiv = \"Blok \" & otkBroj & \" nosi gajbe tipa \" & b & \", a otpremnica \" & _\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (e): blok drugog tipa gajbi se odbija citljivo, tipovi po imenu",
+    ),
+    # Hladnjacki cilj se meri tek u jezgru: blok druge stanice pada na razlici
+    # otkupnog mesta.
+    "lncb-dodaj-hladni-cilj": (
+        "modDokumenta.bas",
+        "        If modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then\n",
+        "        If False Then   ' SABOTAZA: hladnjacki cilj kasno\n",
+        "Test_LNC_Blok_DodajOdbijen",
+        "LNCD9 (n): hladnjacki cilj se odbija",
+    ),
+    # Blok ne ulazi u otpremnicu': potez proknjizi staru sadrzinu pod novim brojem.
+    "lncb-dodaj-bez-bloka-u-novoj": (
+        "modDokumenta.bas",
+        "    If Len(ulazi) > 0 Then p(\"otpPreostali\").Add ulazi\n",
+        "    If False Then p(\"otpPreostali\").Add ulazi   ' SABOTAZA: blok ne ulazi u novu verziju\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: nova verzija nosi stari list i dodati blok (LNC-INV-13)",
+    ),
+    # Trag Dodaj kaze recnikom Izvadi.
+    "lncb-trag-dodaj-bez-bloka": (
+        "modDokumenta.bas",
+        "        tragBloka = \"Blok \" & p(\"otkupBroj\") & \" ulazi u otpremnicu.\"\n",
+        "        tragBloka = \"Blok \" & p(\"otkupBroj\") & \" izlazi iz otpremnice.\"   ' SABOTAZA: trag ne imenuje dodavanje\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: trag imenuje dodati blok",
+    ),
+    # Potvrda ne imenuje oba datuma kad se razlikuju (LNC-ODL-30).
+    "lncb-dodaj-bez-dva-datuma": (
+        "modDokumenta.bas",
+        "            If Int(CDate(p(\"datumBloka\"))) <> Int(CDate(p(\"datumOtp\"))) Then\n",
+        "            If False Then   ' SABOTAZA: potvrda bez datuma\n",
+        "Test_LNC_Blok_DodajIzdataBezZbirne",
+        "LNCD1: potvrda imenuje oba datuma kad se razlikuju (LNC-ODL-30)",
+    ),
+    # KONTROLA iz T11: Dodaj meri ambalazu USRED zamene -- kontra-stav stare spusta
+    # vozaca koji je predao gajbe u minus, pa potez ciji je kraj ispravan pada
+    # (LNC-ODL-31). Izvadi ostaje nedirnut (svoja sabotaza: lncb-izvadi-meri-usred).
+    "lncb-dodaj-meri-usred": (
+        "modDokumenta.bas",
+        "    LncRasturi p, tx, SRC\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "    LncRasturi p, tx, SRC: If vrsta = LNC_DODAJ Then modAmbalaza.AmbOdloziInvarijanteZavrsi tx, SRC: modAmbalaza.AmbOdloziInvarijantePocni tx, SRC   ' SABOTAZA: Dodaj meri usred zamene\n    Set rez = LncSastavi(p, \"\", \"\", tx, SRC)\n",
+        "Test_LNC_Blok_DodajAmbalaza",
+        "LNCD11 (b): Dodaj prolazi jer se ambalaza meri posle cele zamene",
+    ),
+    # Manjak gajbi stanice meri samo pisac: potvrda se nudi, a posle "Da" pada
+    # PrenesiAmbalazu sa savetom o NABAVCI (LNC-INV-18).
+    "lncb-dodaj-manjak-samo-u-tx": (
+        "modDokumenta.bas",
+        "            p(\"razlog\") = LncDodajManjakStanice(otpremnicaID, p(\"otpPreostali\"), SRC)\n",
+        "            p(\"razlog\") = \"\"   ' SABOTAZA: manjak stanice samo u piscu\n",
+        "Test_LNC_Blok_DodajAmbalaza",
+        "LNCD11 (c): stanica bez gajbi bloka -- plan odbija pre potvrde, isti razlog u transakciji",
+    ),
+    # Blok druge kulture u staru otpremnicu dobija savet "rasturi lanac" (kriv je
+    # blok, ne lanac).
+    "lncb-dodaj-kultura-poruka-lanca": (
+        "modDokumenta.bas",
+        "            If Len(razStara) = 0 And Len(kulStara) > 0 And Len(kulBloka) > 0 Then\n",
+        "            If False Then   ' SABOTAZA: savet lanca za los blok\n",
+        "Test_LNC_Blok_DodajStaraBezKulture",
+        "LNCDK: blok druge kulture u staru otpremnicu se odbija citljivo",
+    ),
+    # Zbirna' nastaje bez otpremnice': X iz potvrde se razilazi sa piscem (LNC-INV-16).
+    "lncb-zbirna-bez-otpremnice": (
+        "modDokumenta.bas",
+        "    If Len(otpNova) > 0 Then izvZ.Add otpNova\n",
+        "    If False Then izvZ.Add otpNova   ' SABOTAZA: zbirna' bez otpremnice'\n",
+        "Test_LNC_Blok_DodajUZbirnuSaPrijemnicom",
+        "LNCD5: X iz potvrde = zbir stavki nove zbirne (LNC-INV-16)",
+    ),
+    # Dodaj ne vidi zbirnu iznad otpremnice: zbirna ostaje na staroj verziji.
+    "lncb-dodaj-bez-zbirne": (
+        "modDokumenta.bas",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC\n        If Len(CStr(p(\"razlog\"))) = 0 And CBool(p(\"otpIzdata\")) Then\n",
+        "        LncPlanOtpremnice p, otpremnicaID, \"\", otkupID, False, SRC: p(\"zbrID\") = \"\"   ' SABOTAZA: Dodaj ne vidi zbirnu\n        If Len(CStr(p(\"razlog\"))) = 0 And CBool(p(\"otpIzdata\")) Then\n",
+        "Test_LNC_Blok_PremestiADoB",
+        "LNCD16 (a): obe zbirne imaju nove verzije sa novim brojevima",
+    ),
+    # Prijemnica se pogadja i po LABELI: tudja prijemnica sa istim brojem zbirne
+    # ulazi u Y i seli se (LNC-INV-07).
+    "lncb-prijemnica-po-labeli": (
+        "modDokumenta.bas",
+        "            If StrComp(rod, zbirnaID, vbTextCompare) = 0 Then\n",
+        "            If StrComp(rod, zbirnaID, vbTextCompare) = 0 Or BrojJednak(d(i, cBr), brojZbirne) Then   ' SABOTAZA: po labeli\n",
+        "Test_LNC_Blok_IzvadiDvePrijemnice",
+        "LNCB6: tudja prijemnica sa istom labelom se ne seli",
+    ),
+    # --- deo (b): ekran F1, cilj poteza nad blokom (LNC-ODL-33) ------------------
+    # Radnja "Izaberi za Izvadi / Dodaj" ne bira cilj.
+    "lncb-ekran-izdata-ne-bira": (
+        "modScrDokumenti.bas",
+        "    razlog = IzaberiCilj(oid)\n",
+        "    razlog = Poruka(\"OTKUI_ERR_OTP_IZDATA\")   ' SABOTAZA: radnja ne bira cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: radnja Izaberi nad izdatom je bira kao cilj i napusta nacrt",
+    ),
+    # Izbor cilja ne napusta nacrt: dva konteksta, a nov list ide u nacrt.
+    "lncb-ekran-dva-konteksta": (
+        "modScrDokumenti.bas",
+        "    If Len(mOtpID) > 0 Then\n        mOtpID = \"\"\n        mOtpBroj = \"\"\n        modOtkupUI.ClearForm\n",
+        "    If False Then   ' SABOTAZA: cilj ne napusta nacrt\n        mOtpID = \"\"\n        mOtpBroj = \"\"\n        modOtkupUI.ClearForm\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: nov list uz izdat cilj ne ide u nacrt (ruta posle upisa)",
+    ),
+    # Uz cilj lista Blokovi nudi "ukloni" (radnju nacrta) umesto "Izvadi".
+    "lncb-ekran-ukloni-uz-cilj": (
+        "modScrDokumenti.bas",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1\"\n",
+        "                             \"ukloni:OTKUI_BTN_RED_UKLONI:136:danger:1\"   ' SABOTAZA: radnja nacrta uz cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Izvadi i Dodaj se nude samo uz izdat cilj, vezi / ukloni / izdaj tada ne",
+    ),
+    # Seam potvrde odgovara "Da": potez se upisuje bez operatera.
+    "lncb-ekran-seam-da": (
+        "modScrDokumenti.bas",
+        "    txt = modDokumenta.LncDijalogTekst(uvod & vbCrLf & vbCrLf, opis, Poruka(\"OTKUI_ASK_POTEZ_BLOK_2\"))\n    If IsTestMode() Then\n        mPotvrdaLancaTest = txt\n        Exit Function\n",
+        "    txt = modDokumenta.LncDijalogTekst(uvod & vbCrLf & vbCrLf, opis, Poruka(\"OTKUI_ASK_POTEZ_BLOK_2\"))\n    If IsTestMode() Then\n        mPotvrdaLancaTest = txt\n        PotvrdiPotezNadBlokom = True: Exit Function   ' SABOTAZA: seam odgovara Da\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Ne ne upisuje",
+    ),
+    # Cilj ne prati naslednika: posle poteza ostaje bez cilja.
+    "lncb-ekran-cilj-ne-prati": (
+        "modScrDokumenti.bas",
+        "        id = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, id, COL_TRACE_ZAMENJEN_SA_ID)))\n",
+        "        id = \"\"   ' SABOTAZA: cilj ne prati naslednika\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: posle uspeha cilj prelazi na novu verziju otpremnice",
+    ),
+    # Test reset ne brise cilj: zaostao cilj menja radnje sledeceg testa.
+    "lncb-ekran-reset-bez-cilja": (
+        "modScrDokumenti.bas",
+        "    mOtpBroj = \"\"\n    mCiljID = \"\"\n    mCiljBroj = \"\"\n    mLista = \"\"\n",
+        "    mOtpBroj = \"\"\n    mCiljBroj = \"\"   ' SABOTAZA: reset bez cilja\n    mLista = \"\"\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Scr_OtpTestReset brise cilj",
+    ),
+    # Lista Blokovi ne vidi cilj (cita samo nacrt).
+    "lncb-ekran-blokovi-bez-cilja": (
+        "modScrDokumenti.bas",
+        "    If Len(otpLista) = 0 Then otpLista = CiljAktivan()\n",
+        "    If False Then otpLista = CiljAktivan()   ' SABOTAZA: blokovi samo nacrta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: lista Blokovi pokazuje blokove izabranog cilja",
+    ),
+    # Radnja "izvadi" vozi potez Dodaj (zamenjena vrsta).
+    "lncb-ekran-izvadi-kao-dodaj": (
+        "modScrDokumenti.bas",
+        "            RowAction = PotezNaCilju(LNC_IZVADI, otkupID)\n",
+        "            RowAction = PotezNaCilju(LNC_DODAJ, otkupID)   ' SABOTAZA: izvadi vozi Dodaj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: Izvadi kroz ekran meri plan Izvadi (jedini izvor zbirne sa prijemnicom se odbija)",
+    ),
+    # Klik na izdatu vraca True: ljuska brise izabran red, pa "Ispravi" (B-022) i
+    # specifikacija nad jednim redom ostaju bez reda.
+    "lncb-ekran-cilj-brise-red": (
+        "modScrDokumenti.bas",
+        "            modOtkupUI.ShowToast Poruka(\"OTKUI_MSG_IZDATA_RADNJA\"), False\n",
+        "            modOtkupUI.ShowToast Poruka(\"OTKUI_MSG_IZDATA_RADNJA\"), False: Scr_Event = True   ' SABOTAZA: klik na izdatu brise izabran red\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: klik na izdatu ne menja cilj ni listu i cuva izabran red (Ispravi i specifikacija)",
+    ),
+    # Radnja prebacuje listu na Blokovi: oznake i pretraga liste Otpremnice prelaze
+    # u listu blokova (RefreshFromData ih ne cisti).
+    "lncb-ekran-cilj-prebacuje-listu": (
+        "modScrDokumenti.bas",
+        "    IzaberiCiljRed = True\n",
+        "    mLista = \"BLOKOVI\": IzaberiCiljRed = True   ' SABOTAZA: radnja prebacuje listu\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: posle izbora cilja lista ostaje (oznake i pretragu cisti tek dugme liste)",
+    ),
+    # Radnja Izaberi prima i nacrt (dva konteksta nad istim dokumentom).
+    "lncb-ekran-cilj-nacrt": (
+        "modScrDokumenti.bas",
+        "    If Not modDokumenta.IzdatoStatusJeIzdato(st) Then\n",
+        "    If False Then   ' SABOTAZA: nacrt kao cilj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: radnja Izaberi odbija nacrt (cilj i nacrt ostaju kakvi su bili)",
+    ),
+    # Lista Nevezani nudi "Dodaj" i bez ikakvog konteksta (LNC-INV-19).
+    "lncb-ekran-dodaj-bez-konteksta": (
+        "modScrDokumenti.bas",
+        "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            ElseIf Len(CiljAktivan()) > 0 Then\n",
+        "                Scr_Radnje = Scr_Radnje & \"|vezi:OTKUI_BTN_RED_VEZI:132:soft:1\"\n            Else   ' SABOTAZA: Dodaj bez konteksta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: bez konteksta (ni nacrt ni cilj) lista Bez otpremnice ne nudi Dodaj",
+    ),
+    # Potvrda Izvadi nosi uvod Dodaj.
+    "lncb-ekran-izvadi-uvod-dodaj": (
+        "modScrDokumenti.bas",
+        "        uvod = Poruka(\"OTKUI_ASK_IZVADI_BLOK\")\n",
+        "        uvod = Poruka(\"OTKUI_ASK_DODAJ_BLOK\")   ' SABOTAZA: uvod Izvadi kao Dodaj\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: potvrda Izvadi ide kroz seam sa svojim uvodom, a Ne ne upisuje",
+    ),
+    # Recenice koje traze radnju (MALINA, telefon, broj zbirne) idu na KRAJ opisa,
+    # koji dijalog skracuje.
+    "lncb-opis-hitno-na-kraju": (
+        "modDokumenta.bas",
+        "    LncPlanOpisZaBlok = m\n",
+        "    LncPlanOpisZaBlok = IIf(Len(hitno) > 0, Replace(m, hitno & vbCrLf, \"\") & vbCrLf & hitno, m)   ' SABOTAZA: hitno na kraju\n",
+        "Test_LNC_Blok_IzvadiIzdataBezZbirne",
+        "LNCB2: recenice koje traze radnju idu pre opisa poteza (dijalog skracuje kraj)",
+    ),
+    # Traka kaze "nema izabrane otpremnice" dok je cilj izabran.
+    "lncb-ekran-traka-bez-cilja": (
+        "modScrDokumenti.bas",
+        "        If Len(CiljAktivan()) > 0 Then Scr_OtpInfo = mCiljBroj & \"|\" & Poruka(\"OTKUI_OTP_CILJ\")\n",
+        "        If False Then Scr_OtpInfo = mCiljBroj & \"|\" & Poruka(\"OTKUI_OTP_CILJ\")   ' SABOTAZA: traka bez cilja\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: traka otpremnice imenuje izabran izdat cilj",
+    ),
+    # Lista Blokovi nudi "Izvadi" i bez ikakvog konteksta (LNC-INV-19).
+    "lncb-ekran-izvadi-bez-konteksta": (
+        "modScrDokumenti.bas",
+        "            If Len(mOtpID) = 0 And Len(CiljAktivan()) > 0 Then\n",
+        "            If Len(mOtpID) = 0 Then   ' SABOTAZA: Izvadi bez konteksta\n",
+        "Test_LNC_Blok_EkranPotvrdaIRuta",
+        "LNCB18: bez konteksta (ni nacrt ni cilj) lista Blokovi ne nudi Izvadi",
+    ),
+    # Promena otkupnog mesta ne pusta cilj druge stanice (review 11.11.2026).
+    "lncb-ekran-stanica-ne-pusta": (
+        "modScrDokumenti.bas",
+        "    If StrComp(st, Trim$(stID), vbTextCompare) = 0 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: cilj prezivljava promenu stanice\n",
+        "Test_LNC_Blok_EkranPromenaStanice",
+        "LNCB18S: promena otkupnog mesta pusta cilj druge stanice",
+    ),
+    # I izbor ISTE stanice pusta cilj.
+    "lncb-ekran-stanica-pusta-uvek": (
+        "modScrDokumenti.bas",
+        "    If StrComp(st, Trim$(stID), vbTextCompare) = 0 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: i ista stanica pusta cilj\n",
+        "Test_LNC_Blok_EkranPromenaStanice",
+        "LNCB18S: izbor iste stanice ne dira cilj",
+    ),
+    # Uz cilj lista Blokovi nudi sest radnji: sesta se tiho ne crta.
+    "lncb-ekran-vise-od-max": (
+        "modScrDokumenti.bas",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1\"\n",
+        "                             \"izvadi:OTKUI_BTN_RED_IZVADI:136:danger:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1|print:OTKUI_BTN_RED_PRINT:116:ghost:1\"   ' SABOTAZA: vise od MAX_ACT\n",
+        "Test_LNC_Blok_GranicaRadnji",
+        "LNCB19: nijedna lista F1 i F2 ni u jednom kontekstu ne nudi vise od MAX_ACT radnji",
+    ),
+    # --- KI-095 put (2): F8 storno zbirne uz nedovrsenu ispravku prijemnice ----
+    # (STORNO_U_LANCU.md S11). Kapija samo u piscu: F8 nudi potvrdu, a posle "Da" odbija.
+    "ki095-f8-preflight-bez-kapije": (
+        "modStornoDok.bas",
+        "                StornoRazlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)\n",
+        "                StornoRazlog = \"\"   ' SABOTAZA: F8 bez kapije pre potvrde\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (a): F8 storno zbirne imenuje nedovrsenu ispravku prijemnice PRE potvrde",
+    ),
+    # Kapija samo pre potvrde: drugi pozivalac pisca stornira zbirnu.
+    "ki095-f8-pisac-bez-kapije": (
+        "modStornoDok.bas",
+        "            razlog = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(docID, broj)\n",
+        "            razlog = \"\"   ' SABOTAZA: pisac bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (a): pisac odbija storno zbirne istim razlogom",
+    ),
+    # DUPLI i PONISTENJE zbirne bez kapije (red konteksta nastaje, zbirna pada).
+    "ki095-mod-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)\n",
+        "    razKi095 = \"\"   ' SABOTAZA: DUPLI i PONISTENJE bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b): DUPLI zbirne odbija bez zapisa u Oporavku i bez storna",
+    ),
+    # PONISTENJE druge prijemnice kaskadno stornira zbirnu.
+    "ki095-prijemnica-ponistenje-bez-kapije": (
+        "modStornoFlow.bas",
+        "                razKi095P = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrKi095, parentZbirna)\n",
+        "                razKi095P = \"\"   ' SABOTAZA: kaskada prijemnice bez kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b2): PONISTENJE druge prijemnice ne stornira zbirnu uz nedovrsenu ispravku",
+    ),
+    # Siroka kapija (kao LNC-ODL-37): podsetnik nad samom zbirnom blokira F8 (KI95-ODL-02).
+    "ki095-kapija-siroka": (
+        "modDokumenta.bas",
+        "    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, \"\", \"\", zbrID, _\n                                                                    Trim$(zbrBroj), True)\n",
+        "    ZbirnaCekaIspravkuPrijemniceRazlog = LncNedovrsenKontekstRazlog(ktx, g, \"\", \"\", zbrID, _\n                                                                    Trim$(zbrBroj), False)   ' SABOTAZA: siroka kapija\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (f): podsetnik Resi kasnije nad samom zbirnom ne odbija F8 storno (uska kapija)",
+    ),
+    # Ispravka u svakom statusu odbija -- i ona cija je zamena vec uneta (MANUAL).
+    "ki095-manual-odbija": (
+        "modDokumenta.bas",
+        "                   StrComp(stKtx, SV_STATUS_PENDING, vbTextCompare) = 0 Then\n",
+        "                   True Then   ' SABOTAZA: ispravka u svakom statusu (KI-095)\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (d): zamena vec uneta (MANUAL_REQUIRED) ne odbija F8 storno zbirne",
+    ),
+    # Kapija ne gleda SVOJU zbirnu: ispravka bilo koje zbirne blokira svaki storno.
+    "ki095-gate-globalan": (
+        "modDokumenta.bas",
+        "        LncPrijemnicaCekaIspravku = (StrComp(rod, zbrID, vbTextCompare) = 0)\n",
+        "        LncPrijemnicaCekaIspravku = True   ' SABOTAZA: ispravka bilo koje zbirne\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (e): nedovrsena ispravka druge zbirne ne smeta F8 stornu",
+    ),
+    # Odbijeno PONISTENJE prijemnice ipak ostavlja red konteksta (kapija posle
+    # CreateCorrectionContext) -- FAILED/PENDING trag u Oporavku (KI-039/KI-040).
+    "ki095-ponistenje-red-pre-kapije": (
+        "modStornoFlow.bas",
+        "                    r(\"message\") = razKi095P\n",
+        "                    r(\"correctionID\") = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, , , , FLOW_DOC_ZBIRNA, , parentZbirna, \"SABOTAZA\"): r(\"message\") = razKi095P   ' SABOTAZA: red pre kapije\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (b2): odbijeno PONISTENJE prijemnice ne ostavlja red u Oporavku",
+    ),
+    # Pisac odbija i "Resi kasnije", koje nista ne stornira (KI95-ODL-04).
+    "ki095-resi-kasnije-odbija": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)\n",
+        "    razKi095 = modDokumenta.ZbirnaCekaIspravkuPrijemniceRazlog(zbrOldID, broj)   ' SABOTAZA: i Resi kasnije odbija\n",
+        "Test_KI095_F8ZbirnaUzNedovrsenuIspravku",
+        "KI095 (f2): F8 pre potvrde odbija i Resi kasnije, a pisac ga pusta (nista ne stornira)",
     ),
     # KI-089: ekran ispravke meri manjak sa starim listom jos u knjizi (zatecen
     # kvar) -- pita za 10, a pisac posle storna starog lista meri 6.
