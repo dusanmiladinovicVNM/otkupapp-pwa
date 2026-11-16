@@ -65,13 +65,16 @@ ništa od ovoga nije mereno.
 | Pun `vba_check` | 21,5–22,5 s (30–34 s) `[M]` | oko 10 s (13–14 s) `[M, prototip]` | isto | isto |
 | CI job `static` | medijana 76 s `[M]` | 30–35 s `[I]` | isto | isto |
 | Dokaz reza (primer: 4 BFP sabotaže) | 34 min `[D]` | isto | 3–4 min `[I]`; rez od 13–20 sabotaža 10–17 min `[I]` | isto |
-| Pun dokaz kataloga | 44–100 h `[I]`, pojedinačno, cela suita | isto | 10,5–13,5 h `[I]` u izboru, verdikt „DOKAZANO (izbor)" | 5–6,5 h na jednoj mašini, 1,5–3 h sa 3–4 radnika `[I]` |
+| Pun dokaz kataloga | 44–100 h `[I]`, pojedinačno, cela suita | isto | oko 4–5 h `[I]` u izboru, verdikt „DOKAZANO (izbor)" | isto na jednoj mašini; oko 1–2 h sa 3–4 radnika `[I]` |
 | Starost najstarijeg dokaza u katalogu | oko 11 nedelja `[D]` | isto | isto | do 7 dana `[I]`, uz rotaciju u izboru |
 | Excel prolazi sa zabeleženim trajanjem | približno 0% | isto | 100% | 100% |
 
-Red „Pun dokaz kataloga" je računat za današnjih 1265 sabotaža i bez testova
-koji sami ne prolaze `[?]`. Uz rast od oko 18 sabotaža dnevno isti režim je
-16,5 h za mesec dana i 26,7 h za tri meseca; sa smanjenom režijom 7–11 h `[I]`.
+Red „Pun dokaz kataloga" je računat za oko 1290 sabotaža i bez testova koji
+sami ne prolaze `[?]`. Posle kapije G0 (16.11.2026) računa se sa **izmerenom**
+režijom od 6,5 s po pozivu i izmerenim prosekom po testu (0,66 s u
+`RunAllTests`-u, 1,7 s u BFP-u, plus seed BFP-a do 6,7 s): oko 1.800 poziva,
+3,8–5,2 h. Raste linearno sa katalogom: uz oko 18 sabotaža dnevno oko 6–7 h za
+mesec dana i 9–12 h za tri meseca `[I]`.
 Sve vrednosti „posle" koje se tiču Excela su model. Kapija odluke G0 (§8.3)
 postoji da se posle prvog mernog prolaza redosled potvrdi ili promeni.
 
@@ -110,7 +113,7 @@ globalnih kapija nad pravim repoom.
 
 | Mera | Vrednost | Izvor |
 |---|---|---|
-| Režija jednog `run_vba` poziva | oko 18 s; od toga 4,5–7,9 s su fiksni `sleep`-ovi u kodu. Compile proba ide **oba** puta (COM i SendKeys), dakle 5,9 s čekanja po pozivu, uz verdikt NEJASNO | `[D]`; sleep `[M]` iz koda; put `[M]` 16.11.2026 |
+| Režija jednog `run_vba` poziva | **6,5 s bez compile probe** (16.11.2026, grana `claude/run-vba-ugovor`): priprema 0,3 · start Excela 0,4 · otvaranje 0,3 · uvoz 2,2 · šema 0,3 · zatvaranje i gašenje 3,0 (od toga 2,0 s fiksni `sleep`). Compile proba je dodavala 5,9 s čekanja (ide i COM i SendKeys put). Dokumentovanih „oko 18 s" je bila procena | `[M]` 16.11.2026; ranije `[D]` |
 | `RunAllTests` | **230,9 s pri 354 testa** (16.11.2026, Windows); ranije 215,8 s pri 336 (05.11), 73,5 s pri 204 (09.10) | `[M]` 16.11; ranije `[D]` |
 | `RunBusinessFlowProSuite` | **703,7 s pri 414 testova i 3487 provera**, pušten posle `RunAllTests` u istom pozivu (16.11.2026); 687,9 s u punom prolazu na grani #476; ranije 210 s (07.10) | `[M]` 16.11; ostalo `[D]` |
 | FULL (12 suita) | ne staje u podrazumevanih 600 s; zapisi „oko 37 min" i „20–60 min" | `[D]` |
@@ -395,11 +398,11 @@ unutar oblasti ostaje.
 
 | ID | Stavka | Dobitak | Rizik | Trud | Gde | Kriterijum prihvatanja |
 |---|---|---|---|---|---|---|
-| **R-1** | Čekanje na događaj umesto fiksnih `sleep`-ova; compile proba samo tamo gde nešto tvrdi (`RV-02`, `RV-03`) | 3–7 s po mutacionom pozivu `[I]` | slomljen izvor se u suite režimu vidi kasnije, zato L-1 pre; menja ugovor (N6) | S–M | L + W | `--compile-only` daje isti verdikt nad čistim i nad slomljenim modulom; 20 poziva bez zaostalog procesa |
+| **R-1** | Čekanje na događaj umesto fiksnih `sleep`-ova; compile proba samo tamo gde nešto tvrdi (`RV-02`, `RV-03`) | compile deo urađen na grani `claude/run-vba-ugovor` (5,9 s); preostalo 2,0 s fiksnog čekanja pri gašenju `[M]` | slomljen izvor se u suite režimu vidi kasnije, zato L-1 pre; menja ugovor (N6) | S–M | L + W | `--compile-only` daje isti verdikt nad čistim i nad slomljenim modulom; 20 poziva bez zaostalog procesa |
 | **R-2** | Proba: 50 puta zamena 6 modula u uvezenoj, kompajliranoj svesci (`RV-06`, preduslov) | odgovor na pitanje da li je R-3 izvodljiv | — | S | W | bez pada VBE-a i bez modula sa sufiksom `1` |
-| **R-3** | Jedan uvoz po pozivu dokaza i zamena samo izmenjenih modula u svežoj kopiji sveske (`RV-06`, `D6a`) | 3–7 s po prolazu; zajedno sa R-1 režija oko 18 → 6–8 s `[I]` | ponašanje `Remove` + `Import` nad kompajliranim projektom `[?]`; menja ugovor (N6) | M | W | isti skup sabotaža hladno i delta putem daje isti verdikt; prazna delta → ista baza; pokvaren read-back pada po imenu modula |
+| **R-3** | Jedan uvoz po pozivu dokaza i zamena samo izmenjenih modula u svežoj kopiji sveske (`RV-06`, `D6a`) — **odloženo posle G0** | najviše oko 2 s po pozivu: ceo uvoz je 2,2 s `[M]` | ponašanje `Remove` + `Import` nad kompajliranim projektom `[?]`; menja ugovor (N6) | M | W | isti skup sabotaža hladno i delta putem daje isti verdikt; prazna delta → ista baza; pokvaren read-back pada po imenu modula |
 | **R-4** | Paralelni Excel radnici, svaki nad svojom kopijom izvora; podela po izmerenom vremenu (`RV-09`, `P4`) | približno N puta kraće, realno 2–4× `[I]` | fokus i memorija; mašina zauzeta; menja ugovor (N6) | M | W | isti skup serijski i paralelno, tri ponavljanja bez razlike; dva radnika sa istim izlazom → alat odbija |
-| **R-5** | Topla sesija sa „sendvičem": mutacija, test, vraćanje, isti test mora biti zelen; recikliranje na N mutacija (`RV-08`, `P3`) — **uslovno, posle G2** | preostala režija 6–8 → 2–4 s `[I]` | visok: `OnTime`, zastavice aplikacije, break mode | L | W | ekvivalencija nad celim katalogom; namerno „curava" pseudo-sabotaža uhvaćena po imenu |
+| **R-5** | Topla sesija sa „sendvičem": mutacija, test, vraćanje, isti test mora biti zelen; recikliranje na N mutacija (`RV-08`, `P3`) — **odloženo posle G0** | najviše oko 1 s po pozivu: start Excela 0,4 s, otvaranje 0,3 s `[M]` | visok: `OnTime`, zastavice aplikacije, break mode | L | W | ekvivalencija nad celim katalogom; namerno „curava" pseudo-sabotaža uhvaćena po imenu |
 
 ### Faza 5 — Ritam i evidencija
 
@@ -452,7 +455,7 @@ testovi idu u nov test modul iste suite, što traži samo prvi deo K-3.
 | **1b** | jedna grupa nad ugovorom: M-2, L-1, L-2 | FULL jednom, zajedno sa talasom 2 | merenje i zatvorene litice |
 | **2** | M-1 (prenos izbora), pa M-7 (merni prolaz, sa probom granice iz L-3) | da | brojevi umesto modela → **G0** |
 | **3** | D-2 (prijem), D-3, S-4a, S-1, S-2, S-3, M-4, M-5, F-5, F-6; kolosek K: K-1, K-2, prvi deo K-3 | da | dokaz reza 3–4 min → **G1** |
-| **4** | D-5, D-6, D-7, D-8, R-1, R-2, R-3, F-7, F-11; kolosek K: S-4b, K-4 | da | pun dokaz u izboru reda 5–6,5 h `[I]` → **G2** |
+| **4** | D-5, D-6, D-7, D-8, R-1 (gašenje), F-7, F-11; kolosek K: S-4b, K-4. R-2 i R-3 odloženi posle G0 | da | pun dokaz u izboru oko 4–5 h `[I]` → **G2** |
 | **5** | N-1, N-2, N-3, N-5, R-4, S-6, F-8, F-10, drugi deo K-3, P-5 | da | noćni ritam; hook do 2 s |
 | **6** | F-9, N-6 (istraživanje), P-2, P-4; uslovno: R-5, S-5, S-8, D-4 | da | pravila usklađena |
 
@@ -481,6 +484,13 @@ N-4 nije u talasima jer je odluka (O-1), a P-1 je isto što i F-6.
 - **G0, posle M-7.** Tabela iz §2.2 je izmerena. Ako je režija znatno veća ili
   manja od 18 s, ili trajanje pojedinačnog testa znatno veće od 4 s, menja se
   odnos faza 3 i 4. Ovde se odlučuje i o S-5.
+  **Ishod (16.11.2026):** režija je 6,5 s, a prosečan test 0,66 s (`RunAllTests`)
+  i 1,7 s (BFP). Skoro sve vreme nose same suite, pa faza 4 gubi vrednost: uvoz
+  je 2,2 s, start Excela 0,4 s. R-2, R-3 i R-5 se odlažu (najviše oko 2 s, odnosno
+  1 s po pozivu, uz srednji do visok rizik). Ostaju R-1 (preostalih 2,0 s
+  fiksnog čekanja pri gašenju) i R-4 (paralelni radnici), a sledeća poluga su
+  D-2 (izbor u rezu), S-1 (tihi režim) i najskuplji testovi iz merenja po testu
+  (S-5): jedan BFP test od 75 s nosi 11% suite.
 - **G1, posle D-2 i S-4a.** Izbor postaje podrazumevan u rezu kad je razlika
   prema celoj suiti nula nad najmanje 50 sabotaža **i** kad postoji spisak testova
   koji sami ne prolaze. Za release (O-1, V2) traži se nula nad najmanje 100.
