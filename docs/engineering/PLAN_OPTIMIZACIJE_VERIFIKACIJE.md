@@ -110,9 +110,9 @@ globalnih kapija nad pravim repoom.
 
 | Mera | Vrednost | Izvor |
 |---|---|---|
-| Režija jednog `run_vba` poziva | oko 18 s; od toga 4,5–7,9 s su fiksni `sleep`-ovi u kodu | `[D]`; sleep `[M]` iz koda |
-| `RunAllTests` | 215,8 s pri 336 testova (05.11); 73,5 s pri 204 (09.10) | `[D]` |
-| `RunBusinessFlowProSuite` | 210 s (07.10); oko 350–390 s početkom novembra | `[D]`; `[I]` |
+| Režija jednog `run_vba` poziva | oko 18 s; od toga 4,5–7,9 s su fiksni `sleep`-ovi u kodu. Compile proba ide **oba** puta (COM i SendKeys), dakle 5,9 s čekanja po pozivu, uz verdikt NEJASNO | `[D]`; sleep `[M]` iz koda; put `[M]` 16.11.2026 |
+| `RunAllTests` | **230,9 s pri 354 testa** (16.11.2026, Windows); ranije 215,8 s pri 336 (05.11), 73,5 s pri 204 (09.10) | `[M]` 16.11; ranije `[D]` |
+| `RunBusinessFlowProSuite` | **703,7 s pri 414 testova i 3487 provera**, pušten posle `RunAllTests` u istom pozivu (16.11.2026); 687,9 s u punom prolazu na grani #476; ranije 210 s (07.10) | `[M]` 16.11; ostalo `[D]` |
 | FULL (12 suita) | ne staje u podrazumevanih 600 s; zapisi „oko 37 min" i „20–60 min" | `[D]` |
 | Dokaz reza | 34 min za 4 BFP sabotaže uz `--grupe 6` (04.11; procena pre puštanja 20–25) | `[D]` |
 | Jedna runda prijema reza | 7–20 podizanja Excela, 21–88 min | `[D]` |
@@ -120,6 +120,22 @@ globalnih kapija nad pravim repoom.
 | Trajanje punog kataloga, pojedinačno | 44 h uz dokumentovana trajanja suita (80 i 150 s); oko 100 h uz poslednje zapise (215,8 s i 350–390 s) | `[I]` |
 | Trajanje punog kataloga, grupe po 6 | 11 h uz dokumentovana trajanja; 17 h uz poslednje zapise; oko 25 h sa 8% ponavljanja | `[I]` |
 | Poslednji pun katalog | 28.08.2026, 260/261 | `[D]` |
+
+**Prvo merenje po testu (16.11.2026, Windows, grana izbora `ec8e3bf`)** `[M]`.
+Zbir koraka je 99,8% trajanja suite (702,4 od 703,7 s; 230,8 od 230,9 s), pa
+izvan testova skoro nema skrivenog vremena.
+
+- **Raspodela je koncentrisana.** Deset najsporijih nosi 22% `RunAllTests`
+  (50,7 s) i 23% BFP-a (163,8 s).
+- **Jedan BFP test traje 75,2 s** (11% suite): `Test_OTP_AutoKvarGrupeNeObaraOstale`.
+  Zove `AutoCreateOtpremniceFromPWA_TX("")`, a prazan argument znači da batch
+  obrađuje **svaki** nevezan otkup u svesci, ne samo dva koja test pravi. Cena
+  mu raste sa svakim testom koji ostavi otkup, a u punom prolazu i sa
+  ostacima `RunAllTests`-a. To je kandidat za uzrok sporijeg BFP-a posle
+  `RunAllTests`-a (v. KI-096); nije izmereno.
+- **Stvarna snimanja sveske** su među najsporijim testovima `RunAllTests`-a:
+  tri testa snimanja po 5,6 s i `T_TxRollback_NepotpunZatvaraUpisISnimanje`
+  11,4 s. To su testovi samog snimanja, pa ih tihi režim (S-1) ne skraćuje.
 
 Analize se oko trajanja punog kataloga razilaze (40–100 h pojedinačno, 7–20 h
 grupno), zavisno od toga koja trajanja suita uzimaju. Ništa od toga nije mereno;
@@ -554,9 +570,9 @@ N-4 nije u talasima jer je odluka (O-1), a P-1 je isto što i F-6.
 
 | Nepoznanica | Zatvara je |
 |---|---|
-| Raspodela oko 18 s režije po fazama; koji compile put se danas izvršava (2,5 ili 5,9 s čekanja) | Prilog A.1; zatim M-2 |
-| Današnje trajanje `RunAllTests`, BFP i FULL | Prilog A.1 |
-| Trajanje po testu; koliko traje BFP seed koji se u izboru pušta uvek | Prilog A.2 |
+| Raspodela oko 18 s režije po fazama | Prilog A.1; zatim M-2. Compile put je izmeren: oba, 5,9 s (16.11.2026) |
+| Trajanje FULL-a i BFP-a pustenog samog | Prilog A.1; `RunAllTests` i BFP posle njega izmereni 16.11.2026 (§2.2) |
+| Koliko traje BFP seed koji se u izboru pušta uvek; da li je `Test_OTP_AutoKvarGrupeNeObaraOstale` uzrok sporijeg BFP-a posle `RunAllTests`-a | BFP pušten sam, pa poređenje vremena po koraku sa merenjem od 16.11.2026 |
 | Koliko testova ne prolazi samo | S-4a: `--izolacija` nad celim katalogom, noću (Prilog A.3) |
 | Koliko testova ostavlja stanje | M-5 |
 | Razlika verdikta: izbor prema celoj suiti | Prilog A.2 (uzorak od 6); D-2 (najmanje 50) |
