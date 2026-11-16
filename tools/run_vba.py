@@ -702,8 +702,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--all", action="store_true", help="pokreni sve suite iz kataloga")
     ap.add_argument("--keep", action="store_true", help="ne brisi temp kopiju sveske")
     ap.add_argument("--timeout-dialog", type=float, default=0.4, help="interval watchdog-a u sekundama")
-    ap.add_argument("--timeout", type=float, default=600.0,
-                    help="tvrdi prekid u sekundama (ubija Excel proces; default 600)")
+    # Prekid meri CEO prolaz (KI-096), ne jednu suite. Pun prolaz od 11.2026 traje
+    # ~16 min, a BFP pusten sam ~10 min -- 600 s je obe ubijao usred rada, sa
+    # FATAL porukom koja upucuje na break mode. 1800 s i dalje hvata pravo visenje.
+    ap.add_argument("--timeout", type=float, default=1800.0,
+                    help="tvrdi prekid u sekundama za CEO prolaz (ubija Excel proces; default 1800)")
     ap.add_argument("--self-test", action="store_true",
                     help="provere koje ne traze Excel (radi i na Linux/macOS)")
     ap.add_argument("--ignore-fixture-sig", action="store_true",
@@ -1005,8 +1008,9 @@ def main(argv: list[str]) -> int:
             killer.cancel()
         if hard_stop["fired"]:
             report["fatal"] = (f"Excel nije odgovarao {args.timeout:g}s -- proces je ubijen. "
-                               "Najcesci uzrok: VBE je u break mode-u (vidi "
-                               "docs/EXCEL_TEST_HARNESS.md).")
+                               "Uzrok je break mode u VBE-u ILI prolaz duzi od --timeout "
+                               "(prekid meri ceo prolaz, KI-096); vidi "
+                               "docs/EXCEL_TEST_HARNESS.md.")
             rc = 2
         if watchdog is not None:
             time.sleep(1.0)
