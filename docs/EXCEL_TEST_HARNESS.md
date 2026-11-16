@@ -384,7 +384,13 @@ traži), ovde dva procesa i dve mašine.
   kliknuo `End`/`OK`). Ako se ne vrati, VBE je u break mode-u: proces se ubija, a
   `FATAL` nosi fazu i tekst dijaloga. Pre toga je takav prolaz visio do kraja
   budžeta (06.10.2026: 585 s, „Syntax error" bez mesta). `dokaz.py` takav prolaz
-  prijavljuje kao `EXCEL UBIJEN`, ne kao „NE OBARA NISTA".
+  prijavljuje kao `EXCEL UBIJEN`, ne kao „NE OBARA NISTA". Izmereno 16.11.2026,
+  ista greška u telu suite: sa starom compile probom 1785,6 s i `FATAL` bez
+  razloga, sa ovim putem 20,4 s i `FATAL` sa fazom i dijalogom.
+- **Greška u proceduri koju suite ne zove ne vidi se u prolazu.** VBA kompajlira
+  proceduru tek kad je pozove, pa je takav prolaz uredno zelen (izmereno
+  16.11.2026). Hvata je samo ručni `Debug → Compile VBAProject`, i zato on ostaje
+  kapija pred release.
 - **Red `FAZE`** u izveštaju daje režiju poziva po fazi (start Excela, otvaranje,
   uvoz, šema, zatvaranje), a svaki poziv dopisuje jedan red u
   `tests/run_vba_istorija.jsonl` (gitignored): trajanje po fazi i po suiti, izvor,
