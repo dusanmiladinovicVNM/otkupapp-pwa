@@ -782,6 +782,55 @@ jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
 mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
 pokriveno.
 
+### Radnici — `--radnika N` (R-4)
+
+```bash
+python tools/dokaz.py amb- --izbor --grupe --radnika 5
+```
+
+Svaki od N radnika je svoj Excel proces, sa **svojom kopijom izvora** (D-6) i
+**svojim izlazom** run_vba-a (`--izlaz`: izveštaj, istorija, `excel.pid`).
+
+**Ispis i ishodi se ne menjaju.** Rezultati se ispisuju i knjiže **u redosledu
+kataloga**, kao serijski. Zato je `--radnika 1` isto što i dokaz bez radnika, a
+izlaz sa N radnika se sa njim poredi `diff`-om.
+
+**Šta čuva nezavisnost radnika:**
+- **`run_vba --izlaz DIR` zaključava DIR** dok poziv traje. Drugi poziv sa istim
+  izlazom se odbija pre Excel-a (`IZLAZ ZAUZET`). Bez `--izlaz` je to `tests/`,
+  pa ni dva ručna poziva više ne mešaju `last_run.*`.
+- **Start Excel-a ide jedan po jedan na celoj mašini**, od `DispatchEx` do
+  otvaranja sveske (start brava). Uz to dokaz drži `--razmak` sekundi između
+  dva poziva (podrazumevano 1).
+- **Excel se gasi i ubija preko handle-a uzetog na startu**, ne po PID-u: posle
+  izlaska isti PID može da dobije Excel drugog radnika. Gašenje čeka sam proces
+  umesto fiksne sekunde.
+- **Excel koji preživi svoj run_vba** (timeout dokaza, Ctrl+C) dokaz ubija po
+  `excel.pid`, samo ako se PID **i vreme nastanka** poklope.
+- **Baze cele suite idu serijski, pre radnika**, jer pišu marker zelenog. Baza
+  izbora se meri jednom po izboru, i kad je traže dva radnika odjednom.
+- **Kad Excel ni ne krene** (FATAL bez ijednog reda `SUITE`), poziv se ponavlja
+  jednom. Pad posle starta suite-a je ishod, ne infrastruktura, pa se ne
+  ponavlja. Broj ponovljenih startova stoji na kraju izlaza.
+- **Paralelno smeju samo `RunAllTests`, banka-suite i BFP** (`PARALELNE_SUITE`).
+  Suite koje idu na mrežu ili dele stanje van sveske odbijaju `--radnika > 1`.
+- **Ctrl+C** zaustavlja nove poslove. Poslovi u toku dobijaju `PREKID`, a radni
+  folder se briše.
+
+**Koliko radnika:** VBA radi na jednom jezgru po Excel procesu, pa je granica
+broj **fizičkih jezgara**, ne RAM (jedan Excel sa test sveskom ~200 MB).
+Preporuka je jezgra − 1. Skaliranje za svoju mašinu izmeri jednom, istim skupom
+sa 1, 2, 3 i 5 radnika.
+
+**Poznata granica:** test #184 (`T_Backup_NeObaraStartINeRasteBezGranice`) piše
+u fiksni `%TEMP%\agrix_backup_test`. Dva radnika koji ga puste istovremeno mogu
+da se sudare. Dok ispravka ne prođe reprodukciju (CLAUDE.md §2), pun
+`RunAllTests` u više radnika nosi taj rizik. `--izbor` ga pušta samo kad je baš
+on ciljani test.
+
+`run_vba.py` ovim dobija novi ugovor (N6): posle uvoza jedan pun prolaz vraća
+markere.
+
 ### Grupni dokaz — `--grupe`
 
 Cena punog dokaza je **prolaz suite-a po sabotaži**, ne sama mutacija: BFP traje
