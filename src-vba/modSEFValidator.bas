@@ -762,6 +762,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "PrepareRejectedInvoiceForResubmit"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx

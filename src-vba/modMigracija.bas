@@ -210,6 +210,7 @@ Public Sub MigrirajPodatkeIzStarog()
 CLEAN:
     Dim em As String
     If Err.Number <> 0 Then em = "GRE" & ChrW(352) & "KA: " & Err.description & vbCrLf & vbCrLf
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not stari Is Nothing Then stari.Close SaveChanges:=False
     Application.Calculation = prevCalc

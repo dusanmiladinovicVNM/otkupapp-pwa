@@ -1691,12 +1691,18 @@ Public Function CanStorno(ByVal tblName As String, _
     Exit Function
 
 EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SRC
+    ' Err se cita PRE garda: i GoTo -1 i Resume Next ga resetuju, pa je
+    ' Debug.Print ispod do 17.11.2026. ispisivao Err=0 i prazan opis.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Debug.Print SRC & " failed. Table=" & tblName & _
                 " ID=" & recordID & _
-                " Err=" & CStr(Err.Number) & _
-                " Desc=" & Err.description
+                " Err=" & CStr(errNum) & _
+                " Desc=" & errDesc
     On Error GoTo 0
 
     CanStorno = False

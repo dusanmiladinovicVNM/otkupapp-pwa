@@ -314,6 +314,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "ImportOtkupFromPWA_Core"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", errDesc
@@ -467,6 +468,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "ImportOtkupFromPWA_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -3340,6 +3342,7 @@ Public Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
 
 EH:
     LogErr "ImportRowToTblOtkup_RowTX", "ClientRecordID=" & clientRecordID
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -4121,6 +4124,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "ImportZbirneFromPWA_Core"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", errDesc
@@ -4509,6 +4513,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -5483,6 +5488,7 @@ NextGeoRow:
 
 EH:
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

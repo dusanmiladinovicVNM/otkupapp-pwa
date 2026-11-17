@@ -657,6 +657,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -991,6 +992,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "CreateUtovarSaFakturom_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Monitor_Error _
         moduleName:="modUtovar", _
@@ -1079,6 +1081,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "CreateUtovar_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Monitor_Error _
         moduleName:="modUtovar", _
@@ -1408,6 +1411,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "CreateFakturaIzUtovara_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Monitor_Error _
         moduleName:="modUtovar", _

@@ -329,6 +329,7 @@ EH:
     manualRequiredCount = manualRequiredCount + 1
 
     ' Monitoring je best-effort (telemetrija sme da padne).
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     Monitor_Event _
@@ -390,6 +391,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "AutoMapBankaImportRow_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -589,6 +591,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "MapBankaImportAsKupac_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -739,6 +742,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "MapBankaImportAsKooperant_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -861,6 +865,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "MapBankaImportAsOM_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -971,6 +976,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "MapBankaImportAsKooperantBlock_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -1060,6 +1066,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "MapBankaImportAsKooperantBlockManual_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -1535,6 +1542,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "SkipBankaImportRow_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -1648,6 +1656,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "AutoMapAllBankaImport_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -1767,6 +1776,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     gBankaSilentBatch = False

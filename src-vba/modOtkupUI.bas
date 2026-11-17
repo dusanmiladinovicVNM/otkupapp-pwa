@@ -4755,7 +4755,9 @@ EH:
     ' pokrivaju isto vracanje; ovde je pokriveno pregledom, ne testom. Ako se
     ' EH-u ikad doda logika koja se razlikuje od tih dva, treba mu i tvrdnja.
     ' Vracanje je pod svojim On Error: greska U VRACANJU ne sme da pojede
-    ' prijavu prve greske.
+    ' prijavu prve greske. Sam Resume Next to NE obezbedjuje -- obradjivac je
+    ' jos aktivan, pa bi greska vracanja izasla iz procedure i preskocila
+    ' ShowToast. Zato ide On Error GoTo -1 ispred (vba_check GARD_U_OBRADJIVACU).
     ' Greska se PREPISE i UPISE u log PRE vracanja: vracanje ide pod svojim
     ' On Error Resume Next, a ta naredba resetuje Err -- pa bi LogErr posle nje
     ' upisao prazno (isto sto vba_check hvata kao MRTAV_LOG).
@@ -4763,6 +4765,7 @@ EH:
     errDesc = Err.description
     LogError "modOtkupUI.PostaviSekciju", errDesc, errNum
     If Len(staraSekcija) > 0 And staraSekcija <> mSekcija Then
+        On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
         On Error Resume Next
         VratiSekciju frm, staraSekcija
         Err.Clear
@@ -7591,6 +7594,7 @@ EH:
     ' menja TIP KNJIZENJA. Ide PRE ciscenja -- svaka On Error naredba resetuje Err.
     LogErr "modOtkupUI.FillOpenBlokovi"
     ' Delimicno napunjena lista je gora od prazne: izgleda kao potpuna.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     CB.Clear
     mBlokIDs = Empty
@@ -7711,6 +7715,7 @@ EH:
     mFakListaOk = False
     mFakListaErr = Err.description
     LogErr "modOtkupUI.FillOpenFakture"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     CB.Clear
     mFakIDs = Empty

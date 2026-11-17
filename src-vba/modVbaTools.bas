@@ -2060,6 +2060,7 @@ Private Function FileIsCrLf(ByVal fpath As String) As Boolean
     FileIsCrLf = (InStr(1, s, vbCrLf) > 0)
     Exit Function
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Close #ff
     FileIsCrLf = False
@@ -2082,6 +2083,7 @@ Private Function SourceFormBeginCount(ByVal fpath As String) As Long
     SourceFormBeginCount = n
     Exit Function
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Close #ff
     SourceFormBeginCount = -1
@@ -2135,6 +2137,7 @@ Private Function ValidateExportEnvelope(ByVal fpath As String, ByVal ext As Stri
     End If
     Exit Function
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Close #ff
     ValidateExportEnvelope = "Izvorni fajl " & baseName & "." & ext & " nije citljiv."
@@ -2163,6 +2166,7 @@ Private Function DeclaredVBName(ByVal fpath As String) As String
     Close #ff
     Exit Function
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Close #ff
 End Function

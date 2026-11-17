@@ -170,6 +170,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -375,6 +376,7 @@ EH:
     errCategory = ClassifyBankaImportError(errNum, errSrc, errDesc)
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     fileName = GetFileNameFromPath(pdfPath)
@@ -453,6 +455,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     ExecutePendingBankaFileMoves errorMoves
@@ -765,6 +768,7 @@ EH:
     errSrcTx = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1868,6 +1872,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not movedOk Then

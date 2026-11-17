@@ -882,6 +882,7 @@ EH:
     LogErr ORCH_MODULE & ".ScheduledSyncTick"
     Err.Clear
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     Dim fallbackInterval As Long

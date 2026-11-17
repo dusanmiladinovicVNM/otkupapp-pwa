@@ -428,6 +428,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "SendInvoiceToSEF_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -648,6 +649,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "CancelInvoiceOnSEF_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -699,6 +701,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "StornoInvoiceOnSEF_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -901,6 +904,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "RecoverStuckSEFSendingInvoice"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -1101,6 +1105,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 

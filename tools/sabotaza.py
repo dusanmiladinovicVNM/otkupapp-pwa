@@ -13391,6 +13391,55 @@ SABOTAZE = {
         "T_Backup_NeObaraStartINeRasteBezGranice",
         "BackupFileOnStart NE SME da podigne gresku -- start bi pao",
     ),
+    # GARD_U_OBRADJIVACU. Dok je obradjivac AKTIVAN, On Error Resume Next NE
+    # guta novu gresku -- ona izlazi iz procedure (mereno 17.11.2026, test 184 na
+    # sondi claude/sonda-eh-obradjivac). Ispravka je On Error GoTo -1 pre garda.
+    # Ove sabotaze ga skidaju; kuka modTestMode.ObradjivacKvarAkoTest tada digne
+    # gresku koja izlazi. Prva tvrdnja testa (kuka pogodjena) ostaje zelena, pada
+    # DRUGA -- bas ona koja meri gard.
+    "eh-obradjivac-backup": (
+        "modJournaling.bas",
+        "    On Error GoTo -1\n"
+        "    On Error Resume Next\n"
+        "    ' Test seam: greska U obradjivacu. Bez GoTo -1 iznad izlazi iz procedure.\n",
+        "    ' SABOTAZA: obradjivac ostaje aktivan\n"
+        "    On Error Resume Next\n"
+        "    ' Test seam: greska U obradjivacu. Bez GoTo -1 iznad izlazi iz procedure.\n",
+        "T_Obradjivac_BackupGreskaUObradiNeIzlazi",
+        "greska U obradjivacu BackupFileOnStart ne izlazi -- start bi pao",
+    ),
+    "eh-obradjivac-autosave": (
+        "modJournaling.bas",
+        "    On Error GoTo -1\n"
+        "    On Error Resume Next\n"
+        "    LogError \"AutoSaveAfterCommit\", errDesc, errNo\n",
+        "    ' SABOTAZA: obradjivac ostaje aktivan\n"
+        "    On Error Resume Next\n"
+        "    LogError \"AutoSaveAfterCommit\", errDesc, errNo\n",
+        "T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac",
+        "greska U obradjivacu AutoSaveAfterCommit ne izlazi (AutoSaveTick nema rukovaoca)",
+    ),
+    # Bez kuke: bez forme i telo i obradjivac padaju na frm.caption (91).
+    "eh-obradjivac-chrome": (
+        "modWindow.bas",
+        "    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU\n"
+        "    On Error Resume Next\n"
+        "    frm.caption = vbNullString\n",
+        "    ' SABOTAZA: obradjivac ostaje aktivan\n"
+        "    On Error Resume Next\n"
+        "    frm.caption = vbNullString\n",
+        "T_Obradjivac_ChromeBezFormeNeIzlazi",
+        "RemoveUserFormChrome bez forme ne podize gresku iz obradjivaca",
+    ),
+    # Kuka koja ne gadja obradjivac (drugo ime) ostavlja test zelen i sa GoTo -1
+    # i bez njega -- placebo. Prva tvrdnja testa postoji bas zbog toga.
+    "eh-obradjivac-kuka-promasena": (
+        "modJournaling.bas",
+        "    modTestMode.ObradjivacKvarAkoTest \"modJournaling.BackupFileOnStart\"\n",
+        "    modTestMode.ObradjivacKvarAkoTest \"modJournaling.Promasen\"   ' SABOTAZA: kuka pod drugim imenom\n",
+        "T_Obradjivac_BackupGreskaUObradiNeIzlazi",
+        "kuka u obradjivacu BackupFileOnStart je pogodjena (inace test ne meri gard)",
+    ),
 }
 
 

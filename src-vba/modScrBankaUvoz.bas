@@ -331,6 +331,7 @@ EH:
     ' pomeranja ostavlja redove STVARNO upisane -- bez osvezavanja bi operater
     ' video gresku nad mrezom u kojoj tih redova nema.
     LogErr "modScrBankaUvoz.Scr_Aktiviraj"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Scr_ResetCache
     modOtkupUI.RefreshFromData

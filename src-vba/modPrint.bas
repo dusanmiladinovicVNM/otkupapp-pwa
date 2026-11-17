@@ -185,6 +185,7 @@ Public Sub PrintIzvestajHouse(ByVal data As Variant, ByVal nRows As Long, _
 EH:
     Application.ScreenUpdating = True
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not ws Is Nothing Then ws.Visible = xlSheetVeryHidden
 End Sub
@@ -539,9 +540,13 @@ BLOKADA:
     Dim blokadaMsg As String
     blokadaMsg = Err.description
 
-    On Error Resume Next
+    ' LogErr PRE svake On Error naredbe. Do 17.11.2026. je stajao posle
+    ' "On Error Resume Next", koji resetuje Err -- pa LogErr (pise samo dok je
+    ' Err.Number <> 0) nije upisivao NISTA, a blokada stampe nije ostavljala trag.
+    ' MRTAV_LOG ga nije video jer je trazio labelu po imenu (EH/Fin/...), ne po
+    ' On Error GoTo. Gard oko njega nije ni stitio: obradjivac je bio aktivan
+    ' (GARD_U_OBRADJIVACU), a LogErr ionako ide kroz LogError, koji sam guta greske.
     LogErr SRC
-    On Error GoTo 0
 
     MsgBox Poruka("PRINT_ERR_OTKUP_BLOKIRAN") & vbCrLf & blokadaMsg, _
            vbExclamation, APP_NAME

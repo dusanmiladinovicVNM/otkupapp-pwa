@@ -949,6 +949,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LogError "CreateZbirna_TX", errDesc, errNum
     Monitor_Error _
@@ -1282,6 +1283,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LogError SRC, errDesc, errNum
     On Error GoTo 0
@@ -8888,6 +8890,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     outErrNum = errNum
 
@@ -9235,6 +9238,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     ' Potvrda deficita je PITANJE pozivaocu, ne kvar -- ne ide u log (obrazac
     ' iz CreateOtkup_TX). Broj greske se cuva, jer je on ugovor sa pozivaocem.
@@ -9863,6 +9867,7 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
 EH:
     LogErr "SaveKupciIzlaz_TX"
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -11076,6 +11081,7 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 EH:
     LogErr "SaveOMUlaz_TX"
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -11141,6 +11147,7 @@ Public Function SaveOMUlazSpec_TX(ByVal datum As Date, _
 EH:
     LogErr "SaveOMUlazSpec_TX"
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

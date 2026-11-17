@@ -360,21 +360,31 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    ' On Error Resume Next ide ODMAH posle citanja Err, PRE logovanja i
-    ' monitoringa. Ugovor ove procedure je "NIKAD NE PODIZE GRESKU", pa unutar EH
-    ' bloka nista ne sme da ga ponisti. Greska podignuta u rukovaocu greske je
-    ' NEUHVACENA i izlazi iz procedure -- a StartApp bi tada opet pao, sto je
-    ' tacno kvar koji se ovde leci.
+    ' Ugovor ove procedure je "NIKAD NE PODIZE GRESKU", pa unutar EH bloka nista
+    ' ne sme da ga ponisti: greska koja izadje odavde obara StartApp, sto je tacno
+    ' kvar koji se ovde leci.
     '
-    ' Mereno: LogErr danas ne moze da pukne (LogError pocinje sa On Error Resume
-    ' Next i sav upis je unutra). Ali ugovor ne sme da visi o TUDJEM internom
-    ' rukovanju greskom -- dovoljno je da neko skloni taj gard iz modLogError i
-    ' ova tvrdnja tiho prestane da vazi, bas na punom disku gde se najvise racuna.
-    ' LogError sa SACUVANIM vrednostima, ne LogErr: "On Error Resume Next" resetuje
-    ' Err, a LogErr pise samo dok je Err.Number <> 0 -- posle garda bi upisao
-    ' PRAZNO. Zamku hvata vba_check pravilom MRTAV_LOG; bez toga bi ova izmena
-    ' utisala log bas u trenutku kvara koji se loguje.
+    ' Zato PRVO On Error GoTo -1, pa tek onda gard. Dok je obradjivac AKTIVAN
+    ' (posle greske, pre Resume / Exit / On Error GoTo -1), procedura NE MOZE da
+    ' obradi novu gresku -- ni kroz On Error Resume Next. Nova greska izlazi iz
+    ' procedure, a ostatak bloka se preskace. Do 17.11.2026. je ovde stajao samo
+    ' gard, uz komentar da on stiti; ne stiti. Mereno na Windows-u: Kill pod takvim
+    ' gardom u obradjivacu testa 184 je izasao iz procedure kao "File not found"
+    ' (sonda claude/sonda-eh-obradjivac). Staticki to hvata vba_check pravilom
+    ' GARD_U_OBRADJIVACU, a ovaj blok meri T_Obradjivac_BackupGreskaUObradiNeIzlazi
+    ' (seam ispod).
+    '
+    ' Mereno: LogError danas ne moze da pukne (pocinje sa On Error Resume Next i
+    ' sav upis je unutra). Ali ugovor ne sme da visi o TUDJEM internom rukovanju
+    ' greskom -- dovoljno je da neko skloni taj gard iz modLogError i ova tvrdnja
+    ' tiho prestane da vazi, bas na punom disku gde se najvise racuna.
+    ' LogError sa SACUVANIM vrednostima, ne LogErr: i GoTo -1 i Resume Next
+    ' resetuju Err, a LogErr pise samo dok je Err.Number <> 0 -- posle njih bi
+    ' upisao PRAZNO (vba_check MRTAV_LOG).
+    On Error GoTo -1
     On Error Resume Next
+    ' Test seam: greska U obradjivacu. Bez GoTo -1 iznad izlazi iz procedure.
+    modTestMode.ObradjivacKvarAkoTest "modJournaling.BackupFileOnStart"
     LogError "modJournaling.BackupFileOnStart", errDesc, errNo
     If IsTestMode() Then GoTo BezMonitoringa      ' v. gard na uspesnom putu
 
@@ -751,24 +761,34 @@ EH:
     ' committed in memory; operator must not see save failure for a save
     ' that succeeded at the business-logic level.
     '
-    ' Gard ide PRVI, pre logovanja i pre dodira Application. Greska podignuta u
-    ' rukovaocu greske je NEUHVACENA i izlazi iz procedure -- a pozivalac
+    ' Gard ide PRVI, pre logovanja i pre dodira Application -- i to DVA reda:
+    ' On Error GoTo -1 gasi aktivan obradjivac, tek onda Resume Next. Dok je
+    ' obradjivac aktivan, procedura NE MOZE da obradi novu gresku ni kroz
+    ' Resume Next: greska izlazi iz procedure. Do 17.11.2026. je ovde stajao samo
+    ' Resume Next, uz komentar da on stiti; ne stiti (vba_check
+    ' GARD_U_OBRADJIVACU, mereno na Windows-u na testu 184). A pozivalac
     ' AutoSaveTick je Application.OnTime callback BEZ ijednog rukovaoca, pa bi
     ' operater dobio VBA dijalog usred rada.
     '
-    ' Gora je druga steta: bez garda se "m_AutoSaveInProgress = False" ispod ne bi
-    ' izvrsilo, pa bi reentrancy prekidac ostao True do kraja sesije i svaki
-    ' sledeci AutoSave tiho izlazio na prvoj liniji -- dok CommitTx i dalje
-    ' prijavljuje uspeh, a nista se ne snima. Tih gubitak podataka.
+    ' Gora je druga steta: greska koja izadje odavde preskace
+    ' "m_AutoSaveInProgress = False" ispod, pa bi reentrancy prekidac ostao True
+    ' do kraja sesije i svaki sledeci AutoSave tiho izlazio na prvoj liniji --
+    ' dok CommitTx i dalje prijavljuje uspeh, a nista se ne snima. Tih gubitak
+    ' podataka. Meri T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac (seam
+    ' ispod, PRE oslobadjanja prekidaca).
     '
-    ' LogError sa SACUVANIM vrednostima, ne LogErr: "On Error Resume Next" resetuje
-    ' Err (vba_check pravilo MRTAV_LOG), pa bi LogErr posle garda upisao prazno.
+    ' LogError sa SACUVANIM vrednostima, ne LogErr: i GoTo -1 i Resume Next
+    ' resetuju Err (vba_check pravilo MRTAV_LOG), pa bi LogErr posle njih upisao
+    ' prazno.
     errNo = Err.Number
     errDesc = Err.description
+    On Error GoTo -1
     On Error Resume Next
     LogError "AutoSaveAfterCommit", errDesc, errNo
 
     If alertsTouched Then Application.DisplayAlerts = prevAlerts
+    ' Test seam: greska U obradjivacu, pre oslobadjanja prekidaca.
+    modTestMode.ObradjivacKvarAkoTest "modJournaling.AutoSaveAfterCommit"
     m_AutoSaveInProgress = False
     ' Intentionally no Err.Raise.
 End Sub

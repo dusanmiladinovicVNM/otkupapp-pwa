@@ -101,6 +101,7 @@ Public Function GetWarmStornoDocs() As Collection
 EH:
     LogErr MOD_NAME & ".GetWarmStornoDocs"
     ' Ultimativni fallback: gradi direktno (bez keza) da forma nikad ne ostane prazna.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Set GetWarmStornoDocs = GetActiveDocumentsForStorno("Svi", "")
 End Function
@@ -124,6 +125,7 @@ Private Sub BuildWarm()
     Exit Sub
 EH:
     LogErr MOD_NAME & ".BuildWarm"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     EndTableCache
     m_warming = False

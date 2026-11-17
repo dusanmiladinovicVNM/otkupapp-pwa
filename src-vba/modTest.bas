@@ -644,6 +644,10 @@ Public Sub RunAllTests()
     RunOne 183
     RunOne 184
     RunOne 185
+    ' Greska U aktivnom obradjivacu (vba_check GARD_U_OBRADJIVACU).
+    RunOne 354
+    RunOne 355
+    RunOne 356
     RunOne 186
     RunOne 187
     RunOne 188
@@ -772,6 +776,9 @@ Private Sub ResetSeamova()
     ' Mapiranje izvoda u testovima doplate (329-332) gasi dijaloge greske; test
     ' koji pukne pre vracanja ostavio bi tih rezim i produkciji posle suite.
     modBankaMapiranje.gBankaSilentBatch = False
+    ' Podmetnuta greska u aktivnom obradjivacu (354, 355): zaostao seam bi svaki
+    ' sledeci backup ili AutoSave oborio u obradjivacu.
+    modTestMode.ObradjivacKvarTestSet ""
     Err.Clear
 End Sub
 
@@ -1126,6 +1133,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 351: TestName = "T_Doplata_ObuhvatKooperanta"
         Case 352: TestName = "T_Doplata_ObuhvatNaEkranu"
         Case 353: TestName = "T_Doplata_ObuhvatZastoj"
+        Case 354: TestName = "T_Obradjivac_BackupGreskaUObradiNeIzlazi"
+        Case 355: TestName = "T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac"
+        Case 356: TestName = "T_Obradjivac_ChromeBezFormeNeIzlazi"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1487,6 +1497,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 351: T_Doplata_ObuhvatKooperanta
         Case 352: T_Doplata_ObuhvatNaEkranu
         Case 353: T_Doplata_ObuhvatZastoj
+        Case 354: T_Obradjivac_BackupGreskaUObradiNeIzlazi
+        Case 355: T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac
+        Case 356: T_Obradjivac_ChromeBezFormeNeIzlazi
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -17627,8 +17640,9 @@ End Function
 ' STA OVAJ TEST NE MOZE: da natera bas EH blok da pukne iznutra (za to bi
 ' Application.DisplayAlerts morao da odbije upis). Meri se UGOVOR kroz pravu
 ' proceduru -- greska ne izlazi, prekidac se oslobodi, autosave i dalje radi --
-' a ne konkretan pad u rukovaocu. Redosled garda unutar EH bloka ostaje na
-' pregledu koda.
+' a ne konkretan pad u rukovaocu. Pad U rukovaocu meri
+' T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac (seam
+' modTestMode.ObradjivacKvarTestSet).
 Private Sub T_AutoSave_PadNeZaglavljujePrekidac()
     Dim izaslaGreska As Boolean
     Dim prekidacPosle As Boolean
@@ -17804,6 +17818,124 @@ CistiPosleGreske:
     On Error GoTo 0
     AssertEq "podigao gresku " & errNum & " " & errDesc, "bez greske", _
              "BackupFileOnStart NE SME da podigne gresku -- start bi pao"
+End Sub
+
+' ============================================================
+' 354-356. Greska U AKTIVNOM obradjivacu ne izlazi iz procedure
+' ============================================================
+' Dok je obradjivac aktivan (posle greske, pre Resume / Exit / On Error GoTo -1),
+' procedura NE MOZE da obradi novu gresku -- ni kroz On Error Resume Next. Nova
+' greska izlazi iz procedure, originalna se gubi, a ostatak obradjivaca se
+' preskace. Mereno na Windows-u 17.11.2026: Kill pod takvim gardom u
+' obradjivacu testa 184 je izasao kao "File not found" i sakrio tvrdnju testa.
+'
+' Ispravka je On Error GoTo -1 pre garda; staticki je drzi vba_check pravilo
+' GARD_U_OBRADJIVACU. Ovi testovi mere da ispravka STVARNO gasi obradjivac, i to
+' nad ugovorima "nikad ne podize gresku" -- tamo greska koja izadje obara start
+' (BackupFileOnStart), daje VBA dijalog iz OnTime callback-a i zaglavljuje
+' AutoSave do kraja sesije (AutoSaveAfterCommit), ili obara gradnju forme
+' (RemoveUserFormChrome).
+'
+' Kod prva dva u obradjivacu stoje samo pozivi koji i sami gutaju greske
+' (LogError, Monitor_*), pa bez kuke test ne bi razlikovao GoTo -1 od njegovog
+' odsustva. Kuka (modTestMode.ObradjivacKvarAkoTest) digne gresku ODMAH POSLE
+' garda; prva tvrdnja je da je stvarno pogodjena, inace bi test bio placebo.
+' Sabotaze eh-*-bez-goto-1 skidaju bas GoTo -1 i obaraju drugu tvrdnju.
+Private Sub T_Obradjivac_BackupGreskaUObradiNeIzlazi()
+    Dim uspeo As Boolean, pogodjena As Boolean
+    Dim izasla As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    modTestMode.ObradjivacKvarTestSet "modJournaling.BackupFileOnStart"
+
+    ' Nedozvoljeni znaci u imenu foldera: telo pada pre ikakvog upisa, pa se
+    ' ulazi u EH -- isti put kao "fail-soft" grana testa 184.
+    On Error Resume Next
+    Err.Clear
+    uspeo = modJournaling.BackupFileOnStart(ThisWorkbook.path & "\agrix<nemoguce>ime")
+    If Err.Number <> 0 Then izasla = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    pogodjena = modTestMode.ObradjivacKvarPogodjen()
+    modTestMode.ObradjivacKvarTestSet ""
+
+    AssertEq pogodjena, True, _
+             "kuka u obradjivacu BackupFileOnStart je pogodjena (inace test ne meri gard)"
+    AssertEq izasla, "", _
+             "greska U obradjivacu BackupFileOnStart ne izlazi -- start bi pao"
+    AssertEq uspeo, False, "posle greske u obradjivacu backup i dalje vraca False"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1
+    On Error Resume Next
+    modTestMode.ObradjivacKvarTestSet ""
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Obradjivac_BackupGreskaUObradiNeIzlazi", errDesc
+End Sub
+
+' Kvar u telu (AutoSaveTestKvar) vodi u EH, a kuka u EH-u stoji PRE
+' oslobadjanja reentrancy prekidaca. Bez GoTo -1 greska izlazi i prekidac ostaje
+' True -- svaki sledeci AutoSave bi tiho izlazio, dok CommitTx prijavljuje uspeh.
+Private Sub T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac()
+    Dim pogodjena As Boolean, prekidacPosle As Boolean
+    Dim izasla As String
+    Dim errNum As Long, errDesc As String
+
+    modImportState.ImportPendingTestSet False
+    modJournaling.ResetAutoSaveStateForTests
+
+    On Error GoTo EH
+    modJournaling.AutoSaveTestKvar True
+    modTestMode.ObradjivacKvarTestSet "modJournaling.AutoSaveAfterCommit"
+
+    On Error Resume Next
+    Err.Clear
+    modJournaling.AutoSaveAfterCommit "T_Obradjivac.autosave", True
+    If Err.Number <> 0 Then izasla = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    pogodjena = modTestMode.ObradjivacKvarPogodjen()
+    modTestMode.ObradjivacKvarTestSet ""
+    modJournaling.AutoSaveTestKvar False
+    prekidacPosle = modJournaling.AutoSaveUToku()
+    modJournaling.ResetAutoSaveStateForTests
+
+    AssertEq pogodjena, True, _
+             "kuka u obradjivacu AutoSaveAfterCommit je pogodjena (inace test ne meri gard)"
+    AssertEq izasla, "", _
+             "greska U obradjivacu AutoSaveAfterCommit ne izlazi (AutoSaveTick nema rukovaoca)"
+    AssertEq prekidacPosle, False, _
+             "posle greske u obradjivacu reentrancy prekidac je oslobodjen"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1
+    On Error Resume Next
+    modTestMode.ObradjivacKvarTestSet ""
+    modJournaling.AutoSaveTestKvar False
+    modJournaling.ResetAutoSaveStateForTests
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Obradjivac_AutoSaveGreskaUObradiOslobadjaPrekidac", errDesc
+End Sub
+
+' Bez kuke: kad forme nema, i telo i obradjivac padaju na frm.caption (91). Do
+' ispravke je druga greska izlazila iz procedure; sada je obradjivac proguta.
+Private Sub T_Obradjivac_ChromeBezFormeNeIzlazi()
+    Dim izasla As String
+
+    On Error Resume Next
+    Err.Clear
+    modWindow.RemoveUserFormChrome Nothing
+    If Err.Number <> 0 Then izasla = CStr(Err.Number) & " " & Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq izasla, "", _
+             "RemoveUserFormChrome bez forme ne podize gresku iz obradjivaca"
 End Sub
 
 ' ============================================================

@@ -125,6 +125,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     outErrNum = errNum
 
@@ -431,6 +432,7 @@ EH:
     errSrc = Err.SOURCE
     outErrNum = errNum
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LogError SRC, errDesc, errNum
     Monitor_Event _
@@ -909,6 +911,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LogError SRC, errDesc, errNum
     On Error GoTo 0

@@ -268,6 +268,7 @@ EH:
     
     LogErr "SaveMagacin_TX"
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     Monitor_Error _
@@ -364,6 +365,7 @@ Public Function BookPocetniDug(ByVal kooperantID As String, _
 EH:
     LogErr SRC
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

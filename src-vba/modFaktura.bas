@@ -81,6 +81,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "CreateFaktura_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 

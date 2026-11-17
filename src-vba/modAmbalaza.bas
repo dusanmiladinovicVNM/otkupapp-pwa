@@ -3094,6 +3094,7 @@ Public Function StornirajAmbDokument_TX(ByVal ambDokID As String, _
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -3202,6 +3203,7 @@ Public Function UpisiReversAmbalaze_TX(ByVal datum As Date, ByVal broj As String
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -3505,6 +3507,7 @@ Public Function IspravkaReversa_TX(ByVal stariAmbDokID As String, ByVal datum As
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -3830,6 +3833,7 @@ Private Function UpisiKupcevDokument_TX(ByVal vrstaKretanja As String, _
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -4024,6 +4028,7 @@ EH:
     errDesc = Err.description
     LogErr SRC
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing

@@ -113,6 +113,7 @@ Public Sub RemoveUserFormChrome(ByVal frm As Object, _
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     frm.caption = vbNullString
 End Sub

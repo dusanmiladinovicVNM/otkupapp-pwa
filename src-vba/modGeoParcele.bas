@@ -89,6 +89,7 @@ Public Function SaveParcelGeoPointByID_TX(ByVal parcelaID As String, _
 EH:
     LogErr SRC
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -169,6 +170,7 @@ Public Function ClearParcelGeoByID_TX(ByVal parcelaID As String) As Boolean
 EH:
     LogErr SRC
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

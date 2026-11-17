@@ -123,6 +123,7 @@ EH:
     End If
     
     LogErr "SaveNovac_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
 
@@ -506,6 +507,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "ApplyAvansToFaktura_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -2062,6 +2064,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr "ApplyAvansToOtkup_TX"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
@@ -2141,6 +2144,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -2202,6 +2206,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -2452,6 +2457,7 @@ EH:
     errSrc = Err.SOURCE
 
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx

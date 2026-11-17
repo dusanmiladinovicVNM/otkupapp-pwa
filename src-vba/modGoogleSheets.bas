@@ -350,6 +350,7 @@ Public Function WriteSheetData(ByVal spreadsheetID As String, _
 
 EH:
     LogErr SRC
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(Trim$(stagingTab)) > 0 Then SafeDeleteSheetByTitle spreadsheetID, stagingTab
     On Error GoTo 0

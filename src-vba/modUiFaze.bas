@@ -425,6 +425,7 @@ Private Sub NazadUAplikaciju()
     Exit Sub
 EH:
     LogErr "modUiFaze.NazadUAplikaciju"
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Application.Visible = False
     FazaApp
