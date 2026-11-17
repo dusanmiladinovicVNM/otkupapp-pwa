@@ -469,7 +469,7 @@ def _izvrsi(poslovi: list, bazen: list):
     def omot(i, fn):
         if _STOP.is_set() or i > granica[0]:
             return None
-        c = radnici.uzmi(odustani=lambda: _STOP.is_set() or i > granica[0])
+        c = radnici.uzmi(odustani=lambda: _STOP.is_set() or i > granica[0], kljuc=i)
         if c is None:
             return None
         rez = None
@@ -775,6 +775,15 @@ def _prolaz(clanovi: list, pre: str, grupno: bool, izbor=frozenset(),
         rez["stop"] = ("STRAZA: nema kopije za mutacije, ili je kopija u "
                        "radnom stablu / snimku -- dokaz ne pise src-vba")
         return rez
+    # Kopija mora biti u stanju snimka PRE prolaza, ne samo posle prethodnog:
+    # radnik dolazi iz zajednickog bazena, a prolaz koji javi REVERT-FAIL ga
+    # vraca sa mutacijom u kopiji. Mera nad njom bi bila tudja (R-4).
+    zatecen = _otisak(ctx["kopija"])
+    if zatecen != pre:
+        rez["stop"] = ("STRAZA: kopija radnika r%s nije u stanju snimka pre "
+                       "prolaza (potpis %s) -- mera bi isla nad tudjom mutacijom"
+                       % (ctx.get("id"), zatecen))
+        return rez
 
     suite = clanovi[0]["suite"]
     testovi = None
@@ -940,25 +949,40 @@ class _Radnici:
     Ko uzme radnika drzi ga do vracanja -- u jednom trenutku je radnik kod
     najvise jednog posla. Prioritetan zahtev (baza cele suite) dobija PRVOG
     slobodnog, pre poslova koji vec cekaju: inace bi baza cekala kraj cele
-    faze, a ona je duza od svakog posla izbora."""
+    faze, a ona je duza od svakog posla izbora.
+
+    Obicni zahtevi se uslugaju po KLJUCU (indeks posla), ne po tome ko stigne:
+    nit koja vrati radnika ne sme da ga odmah uzme za svoj KASNIJI posao ispred
+    ranijeg koji ceka. Granica STOP-a u _izvrsi stiti samo kasnije poslove --
+    raniji posao koji krene POSLE REVERT-FAIL-a kasnijeg dobio bi njegovu
+    nevracenu kopiju."""
 
     def __init__(self, bazen: list, korak: float = 0.5):
         self.bazen = list(bazen)
         self._slobodni = list(bazen)
         self._uslov = threading.Condition()
         self._prioritetnih = 0
+        self._red = []                  # obicni zahtevi koji cekaju: (kljuc, broj)
+        self._broj = 0
         self._korak = korak             # koliko cesto ceka pita odustani()
 
     def __len__(self) -> int:
         return len(self.bazen)
 
-    def uzmi(self, prioritet: bool = False, odustani=None):
-        """Slobodan radnik, ili None ako odustani() postane tacno dok se ceka."""
+    def uzmi(self, prioritet: bool = False, odustani=None, kljuc=None):
+        """Slobodan radnik, ili None ako odustani() postane tacno dok se ceka.
+        Obican zahtev ceka svoj red: najmanji kljuc (bez kljuca -- redosled
+        dolaska) i nijedan prioritetan ispred sebe."""
         with self._uslov:
             if prioritet:
                 self._prioritetnih += 1
+            else:
+                self._broj += 1
+                moj = (self._broj if kljuc is None else kljuc, self._broj)
+                self._red.append(moj)
             try:
-                while not self._slobodni or (not prioritet and self._prioritetnih):
+                while not self._slobodni or (not prioritet and (
+                        self._prioritetnih or min(self._red) != moj)):
                     if odustani is not None and odustani():
                         return None
                     self._uslov.wait(self._korak)
@@ -966,7 +990,9 @@ class _Radnici:
             finally:
                 if prioritet:
                     self._prioritetnih -= 1
-                    self._uslov.notify_all()
+                else:
+                    self._red.remove(moj)
+                self._uslov.notify_all()
 
     def vrati(self, c: dict) -> None:
         with self._uslov:
@@ -1121,6 +1147,7 @@ class _BazeUnapred:
                 continue
             except Exception:               # noqa: BLE001 -- otkazana baza nije nalaz
                 break
+            break                           # posao je zavrsen -- nema sta da se ceka
         self._zatvori()
 
     def _zatvori(self) -> None:
@@ -1507,11 +1534,12 @@ def main(argv: list) -> int:
             unapred = _BazeUnapred(radnici, pre)
 
     def najavi(ishod):
-        """Stavka koja vodi u fazu 3 (cela suite, ili ponavljanje sama) trazi
-        bazu svoje suite ODMAH, iz niti radnika -- ne ceka redosled ispisa."""
+        """Stavka koja SIGURNO ide u fazu 3 (cela suite) trazi bazu svoje suite
+        ODMAH, iz niti radnika -- ne ceka redosled ispisa. Ponavljanje sama se
+        ne racuna: ta stavka cesto prodje u fazi 2, a njena baza bi stala u red
+        ISPRED baze koja fazi 3 stvarno treba (baze idu jedna po jedna)."""
         if unapred is not None and isinstance(ishod, dict):
             kandidati = [s for s, _r in ishod.get("cela_suite", [])]
-            kandidati += [s for s, _r in ishod.get("ostatak", [])]
             nove = unapred.trazi(sorted({s["suite"] for s in kandidati} & moguce))
             if nove:
                 print("BAZE UNAPRED: %s -- krece uz %s (prva stavka koja vodi u "
@@ -1775,7 +1803,7 @@ _LAZNI_CTX = {"radni": os.path.join(os.sep, "nema", "dokaz_x"),
 
 def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
                   timeout=False, izbor=frozenset(), baze=None, izlaz_baze="",
-                  ctx=None, prekid=False):
+                  ctx=None, prekid=False, zatecen="P"):
     """Pokreni `_prolaz` bez Excela. Vraca (rez, pozivi).
 
     Pravila grupisanja i ocena su ciste funkcije i mere se direktno, ali
@@ -1786,7 +1814,7 @@ def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
     minutima i gde greska u njemu izgleda kao nalaz nad VBA kodom.
     """
     pozivi = []
-    stanje = {"mutirano": False}
+    stanje = {"mutirano": False, "obnovljena": False}
 
     def lazni_pusti(*a, **kw):
         pozivi.append(tuple(a[1:]))
@@ -1810,14 +1838,18 @@ def _lazni_prolaz(clanovi, izlaz_suite, grupno=True, pukli=(), potpis="P",
         pozivi.append(("<obnova>", "<cela>" if fajlovi is None
                        else tuple(sorted(fajlovi))))
         stanje["mutirano"] = False
+        stanje["obnovljena"] = True
 
     # Potpis ZAVISI OD PUTANJE: `potpis` vazi samo za kopiju, sve ostalo
     # (src-vba, snimak) je "P". Provera koja bi merila pogresno stablo -- npr.
     # src-vba umesto kopije -- tako bi videla "P" i propustila nevracenu kopiju.
+    # I OD TRENUTKA: kopija PRE prolaza nosi `zatecen` (cista = "P"), a posle
+    # obnove `potpis` -- nevracena kopija je ishod obnove, ne pocetno stanje.
     kopija = (ctx or _LAZNI_CTX)["kopija"]
     pravi = _pusti, _otisak, _obnovi
     globals()["_pusti"] = lazni_pusti
-    globals()["_otisak"] = lambda put=None: potpis if put == kopija else "P"
+    globals()["_otisak"] = lambda put=None: (
+        (potpis if stanje["obnovljena"] else zatecen) if put == kopija else "P")
     globals()["_obnovi"] = lazna_obnova
     try:
         rez = _prolaz(clanovi, "P", grupno, izbor, baze, ctx or _LAZNI_CTX)
@@ -1866,6 +1898,13 @@ def _self_test_d6(prolaz, suita) -> list:
     rez, _p = prolaz(g2, OBA, pukli=("a", "b"), potpis="DRUGI")
     tvrdi(rez["stop"].startswith("REVERT-FAIL"),
           "D-6: nevracena kopija bez prijavljene primene ne zaustavlja dokaz")
+    # Radnik iz zajednickog bazena moze da stigne sa TUDJOM, nevracenom
+    # mutacijom (R-4): prolaz tada ne meri nista -- ni bazu izbora, ni mutaciju.
+    rez, pozivi = prolaz(g2, OBA, zatecen="TUDJA", izbor=frozenset({"RunAllTests"}))
+    tvrdi(rez["stop"].startswith("STRAZA") and "nije u stanju snimka" in rez["stop"]
+          and not pozivi and not rez["ishodi"],
+          "D-6: prolaz meri nad kopijom koja nije u stanju snimka (tudja mutacija "
+          "iz zajednickog bazena)")
 
     # Baza izbora i izolacija takodje mere KOPIJU.
     IZB = frozenset({SUITE_ALL})
@@ -2345,9 +2384,25 @@ def _self_test_r4() -> list:
 
     prvi = {}
 
+    class Belezi(_Radnici):
+        """Belezi prioritet zahteva i stanje baze u trenutku vracanja radnika."""
+        def __init__(self, bazen):
+            super().__init__(bazen, korak=0.01)
+            self.prioriteti, self.ctx_pri_vracanju, self.bu = [], [], None
+
+        def uzmi(self, prioritet=False, odustani=None, kljuc=None):
+            self.prioriteti.append(prioritet)
+            return super().uzmi(prioritet, odustani, kljuc)
+
+        def vrati(self, c):
+            if self.bu is not None:
+                self.ctx_pri_vracanju.append(self.bu._ctx)
+            super().vrati(c)
+
     def prvi_scenario():
-        rad = _Radnici([r5], korak=0.01)
+        rad = prvi["rad"] = Belezi([r5])
         bu = prvi["bu"] = _BazeUnapred(rad, "P", ubij=lambda c: None, otisak=cist)
+        rad.bu = bu
         time.sleep(0.02)
         prvi["nista"] = redosled == [] and bu.gotovo()
         prvi["nove"] = bu.trazi(["S1", "S2"])
@@ -2368,6 +2423,14 @@ def _self_test_r4() -> list:
     bu = prvi.get("bu")
     tvrdi(nista_bez_zahteva,
           "baza unapred krece bez zahteva (rez bez faze 3 bi platio punu suite)")
+    rad_p = prvi.get("rad")
+    tvrdi(rad_p is not None and rad_p.prioriteti[:2] == [True, True],
+          "baza unapred ne trazi radnika PRIORITETNO -- ceka iza poslova faza "
+          "(%r)" % (rad_p.prioriteti if rad_p else None))
+    tvrdi(rad_p is not None and len(rad_p.ctx_pri_vracanju) == 2
+          and all(x is None for x in rad_p.ctx_pri_vracanju),
+          "baza vraca radnika dok je jos 'njen' -- otkaz u tom trenutku ubija "
+          "Excel faze koja ga uzme")
     tvrdi(redosled == [("S1", "/k5", "/i5"), ("S2", "/k5", "/i5")]
           and nove == ["S1", "S2"] and dupla == []
           and sorted(dobijeno) == ["S1", "S2"] and bu is not None
@@ -2405,17 +2468,53 @@ def _self_test_r4() -> list:
 
     # Kopija radnika van stanja snimka: baza se NE meri nad njom.
     redosled[:] = []
+    mut = {}
+
+    def van_snimka():
+        bu = mut["bu"] = _BazeUnapred(_Radnici([r5], korak=0.01), "P",
+                                      ubij=lambda c: None, otisak=lambda _p: "MUTIRANA")
+        bu.trazi(["S1"])
+        return bu.sacekaj()
+
     globals()["_baza_zelena"] = lazna
     try:
-        bu = _BazeUnapred(_Radnici([r5], korak=0.01), "P", ubij=lambda c: None,
-                          otisak=lambda _p: "MUTIRANA")
-        bu.trazi(["S1"])
-        dobijeno = bu.sacekaj()
+        gotov_m, dobijeno = u_roku(van_snimka)
+        dobijeno = dobijeno or {}
     finally:
+        if "bu" in mut:
+            mut["bu"]._otkazi.set()
         globals()["_baza_zelena"] = pravi_bz
-    tvrdi(redosled == [] and not dobijeno.get("S1", (True,))[0]
+    tvrdi(gotov_m and redosled == [] and not dobijeno.get("S1", (True,))[0]
           and "nije u stanju snimka" in dobijeno.get("S1", (True, ""))[1],
           "baza se meri nad kopijom radnika koja nije u stanju snimka (%r)" % (dobijeno,))
+
+    # Izuzetak iz baze unapred ide GORE kroz sacekaj, kao iz serijske baze
+    # (N=1): progutan bi uz N>1 postao NIJE IZMERENA, a N=1 bi pukao.
+    def pukne(suite, testovi=None, src=None, izlaz=None, prekini=None):
+        raise RuntimeError("baza pukla")
+
+    puk = {}
+
+    def puknuta():
+        bu = puk["bu"] = _BazeUnapred(_Radnici([r5], korak=0.01), "P",
+                                      ubij=lambda c: None, otisak=cist)
+        bu.trazi(["S1"])
+        try:
+            bu.sacekaj()
+        except RuntimeError as e:
+            return str(e)
+        return None
+
+    globals()["_baza_zelena"] = pukne
+    try:
+        gotov_p, pukla = u_roku(puknuta)
+    finally:
+        if "bu" in puk:
+            puk["bu"]._otkazi.set()
+        globals()["_baza_zelena"] = pravi_bz
+    tvrdi(gotov_p and pukla == "baza pukla",
+          "izuzetak iz baze unapred se guta (uz N>1 bi postao NIJE IZMERENA, a "
+          "N=1 puca) (%r)" % (pukla,))
 
     # Otkaz: tekuca suite se prekida (ubija se SAMO dok je radnik kod baze),
     # sledeca ne krece, a radnik se vraca.
@@ -2431,8 +2530,16 @@ def _self_test_r4() -> list:
     globals()["_baza_zelena"] = visi
     try:
         rad = _Radnici([r5], korak=0.01)
-        bu = _BazeUnapred(rad, "P", ubij=lambda c: (ubijeno.append(c["id"]), pusti.set()),
-                          otisak=cist)
+        vracen_tokom = []
+
+        def ubij_visi(c):
+            # Ubija se POD BRAVOM: baza ne sme da vrati radnika dok traje ubijanje.
+            ubijeno.append(c["id"])
+            pusti.set()
+            time.sleep(0.05)
+            vracen_tokom.append(r5 in rad._slobodni)
+
+        bu = _BazeUnapred(rad, "P", ubij=ubij_visi, otisak=cist)
         bu.trazi(["S1", "S2"])
         time.sleep(0.02)
         u_registru = bu in _UNAPRED
@@ -2445,6 +2552,9 @@ def _self_test_r4() -> list:
     tvrdi(u_registru and bu not in _UNAPRED,
           "baza unapred nije u registru dok radi (prekid je ne bi otkazao), "
           "ili ostaje u njemu posle otkaza")
+    tvrdi(vracen_tokom == [False],
+          "otkaz ubija van brave: baza vraca radnika dok se ubija, pa ubijanje "
+          "pogadja tudji posao na istom izlazu (%r)" % vracen_tokom)
     tvrdi(redosled == ["S1"] and ubijeno == [5] and trajalo < 1.5 and vracen,
           "otkaz baze unapred ne prekida tekucu suite, pusta sledecu, ili ne "
           "vraca radnika (%r, %.2fs)" % (redosled, trajalo))
@@ -2456,14 +2566,21 @@ def _self_test_r4() -> list:
         def __init__(self, bazen):
             super().__init__(bazen, korak=0.01)
             self.zahteva = 0
+            self.visi = False
 
-        def uzmi(self, prioritet=False, odustani=None):
+        def uzmi(self, prioritet=False, odustani=None, kljuc=None):
             self.zahteva += 1
             if self.zahteva == 2:
+                # U roku: cekanje koje ne odustaje na otkaz pada po imenu,
+                # ne zaglavi self-test.
+                rok = time.time() + 1.0
                 while not (odustani is not None and odustani()):
+                    if time.time() > rok:
+                        self.visi = True
+                        break
                     time.sleep(0.005)
                 return None
-            return super().uzmi(prioritet, odustani)
+            return super().uzmi(prioritet, odustani, kljuc)
 
     ubijeno3 = []
     globals()["_baza_zelena"] = lazna
@@ -2479,6 +2596,9 @@ def _self_test_r4() -> list:
         bu.otkazi()
     finally:
         globals()["_baza_zelena"] = pravi_bz
+    tvrdi(not bu._radnici.visi,
+          "baza ceka radnika bez odustajanja -- otkaz i Ctrl+C bi cekali da se "
+          "neki radnik oslobodi")
     tvrdi(ubijeno3 == [] and "S2" not in bu.gotove(),
           "otkaz ubija Excel radnika koga je baza vec vratila (tudji posao na "
           "istom izlazu), ili pusta sledecu bazu (%r)" % ubijeno3)
@@ -2554,6 +2674,32 @@ def _self_test_r4() -> list:
     nit.join(1.0)                       # rok: mutant koji ne odustaje ne sme da zaglavi
     tvrdi(odustao == [None] and zauzet is r5,
           "cekanje na radnika ne odustaje (Ctrl+C ili otkaz bi visili)")
+    # Poslovi dobijaju radnika PO REDU i kad baza drzi jednog: nit koja vrati
+    # radnika ne sme da ga odmah uzme za svoj kasniji posao ispred ranijeg koji
+    # ceka. Granica STOP-a stiti samo kasnije poslove -- raniji koji krene
+    # posle REVERT-FAIL-a kasnijeg dobio bi njegovu nevracenu kopiju.
+    rA, rB = {"id": 1}, {"id": 2}
+    rad4 = _Radnici([rA, rB], korak=0.01)
+    drzi_bazu = rad4.uzmi(prioritet=True)
+    krenuli = []
+
+    def posao_po_redu(k):
+        def fn(c):
+            krenuli.append(k)
+            time.sleep(0.01)
+            return k
+        return fn
+
+    def po_redu():
+        with contextlib.closing(_izvrsi([posao_po_redu(k) for k in range(6)],
+                                        rad4)) as tok:
+            return list(tok)
+
+    gotov4, rez4 = u_roku(po_redu, rok=3.0)
+    rad4.vrati(drzi_bazu)
+    tvrdi(gotov4 and krenuli == list(range(6)) and rez4 == list(range(6)),
+          "posao krece pre ranijeg koji ceka radnika (raniji bi dobio nevracenu "
+          "kopiju kasnijeg posle REVERT-FAIL-a) (%r)" % krenuli)
     tvrdi(_rana_mutacija(4, 5, True) and not _rana_mutacija(5, 5, True)
           and _rana_mutacija(5, 5, False) and not _rana_mutacija(2, 2, True),
           "rana mutacija krece i kad stavke ne staju na radnike koje baza ne drzi")
@@ -2577,11 +2723,19 @@ def _self_test_r4() -> list:
           and izvor_main.count("posao([s], False, izbor, baze_izbora, True)") == 1
           and "return lambda c: najavi(_prolaz(" in izvor_main
           and izvor_main.count("unapred.trazi(") == 1
-          and 'kandidati += [s for s, _r in ishod.get("ostatak", [])]' in izvor_main
+          and 'kandidati = [s for s, _r in ishod.get("cela_suite", [])]' in izvor_main
+          and "ostatak" not in izvor_main[izvor_main.find("    def najavi("):
+                                         izvor_main.find("    def posao(")]
+          and "        if unapred is not None and isinstance(ishod, dict):\n" in izvor_main
+          and '        moguce = ({s["suite"] for s in stavke} & izbor) - set(cele_baze)\n' in izvor_main
+          and ("    if unapred is not None and not unapred.suite:\n"
+               "        unapred.otkazi()") in izvor_main
+          and izvor_main.count("unapred.otkazi()") == 2
           and "nove = unapred.trazi(sorted({s[\"suite\"] for s in kandidati} & moguce))" in izvor_main
           and "unapred.otkazi()" in izvor_main,
-          "baze unapred: ne krecu na zahtev (najava iz faza 1-2), faze ne idu kroz "
-          "zajednicki bazen, ili se baze unapred ne otkazuju")
+          "baze unapred: ne krecu na zahtev (samo stavka koja ide na celu suite, "
+          "iz faza 1-2), faze ne idu kroz zajednicki bazen, ili se baze unapred "
+          "ne otkazuju")
     tvrdi(("            c = radnici.uzmi(prioritet=True)\n"
            "            try:\n"
            "                ok_opis = _baza_zelena(suite, src=c[\"kopija\"], izlaz=c[\"izlaz\"])\n"

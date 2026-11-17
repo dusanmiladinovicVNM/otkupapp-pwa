@@ -822,13 +822,19 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
 - **Baze unapred** (uz `--izbor` i `--radnika > 1`), **na zahtev**. Puna baza
   je potrebna samo sabotažama koje izbor ne obori, a one dolaze na red tek na
   kraju („MERI SE CELOM SUITE-OM"). Baza zato kreće ranije, ali tek uz **prvu
-  stavku koja vodi u fazu 3**: stavku koja se ponavlja sama ili traži celu
-  suite. Rez bez faze 3 je ne plaća. Kod `dop-spec` je spekulativna baza
-  zauzimala radnika i jezgro ceo prolaz, pa je bila otkazana. Radnici su
-  zajednički za sve faze i bazu. Baza pozajmljuje prvog slobodnog radnika, pre
-  poslova koji čekaju, i vraća ga posle svake suite, pa Excel-a i dalje ima N.
-  Meri samo nad kopijom u stanju snimka, a otkaz ubija njen Excel samo dok je
-  radnik kod nje. Ispis to kaže redovima `BAZE UNAPRED`.
+  stavku koja sigurno ide u fazu 3** (traži celu suite). Stavka koja se
+  „ponavlja sama" ne pokreće bazu: često prođe u fazi 2, a njena baza bi stala
+  u red ispred baze koja fazi 3 stvarno treba. Rez bez faze 3 ne plaća ništa.
+  Kod `dop-spec` je spekulativna baza zauzimala radnika i jezgro ceo prolaz,
+  pa je bila otkazana. Radnici su zajednički za sve faze i bazu. Baza
+  pozajmljuje prvog slobodnog radnika, pre poslova koji čekaju, i vraća ga
+  posle svake suite, pa Excel-a i dalje ima N. Meri samo nad kopijom u stanju
+  snimka, a otkaz ubija njen Excel samo dok je radnik kod nje. Ispis to kaže
+  redovima `BAZE UNAPRED`.
+- **Poslovi dobijaju radnika po redu** (indeks posla), i kad baza drži jednog.
+  Granica STOP-a štiti samo kasnije poslove, pa bi raniji posao koji krene
+  posle REVERT-FAIL-a kasnijeg dobio njegovu nevraćenu kopiju. Uz to svaki
+  prolaz pre rada proverava da je kopija u stanju snimka (inače `STRAZA`).
 - **Rana mutacija cele suite** (uz baze unapred). Mutacije faze 3 ne čekaju
   bazu: kreću odmah, na ostalim radnicima, a ocenjuju se kad je baza gotova.
   Kraj dokaza je tako max(baza, mutacija), ne zbir. Rano se kreće samo kad sve
