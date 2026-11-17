@@ -50,10 +50,25 @@ End Function
 ' Meko: sveska pre nadogradnje nema tabele -> prazna mapa (sve na
 ' stanju). Public: dele je grid, writer i storno kapija -- JEDNO
 ' pravilo, ne tri kopije (pouka kruga 3).
-Public Function UtovarenoPoPreradi() As Object
+'
+' ISTI PROLAZ puni i dva neobavezna izlaza za jezgro grafa sledljivosti (ivica
+' E9, S9-1). Pozivaoci koji ih ne traze dobijaju isto sto i do sada:
+'   outPoUtovaru -- PreradaID -> Collection(Array(UtovarID, kg)), po aktivnoj
+'                   stavci. Ista definicija "aktivne stavke" kao za zbir, pa
+'                   stanje i graf ne mogu da se raziju;
+'   outKvar      -- PreradaID -> razlog, za nestorniranu stavku ciji utovar NE
+'                   POSTOJI (ni aktivan ni storniran). Zbir je takvu stavku
+'                   oduvek cutke izostavljao; za graf je to aktivno dete bez
+'                   roditelja (SLED-INV-01), pa se imenuje.
+Public Function UtovarenoPoPreradi(Optional ByRef outPoUtovaru As Object, _
+                                   Optional ByRef outKvar As Object) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d.CompareMode = vbTextCompare
     Set UtovarenoPoPreradi = d
+    Set outPoUtovaru = CreateObject("Scripting.Dictionary")
+    outPoUtovaru.CompareMode = vbTextCompare
+    Set outKvar = CreateObject("Scripting.Dictionary")
+    outKvar.CompareMode = vbTextCompare
 
     If GetTable(TBL_UTOVAR_STAVKE) Is Nothing Then Exit Function
     If GetTable(TBL_UTOVAR) Is Nothing Then Exit Function
@@ -62,7 +77,20 @@ Public Function UtovarenoPoPreradi() As Object
     Dim ut As Variant, i As Long
     Dim aktivni As Object: Set aktivni = CreateObject("Scripting.Dictionary")
     aktivni.CompareMode = vbTextCompare
+    ' Svi utovari, i stornirani -- samo za outKvar. Kolona se ovde trazi MEKO, da
+    ' zbir ne dobije novu gresku tamo gde je do sada nije imao.
+    Dim sviUtovari As Object: Set sviUtovari = CreateObject("Scripting.Dictionary")
+    sviUtovari.CompareMode = vbTextCompare
+    Dim cSviId As Long, lista As Collection, utvID As String
     ut = GetTableData(TBL_UTOVAR)
+    If IsArray(ut) Then
+        cSviId = GetColumnIndex(TBL_UTOVAR, COL_UT_ID)
+        If cSviId > 0 Then
+            For i = 1 To UBound(ut, 1)
+                sviUtovari(Trim$(CStr(nz(ut(i, cSviId))))) = True
+            Next i
+        End If
+    End If
     If IsArray(ut) Then
         ut = ExcludeStornirano(ut, TBL_UTOVAR)
         If IsArray(ut) Then
@@ -85,6 +113,7 @@ Public Function UtovarenoPoPreradi() As Object
     cPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, "modUtovar.UtovarenoPoPreradi")
     cKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, "modUtovar.UtovarenoPoPreradi")
     For i = 1 To UBound(s, 1)
+        utvID = Trim$(CStr(nz(s(i, cUt))))
         If aktivni.Exists(Trim$(CStr(nz(s(i, cUt))))) Then
             k = Trim$(CStr(nz(s(i, cPre))))
             If Len(k) > 0 And IsNumeric(s(i, cKol)) Then
@@ -92,6 +121,21 @@ Public Function UtovarenoPoPreradi() As Object
                     d(k) = CDbl(d(k)) + CDbl(s(i, cKol))
                 Else
                     d.Add k, CDbl(s(i, cKol))
+                End If
+                If outPoUtovaru.Exists(k) Then
+                    Set lista = outPoUtovaru(k)
+                Else
+                    Set lista = New Collection
+                    outPoUtovaru.Add k, lista
+                End If
+                lista.Add Array(utvID, CDbl(s(i, cKol)))
+            End If
+        ElseIf Not sviUtovari.Exists(utvID) Then
+            k = Trim$(CStr(nz(s(i, cPre))))
+            If Len(k) > 0 Then
+                If Not outKvar.Exists(k) Then
+                    outKvar.Add k, "Stavka utovara prerade " & k & _
+                                   " pokazuje na utovar koga nema: [" & utvID & "]."
                 End If
             End If
         End If
@@ -370,11 +414,18 @@ End Sub
 ' bi StornoUtovar, koji semu linija sam ne proverava, vratio fakturisanu GP robu na
 ' stanje. Meka grana "sveska pre GP nadogradnje" je obrisana: kolona je u kanonu, a
 ' EnsureRuntimeSchema je dodaje na svakom startu. Prazna tabela je legitimna nula.
-Public Function AktivnihFstZaUtovar(ByVal utovarID As String) As Long
+'
+' outFakture (neobavezan; ivica E10 grafa sledljivosti, S9-1): FakturaID -> broj
+' prebrojanih linija. ISTO brojanje, samo sa imenom fakture -- graf vezu utovar
+' -> faktura potvrdjuje tek kad se marker na utovaru i ove linije slazu.
+Public Function AktivnihFstZaUtovar(ByVal utovarID As String, _
+                                    Optional ByRef outFakture As Object) As Long
     Const SRC As String = "modUtovar.AktivnihFstZaUtovar"
     Dim fs As Variant, i As Long
     Dim cUt As Long, cF As Long
     Dim aktivnaFak As Object, fid As String, aktivna As Boolean
+    Set outFakture = CreateObject("Scripting.Dictionary")
+    outFakture.CompareMode = vbTextCompare
     RequireTable TBL_FAKTURA_STAVKE, SRC
     cUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
     cF = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
@@ -388,6 +439,11 @@ Public Function AktivnihFstZaUtovar(ByVal utovarID As String) As Long
             If aktivnaFak.Exists(fid) Then aktivna = CBool(aktivnaFak(fid))
             If aktivna Then
                 AktivnihFstZaUtovar = AktivnihFstZaUtovar + 1
+                If outFakture.Exists(fid) Then
+                    outFakture(fid) = CLng(outFakture(fid)) + 1
+                Else
+                    outFakture.Add fid, 1
+                End If
             End If
         End If
     Next i

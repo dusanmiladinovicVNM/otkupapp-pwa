@@ -113,7 +113,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblFakturaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modTest`, `modTestStorno`
 - `tblPaleta`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblParcele`: `modAgrohemijaTests`
-- `tblUtovar`: `modBusinessFlowProTests`
+- `tblUtovar`: `modBusinessFlowProTests`, `modTest`
 - `tblZbirna`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoldenTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalazaDokument`: `modBusinessFlowProTests`, `modTest`
@@ -135,6 +135,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblSEFSubmission`: `modSEFTests`
 - `tblStornoVeze`: `modBusinessFlowProTests`, `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblStornoZurnal`: `modBusinessFlowProTests`, `modTest`, `modTestStornoCentar`
+- `tblUtovarStavke`: `modTest`
 - `tblVozaci`: `modBusinessFlowProTests`, `modGoldenTests`
 - `tblZbirnaIzvori`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestStornoCentar`
 - `tblZbirnaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`

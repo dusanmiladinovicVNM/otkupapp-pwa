@@ -6,6 +6,11 @@
 > na `1fa4937a` (stavka 326) i na `6b601ee1` (stavka 328); šta se promenilo i gde su čitači ivica
 > danas stoji u planu §14.64.
 >
+> **Od S9-1 (plan §14.65, stavka 331)** graf postoji: `modSledljivost.SledPreci` i `SledPotomci` hodaju
+> ivicama E1–E6, E9 i E10. E4 ima javni čitač `modAutoHladnjaca.AktivnePrijemniceZbirnih`; E9 i E10
+> čitaju se kroz proširene `modUtovar.UtovarenoPoPreradi` i `AktivnihFstZaUtovar`. E7 i E8 dodaje
+> S9-7, pa GP lanac (prerada → utovar → GP faktura) do tada nije spojen sa lancem otkupa.
+>
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
 > trajao) je ovde ponovo izmeren i zamenjen. Odluke iz njega važe.
 >

@@ -11419,8 +11419,8 @@ SABOTAZE = {
     # druga aktivna prijemnica zbirne lanca ostaje precutana.
     "s6k7-citac-prijemnica-prvi-pogodak": (
         "modAutoHladnjaca.bas",
-        "                ElseIf Not outKvar.Exists(rod) Then\n",
-        "                ElseIf False Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
+        "                    ElseIf Not outKvar.Exists(rod) Then\n",
+        "                    ElseIf False Then   ' SABOTAZA: prvi pogodak pobedjuje\n",
         "Test_S6K7_LanacJednaPrijemnica",
         "S6K7 jedna prijemnica: dve aktivne prijemnice zbirne lanca daju razlog koji imenuje zbirnu",
     ),
@@ -13513,6 +13513,99 @@ SABOTAZE = {
         "    Err.Raise errNo, \"BackupFileOnStart\", errDesc\n",
         "T_Backup_NeObaraStartINeRasteBezGranice",
         "BackupFileOnStart NE SME da podigne gresku -- start bi pao",
+    ),
+    # --- S9-1: jezgro grafa sledljivosti (modSledljivost; plan 14.64 ugovor, 14.65) ---
+    # Starog koda nema, pa je crveno ovih testova sabotaza. Lanac B u testu 356
+    # nastaje PRVI: pogodak po broju (prvi red tabele) zato vodi u tudji lanac.
+    #
+    # E4 unazad po broju zbirne umesto po ZbirnaRoditeljID.
+    "sled-e4-po-broju-zbirne": (
+        "modSledljivost.bas",
+        "    ZbirnaPrijemnice = Trim$(NzToText(m_Data(SL_PRJ)(r, m_cPrjRod)))\n",
+        "    ZbirnaPrijemnice = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, "
+        "NzToText(m_Data(SL_PRJ)(r, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE))), "
+        "COL_ZBR_ID))   ' SABOTAZA: E4 po broju zbirne\n",
+        "T_Sled_TraceBezPogadjanja",
+        "356 G3: unazad od prijemnice A nema otkupa zbirne B (isti broj zbirne)",
+    ),
+    # Jezgro prati kolonu bez pisca: otkup -> (Otkup.BrojZbirne) -> zbirna tog broja
+    # -> njena otpremnica. Mamac na otkupu A nosi broj koji prvo pogadja zbirnu B.
+    "sled-jezgro-prati-otkup-brojzbirne": (
+        "modSledljivost.bas",
+        "    If m_E2.Exists(otkKljuc) Then OtpremnicaOtkupa = Trim$(CStr(m_E2(otkKljuc)))\n",
+        "    OtpremnicaOtkupa = NzToText(LookupValue(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, "
+        "NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzToText(LookupValue(TBL_OTKUP, "
+        "COL_OTK_ID, IdCvora(SL_OTK, otkKljuc), COL_OTK_BROJ_ZBIRNE)), COL_ZBR_ID)), "
+        "COL_ZBI_OTPREMNICA_ID))   ' SABOTAZA: jezgro prati Otkup.BrojZbirne\n",
+        "T_Sled_TraceBezPogadjanja",
+        "356 G3: unapred od otkupa A nema prijemnice ni fakture lanca B (mamac, isti brojevi)",
+    ),
+    # E2 bez strogog citaca: sirova tabela clanstva, prvi pogodak. Otkup sa dva
+    # aktivna clanstva tada izgleda uredno vezan.
+    "sled-e2-bez-strogog-citaca": (
+        "modSledljivost.bas",
+        "    Set m_E2 = modDokumenta.AktivnoClanstvoOtpremnica()\n",
+        "    Set m_E2 = BuildLookupDict(TBL_OTPREMNICA_IZVORI, COL_OPI_OTKUP_ID, "
+        "COL_OPI_OTPREMNICA_ID)   ' SABOTAZA: E2 bez strogog citaca (prvi pogodak)\n",
+        "T_Sled_NerazresenaIvicaSeOznacava",
+        "359 fail-closed: otkup sa dva aktivna clanstva nije vezan ni za jednu otpremnicu",
+    ),
+    # Nerazresena ivica se ne oznacava: zbirna ciji se skup prijemnica ne zna
+    # prolazi kao uredna.
+    "sled-nerazresena-ivica-se-pogadja": (
+        "modSledljivost.bas",
+        "        If m_E4KvarPoZbirni.Exists(kljuc) Then            "
+        "' skup prijemnica zbirne se ne zna: oznaci, ne vezuj\n",
+        "        If False Then   ' SABOTAZA: kvar ivice se ne gleda, zbirna prolazi bez oznake\n",
+        "T_Sled_NerazresenaIvicaSeOznacava",
+        "359 fail-closed: zbirna cija prijemnica nema ID je oznacena",
+    ),
+    # SLED-KLASA-01: klasa se odseca i van hladnjackog lanca.
+    "sled-klasa-odseca-van-lanca": (
+        "modSledljivost.bas",
+        "    If Not hladnjacki Then Exit Function                  "
+        "' van hladnjackog lanca se nista ne odseca\n",
+        "    If False Then Exit Function   ' SABOTAZA: klasa se odseca i van hladnjackog lanca\n",
+        "T_Sled_KlasaSeOznacavaNeOdseca",
+        "357 klasa: unazad od stavke II dolazi i stavka otkupa klase I (nista se ne odseca)",
+    ),
+    # SLED-KLASA-01: hladnjacki lanac ne filtrira po klasi.
+    "sled-hladnjacki-ne-filtrira": (
+        "modSledljivost.bas",
+        "    If Not hladnjacki Then Exit Function                  "
+        "' van hladnjackog lanca se nista ne odseca\n",
+        "    Exit Function   ' SABOTAZA: hladnjacki lanac ne filtrira po klasi\n",
+        "T_Sled_HladnjackiLanacPoKlasi",
+        "358 hladnjacki lanac: unazad od stavke II nema stavke otkupa klase I",
+    ),
+    # E9: ivica prerada -> utovar nosi zbir cele prerade umesto kilograma tog utovara.
+    "sled-e9-kg-zbir-prerade": (
+        "modSledljivost.bas",
+        "        NizUtovar CStr(v(0)), 1, preID, v(1)\n",
+        "        NizUtovar CStr(v(0)), 1, preID, ukupno   "
+        "' SABOTAZA: utovar nosi zbir prerade, ne svoje kilograme\n",
+        "T_Sled_GpLanac",
+        "360 GP: svaki utovar nosi svoje kilograme, ne zbir prerade",
+    ),
+    # E10: vezu utovar -> faktura odlucuje samo marker na utovaru. Utovar bez
+    # markera, koga aktivne linije fakture i dalje tvrde, prolazi kao nefakturisan.
+    "sled-e10-veruje-markeru": (
+        "modSledljivost.bas",
+        "    If n = 0 And Len(marker) = 0 Then Exit Function       "
+        "' nefakturisan utovar: kraj, nije kvar\n",
+        "    If Len(marker) = 0 Then Exit Function   ' SABOTAZA: E10 veruje samo markeru na utovaru\n",
+        "T_Sled_GpLanac",
+        "360 fail-closed: utovar ciji marker i linije fakture ne govore isto je oznacen",
+    ),
+    # E3 bez strogog citaca: sirova tabela clanstva, prvi pogodak -- a prvi zapis
+    # otpremnice je clanstvo u STORNIRANOJ verziji zbirne (A13).
+    "sled-e3-bez-strogog-citaca": (
+        "modSledljivost.bas",
+        "    Set m_E3 = modDokumenta.AktivnoClanstvoZbirni()\n",
+        "    Set m_E3 = BuildLookupDict(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, "
+        "COL_ZBI_ZBIRNA_ID)   ' SABOTAZA: E3 bez strogog citaca (prvi pogodak)\n",
+        "T_Sled_StaraVerzijaNijeUGrafu",
+        "361 verzije: unapred od otkupa ide samo aktivna verzija zbirne, do njene prijemnice",
     ),
 }
 

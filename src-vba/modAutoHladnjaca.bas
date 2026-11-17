@@ -536,13 +536,27 @@ End Function
 ' prijemnicu obicne zbirne (potvrda "dupla prijemnica"), pa bi greska nad celom
 ' tabelom oborila i lanac koji sa tom zbirnom nema veze. Pita se samo za
 ' zbirnu lanca.
-Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object) As Object
+'
+' ISTI PROLAZ puni i dva izlaza za jezgro grafa sledljivosti (ivica E4, S9-1;
+' javni ulaz je AktivnePrijemniceZbirnih ispod):
+'   outSve   -- UCase(ZbirnaRoditeljID) -> Collection(PrijemnicaID), SVE aktivne,
+'               redom tabele. Zbirna sme na vise prijemnica (F4 "dupla
+'               prijemnica"), pa je za graf to nadskup, ne kvar (SLED-ODL-01);
+'   outBezID -- UCase(ZbirnaRoditeljID) -> razlog, samo za aktivnu prijemnicu bez
+'               PrijemnicaID-a. To jeste kvar i za graf: skup prijemnica zbirne
+'               se tada ne zna.
+' Lanac i dalje cita mapu i outKvar, nepromenjene.
+Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
+                                           Optional ByRef outSve As Object, _
+                                           Optional ByRef outBezID As Object) As Object
     Const SRC As String = "AktivnePrijemnicePoZbirni"
     Dim mapa As Object, d As Variant, i As Long, rod As String, pid As String
-    Dim cId As Long, cRod As Long, cSto As Long
+    Dim cId As Long, cRod As Long, cSto As Long, lista As Collection
 
     Set mapa = CreateObject("Scripting.Dictionary")
     Set outKvar = CreateObject("Scripting.Dictionary")
+    Set outSve = CreateObject("Scripting.Dictionary")
+    Set outBezID = CreateObject("Scripting.Dictionary")
     Set AktivnePrijemnicePoZbirni = mapa
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -556,19 +570,47 @@ Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object) As Object
             If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then
                 pid = Trim$(NzToText(d(i, cId)))
                 If Len(pid) = 0 Then
+                    If Not outBezID.Exists(rod) Then
+                        outBezID.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                          " ima aktivnu prijemnicu bez PrijemnicaID-a."
+                    End If
                     If Not outKvar.Exists(rod) Then
                         outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
                                          " ima aktivnu prijemnicu bez PrijemnicaID-a."
                     End If
-                ElseIf Not mapa.Exists(rod) Then
-                    mapa.Add rod, pid
-                ElseIf Not outKvar.Exists(rod) Then
-                    outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
-                                     " ima vise aktivnih prijemnica: " & CStr(mapa(rod)) & ", " & pid & "."
+                Else
+                    If outSve.Exists(rod) Then
+                        Set lista = outSve(rod)
+                    Else
+                        Set lista = New Collection
+                        outSve.Add rod, lista
+                    End If
+                    lista.Add pid
+
+                    If Not mapa.Exists(rod) Then
+                        mapa.Add rod, pid
+                    ElseIf Not outKvar.Exists(rod) Then
+                        outKvar.Add rod, "Zbirna " & Trim$(NzToText(d(i, cRod))) & _
+                                         " ima vise aktivnih prijemnica: " & CStr(mapa(rod)) & ", " & pid & "."
+                    End If
                 End If
             End If
         End If
     Next i
+End Function
+
+' IVICA E4 ZA GRAF SLEDLJIVOSTI (S9-1, SLED-ODL-01): UCase(ZbirnaRoditeljID) ->
+' Collection(PrijemnicaID), SVE aktivne prijemnice zbirne, iskljucivo po ID-u
+' roditelja. outKvar: UCase(ZbirnaRoditeljID) -> razlog, za zbirnu ciji se skup
+' prijemnica ne zna (aktivna prijemnica bez PrijemnicaID-a).
+'
+' Nije drugi citalac: isti prolaz kao AktivnePrijemnicePoZbirni, pa lanac i graf
+' ne mogu da se raziju u tome sta je "aktivna prijemnica zbirne". Razlika je samo
+' u pitanju -- lanac trazi TACNO JEDNU, a graf sve.
+Public Function AktivnePrijemniceZbirnih(ByRef outKvar As Object) As Object
+    Dim kvarLanca As Object, sve As Object
+    AktivnePrijemnicePoZbirni kvarLanca, sve, outKvar
+    Set AktivnePrijemniceZbirnih = sve
 End Function
 
 ' Izvestaj o koraku koji nije uspeo: koji korak, zasto, i sta je VEC napravljeno

@@ -452,6 +452,14 @@ Napomena o SEF-u: `SellersItemIdentification` za legacy lotove menja vrednost sa
 
 ### 8.1 Graf
 
+> **Ispravka (S9-1, `SLED-ODL-06`, 17.11.2026).** Ovo poglavlje je pisano nad modulima koji su u
+> međuvremenu obrisani (`modSledljivost.ProcesGraf` i `modScrSledljivost`, `c79935be`). Graf porekla
+> je **jedan**: `modSledljivost` sa ulazima `SledPreci` i `SledPotomci`
+> (`docs/DOMEN/SLEDLJIVOST.md`, plan `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.65). Faza C2
+> ga **proširuje** ivicama LJ i šarže; ne pravi `ProcesGraf` kao drugi graf. Ime oznake
+> `SLED_OZN_VEZA` ispod zamenjuje kolona kvara u odgovoru grafa (`SLG_C_KVAR`). Ostatak poglavlja
+> važi kao opis ivica koje C2 dodaje.
+
 - Čvorovi: LJ (sve), palete bez LJ (listovi porekla), legacy prerade (kroz svoju LJ),
   utovari, fakture.
 - Ivice (jedan prolaz, S5): `paleta → LJ` (materijalizacija), `LJ → šarža`
