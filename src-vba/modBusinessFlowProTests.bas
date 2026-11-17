@@ -32004,11 +32004,18 @@ Private Sub Test_Amb_ZaglavljeDokumentaPisac()
     modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
         AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
         AMB_VK_NABAVKA, "", ""
-    errNum = Err.Number
+    errNum = Err.Number: errDesc = Err.description
     Err.Clear
     On Error GoTo EH
     AssertTrue errNum <> 0, _
                "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)"
+    ' RAZLOG, NE SAMO PAD. Isti broj greske (AMB_ERR_KNJIGA_ULAZ) dize i
+    ' AMB-INV-08 kad dokument nije vezan -- a prazan identitet nikad nije vezan,
+    ' jer ga BindSourceDocument ne prima. Tvrdnja nad errNum je zato zelena i bez
+    ' provere identiteta; sonda je pokazala da A odbija bas -08. Trazi se ceo
+    ' pocetak poruke pisca: kraci podniz nosi i citalac knjige (KnjigaRedProblem).
+    AssertTrue InStr(1, errDesc, "Red knjige nema identitet dokumenta", vbTextCompare) > 0, _
+               "Amb zaglavlje: kretanje bez identiteta odbija provera identiteta, ne AMB-INV-08"
 
     ' --- B) NEPOSTOJEC DOKUMENT ------------------------------------------
     On Error Resume Next
