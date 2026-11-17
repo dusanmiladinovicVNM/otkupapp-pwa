@@ -817,6 +817,13 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
   Excel-a i dalje ima N. Ako faza 3 ne zatreba, baza se otkazuje: njen Excel se
   ubija po `excel.pid` i ne pokreće se ponovo. Ispis to kaže redovima
   `BAZE UNAPRED`.
+- **Rana mutacija cele suite** (uz baze unapred). Mutacije faze 3 ne čekaju
+  bazu: kreću odmah, na ostalim radnicima, a ocenjuju se kad je baza gotova.
+  Priznaju se samo uz zelenu bazu, pa crvena baza i dalje daje `NIJE
+  IZMERENA`, isto kao serijski. Kraj dokaza je tako max(baza, mutacija), ne
+  zbir. Jedina razlika je STOP u fazi 3: on ne čeka bazu koja još traje, pa je
+  stavka `NIJE IZMERENA (dokaz je stao pre baze cele suite)`. Verdikt je
+  ionako `NIJE DOKAZANO`.
 - **Kad Excel ni ne krene** (FATAL bez ijednog reda `SUITE`), poziv se ponavlja
   jednom. Pad posle starta suite-a je ishod, ne infrastruktura, pa se ne
   ponavlja. Broj ponovljenih startova stoji na kraju izlaza.

@@ -21,6 +21,9 @@ CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
    je izazvala crveno" nego samo "posle mutacije postoji crveno" -- a to nisu
    iste tvrdnje. Test koji vec pada iz nekog treceg razloga proglasio bi svaku
    sabotazu nad sobom dokazanom, ukljucujuci onu koja ne radi nista.
+   "Pre" je pre OCENE, ne nuzno pre pokretanja: baza i mutacija idu nad istim
+   snimkom, pa uz radnike (R-4) mutacija cele suite sme da krene dok baza
+   unapred jos traje -- ali se priznaje tek kad je baza poznata i zelena.
 
 2. RADNI IZVOR SE NE DIRA (D-6). Na pocetku se `src-vba/` preslika u SNIMAK, a
    mutacije idu u KOPIJU snimka u privremenom folderu (`sabotaza.py --src`,
@@ -1357,39 +1360,78 @@ def main(argv: list) -> int:
               "nije oborio tvrdnju -- v. --izolacija)" % len(cela_suite), flush=True)
         for s, razlog in cela_suite:
             print("  %-46s <- %s" % (s["ime"], razlog), flush=True)
-        if unapred is not None:
-            potrebne_3 = {s["suite"] for s, _r in cela_suite}
-            for suite, ok_opis in sorted(unapred.sacekaj(potrebne_3).items()):
-                if suite not in potrebne_3:
-                    continue
+        if unapred is None:
+            # Serijski put (i radnici bez baza unapred): baza, pa mutacije.
+            for suite in sorted({s["suite"] for s, _r in cela_suite} - set(cele_baze)):
+                ok_opis = _baza_zelena(suite, src=ctx["kopija"], izlaz=ctx["izlaz"])
                 cele_baze[suite] = ok_opis
-                print("BAZNO (unapred): %s" % ok_opis[1], flush=True)
-            unapred = None
-        for suite in sorted({s["suite"] for s, _r in cela_suite} - set(cele_baze)):
-            ok_opis = _baza_zelena(suite, src=ctx["kopija"], izlaz=ctx["izlaz"])
-            cele_baze[suite] = ok_opis
-            print("BAZNO: %s" % cele_baze[suite][1], flush=True)
-        merljive = []
-        for s, _razlog in cela_suite:
-            ok, opis = cele_baze[s["suite"]]
-            if not ok:
-                lose.append((s["ime"], "NIJE IZMERENA: ni izbor ni cela suite "
-                                       "nisu zeleni -- %s" % opis))
-                print("%-46s NIJE IZMERENA: baza cele suite nije zelena"
-                      % s["ime"], flush=True)
-                continue
-            merljive.append(s)
-        with contextlib.closing(_izvrsi([posao([s], False) for s in merljive], bazen)) as tok:
-            for s, ishod in zip(merljive, tok):
-                if ishod is None:
-                    stop = stop or "PREKID"
-                    break
-                koren_tokom.add(ishod.get("koren") or koren_pre)
-                upisi(ishod["ishodi"])
-                if ishod["stop"]:
-                    stop = ishod["stop"]
-                    _STOP.set()
-                    break
+                print("BAZNO: %s" % cele_baze[suite][1], flush=True)
+            merljive = []
+            for s, _razlog in cela_suite:
+                ok, opis = cele_baze[s["suite"]]
+                if not ok:
+                    lose.append((s["ime"], "NIJE IZMERENA: ni izbor ni cela suite "
+                                           "nisu zeleni -- %s" % opis))
+                    print("%-46s NIJE IZMERENA: baza cele suite nije zelena"
+                          % s["ime"], flush=True)
+                    continue
+                merljive.append(s)
+            with contextlib.closing(_izvrsi([posao([s], False) for s in merljive],
+                                            bazen)) as tok:
+                for s, ishod in zip(merljive, tok):
+                    if ishod is None:
+                        stop = stop or "PREKID"
+                        break
+                    koren_tokom.add(ishod.get("koren") or koren_pre)
+                    upisi(ishod["ishodi"])
+                    if ishod["stop"]:
+                        stop = ishod["stop"]
+                        _STOP.set()
+                        break
+        else:
+            # RANA MUTACIJA (R-4): mutacije cele suite krecu ODMAH, uz bazu
+            # unapred koja jos traje, a baza se ceka tek pri oceni. Mutacija se
+            # priznaje SAMO uz zelenu bazu -- crvena baza i dalje daje NIJE
+            # IZMERENA -- pa je tvrdnja ista kao serijski; menja se raspored, ne
+            # tumacenje. Kraj dokaza je tako max(baza, mutacija), ne zbir.
+            potrebne_3 = {s["suite"] for s, _r in cela_suite}
+            for suite in sorted(potrebne_3 - set(unapred.suite) - set(cele_baze)):
+                ok_opis = _baza_zelena(suite, src=ctx["kopija"], izlaz=ctx["izlaz"])
+                cele_baze[suite] = ok_opis
+                print("BAZNO: %s" % cele_baze[suite][1], flush=True)
+            sve = [s for s, _r in cela_suite]
+            with contextlib.closing(_izvrsi([posao([s], False) for s in sve], bazen_faze())) as tok:
+                for s, ishod in zip(sve, tok):
+                    if ishod is None:
+                        stop = stop or "PREKID"
+                        break
+                    koren_tokom.add(ishod.get("koren") or koren_pre)
+                    # STOP ne ceka punu suite baze: dokaz je vec nevazeci, pa se
+                    # uzima samo baza koja je VEC gotova.
+                    if unapred is not None and (not ishod["stop"] or unapred.gotovo()):
+                        for suite, ok_opis in sorted(unapred.sacekaj(potrebne_3).items()):
+                            if suite not in potrebne_3:
+                                continue
+                            cele_baze[suite] = ok_opis
+                            print("BAZNO (unapred): %s" % ok_opis[1], flush=True)
+                        unapred = None
+                    ok, opis = cele_baze.get(s["suite"],
+                                             (False, "baza cele suite nije izmerena "
+                                                     "(dokaz je stao pre nje)"))
+                    if ok:
+                        upisi(ishod["ishodi"])
+                    else:
+                        # Mutacija je izmerena, ali bez zelene baze ne kaze nista.
+                        lose.append((s["ime"], "NIJE IZMERENA: ni izbor ni cela suite "
+                                               "nisu zeleni -- %s" % opis))
+                        print("%-46s NIJE IZMERENA: %s"
+                              % (s["ime"], "baza cele suite nije zelena"
+                                 if s["suite"] in cele_baze
+                                 else "dokaz je stao pre baze cele suite"), flush=True)
+                    if ishod["stop"]:
+                        stop = ishod["stop"]
+                        _STOP.set()
+                        break
 
     if stop:
         if stop.startswith("REVERT-FAIL"):
@@ -1419,8 +1461,10 @@ def main(argv: list) -> int:
         # Faza 3 nije trebala (ili je dokaz stao): baza unapred se otkazuje.
         vec_gotove = unapred.gotovo()
         unapred.otkazi()
-        print("BAZE UNAPRED nisu zatrebale -- %s" % (
-            "bile su vec gotove" if vec_gotove else "otkazane"), flush=True)
+        print("BAZE UNAPRED %s" % (
+            "otkazane -- dokaz je stao" if stop and not vec_gotove
+            else "nisu zatrebale -- %s" % ("bile su vec gotove" if vec_gotove
+                                           else "otkazane")), flush=True)
         unapred = None
 
     posle = _otisak(ctx["snimak"])
@@ -2136,15 +2180,20 @@ def _self_test_r4() -> list:
     tvrdi("    if args.radnika > 1 and izbor:\n" in izvor_main
           and "unapred = _BazeUnapred(moguce, bazen[-1])" in izvor_main
           and "return bazen[:-1]" in izvor_main
-          and izvor_main.count("bazen_faze())) as tok:") == 2
-          and 0 <= izvor_main.find("        if unapred is not None:\n"
-                                   "            potrebne_3 = {s[\"suite\"] for s, _r in cela_suite}\n"
-                                   "            for suite, ok_opis in sorted("
-                                   "unapred.sacekaj(potrebne_3).items()):")
-          < izvor_main.find('for suite in sorted({s["suite"] for s, _r in cela_suite}')
+          and izvor_main.count("bazen_faze())) as tok:") == 3
+          and 0 <= izvor_main.find("_izvrsi([posao([s], False) for s in sve], bazen_faze())")
+          < izvor_main.find("unapred.sacekaj(potrebne_3)")
           and "unapred.otkazi()" in izvor_main,
           "baze unapred: pogresan uslov, rezervisani radnik nije izuzet iz faza, "
           "ili faza 3 ne ceka (ne otkazuje) baze unapred")
+    # Rana mutacija: ocena TEK uz zelenu bazu, a STOP ne ceka punu suite baze.
+    rana = izvor_main[izvor_main.find("# RANA MUTACIJA"):]
+    tvrdi(izvor_main.count('upisi(ishod["ishodi"])') == 3
+          and "                    ok, opis = cele_baze.get(s[\"suite\"],\n" in rana
+          and "                    if ok:\n                        upisi(ishod[\"ishodi\"])" in rana
+          and "if unapred is not None and (not ishod[\"stop\"] or unapred.gotovo()):" in rana,
+          "rana mutacija: priznaje se bez zelene baze cele suite, ili STOP ceka "
+          "punu suite baze")
     tvrdi(izvor_main.count("contextlib.closing(_izvrsi(") >= 3
           and "tok.close()" not in izvor_main,
           "faze ne zatvaraju tok kroz contextlib.closing (izuzetak bi ostavio bazen)")
