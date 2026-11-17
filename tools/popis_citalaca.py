@@ -242,7 +242,17 @@ PRAGOVI = collections.OrderedDict([
     ("prj_linija", 0),
     ("prj_kes", 0),
     ("prj_generacija", 0),
-    ("prj_brojzbirne", 31),
+    # S9 N15 (plan 14.64, "Preslaganje na 1fa4937a"; odluka operatera 11.11.2026):
+    # 31 -> 33. Rez "storno i ispravka otkupnog lista u lancu" (#471-#473) dodao je
+    # dva mesta, i nijedno nije spoj po broju: LncPrijemniceZbirne broj koristi samo
+    # da prepozna red bez ZbirnaRoditeljID i potez ODBIJE, a LncPreveziPrijemnicu
+    # pise labelu u koraku sa ID-em. S9-3 deli grupu na spoj (prag 0) i labelu.
+    # S9 N17 (plan 14.64, "Preslaganje na 6b601ee1"; odluka operatera 17.11.2026):
+    # 33 -> 35. Rez "Dodaj / Izvadi blok" (#476) dodao je dva mesta u kapiji
+    # LNC-ODL-37 (LncPrijemnicaCekaIspravku), i nijedno nije spoj po broju: jedno
+    # trazi da kolona postoji, drugo broj koristi samo da prepozna storniranu
+    # prijemnicu bez ZbirnaRoditeljID (stari oblik, KI95-ODL-02) i potez ODBIJE.
+    ("prj_brojzbirne", 35),
     ("fak_broj_prj", 0),
     ("pal_broj", 0),
 ])

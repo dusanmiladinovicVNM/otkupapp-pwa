@@ -298,13 +298,13 @@ i (16.11.2026, u dokazu 87/87, §10) `lnc-f1-bez-potvrde`; ostali `lnc-*` / `odl
   kanon), pa važi u oba smera: ovaj rez **ne piše** broj-oblik koji S9 briše, a S9-6 **ne
   briše** nove ID kolone zbirne (`LNC-ODL-16`) i čita red po paru u `tblStornoVeze`
   (`LNC-ODL-20`). Pre-flight S9 posle preslaganja treba ponovo da izmeri merenje 2
-  („kolone bez pisca"): `tblZbirna.IspravkaOdID` / `ZamenjenSaID` tada imaju pisca.
+  („kolone bez pisca"): `tblZbirna.IspravkaOdID` / `ZamenjenSaID` tada imaju pisca **Urađeno** 10.11.2026 (plan §14.64, „Preslaganje na `1fa4937a`").
 - **Šema** (`LNC-ODL-16`) je centralni registar → serijski, sama u svom commitu.
 - PR #457 (ambalaža, otvoren) dira `AMBALAZA.md`, `README.md`, `modTest.bas`: brojevi
   testova i odeljaka se dodeljuju **posle** njegovog merge-a.
 - Numeracija plana (`REFAKTOR_DOKUMENT_HEADER_STAVKE.md` §14.x) i stavki
   (`STANJE_REFAKTORA.md`) se ovde namerno ne dodeljuje: #469 zauzima §14.64 i stavke
-  323–324.
+  324–326 (posle preslaganja na `1fa4937a`; stavku 323 je u međuvremenu uzela doplata).
 - Predlog sečenja (svaki deo zelen sam za sebe): **1** šema + ambalaža na kraju
   (`AMB-10-ODL-40`) + T1 · **2** jezgro poteza za storno (BFP T2–T3, T5–T7, T9–T12, T16, T18)
   · **3** ispravka (T4, T8, T13, T15) · **4** ekrani F8/F1 + UNDO kapija (T14, T17).
@@ -655,7 +655,8 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
 - Ovde se ne dodeljuju KI, broj `modTest` testa ni stavka `STANJE_REFAKTORA.md`. Testovi
   `Test_LNC_Blok_*`, sabotaže `lncb-*`.
 - **S9:** ovaj rez ide pre S9, kao i §9. PR #469 posle preslaganja meri i koren LANAC čiji je par
-  otpremnica (`LNC-ODL-27`, `SLED-ODL-03`).
+  otpremnica (`LNC-ODL-27`, `SLED-ODL-03`). **Urađeno** 17.11.2026 (plan §14.64, „Preslaganje na
+  `6b601ee1`", merenje 5).
 - **Ispravka naziva (09.11.2026):** ovaj fajl je „Ispravi" izdate otpremnice zvao „F2 Ispravi";
   radnja stoji u F1, lista „Otpremnice" (`modScrDokumenti.bas:203-214`), pa je naziv ispravljen
   u §0, §3, §6, §7, §8.
