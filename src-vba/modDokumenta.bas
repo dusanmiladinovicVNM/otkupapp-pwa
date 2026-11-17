@@ -7505,24 +7505,6 @@ Public Sub UvediIzvorUNacrt(ByVal otpremnicaID As String, _
     OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC
 End Sub
 
-' Denormalizovan BrojOtpremnice na bloku -- OSTAJE dok traje kaskada zbirne.
-'
-' S3e-1 je ovo prvo obrisalo kao mrtvo, pa vratilo: `vba_check` je nasao zivog
-' pozivaoca (modStornoFlow.FreeOtkupBloksInline, kaskada PONISTENJA zbirne),
-' koga je moj grep propustio jer poziv nosi komentar na kraju reda. Zapisano
-' namerno -- brisanje "mrtvog" koda po grepu bez kapije je tacno ta klasa greske.
-'
-' Umire zajedno sa kolonom Otkup.BrojOtpremnice u S3e-2, kad S4 prevede kaskadu
-' zbirne na kanon. Do tada: otpID prazan -> ocisti (unbind), guarded na kolonu.
-Public Sub SetOtkupBrojOtpremnice(ByVal rowIndex As Long, ByVal otpID As String)
-    On Error Resume Next
-    If GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) = 0 Then Exit Sub
-    Dim broj As String: broj = ""
-    If Len(Trim$(otpID)) > 0 Then _
-        broj = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
-    UpdateCell TBL_OTKUP, rowIndex, COL_OTK_BROJ_OTPREMNICE, broj
-End Sub
-
 ' Kojoj AKTIVNOJ otpremnici otkup pripada, ili "" kad nijednoj.
 '
 ' Pripadnost zivi iskljucivo u tblOtpremnicaIzvori (S4.1e) -- nema kolone na
@@ -8108,94 +8090,6 @@ Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
 EH:
     LogErr "modDokumenta.ValidateZbirna"
     ValidateZbirna = Array(0#, 0#, 0#, False, 0&, 0&, 0&)
-End Function
-
-Public Function ValidateZbirnaPreUnosa(ByVal brojZbirne As String, _
-                                      ByVal inputKgKlI As Double, _
-                                      ByVal inputKgKlII As Double, _
-                                      ByVal inputAmb As Long) As Variant
-    On Error GoTo EH
-
-    Dim otpData As Variant
-    otpData = GetOtpremniceByZbirna(brojZbirne)
-
-    If IsArray(otpData) Then otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
-
-    Dim sumaKgKlI As Double
-    Dim sumaKgKlII As Double
-    Dim sumaAmb As Long
-
-    ' Klasa, kilaza i gajbe su na STAVKAMA (S3b). Jedna otpremnica moze da nosi
-    ' obe klase, pa red zaglavlja vise ne pripada jednoj klasi.
-    If IsArray(otpData) Then
-        Dim colOtpID As Long
-        Dim i As Long, s As Long
-
-        colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
-                                      "modDokumenta.ValidateZbirnaPreUnosa")
-
-        Dim stavkeDok As Object
-        Set stavkeDok = StavkeOtpremnicePoDokumentu()
-
-        Dim stavke As Collection, stavka As Variant, rowKlasa As String
-
-        For i = 1 To UBound(otpData, 1)
-            Set stavke = StavkeZaOtpremnicu(stavkeDok, _
-                             Trim$(NzToText(otpData(i, colOtpID))), _
-                             "modDokumenta.ValidateZbirnaPreUnosa")
-            For s = 1 To stavke.count
-                stavka = stavke(s)
-                rowKlasa = Trim$(CStr(stavka(3)))
-
-                If rowKlasa = KLASA_I Then
-                    sumaKgKlI = sumaKgKlI + CDbl(stavka(4))
-                ElseIf rowKlasa = KLASA_II Then
-                    sumaKgKlII = sumaKgKlII + CDbl(stavka(4))
-                End If
-
-                sumaAmb = sumaAmb + CLng(stavka(6))
-            Next s
-        Next i
-    End If
-
-    ValidateZbirnaPreUnosa = Array( _
-        sumaKgKlI, inputKgKlI, sumaKgKlI - inputKgKlI, (Abs(sumaKgKlI - inputKgKlI) < 0.01), _
-        sumaKgKlII, inputKgKlII, sumaKgKlII - inputKgKlII, (Abs(sumaKgKlII - inputKgKlII) < 0.01), _
-        sumaAmb, inputAmb, sumaAmb - inputAmb _
-    )
-
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.ValidateZbirnaPreUnosa"
-    ValidateZbirnaPreUnosa = Array(0#, inputKgKlI, -inputKgKlI, False, _
-                                   0#, inputKgKlII, -inputKgKlII, False, _
-                                   0&, inputAmb, -inputAmb)
-End Function
-
-' Da li izvorne (nestornirane) otpremnice date zbirne imaju Klasu II.
-' Koristi frmDokumenta (hard-blokada unosa zbirne kad je "Dve klase" iskljuceno --
-' inace bi pisac dobio hasKlasaII:=False i Kl.II bi se tiho izgubila).
-' Isti izvor kao validacija u formi: ValidateZbirnaPreUnosa -> val(4) = sumaKgKlII.
-Public Function ZbirnaIzvorImaKlasuII(ByVal brojZbirne As String) As Boolean
-    On Error GoTo EH
-
-    If Trim$(brojZbirne) = "" Then Exit Function
-
-    Dim v As Variant
-    v = ValidateZbirnaPreUnosa(brojZbirne, 0, 0, 0)
-
-    If IsArray(v) Then
-        If UBound(v) >= 4 Then
-            If IsNumeric(v(4)) Then ZbirnaIzvorImaKlasuII = (CDbl(v(4)) > 0)
-        End If
-    End If
-
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.ZbirnaIzvorImaKlasuII"
-    ZbirnaIzvorImaKlasuII = False
 End Function
 
 ' ============================================================
@@ -10293,59 +10187,45 @@ EH:
     GetVozacDokumenta = Empty
 End Function
 
+' Broj zbirne -> vrsta voca, za izvestaje koji vrstu prijemnice traze po
+' Prijemnica.BrojZbirne (ReportProsecnaCena, ReportZbirniKupac).
+'
+' S9-2 (SLED-INV-03): vrsta je cinjenica ZAGLAVLJA nestornirane zbirne. Pisac
+' zbirne je drzi jednakom vrsti svake clanice (RequireIstoPolje,
+' ZbrRequireIstiAko), pa clanstvo nije potrebno. Do S9-2 je kes gradjen iz
+' Otpremnica.BrojZbirne, koja nema pisca -- svaka prijemnica je bila
+' "(Nepoznato)". Kljuc ostaje broj; spoj sa prijemnicom po broju je S9-3.
+' Dve aktivne zbirne istog broja (A2: legalno) sa RAZLICITOM vrstom daju ""
+' -- "(Nepoznato)" je istina, a prva po redu tabele bila bi pogadjanje.
+' Greska se vise ne guta: prazan kes bi bio isti lazan "(Nepoznato)".
 Public Function BuildZbirnaVrstaCache() As Object
-    On Error GoTo EH
-
+    Const SRC As String = "modDokumenta.BuildZbirnaVrstaCache"
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
+    Set BuildZbirnaVrstaCache = dict
 
-    Dim otpData As Variant
-    otpData = GetTableData(TBL_OTPREMNICA)
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(zbrData) Then Exit Function
+    zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
+    If IsEmpty(zbrData) Then Exit Function
 
-    If IsEmpty(otpData) Then
-        Set BuildZbirnaVrstaCache = dict
-        Exit Function
-    End If
-    
-    otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
+    Dim colBrZbr As Long, colVrsta As Long
+    colBrZbr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    colVrsta = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA, SRC)
 
-    If IsEmpty(otpData) Then
-        Set BuildZbirnaVrstaCache = dict
-        Exit Function
-    End If
-
-    Dim colBrZbr As Long
-    Dim colVrsta As Long
-
-    colBrZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, _
-                                  "modDokumenta.BuildZbirnaVrstaCache")
-    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, _
-                                  "modDokumenta.BuildZbirnaVrstaCache")
-
-    Dim i As Long
-    Dim brz As String
-    Dim vrsta As String
-
-    For i = 1 To UBound(otpData, 1)
-        brz = Trim$(NzToText(otpData(i, colBrZbr)))
-        vrsta = Trim$(NzToText(otpData(i, colVrsta)))
-
-        If brz <> "" Then
+    Dim i As Long, brz As String, vrsta As String
+    For i = 1 To UBound(zbrData, 1)
+        brz = Trim$(NzToText(zbrData(i, colBrZbr)))
+        vrsta = Trim$(NzToText(zbrData(i, colVrsta)))
+        If Len(brz) > 0 And Len(vrsta) > 0 Then
             If Not dict.Exists(brz) Then
                 dict.Add brz, vrsta
+            ElseIf StrComp(CStr(dict(brz)), vrsta, vbTextCompare) <> 0 Then
+                dict(brz) = ""
             End If
         End If
     Next i
-
-    Set BuildZbirnaVrstaCache = dict
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.BuildZbirnaVrstaCache"
-
-    Dim emptyDict As Object
-    Set emptyDict = CreateObject("Scripting.Dictionary")
-    Set BuildZbirnaVrstaCache = emptyDict
 End Function
 
 Public Function GetVrstaFromCache(ByVal dict As Object, _

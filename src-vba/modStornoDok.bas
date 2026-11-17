@@ -720,8 +720,9 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
     res = Spoji(res, "sorta", NzToText(d(base, cSo)))
     res = Spoji(res, "tipamb", NzToText(d(base, cTip)))
     ' Zbirna: kod same zbirne broj dokumenta JESTE broj zbirne, pa se ne
-    ' preuzima (pravilo 3) - novi dokument dobija nov broj.
-    If tip <> STIP_ZBIRNA Then res = Spoji(res, "brzbirne", NzToText(d(base, cZbr)))
+    ' preuzima (pravilo 3) - novi dokument dobija nov broj. CelijaAko: tip bez
+    ' te kolone (otkup, otpremnica -- S9-2) daje prazno, ne gresku 9.
+    If tip <> STIP_ZBIRNA Then res = Spoji(res, "brzbirne", CelijaAko(d, base, cZbr))
 
     res = Spoji(res, "omid", CelijaAko(d, base, GetColumnIndex(tbl, ColStanicaZaPrefill(tip))))
     res = Spoji(res, "vozacid", CelijaAko(d, base, GetColumnIndex(tbl, ColVozacZaPrefill(tip))))
@@ -1059,9 +1060,10 @@ Private Function ColParcelaZaPrefill(ByVal tip As String) As String
     If tip = STIP_OTKUP Then ColParcelaZaPrefill = COL_OTK_PARCELA
 End Function
 
+' Otkup nema vozaca (S9-2, SLED-INV-03): vozac pripada otpremnici (S4.1c),
+' Otkup.VozacID nema pisca, a pisac otkupa vozaca ni ne prima.
 Private Function ColVozacZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColVozacZaPrefill = COL_OTK_VOZAC
         Case STIP_OTPREMNICA: ColVozacZaPrefill = COL_OTP_VOZAC
         Case STIP_ZBIRNA:     ColVozacZaPrefill = COL_ZBR_VOZAC
         Case STIP_PRIJEMNICA: ColVozacZaPrefill = COL_PRJ_VOZAC
@@ -1096,10 +1098,11 @@ Private Function ColTipAmbZaPrefill(ByVal tip As String) As String
 End Function
 
 ' Zbirna nema BrojZbirne - ona JESTE zbirna, pa se u telu i preskace.
+' Otkup i otpremnica ga ne nose (S9-2, SLED-INV-03): zbirna im je clanstvo,
+' kolone Otkup/Otpremnica.BrojZbirne nemaju pisca, a pisci broj ne primaju
+' (A2). Labelu sa piscem ima samo prijemnica (SLED-ODL-08).
 Private Function ColBrojZbirneZaPrefill(ByVal tip As String) As String
     Select Case tip
-        Case STIP_OTKUP:      ColBrojZbirneZaPrefill = COL_OTK_BROJ_ZBIRNE
-        Case STIP_OTPREMNICA: ColBrojZbirneZaPrefill = COL_OTP_BROJ_ZBIRNE
         Case STIP_PRIJEMNICA: ColBrojZbirneZaPrefill = COL_PRJ_BROJ_ZBIRNE
     End Select
 End Function

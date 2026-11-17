@@ -2292,7 +2292,8 @@ End Sub
 ' RF-05 -- frmDokumenta unos + storno set (regresija)
 '   R01 prosek gajbe ne racuna stornirane redove (CalculateProsekGajbeByZbirna)
 '   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
-'   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
+'   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII;
+'       obrisana u S9-2 bez pozivaoca -- sadrzaj zbirne dolazi iz izvora)
 '   R04 prefill bira POSLEDNJU GENERACIJU (GeneracijaID, ne datum/ID kontinuitet)
 '   R05 malina auto-zbirna signalizira pad (Err / created=0), scoped na svoj broj
 '   R06 katalog poruka sadrzi kljuceve koje frmDokumenta koristi (EnsurePoruke)
@@ -13369,10 +13370,10 @@ Private Sub Test_ZBR_KanonskoPonistenjeStorniraIzvore()
     AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
                "ZBR pon: IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren"
 
-    ' BLOK MORA BITI SLOBODAN. Kaskada javlja "blokovi oslobodjeni: 0" jer
-    ' FreeOtkupBloksInline gleda staru vezu Otkup.OtpremnicaID, koju kanonski
-    ' pisac ne pise. Pitanje je da li je to SAMO netacan broj ili i podatak --
-    ' zato se meri stanje bloka, ne poruka.
+    ' BLOK MORA BITI SLOBODAN. Do review-a #384 je kaskada javljala "blokovi
+    ' oslobodjeni: 0", jer je brojala staru vezu Otkup.OtpremnicaID, koju
+    ' kanonski pisac ne pise (taj brojac je obrisan u S9-2). Pitanje je da li
+    ' je to bio SAMO netacan broj ili i podatak -- zato se meri stanje bloka.
     Dim izv As Collection, otkID As String
     Set izv = modDokumenta.IzvoriOtpremnice(otpID)
     If izv.count > 0 Then otkID = Trim$(NzToText(izv(1)))

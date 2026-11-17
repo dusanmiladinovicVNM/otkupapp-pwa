@@ -579,6 +579,14 @@ Public Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
 
     Dim nowIso As String: nowIso = Format$(Now, "yyyy-mm-dd\Thh:nn:ss")
 
+    ' S9-2 (plan 14.64 DOWNSTREAM): vozac nije cinjenica otkupa nego TEKUCE
+    ' PREDAJE (Otpremnica.VozacID aktivne otpremnice clanstva) -- isti seam kao
+    ' izvoz OtkupiAll. Otkup.VozacID nema pisca. Kvar strogog citaca clanstva
+    ' (KI-081) ide u EH: red se ne salje i ostaje na cekanju, kao kod stavki.
+    ' Ugovor kolona GAS/PWA se ne menja.
+    Dim predOtp As String, predVoz As String, predID As String, predZbr As String
+    modStammdatenSync.TekucaPredajaOtkupa otkupID, predOtp, predVoz, predID, predZbr
+
     Dim kol As Variant
     kol = modMasterSync.OtkZaglavljeKolone()
     Dim rowOut() As Variant
@@ -601,7 +609,7 @@ Public Function BuildOTKSheetRowForOtkup(ByVal otkupID As String, _
             Case "SortaVoca": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_SORTA), ""))
             Case "TipAmbalaze": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_TIP_AMB), ""))
             Case "ParcelaID": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_PARCELA), ""))
-            Case "VozacID": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_VOZAC), ""))
+            Case "VozacID": v = predVoz
             Case "BrojDokumenta": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_BR_DOK), ""))
             Case "Klasa", "Kolicina", "Cena", "KolAmbalaze": v = ""   ' stavka -> OTK_STAVKE
             Case "StavkeCount": v = stavkeCount

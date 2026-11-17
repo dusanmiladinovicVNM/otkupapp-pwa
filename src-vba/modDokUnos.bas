@@ -336,7 +336,7 @@ Public Function OtpremnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     '
     ' Ovde je do S3a stajalo ZavrsiIspravkuAko FLOW_DOC_OTPREMNICA. Taj tok nije
     ' zatvaranje konteksta nego pisac STAROG modela (obrisan u S3c)
-    ' preko GetBlokOtkupIDs zove ReassignOtkupToOtpremnica_TX, koji upisuje
+    ' preko GetBlokOtkupIDs (obrisan u S9-2) zove ReassignOtkupToOtpremnica_TX, koji upisuje
     ' Otkup.OtpremnicaID i BrojZbirne, pa rekalkulise ili stornira zbirnu.
     '
     ' Pustiti ga nad upravo otvorenim NACRTOM znacilo bi dve stvari, obe lose:

@@ -289,7 +289,7 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
     Next i
     If rows.count = 0 Then Err.Raise ERR_SZ_BASE + 3, SRC, "Operacija nije nadjena: " & opID
 
-    ' Garda operacije (kontra-stav u knjizi); mrtav roditelj otkupa ide PO REDU nize.
+    ' Garda operacije (kontra-stav u knjizi); potez u lancu cuva LancaRazlog.
     Dim gr As String: gr = UndoGuardReasonZaOp(opID, docType, broj)
     If Len(gr) > 0 Then Err.Raise ERR_SZ_BASE + 4, SRC, gr
 
@@ -309,14 +309,11 @@ Public Function UndoOperation_TX(ByVal opID As String) As Boolean
             Err.Raise ERR_SZ_BASE + 13, SRC, "Stanje se promenilo posle storna (" & vt & "." & vcol & _
                 " = '" & curV & "', ocekivano '" & CStr(rows(i)(4)) & "') -> undo odbijen (ne gazi noviju izmenu)."
         End If
-        ' Otkup PO REDU: mrtav-roditelj (bas tog reda).
-        If StrComp(vt, TBL_OTKUP, vbTextCompare) = 0 And StrComp(vcol, COL_STORNIRANO, vbTextCompare) = 0 Then
-            Dim dpr As String: dpr = OtkupBlockDeadParentByID(CStr(rows(i)(1)))
-            If Len(dpr) > 0 Then Err.Raise ERR_SZ_BASE + 15, SRC, "Roditelj/provera bloka " & _
-                CStr(rows(i)(1)) & ": " & dpr & " -> undo bi ostavio siroce. Odbijeno."
-            ' Provera duplikata (broj, klasa) obrisana u S1b-1: pojam nestaje kad je
-            ' otkup jedan dokument sa stavkama.
-        End If
+        ' Provera "mrtav roditelj otkupa" (OtkupBlockDeadParentByID) obrisana u
+        ' S9-2: citala je Otkup.OtpremnicaID i Otkup.BrojZbirne, kolone bez pisca,
+        ' pa je na kanonskim podacima uvek vracala "" (plan 14.64, N2c). U kanonu
+        ' to stanje ne nastaje: StornoOtkup odbija clana aktivne otpremnice, a
+        ' pisac clanstva odbija storniran otkup. Potez u lancu cuva LancaRazlog.
     Next i
 
     Set tx = New clsTransaction
@@ -351,8 +348,8 @@ End Function
 ' Jedan razlog: kontra-stav u knjizi (AMB-10-ODL-19, konacan po AMB-10-ODL-25).
 ' Revers grana (ReversID iz AmbID-eva operacije, duplikat u nizu stanica/dan) je
 ' obrisana u 10e-2 -- storno reversa je kontra-stav nad AmbDokID-em i nije u
-' zurnalu, pa operacija reversa ne nastaje. Mrtav roditelj otkupa se proverava PO
-' REDU u UndoOperation_TX (OtkupBlockDeadParentByID).
+' zurnalu, pa operacija reversa ne nastaje. Provera mrtvog roditelja otkupa je
+' obrisana u S9-2 (citala je kolone bez pisca; u kanonu stanje ne nastaje).
 ' docType i broj ostaju u potpisu: oba pozivaoca ih imaju, a ekran ih prikazuje.
 ' FAIL-CLOSED: greska -> razlog.
 Public Function UndoGuardReasonZaOp(ByVal opID As String, ByVal docType As String, _

@@ -3169,14 +3169,22 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     
     Dim colVrsta As Long, colBrOtp As Long
     Dim colDatum As Long, colVozac As Long
-    Dim colOtpID As Long, colBrZbirne As Long, colIzd As Long
+    Dim colOtpID As Long, colIzd As Long
     colIzd = RequireColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS, SRC)
     colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, SRC)
     colBrOtp = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
     colDatum = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
     colVozac = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
     colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
-    colBrZbirne = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
+
+    ' S9-2 (SLED-INV-03): zbirna otpremnice je AKTIVNO CLANSTVO (E3), a broj je
+    ' labela iz zaglavlja zbirne po ID-u. Otpremnica.BrojZbirne nema pisca, pa
+    ' je do S9-2 svaki red bio "nema prijema". Spoj sa prijemom ostaje po broju
+    ' (BuildManjakDict) do S9-3. Citac je strog: kvar clanstva obara izvestaj
+    ' sa razlogom (S92-ODL-01), isto kao citaci stavki ispod.
+    Dim zbrPoOtp As Object, brojPoZbr As Object
+    Set zbrPoOtp = modDokumenta.AktivnoClanstvoZbirni()
+    Set brojPoZbr = BuildLookupDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ)
 
     ' Kolone 7 (kg blokova) i 8 (razlika) ostaju PRAZNE od S1b-3: racunale su se
     ' preko veze Otkup.OtpremnicaID, koju S3 zamenjuje sa tblOtpremnicaIzvori.
@@ -3260,7 +3268,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
 
         ' Manjak proportional berechnen
         Dim thisBrZbirne As String
-        thisBrZbirne = Trim$(CStr(otpData(hr, colBrZbirne)))
+        thisBrZbirne = BrojAktivneZbirneOtp(thisOtpID, zbrPoOtp, brojPoZbr)
 
         ' Vozac i klasa otpremnice -- treba za razresenje STAVKE zbirne (dole) i
         ' za prikaz, pa se citaju pre oba.
@@ -3270,8 +3278,8 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         klasaOtp = mapKlasa(i)
 
         ' Prijem po otpremnici -- vezan za STAVKU (vlasnik + Klasa), ne za broj.
-        ' Otpremnica nosi BrojZbirne, VozacID i Klasu, ali ne i KupacID, pa se
-        ' vlasnik razresava ovako:
+        ' Otpremnica nosi VozacID i Klasu (a zbirnu kroz clanstvo), ali ne i
+        ' KupacID, pa se vlasnik razresava ovako:
         '   #V = 1  -> broj ima jednog vlasnika: agregat po (broj, klasa) je
         '              dokazano siguran (i hvata starije prijemnice bez vlasnika),
         '   #V > 1  -> broj dele dve zbirne: pokusaj razresenja po vozacu (#O);
@@ -3413,6 +3421,21 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
 
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' S9-2: broj AKTIVNE zbirne otpremnice po clanstvu (E3); "" kad je nema.
+' Clanstvo na zbirnu koje nema u zaglavljima je kvar (AktivnoClanstvoZbirni
+' postojanje ne proverava) -- ne sme da postane tiho "nema prijema".
+Private Function BrojAktivneZbirneOtp(ByVal otpID As String, ByVal zbrPoOtp As Object, _
+                                      ByVal brojPoZbr As Object) As String
+    Dim k As String, zbrID As String
+    k = UCase$(Trim$(otpID))
+    If Not zbrPoOtp.Exists(k) Then Exit Function
+    zbrID = CStr(zbrPoOtp(k))
+    If Not brojPoZbr.Exists(zbrID) Then Err.Raise vbObjectError + 7512, _
+        "modIzvestaj.ReportOtkupRobaOM", "Clanstvo otpremnice " & otpID & _
+        " pokazuje na zbirnu koje nema: " & zbrID
+    BrojAktivneZbirneOtp = Trim$(CStr(brojPoZbr(zbrID)))
 End Function
 
 Private Function ReportOtkupRobaKupac(ByVal kupacID As String, _

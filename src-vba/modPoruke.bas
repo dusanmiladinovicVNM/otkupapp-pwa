@@ -958,6 +958,9 @@ Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_STAT_SACUVANA", "Sa" & ChrW(269) & "uvana"
     UpsertRow lo, existing, "OTKUI_STAT_POSLATO", "Poslato"
     UpsertRow lo, existing, "OTKUI_STAT_OTKAZANA", "Otkazana"
+    ' S9-2 (S92-ODL-01): strogi citac clanstva je odbio tabelu (KI-081) --
+    ' status zbirne se ne zna, pa se ne pogadja ni "Sacuvana" ni "Poslato".
+    UpsertRow lo, existing, "OTKUI_STAT_NEPOZNATO", "Veza nepoznata"
 
     ' Desna kolona prikazuje SVE rezime (aktivni je obelezen), pa naslov nije
     ' vise "OSTALI". Stari kljuc ostaje u tabeli neupotrebljen - bezopasno.

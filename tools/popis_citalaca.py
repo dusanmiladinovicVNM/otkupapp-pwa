@@ -204,7 +204,22 @@ KOLONE_STAROG_MODELA = re.compile(
 # a ne bi stitio nista -- ta grupa nema cilj nula.
 PRAGOVI = collections.OrderedDict([
     ("otp_stari_pisac", 0),
-    ("otk_veza_otp", 11),
+    # S9-2 (plan 14.66, 17.11.2026): 11 -> 2. Citaoci kolona bez pisca su presli
+    # na clanstvo (detalj izvestaja, OTK red za PWA, prefill storna), a pisci koji
+    # su kolone samo brisali su obrisani (FreeOtkupBloksInline,
+    # SetOtkupBrojOtpremnice, OtkupBlockDeadParentByID). Ostaju
+    # modIntegritet.ProizvodjacByZbirna (S9-5) i modSetup.EnsureSledljivostSchema
+    # (S9-6); oba odlaze sa svojim rezom, pa prag tada ide na 0.
+    ("otk_veza_otp", 2),
+    # S9-2: nove grupe sa pragom -- do S9-2 su bile bez praga jer su im citaoci
+    # bili zivi u UI-ju. Sada brane rast do S9-5 / S9-6.
+    #   otk_brojzbirne 2: Chk_B6 i ProizvodjacByZbirna (oba S9-5).
+    #   otp_brojzbirne 8: GetOtpremniceByZbirna (-> ValidateZbirna -> A1),
+    #                     GetVerwaisteOtpremnice (-> B1a) i sest u modIntegritet
+    #                     (sve S9-5). F1/F2 status, ROBA OM, detalj, prefill i
+    #                     kes vrste zbirne su presli na kanon u S9-2.
+    ("otk_brojzbirne", 2),
+    ("otp_brojzbirne", 8),
     # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano iz
     # kanona, a self-heal ih brise iz zatecene sveske. Poslednja tri ziva
     # mesta su bila u modSetup (format i EnsureColumnOnTable) -- ona su ta
@@ -255,6 +270,11 @@ PRAGOVI = collections.OrderedDict([
     ("prj_brojzbirne", 35),
     ("fak_broj_prj", 0),
     ("pal_broj", 0),
+    # S9-2 (plan 14.66): broj-oblik traga ispravke (IspravkaOd / ZamenjenSa) vise
+    # ne citaju papir otpremnice ni uvid zbirne (17 -> 12). Ostaju prijemnica
+    # (pisac StampIspravkaTrace postoji, SLED-ODL-08), KulVerzijeTabele (S9-5) i
+    # EnsureSledljivostSchema (S9-6). Prag brani rast; deo grupe ide na 0 u S9-6.
+    ("x_trace", 12),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

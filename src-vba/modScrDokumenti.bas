@@ -2883,10 +2883,11 @@ Public Function ColCena(ByVal m As String) As String
     End Select
 End Function
 
+' Kolona broja zbirne samo tamo gde je ona LABELA SA PISCEM (prijemnica). Za
+' otkup i otpremnicu zbirna je clanstvo (S9-2, RedoviZaTip): Otkup.BrojZbirne
+' i Otpremnica.BrojZbirne nemaju pisca, pa je svaki dokument bio "bez zbirne".
 Public Function ColBrojZbirne(ByVal m As String) As String
     Select Case m
-        Case "OTKUP":                ColBrojZbirne = COL_OTK_BROJ_ZBIRNE
-        Case "OTPREMNICA":           ColBrojZbirne = COL_OTP_BROJ_ZBIRNE
         Case "PRIJEMNICA":           ColBrojZbirne = COL_PRJ_BROJ_ZBIRNE
     End Select
 End Function
@@ -2898,9 +2899,50 @@ Public Function ColF(ByVal spec As String, ByVal idx As Long) As String
     ColF = CStr(p(idx))
 End Function
 
-Public Function StatusCode(ByVal isStorno As Boolean, ByVal bezZbirne As Boolean) As Long
+' S9-2 (S92-ODL-01): mape clanstva za listu F1/F2, jednom po pozivu
+' RedoviZaTip. Strogi citaci su globalni (KI-081) -- kvar se vraca kao razlog
+' citaca (imenuje dokument), a mape ostaju Nothing; pozivalac tada status ne
+' pogadja. Broj zbirne je samo labela za pretragu: status nosi postojanje
+' aktivnog clanstva, ne broj.
+Private Function ClanstvoZaListu(ByVal mk As String, ByRef outOtp As Object, _
+                                 ByRef outZbr As Object, ByRef outBroj As Object) As String
+    On Error GoTo EH
+    Set outZbr = modDokumenta.AktivnoClanstvoZbirni()
+    If mk = "OTKUP" Then Set outOtp = modDokumenta.AktivnoClanstvoOtpremnica()
+    Set outBroj = BuildLookupDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ)
+    Exit Function
+EH:
+    ClanstvoZaListu = Err.description
+    Set outOtp = Nothing
+    Set outZbr = Nothing
+    Set outBroj = Nothing
+End Function
+
+' Aktivna zbirna reda liste: otpremnica -> E3; otkup -> E2 -> E3. Kljucevi
+' mapa su UCase(Trim(ID)); vraca ZbirnaID ili "" (dokument bez zbirne).
+Private Function ZbirnaReda(ByVal mk As String, ByVal docID As String, _
+                            ByVal clOtp As Object, ByVal clZbr As Object) As String
+    Dim otpID As String, k As String
+    k = UCase$(Trim$(docID))
+    If Len(k) = 0 Then Exit Function
+    If mk = "OTKUP" Then
+        If Not clOtp.Exists(k) Then Exit Function
+        otpID = CStr(clOtp(k))
+    Else
+        otpID = Trim$(docID)
+    End If
+    k = UCase$(Trim$(otpID))
+    If clZbr.Exists(k) Then ZbirnaReda = CStr(clZbr(k))
+End Function
+
+' 3 = veza nepoznata (S92-ODL-01): citac clanstva je odbio tabelu (KI-081),
+' pa se status zbirne ne zna -- ne pogadja se ni "bez zbirne" ni "poslato".
+Public Function StatusCode(ByVal isStorno As Boolean, ByVal bezZbirne As Boolean, _
+                           Optional ByVal nepoznato As Boolean = False) As Long
     If isStorno Then
         StatusCode = 2
+    ElseIf nepoznato Then
+        StatusCode = 3
     ElseIf bezZbirne Then
         StatusCode = 0
     Else
@@ -3350,6 +3392,24 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     mStep = "indeksi kolona"
     iStorno = ColIdx(tblName, COL_STORNIRANO)
     iZbir = ColIdx(tblName, ColBrojZbirne(mk))
+
+    ' S9-2 (N2a', SLED-INV-03): zbirna otkupa i otpremnice je CLANSTVO, ne
+    ' kolona. Mape se grade JEDNOM po listi (E2 otkup -> otpremnica, E3
+    ' otpremnica -> aktivna zbirna), nikad citac po redu. Kad strogi citac
+    ' odbije tabelu (KI-081), lista se NE obara i NE pogadja: red dobija
+    ' "veza nepoznata", a razlog ide u log (S92-ODL-01, plan 14.66).
+    Dim zbrIzClanstva As Boolean, clRazlog As String
+    Dim clOtp As Object, clZbr As Object, brPoZbr As Object
+    zbrIzClanstva = (mk = "OTKUP" Or mk = "OTPREMNICA")
+    If zbrIzClanstva Then
+        mStep = "clanstvo zbirne"
+        clRazlog = ClanstvoZaListu(mk, clOtp, clZbr, brPoZbr)
+        ' Cip "Bez zbirne" se tada ne obara: nudi sve nestornirane redove, a
+        ' svaki nosi "veza nepoznata" -- skup je oznacen kao neizvestan. Pad
+        ' bi ostavio upaljen filter, pa bi padalo i svako sledece osvezavanje.
+        If Len(clRazlog) > 0 Then _
+            LogWarn "modScrDokumenti.RedoviZaTip", "status zbirne nepoznat (" & mk & "): " & clRazlog
+    End If
     ' Fakturisanost prijemnice je IZVEDENA (S6 korak 5, FAK-LIN-03) -- isti recnik
     ' koji pitaju kapija storna i mreza Fakturisanja. Do tada je lista citala
     ' FakturaID zaglavlja, a kapija kes Fakturisano ili liniju, pa su o istom
@@ -3421,6 +3481,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     For r = 1 To nRows
         Dim vDatK As Double, vZbir As String, hay As String
         Dim isStorno As Boolean, bezZbirne As Boolean, bezFakture As Boolean
+        Dim nepoznato As Boolean, zbrID As String
         Dim vKgRow As Double, cell As Variant
 
         ' reversi su podskup tblAmbalaza - ostalo iz te knjige ne ulazi
@@ -3577,10 +3638,25 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             outA(n + 1, c + 1) = cell
         Next c
 
-        vZbir = CellS(src, r, iZbir)
         isStorno = (iStorno > 0)
         If isStorno Then isStorno = (UCase$(CellS(src, r, iStorno)) = "DA")
-        bezZbirne = (Len(vZbir) = 0)
+        nepoznato = False
+        If zbrIzClanstva Then
+            vZbir = ""
+            If Len(clRazlog) > 0 Then
+                nepoznato = True
+                bezZbirne = False
+            Else
+                zbrID = ZbirnaReda(mk, CellS(src, r, iStavID), clOtp, clZbr)
+                bezZbirne = (Len(zbrID) = 0)
+                If Not bezZbirne Then
+                    If brPoZbr.Exists(zbrID) Then vZbir = CStr(brPoZbr(zbrID))
+                End If
+            End If
+        Else
+            vZbir = CellS(src, r, iZbir)
+            bezZbirne = (Len(vZbir) = 0)
+        End If
         hay = hay & "|" & vZbir
 
         ' "Nefakturisane" = na dokumentu jos ima sta da se fakturise (NE ili DELIM).
@@ -3596,7 +3672,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
             If bezFakture Then cNef = cNef + 1
         End If
 
-        keep = MatchFilterFast(filter, vDatK, bezZbirne, isStorno, bezFakture)
+        keep = MatchFilterFast(filter, vDatK, bezZbirne Or nepoznato, isStorno, bezFakture)
         If keep And Len(q) > 0 Then keep = (InStr(1, hay, q, vbTextCompare) > 0)
         ' dodatni uslovi iz panela Filteri - isti "hay", bez drugog prolaza
         If keep And Len(fltV) > 0 Then keep = (InStr(1, hay, fltV, vbTextCompare) > 0)
@@ -3608,7 +3684,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 Select Case kind(c)
                     Case "kg":                 sumKg = sumKg + CDbl(outA(n, c + 1))
                     Case "rsd", "mult", "sum0": sumVal = sumVal + CDbl(outA(n, c + 1))
-                    Case "pill":               outA(n, c + 1) = StatusCode(isStorno, bezZbirne)
+                    Case "pill":               outA(n, c + 1) = StatusCode(isStorno, bezZbirne, nepoznato)
                 End Select
             Next c
         End If
@@ -3620,6 +3696,8 @@ NextRow:
     ' ekran. Dok je sortiranje bilo unutar ovog koda, mreza je umela da sortira
     ' samo dokumenta.
     mStep = "OK"
+    ' Brojac "Bez zbirne" uz nepoznatu vezu je -1 ("?" na cipu), ne broj.
+    If Len(clRazlog) > 0 Then cBez = -1
     RedoviZaTip = Array(cols, outA, n, sumKg, sumVal, Array(cOtk, cBez, cNef))
     Exit Function
 EH:
