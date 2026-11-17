@@ -11713,6 +11713,18 @@ promenio ga je `ObuhvatKooperantID`). **`popis_citalaca --check` pada** (N17).
 - `#477` (samo dokumenti: plan izmene izdate zbirne i prijemnice, `LZP-ODL-01..16`) je otvoren i
   najavljuje nov rad nad zbirnom i prijemnicom. S9-1 zato pre koda ponavlja merenja 1–3 odavde.
 
+#### Odluka operatera 17.11.2026 — N17 (`docs/STANJE_REFAKTORA.md` stavka 329)
+
+- **N17 — predlog prihvaćen („Prag 35"):** prag `prj_brojzbirne` je u ovom PR-u podignut 33 → 35
+  (`tools/popis_citalaca.py`, komentar upućuje ovde). Razlog: dva mesta kapije `LNC-ODL-37`
+  (`LncPrijemnicaCekaIspravku`) su detektor starog oblika, ne spoj. Grupa sada ima 14 labela/detektora
+  i 21 spoj (N4 bez promene).
+- **Dokaz u oba smera:** prag 34 → `PAO`, prag 36 → `PRAG ZASTAREO`, prag 35 → `ok`.
+  `popis_citalaca --check` je time zelen nad ovom granom.
+- **Šta ostaje za S9-3:** grupa se deli na spoj (prag 0) i labelu. Tada se odlučuje i da li detektor
+  starog oblika po broju ostaje, zajedno sa dva poređenja iste kapije koja popis danas ne vidi (N17).
+- **Redosled merge-a:** ovaj PR, pa `#474` (CI korak), pa S9-1.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
