@@ -11614,6 +11614,105 @@ prioritet; `Prijemnica.BrojZbirne` ostaje labela bez spoja.
   - **(b)** korak `popis_citalaca --check` u CI ide **zasebnim** PR-om (process). Taj PR se merge-uje
     **posle** ovog: pre njega je kapija na `main`-u crvena, i to je ujedno dokaz da korak meri.
 
+#### Preslaganje na `main` = `6b601ee1` (17.11.2026, `docs/STANJE_REFAKTORA.md` stavka 328)
+
+> PR `#469` je od 11.11.2026 ostao otvoren, a `main` je otišao 54 commita dalje. S9-1 se ne radi nad
+> pre-flight-om koji nije u `main`-u, pa je grana preslagana (rebase bez konflikta) i ponovo je izmereno
+> samo ono što se od `1fa4937a` promenilo. Brojevi linija u merenjima 1–5 iznad i dalje važe za
+> `57ab47ed`. Excel nije korišćen, pa sonda nad C002 (merenje 5) nije ponovljena.
+
+**Šta je ušlo u `main` posle `1fa4937a`, a dira S9:**
+- „Dodaj blok" / „Izvadi blok" u izdatoj otpremnici i u aktivnoj zbirnoj (`#476`,
+  `STORNO_U_LANCU.md` §10, `LNC-ODL-22..38`), sa kapijom nedovršenog konteksta (`LNC-ODL-37`) i F8
+  stornom zbirne uz nedovršenu ispravku prijemnice (§11, `KI95-ODL-01..04`, `KI-095`);
+- obuhvat obračuna doplate (`#475`, `DOP-ODL-31`): nova kolona `tblDoplata.ObuhvatKooperantID`, na
+  kraju kanona, sa piscem. Lanac dokumenata ne dira;
+- alati (`run_vba` timeout, `KI-096`; katalog sabotaža `lncb-*`). Kod S9 ne diraju.
+
+**Ponovo izmereno:**
+
+1. **Popis** (razlika prema preslaganju na `1fa4937a`, samo živa mesta):
+
+   | Grupa | `1fa4937a` | `6b601ee1` | Šta je novo |
+   |---|---|---|---|
+   | `otk_linija` | 19 | 20 | `LncDodajRazlogCitljiv` čita `TipAmbalaze` lista. Telo provere izvora je iz `OtpRequireIzvorValjan` prešlo u `OtpProveriIzvor` (isto mesto, drugo ime). Činjenica zaglavlja |
+   | `otp_zaglavlje` | 49 | 52 | `LncPlanBlok`, `LncDodajManjakStanice` i `LncDodajRazlogCitljiv` čitaju `TipAmbalaze` otpremnice; dva mesta su sa `OtpRequireIzvorValjan` prešla u `OtpProveriIzvor`. Sve su činjenice zaglavlja |
+   | `prj_brojzbirne` | 33 | **35** | `LncPrijemnicaCekaIspravku` (`modDokumenta:4342`, `:4356`), v. N17 |
+
+   Ostale grupe su iste: `otk_veza_otp` 11, `otk_brojzbirne` 6, `otp_brojzbirne` 13, `zbr_linija` 3,
+   `x_trace` 17, `x_literal` 7.
+2. **Pisci:**
+   - **kolona bez pisca je i dalje 20.** Mereno razlikom `1fa4937a..6b601ee1` nad produkcionim
+     modulima: nijedan dodat red ne piše nijednu od 20 kolona. Jedina nova pominjanja tih konstanti su
+     čitanja `Prijemnica.ZbirnaRoditeljID` (E4, ima pisca);
+   - **u produkciji su dodata samo dva poziva upisa**, i nijedan nije u lancu dokumenata:
+     `tblDoplata.ObuhvatKooperantID` (`modDoplata`, `DOP-ODL-31`) i dopis u `tblStornoVeze.Message`
+     (`modStornoContext.DopisiPorukuKonteksta`, `LNC-ODL-38`);
+   - kanonski pisci su telom isti kao na `1fa4937a`: `BuildOtkupHeaderRowData`,
+     `BuildOtpremnicaHeaderRowData`, `BuildZbirnaHeaderRowData`, `BuildPrijemnicaRowData`,
+     `SavePrijemnicaDokument`, `ReassignPrijemnicaToZbirna_TX`, `PoveziDeteNaZbirnu`,
+     `ApplyGeneracijaID`. `modOtkup` i `modNovac` nisu dirani. Potezi „Dodaj" / „Izvadi" zato ne donose
+     nov pisac zaglavlja: idu kroz `LncSastavi` i postojeće pisce.
+3. **Čitači ivica (ulaz za S9-1):** svi čitači iz `SLEDLJIVOST.md` §2 postoje, sa **istim potpisom i
+   istim telom** kao na `1fa4937a`. `modOtkup`, `modAutoHladnjaca`, `modFaktura`, `modUtovar`,
+   `modSEFMapper` i `modPaletniList` nisu dirani; u `modDokumenta` su pomerene samo linije:
+
+   | Ivica | Čitač (`6b601ee1`) |
+   |---|---|
+   | E1 | `modOtkup.StavkeOtkupaRedovi:1201` |
+   | E2 | `modDokumenta.IzvoriOtpremnice:7552`, `OtpremnicaZaOtkup:7534`, `AktivnoClanstvoOtpremnica:7562` |
+   | E3 | `modDokumenta.IzvoriZbirne:2893`, `AktivnaZbirnaZaOtpremnicu:1537`, `AktivnoClanstvoZbirni:1554` |
+   | E4 | `modAutoHladnjaca.AktivnePrijemnicePoZbirni:539`, i dalje `Private` |
+   | E5 | `modDokumenta.StavkePrijemniceRedovi:9369`, `StavkePrijemnicePoDokumentu:9660` |
+   | E6 | `modFaktura.FakturaLinijePoStavci:984` |
+   | E9 | `modUtovar.UtovarenoPoPreradi:53` |
+   | E10 | `modUtovar.AktivnihFstZaUtovar:373`, `modSEFMapper.GpFakturaRazlog:354` |
+
+   - javnog strogog čitača paletnih stavki po stavci prijemnice i dalje nema, pa E7 i E8 ostaju u S9-7;
+   - čuvar ivice E2 (`SLED-INV-01`): `OtpRequireIzvorValjan` je sada omotač nad `OtpProveriIzvor`
+     (`:6285`, `:6330`). Pravilo je isto.
+4. **Integritet:** `modIntegritet` nije diran. `RunAllChecks` ima i dalje **24** provere.
+5. **Trag poteza bez para lista** (obaveza iz `STORNO_U_LANCU.md` §10.9; `LNC-ODL-27`, `SLED-ODL-03`):
+   - koren poteza „Dodaj" / „Izvadi" je **red para otpremnice** u `tblStornoVeze`: `OldDocType` je
+     otpremnica, `ParentDocType = LANAC`, `ParentDocID` prazan. Piše ga `LncKontekstPar`
+     (`modDokumenta:5231`), koji `LncSastavi` zove sa praznim korenom (`:5003`). Red zbirne nosi
+     `ParentDocID` = `CorrectionID` tog korena (`:5058`);
+   - kad potez ima list (storno i ispravka lista), koren je i dalje red lista (`:5204`, `LNC-ODL-20`);
+   - par sa naslednikom je `ISPRAVKA`. Par bez naslednika je `PONISTENJE`, sa praznim `NewDocID`
+     (vađenje poslednjeg bloka);
+   - na blok se `CorrectionID` ne upisuje. Koji je blok ušao ili izašao stoji u tekstu korenskog reda
+     (`:4629`) i vidi se iz razlike članstva (A15);
+   - `ParentDocType = LANAC` danas čita samo `modStornoZurnal.LancaRazlog` (`:177`).
+
+   **Za S9:** istorija verzija (`SLED-ODL-03`) čita par po par. Ne sme da pretpostavi da je koren
+   poteza list, ni da svaki par ima naslednika. Aktivni graf (S9-1) ovo ne dira: članstvo se piše po
+   verziji (A13), a strogi čitači E2 i E3 su isti.
+
+**Kapije nad ovom granom:** čisti su `vba_check` (193 fajla), `who_writes --check`,
+`--check-ownership` (isti preostali ciljevi A11) i `gen_schema_module --check` (otisak `A2A085EB`;
+promenio ga je `ObuhvatKooperantID`). **`popis_citalaca --check` pada** (N17).
+
+**Novi nalazi:**
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| N17 | **Prag `prj_brojzbirne` 33 je zastareo pre merge-a:** `main` ima 35 živih mesta. Oba nova su u `LncPrijemnicaCekaIspravku` (`#476`). Mesto `:4342` traži da kolona postoji (`RequireColumnIndex`). Mesto `:4356` poredi labelu stornirane prijemnice sa brojem zbirne **samo kad red nema `ZbirnaRoditeljID`** („stari oblik po broju", `KI95-ODL-02`, operater 11.11.2026). Jedini pozivalac je kapija `LncNedovrsenKontekstRazlog` (`:4256`), koja potez **odbija**: ne bira dokument i ne piše. Isti obrazac kao `LncPrijemniceZbirne` iz N15. Ista kapija ima još dva poređenja po broju koja popis ne vidi, jer ne čitaju kolonu prijemnice: `ParentBroj` konteksta (`:4333`) i grana `poBroju` u `LncKontekstPogadja` (`:4294`). I ona samo odbijaju. **Posledica:** `#469` bi sam prošao, jer njegov CI taj korak još nema, a `#474` bi posle njega ostao crven na `main`-u | `python tools/popis_citalaca.py --check` i `--uporedi 1fa4937a` nad ovom granom; čitanje `modDokumenta:4213-4358` | **Predlog, čeka odluku:** prag 35, sa razlogom „dva mesta kapije `LNC-ODL-37` su detektor starog oblika, ne spoj". Ukupno bi bilo 14 labela/detektora i 21 spoj (N4 bez promene). S9-3 deli grupu na spoj (prag 0) i labelu, i odlučuje da li detektor starog oblika po broju ostaje |
+
+**Obaveze iz reza „Dodaj / Izvadi" za S9** (`STORNO_U_LANCU.md` §10.9):
+- istorija verzija čita i koren čiji je par otpremnica (merenje 5 iznad);
+- rez ne piše nijednu kolonu koju S9 briše (merenje 2 iznad);
+- ugovor S9-1 ostaje isti. Novi potezi prave verzije kroz iste pisce i isto članstvo, pa ih pokriva
+  postojeći *edge* „ispravka zbirne" (A13).
+
+**GO / HOLD:** bez promene. S9-1 kreće kad su `#469` i `#474` u `main`-u.
+
+**Landing:**
+- `#474` (CI korak) se merge-uje posle ovog PR-a i posle odluke o N17. Do tada je crven;
+- `#457` je i dalje otvoren, sada u konfliktu sa `main`-om. `main` nosi testove do 353 (`RunOne`), a
+  `#457` staje na 350, pa se brojevi testova S9 dodeljuju od stanja `main`-a pri rebase-u koda;
+- `#477` (samo dokumenti: plan izmene izdate zbirne i prijemnice, `LZP-ODL-01..16`) je otvoren i
+  najavljuje nov rad nad zbirnom i prijemnicom. S9-1 zato pre koda ponavlja merenja 1–3 odavde.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
