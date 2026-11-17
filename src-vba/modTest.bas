@@ -17979,8 +17979,7 @@ EH:
     ' greska (Kill nad praznim ili nepostojecim folderom) izlazi iz procedure i
     ' pored Resume Next -- test je tako padao golim "File not found" umesto
     ' tvrdnjom ispod (17.11.2026).
-    Resume CistiPosleGreske
-CistiPosleGreske:
+    ' SONDA (ne spaja se): ciscenje U AKTIVNOM obradjivacu, kao pre #184.
     On Error Resume Next
     Kill tmp & "\*.*"
     RmDir tmp
