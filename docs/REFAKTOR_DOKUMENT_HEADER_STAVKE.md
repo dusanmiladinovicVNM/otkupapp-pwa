@@ -11943,8 +11943,12 @@ Prerada u testu 360 je iz fixture-a (`PRE-GP-W1`); utovari i fakture nastaju kro
   (isti broj provera kao na `main`-u posle `#484`), Storno 111 / 0, Palete zeleno (suite ne javlja
   broj). Marker zelenog je upisan za sve četiri.
 
-**Nije izvršeno:** ručni Compile nad ovim izvorom (potvrda od 17.11. važi za `89eadfc0e930`, pre
-drugog dela); dokaz u redosledu cele suite (isti pozivi bez `--izbor`).
+**Ručni Compile nad ovim izvorom: prošao** (operater, 17.11.2026, `Debug → Compile VBAProject`).
+Glavni checkout je bio na commitu `a0b94050`, bez izmena u `src-vba`; potvrda je upisana kroz
+`vba_gate --mark-compile`. `vba_gate --require-green --require-compile` nad `RunAllTests`, BFP, Storno
+i Palete prolazi za otisak `b78fbb13f956`.
+
+**Nije izvršeno:** dokaz u redosledu cele suite (isti pozivi bez `--izbor`).
 
 **Ugovor S9-1 (§14.64) posle oba dela:** pokriveni su hod ivicama E1–E6, E9 i E10, nadskup, klasa,
 hladnjački lanac, verzije, GP lanac i svi navedeni negativi. Jedino odstupanje od slova ugovora je
