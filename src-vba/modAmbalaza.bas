@@ -2228,6 +2228,18 @@ Private Function UpisiRedKnjige(ByVal tx As clsTransaction, _
                                 ByVal vrsta As String, ByVal stornoOd As String, _
                                 ByVal sourceName As String) As String
     RequireAmbTxVlasnistvo tx, TBL_AMBALAZA, sourceName
+
+    ' IDENTITET DOKUMENTA STOJI ISPRED AMB-INV-08, i to nije kozmetika.
+    ' RequireAmbTxIzvorniDokument odbija i prazan identitet (BindSourceDocument
+    ' ne prima prazno, pa ga nijedna transakcija ne poseduje) -- ali pod TUDJIM
+    ' razlogom i ISTIM brojem greske. Iza nje je ova provera bila nedostizna,
+    ' pa je sabotaza amb-pisac-red-bez-dokumenta nije mogla oboriti. Ovde
+    ' odbijanje imenuje pravi uzrok, a -08 ostaje druga brana za isti ulaz.
+    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then
+        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
+                  "Red knjige nema identitet dokumenta (AMB-INV-04 i -08)."
+    End If
+
     RequireAmbTxIzvorniDokument tx, dokTip, dokID, sourceName
     RequireKnjigaSchema sourceName
 
@@ -2249,11 +2261,6 @@ Private Function UpisiRedKnjige(ByVal tx As clsTransaction, _
     If Len(vrstaK) = 0 Or Len(odTipK) = 0 Or Len(naTipK) = 0 Then
         Err.Raise AMB_ERR_KNJIGA_KVAR, sourceName, _
                   "Kanonski zapis nije nadjen posle prosle kapije -- kvar ugovora."
-    End If
-
-    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then
-        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _
-                  "Red knjige nema identitet dokumenta (AMB-INV-04 i -08)."
     End If
 
     If Len(Trim$(stornoOd)) = 0 Then

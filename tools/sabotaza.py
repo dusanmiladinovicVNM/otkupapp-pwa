@@ -5325,6 +5325,10 @@ SABOTAZE = {
     ),
     # Kretanje bez identiteta dokumenta ne postoji (AMB-INV-04 i -08). Provera je u
     # JEZGRU, kroz koje prolazi svaki red -- i pokrice i ostatak podele.
+    # Meri se RAZLOG, ne pad: isti broj greske dize i AMB-INV-08, koje prazan
+    # identitet odbija kao nevezan dokument. Dok je provera stajala iza -08 bila je
+    # nedostizna i ova sabotaza nije obarala nista; tvrdnja nad errNum ostaje
+    # zelena i pod njom (-08 je druga brana).
     "amb-pisac-red-bez-dokumenta": (
         "modAmbalaza.bas",
         "    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then\n"
@@ -5332,7 +5336,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: red knjige sme bez identiteta dokumenta\n"
         "        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _\n",
         "Test_Amb_ZaglavljeDokumentaPisac",
-        "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)",
+        "Amb zaglavlje: kretanje bez identiteta odbija provera identiteta, ne AMB-INV-08",
     ),
     # Veza dokument <-> kretanje: NABAVKA okacena na revers izgleda kao uredan
     # zapis, pa je kapija jedini nacin da se vidi.
