@@ -822,11 +822,12 @@ broj **fizičkih jezgara**, ne RAM (jedan Excel sa test sveskom ~200 MB).
 Preporuka je jezgra − 1. Skaliranje za svoju mašinu izmeri jednom, istim skupom
 sa 1, 2, 3 i 5 radnika.
 
-**Poznata granica:** test #184 (`T_Backup_NeObaraStartINeRasteBezGranice`) piše
-u fiksni `%TEMP%\agrix_backup_test`. Dva radnika koji ga puste istovremeno mogu
-da se sudare. Dok ispravka ne prođe reprodukciju (CLAUDE.md §2), pun
-`RunAllTests` u više radnika nosi taj rizik. `--izbor` ga pušta samo kad je baš
-on ciljani test.
+**Test koji piše van svoje sveske ne sme u radnike.** Primer je #184
+(`T_Backup_NeObaraStartINeRasteBezGranice`). Pisao je u fiksni
+`%TEMP%\agrix_backup_test`, pa bi se dva radnika tu sudarila. Reprodukovano je
+17.11.2026: fajl tog imena podmetnut u `%TEMP%` obarao je test. Test sada piše
+pod `ThisWorkbook.path`, a to je privatni temp folder svakog run_vba poziva.
+Nov test koji piše fajlove ide istim putem, nikad u `%TEMP%` ni na fiksnu putanju.
 
 `run_vba.py` ovim dobija novi ugovor (N6): posle uvoza jedan pun prolaz vraća
 markere.
