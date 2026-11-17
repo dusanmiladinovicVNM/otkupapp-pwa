@@ -142,7 +142,8 @@ Public Sub RunBusinessFlowProSuite()
     BfpKorakPocni "SeedBusinessFlowProMasterData"
     SeedBusinessFlowProMasterData
 
-    ' Prvih 300 testova posle seed-a je u BfpDeo1..BfpDeo3, po 100, istim redom.
+    ' Prvih 301 poziv posle seed-a je u BfpDeo1..BfpDeo3, istim redom (BfpDeo1
+    ' nosi 101: S-4a je izvukao jedan test iz tela omotaca, da ga izbor vidi).
     ' Sa omotacem BfpIzabran telo vise ne staje u PROCEDURA_VELIKA (vba_check).
     ' Nov test se i dalje dopisuje OVDE, na kraj; kad suite opet predje prag,
     ' sledecih 100 poziva ide u nov BfpDeo. Da je svaki deo pozvan tacno jednom
@@ -298,6 +299,7 @@ Private Sub BfpDeo1()
     If BfpIzabran("Test_OtkupInputValidationHardening") Then Test_OtkupInputValidationHardening
     If BfpIzabran("Test_OtkupReadHelpersExcludeStornirano") Then Test_OtkupReadHelpersExcludeStornirano
     If BfpIzabran("Test_DokumentaInputValidationHardening") Then Test_DokumentaInputValidationHardening
+    If BfpIzabran("Test_PrijemnicaMissingZbirnaDoesNotAppend") Then Test_PrijemnicaMissingZbirnaDoesNotAppend
     If BfpIzabran("Test_DokumentaReadHelpersExcludeStornirano") Then Test_DokumentaReadHelpersExcludeStornirano
     If BfpIzabran("Test_MalinaVozacMirror") Then Test_MalinaVozacMirror
 
@@ -1129,7 +1131,9 @@ Private Sub Test_DokumentaInputValidationHardening()
 
     Test_InvalidZbirnaInvalidClassDoesNotAppend
     Test_InvalidPrijemnicaNegativeAmbalazaDoesNotAppend
-    Test_PrijemnicaMissingZbirnaDoesNotAppend
+    ' Test_PrijemnicaMissingZbirnaDoesNotAppend se pusta iz BfpDeo1, odmah posle
+    ' ovog omotaca, kroz BfpIzabran: pozvan odavde, izbor ga nije video, pa
+    ' njegova sabotaza nije mogla kroz izbor (S-4a).
 
     Exit Sub
 
@@ -18755,6 +18759,12 @@ Private Sub Test_S6K7_LanacBezKupcaNePise()
     Dim scenario As String, izvestaj As String, blok As String, r As String, nOtp As Long
     scenario = NewScenarioCode("S6K7KUP")
     prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke): izvestaj imenuje
+    ' kljuc kroz TEKST kataloga, a pusten SAM (izbor) test ne bi imao ko da ga
+    ' osvezi -- tvrdnja bi merila fixture, ne kod (S-4a). Tek POSLE citanja
+    ' prevKupac: EH vraca bas tu vrednost, a ne prazno.
+    modSetup.EnsurePoruke
 
     Set tx = New clsTransaction
     tx.BeginTx

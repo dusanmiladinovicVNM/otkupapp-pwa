@@ -11931,6 +11931,17 @@ SABOTAZE = {
         "T_AmbPoslovno_PokriceNijeZaduzenje",
         "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11",
     ),
+    # Isto pokvarena kartica (fizicka knjiga), ali merena na OTKUPU: posle S-4a
+    # T_AmbPoslovno_OtkupniListKaoKartica meri promet otkupa kao RAZLIKU kartice
+    # pre i posle, pa izmenjena tvrdnja dobija svoju sabotazu. Papir i knjiga
+    # ne citaju karticu, pa ranije tvrdnje testa prolaze.
+    "amb-posl-kartica-otkup-fizicki": (
+        "modIzvestaj.bas",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), True)\n    If Not IsArray(ambData) Then\n",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), False)   ' SABOTAZA: kartica otkupa iz fizicke knjige\n    If Not IsArray(ambData) Then\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "kartica ambalaze: promet otkupa je -5, isti kao na papiru",
+    ),
     # Kontra-stav se ne sudi po vrsti ORIGINALA: svaki storno postaje
     # tehnicki, pa storno povrata ne gasi poslovni promet dokumenta.
     "amb-posl-pokrice-po-vrsti": (
