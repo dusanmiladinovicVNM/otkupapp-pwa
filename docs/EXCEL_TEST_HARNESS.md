@@ -763,6 +763,30 @@ Tri zamke koje skripta rešava, i koje važe za svaki sličan zahvat nad izvorom
 3. **Vraćanje** — `git checkout --` briše i nesnimljene izmene koje sa sabotažom
    nemaju veze (jednom je pojelo test seam-ove). `--vrati` radi obrnutu zamenu.
 
+**`dokaz.py` ne piše `src-vba` (D-6).** Ručni dokaz iznad kvari radno stablo i
+vraća ga sa `--vrati`. `dokaz.py` radi drugačije:
+- Na početku preslika `src-vba/` u **snimak** u privremenom folderu.
+- Mutacije primenjuje u **kopiju** snimka, zamrznutim katalogom:
+  `sabotaza.py <ime> --src <kopija>`.
+- Excel uvozi baš tu kopiju (`run_vba.py --src <kopija>`).
+- Posle svakog prolaza kopiju vraća **iz snimka**, ne obrnutom zamenom.
+
+Posledice:
+- **Dok dokaz traje, možeš da radiš u repou**, a hook ostaje čist.
+- **Prekinut dokaz (Ctrl+C, pad) ne ostavlja pokvaren izvor.** `src-vba` nije ni
+  dirao, pa `--vrati` posle prekida više ne treba.
+- **Ostatak ručnog dokaza se odbija pre prve baze.** Ako u `src-vba` zatekne
+  primenjenu sabotažu, dokaz staje sa „ZATECEN SABOTIRAN": inače bi je snimak
+  poneo i svaka mutacija bi se merila nad njom. Prvo `--vrati`, pa dokaz.
+- **Dokaz meri snimak.** Ako se `src-vba` menjao tokom dokaza, red „radno stablo"
+  to kaže, a verdikt imenuje snimak: `DOKAZANO (…, snimak <potpis>)`.
+- **Marker zelenog** bazne suite nosi otisak *sadržaja* uvezene kopije. Zato važi
+  za `src-vba` tačno kad je sadržaj isti.
+
+Na `STOP` privremeni folder ostaje radi uvida (putanja je u izlazu), a inače se
+briše. `run_vba.py --src` menja ugovor alata (N6): posle uvoza ove izmene jedan
+pun prolaz vraća markere.
+
 `parse-cdate` pada na tvrdnji „godina van poslovnog opsega" (`11.08.1899`) —
 jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
 mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
