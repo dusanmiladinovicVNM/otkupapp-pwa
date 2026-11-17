@@ -11076,7 +11076,8 @@
      - **Kapije (docs-only):** `vba_check` čist (193), `who_writes --check` i `--check-ownership`,
        `gen_schema_module --check` (`A2A085EB`) zeleni. `popis_citalaca --check` pada do odluke o N17.
      - **Landing:** `#474` ide posle ovog PR-a i odluke o N17. `#457` je otvoren i u konfliktu sa `main`-om.
-       `#477` (samo dokumenti, `LZP-ODL-01..16`) je otvoren.
+       `#477` (samo dokumenti, `LZP-ODL-01..16`) je otvoren i nosi redosled „optimizacija testova → P1 → S9".
+       P1 dira `ReassignPrijemnicaToZbirna_TX` i Oporavak, kao i S9-4, pa posle njega S9-1 ponavlja merenja 1–3.
      - **Sledeći brojevi:** test 354 · stavka 329 · KI-097 · plan §14.65.
 
 329. **N17: prag `prj_brojzbirne` 35** (17.11.2026, operater: „Prag 35"). Plan §14.64, „Odluka operatera

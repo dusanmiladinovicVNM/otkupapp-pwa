@@ -11710,8 +11710,13 @@ promenio ga je `ObuhvatKooperantID`). **`popis_citalaca --check` pada** (N17).
 - `#474` (CI korak) se merge-uje posle ovog PR-a i posle odluke o N17. Do tada je crven;
 - `#457` je i dalje otvoren, sada u konfliktu sa `main`-om. `main` nosi testove do 353 (`RunOne`), a
   `#457` staje na 350, pa se brojevi testova S9 dodeljuju od stanja `main`-a pri rebase-u koda;
-- `#477` (samo dokumenti: plan izmene izdate zbirne i prijemnice, `LZP-ODL-01..16`) je otvoren i
-  najavljuje nov rad nad zbirnom i prijemnicom. S9-1 zato pre koda ponavlja merenja 1–3 odavde.
+- `#477` (samo dokumenti: plan izmene izdate zbirne i prijemnice, `LZP-ODL-01..16`) je otvoren. Nosi
+  odluku operatera od 17.11.2026 o redosledu: optimizacija testova → **P1 → S9** → R1 → R2 → R3, i
+  traži da prvi korak S9 bude ponovno merenje ovog pre-flight-a posle P1;
+- **P1 dira ono što meri S9:** `ReassignPrijemnicaToZbirna_TX` (dva mesta grupe `prj_brojzbirne`) i
+  listu ciljeva Oporavka. Istu funkciju i isti ekran menja i rez S9-4 (N7), pa P1 i S9-4 idu serijski.
+  Ako P1 uđe pre koda S9-1, S9-1 pre koda ponavlja merenja 1–3 odavde nad tadašnjim `main`-om. Kad
+  je `#474` u `main`-u, promenu broja mesta hvata već CI reza koji je pravi.
 
 #### Odluka operatera 17.11.2026 — N17 (`docs/STANJE_REFAKTORA.md` stavka 329)
 

@@ -655,7 +655,8 @@ i ne bira pogrešnu radnju; (3) dijalozi `PAZNJA` nad pravim prijemnicama i star
 - Ovde se ne dodeljuju KI, broj `modTest` testa ni stavka `STANJE_REFAKTORA.md`. Testovi
   `Test_LNC_Blok_*`, sabotaže `lncb-*`.
 - **S9:** ovaj rez ide pre S9, kao i §9. PR #469 posle preslaganja meri i koren LANAC čiji je par
-  otpremnica (`LNC-ODL-27`, `SLED-ODL-03`).
+  otpremnica (`LNC-ODL-27`, `SLED-ODL-03`). **Urađeno** 17.11.2026 (plan §14.64, „Preslaganje na
+  `6b601ee1`", merenje 5).
 - **Ispravka naziva (09.11.2026):** ovaj fajl je „Ispravi" izdate otpremnice zvao „F2 Ispravi";
   radnja stoji u F1, lista „Otpremnice" (`modScrDokumenti.bas:203-214`), pa je naziv ispravljen
   u §0, §3, §6, §7, §8.
