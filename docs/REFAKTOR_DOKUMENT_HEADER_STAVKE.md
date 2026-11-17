@@ -11764,13 +11764,14 @@ prošao bez konflikta, a svih šest commita ove grane je sadržajem isto. Excel 
 - `#477` i `#457` su u konfliktu sa `main`-om (`#477` u `docs/KNOWN_ISSUES.md`);
 - brojevi testova za kod S9 kreću od **356**.
 
-### 14.65) S9-1 — jezgro grafa sledljivosti (`modSledljivost`), ivice E1–E6 (17.11.2026)
+### 14.65) S9-1 — jezgro grafa sledljivosti (`modSledljivost`), ivice E1–E6, E9 i E10 (17.11.2026)
 
 > Grana `claude/s9-1-jezgro-grafa`, od `main` = `6d922fd3` (`#469` i `#474` su spojeni). Ugovor:
 > §14.64, „ACCEPTANCE CONTRACT — S9-1". Stanje: `docs/STANJE_REFAKTORA.md`, stavka 331.
 >
-> **Rez nije ceo.** Urađene su ivice E1–E6. Ivice E9 i E10 (GP lanac: prerada → utovar → GP
-> faktura) nisu, i ugovor S9-1 se ne zatvara dok one ne uđu. Spisak onoga što fali je na kraju.
+> **Rez je išao u dva dela.** Prvi deo (stavka 331) je dao ivice E1–E6. Drugi deo (stavka 332) je
+> dodao E9 i E10 (GP lanac: prerada → utovar → GP faktura), test verzija zbirne i pune suite; opisan
+> je u odeljku „Drugi deo" na kraju. Odeljci između opisuju stanje posle prvog dela.
 
 #### Merenje pre koda
 
@@ -11878,13 +11879,76 @@ puštene.
 | N18 | **F4 ne upisuje prijemnicu dok dve aktivne zbirne dele broj**, i kad se razlikuju po vozaču i kupcu. Poruka: „Pod tim brojem postoji više aktivnih zbirnih". Pisac zbirne takav drugi broj dozvoljava. Uzrok u kodu nije čitan | prvi prolaz testa 356, 17.11.2026 | ulaz za S9-3 (F4 bira zbirnu po broju, N4). Nije KI dok se uzrok ne pročita |
 | N19 | **Jezgro ne daje pojedinačne nalaze o pokvarenim redovima** za E1–E3, E5 i E6: dobija prvu poruku čitača i gasi ivicu. S9-5 je planirao `SLED-INV-01` „kroz jezgro" | odluka u rezu iznad; `KI-081` | S9-5 mora prvo da odluči: hardening strogih čitača po dokumentu (`KI-081`) ili provera koja nabraja redove van jezgra |
 
-#### Šta S9-1 još duguje
+#### Šta je S9-1 dugovao posle prvog dela
 
 - **E9 i E10 (GP lanac):** javni čitač E9 sa ID-em utovara (proširenje `modUtovar.UtovarenoPoPreradi`),
   ivice u jezgru, test „utovar delimično po kg, GP faktura nad utovarom" i njegova sabotaža;
-- **slučaj „ispravka zbirne"** (A13: stara verzija nije u aktivnom grafu, članstvo nove jeste) nema
-  svoj test. Pravilo drži strogi čitač E3, koji jezgro zove;
+- **slučaj „ispravka zbirne"** (A13: stara verzija nije u aktivnom grafu, članstvo nove jeste) nije
+  imao svoj test. Pravilo drži strogi čitač E3, koji jezgro zove;
 - **cela `RunAllTests`, BFP, Storno i Palete** i ručni Compile, pre merge-a.
+
+Sve tri stavke zatvara drugi deo, ispod.
+
+#### Drugi deo: GP lanac (E9, E10), verzije zbirne i pune suite (`docs/STANJE_REFAKTORA.md` stavka 332)
+
+**Šta je urađeno:**
+
+- **E9, prerada ↔ utovar po kg.** `modUtovar.UtovarenoPoPreradi` je dobio dva neobavezna izlaza: po
+  preradi spisak parova (utovar, kg), i razlog za nestorniranu stavku čiji utovar ne postoji. Zbir
+  koji čitaju mreža, pisac i storno je isti kao pre, i računa se u istom prolazu.
+- **E10, utovar → GP faktura.** `modUtovar.AktivnihFstZaUtovar` je dobio neobavezan izlaz: koje
+  fakture tvrde utovar svojim linijama. Jezgro vezu pravi tek kad se slažu tri stvari: marker na
+  utovaru (`Utovar.FakturaID`), te linije, i GP pravilo fakture (`modSEFMapper.GpFakturaRazlog`, isto
+  koje drži SEF kapija). Kad se ne slažu, utovar nosi razlog i ne vodi do fakture.
+- **Čvorovi:** prerada (`PRE`) i utovar (`UTV`). Prerada unapred nosi ukupno utovareno, a svaki
+  utovar ispod nje svoje kilograme. Od fakture unazad se dolazi do njenog utovara i do prerada sa
+  kilogramima tog utovara.
+- **GP lanac stoji za sebe** dok S9-7 ne doda E7 i E8: od prerade se ide do fakture i nazad, ali ne
+  do otkupa.
+
+**Testovi (`modTest`):**
+
+| Test | Šta meri |
+|---|---|
+| 360 `T_Sled_GpLanac` | Ista prerada ide na dva utovara (2 i 3 kg), svaki sa svojom fakturom. Svaki utovar nosi svoje kilograme; faktura unazad vodi samo do svog utovara. Utovar kome je obrisan marker fakture, a linije ga i dalje tvrde, nosi razlog i ne vodi do fakture |
+| 361 `T_Sled_StaraVerzijaNijeUGrafu` | Zbirna se stornira, a ista otpremnica ulazi u novu. U grafu je samo aktivna verzija; stornirana zbirna kao polazni čvor nosi status i ne vodi dalje |
+
+Prerada u testu 360 je iz fixture-a (`PRE-GP-W1`); utovari i fakture nastaju kroz
+`CreateUtovarSaFakturom_TX`, unutar transakcije koja se vraća.
+
+**Sabotaže:**
+
+| Sabotaža | Obara |
+|---|---|
+| `sled-e9-kg-zbir-prerade` | 360: svaki utovar nosi svoje kilograme, ne zbir prerade |
+| `sled-e10-veruje-markeru` | 360: utovar čiji marker i linije fakture ne govore isto je označen |
+| `sled-e3-bez-strogog-citaca` | 361: unapred od otkupa ide samo aktivna verzija zbirne |
+
+**Novi nalaz:**
+
+| # | Nalaz | Dokaz | Ishod |
+|---|---|---|---|
+| N20 | **E10 se potvrđuje po čvoru, ne u jednom prolazu.** Kanonski brojač i GP pravilo čitaju linije faktura za jedan utovar, odnosno jednu fakturu. Trag dodirne nekoliko utovara, pa cena nije merena kao problem; provera nad svim utovarima odjednom bi čitala tabelu linija po utovaru | `modSledljivost.FakturaUtovara` | S9-5 meri vreme pre nego što E10 uključi u integritet; zapremina GP linija i dalje nije izmerena (N13) |
+
+**Izvršeno nad konačnim izvorom drugog dela** (otisak `src-vba` `b78fbb13f956`):
+
+- Python koraci CI-ja: 21 / 21. `docs/DOMEN/WHO_WRITES.md` je regenerisan, jer test 360 snima tabele
+  utovara;
+- `vba_check`: čisto, 1392 sabotaže u katalogu;
+- ciljano, 356–361: 6 / 0;
+- `dokaz.py sled- s6k7-citac-prijemnica --izbor`: 11 / 11, „DOKAZANO (izbor)";
+- `dokaz.py modUtovar.bas --izbor`: 8 / 8. To su postojeće sabotaže modula čiji su čitači prošireni,
+  među njima tri nad `AktivnihFstZaUtovar`;
+- **pune suite, jedan prolaz:** `RunAllTests` 361 / 0 (na `main`-u 355, plus šest novih), BFP 3491 / 0
+  (isti broj provera kao na `main`-u posle `#484`), Storno 111 / 0, Palete zeleno (suite ne javlja
+  broj). Marker zelenog je upisan za sve četiri.
+
+**Nije izvršeno:** ručni Compile nad ovim izvorom (potvrda od 17.11. važi za `89eadfc0e930`, pre
+drugog dela); dokaz u redosledu cele suite (isti pozivi bez `--izbor`).
+
+**Ugovor S9-1 (§14.64) posle oba dela:** pokriveni su hod ivicama E1–E6, E9 i E10, nadskup, klasa,
+hladnjački lanac, verzije, GP lanac i svi navedeni negativi. Jedino odstupanje od slova ugovora je
+zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragove, N19 i `KI-081`).
 
 ## 15) Backlog — namerno van opsega
 
