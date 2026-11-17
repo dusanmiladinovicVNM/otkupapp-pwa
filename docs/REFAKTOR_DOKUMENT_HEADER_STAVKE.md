@@ -11866,6 +11866,11 @@ konflikta, oba commita sadržajem ista. `#484` nije dodao testove (`main` staje 
 356–359 stoje. Ponovljeno nad novom bazom: Python koraci CI-ja 21 / 21, `vba_check` čist (1389
 sabotaža u katalogu), 356–359 uz `T_S6K7_*` i 309 8 / 0, dokaz 8 / 8 (potpis `c2cd934f1b52b814`).
 
+**Ručni Compile: prošao** (operater, 17.11.2026, `Debug → Compile VBAProject`), nad izvorom commita
+`5064046f` (otisak `src-vba` `89eadfc0e930`). Glavni checkout je u tom trenutku bio na tom commitu,
+bez izmena u `src-vba`. Potvrda je upisana kroz `vba_gate --mark-compile`. Pune suite i dalje nisu
+puštene.
+
 #### Novi nalazi
 
 | # | Nalaz | Dokaz | Ishod |

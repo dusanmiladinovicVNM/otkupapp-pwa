@@ -11130,6 +11130,8 @@
        (automatska proba: „NEJASNO").
      - **Preslagano na `b7c376cb`** (posle `#484`): rebase bez konflikta, brojevi testova stoje. Ponovljeno:
        Python koraci CI-ja 21 / 21, ciljani testovi 8 / 0, dokaz 8 / 8 (potpis `c2cd934f1b52b814`).
+     - **Ručni Compile: prošao** (operater, 17.11.2026) nad izvorom commita `5064046f` (otisak `89eadfc0e930`).
+       Pune suite i dalje nisu puštene.
      - **Novi nalazi:** N18 (F4 ne upisuje prijemnicu dok dve aktivne zbirne dele broj; uzrok nije čitan) i
        N19 (jezgro ne nabraja pokvarene redove, pa S9-5 prvo odlučuje kako dolazi do pojedinačnih nalaza).
      - **Duguje se u S9-1:** E9 i E10 sa testom GP lanca; test „ispravka zbirne"; pune suite i Compile.
