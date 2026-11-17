@@ -1,4 +1,4 @@
-"""Headless VBA runner za AgriX OtkupApp: import src-vba -> compile -> test suite.
+"""Headless VBA runner za AgriX OtkupApp: import src-vba -> test suite (compile proba samo uz --compile-only).
 
 Radi SAMO na Windows masini sa instaliranim Excelom (COM). Na macOS/Linux nema
 VBProject COM interfejsa -- VBA sesije se vode na Windows kutiji.
@@ -11,7 +11,13 @@ Upotreba:
     python tools/run_vba.py --compile-only          # samo import + compile (najbrze, najstabilnije)
     python tools/run_vba.py                         # + podrazumevani set suite-ova
     python tools/run_vba.py --suite RunIzvestajTests
+    python tools/run_vba.py --suite RunAllTests --test T_ParseDatum_Ugovor   # samo ti testovi
     python tools/run_vba.py --all
+
+Izbor testova (`--test`, moze vise puta) pusta samo imenovane testove JEDNE
+suite, u njenom redosledu, kroz ulaznu tacku iz kljuca `izbor` u SUITES. Takav
+prolaz NIJE dokaz cele suite: marker zelenog se ne upisuje (vba_gate). Uz svaki
+prolaz se ispisuju najsporiji testovi (VREME), iz `<rezultat>_vreme.txt`.
     python tools/run_vba.py --workbook "C:\\putanja\\AgriX_OtkupApp.xlsm"
 
 Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`. Ako ga nema,
@@ -22,7 +28,8 @@ samo sinteticke podatke, a suite koje diraju tabele ionako seju sebi svoje
 im NIJE potrebna. Sveska se uvek kopira u temp, original se ne dira.
 Detalji: docs/EXCEL_TEST_HARNESS.md.
 
-Izlazni kod: 0 = zeleno, 2 = palo (compile greska, pala suite, ili neocekivan dijalog).
+Izlazni kod: 0 = zeleno, 2 = palo (pala suite, Excel ubijen -- FATAL, ili uz
+--compile-only compile greska / NEJASNO).
 
 Zasto ovaj skript NE zove `ImportAllVBA`:
   - `modVbaTools.ImportAllVBA` ima hardkodiran folder
@@ -41,6 +48,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -60,8 +68,13 @@ import time
 SUITES = {
     # Verdikt NE dolazi iz toga da li Run() pukne (modTest hvata gresku po testu
     # da jedan pad ne obori ostale), nego iz last_run.txt pored sveske.
+    #
+    # `izbor` = ulazna tacka koja prima spisak testova ("T_A,T_B") i pusta samo
+    # njih, u redosledu suite-a, sa istim rezultat-fajlom. Samo suite koje je
+    # imaju primaju `--test`.
     "RunAllTests":              {"gate": True,  "dialogs": False, "default": True,
-                                 "result_file": "last_run.txt"},
+                                 "result_file": "last_run.txt",
+                                 "izbor": "RunAllTestsIzbor"},
     "RunIzvestajTests":         {"gate": True,  "dialogs": False, "default": True},
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
     # Detalji pada ove suite ne prezive COM granicu (opis greske stigne kao golo
@@ -82,7 +95,8 @@ SUITES = {
     # Pad ove suite stize kao Err.Raise iz EndRun, pa opis ne prezivi COM
     # granicu -- ime pale tvrdnje se cita iz fajla, kao kod banke.
     "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True,
-                                 "result_file": "last_run_bfp.txt"},
+                                 "result_file": "last_run_bfp.txt",
+                                 "izbor": "RunBusinessFlowProIzbor"},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     # Golden poslovni scenariji: mere ISHOD, ne strukturu. Svaki radi u
     # transakciji i rollback-uje se, pa je drugi prolaz identican prvom.
@@ -165,12 +179,15 @@ def _read_test_results(wbdir: str, report: dict,
 # koji je inace jedini nacin da VBE prijavi neuspeh kompajliranja.
 
 class DialogWatchdog(threading.Thread):
-    def __init__(self, pid: int, poll: float = 0.4):
+    def __init__(self, pid: int, poll: float = 0.4, na_dijalog=None):
         super().__init__(daemon=True)
         self.pid = pid
         self.poll = poll
         self.seen: list[str] = []
         self._stop = threading.Event()
+        # Javlja se tekst SVAKOG dijaloga (v. Prekid.dijalog): koban dijalog
+        # skracuje cekanje na Excel, ostali ne menjaju nista.
+        self.na_dijalog = na_dijalog
 
     def stop(self) -> None:
         self._stop.set()
@@ -203,6 +220,11 @@ class DialogWatchdog(threading.Thread):
         for hwnd in targets:
             text = self._dialog_text(win32gui, hwnd)
             self.seen.append(text)
+            if self.na_dijalog is not None:
+                try:
+                    self.na_dijalog(text)
+                except Exception:
+                    pass
             self._click_default(win32gui, hwnd)
 
     @staticmethod
@@ -315,8 +337,8 @@ def _has_vb_header(path: str) -> bool:
     return "Attribute VB_Name" in first or first.lstrip().upper().startswith("VERSION")
 
 
-def report_orphan_components(wb, log: list[str]) -> None:
-    """Moduli koji postoje u svesci a NEMA ih u src-vba/.
+def report_orphan_components(wb, log: list[str], src: str = SRC_VBA) -> None:
+    """Moduli koji postoje u svesci a NEMA ih u src-vba/ (ili u `--src`).
 
     Import prepisuje samo ono sto repo ima; zaostao modul iz donora ostaje i
     izvrsava se. Ako nosi Public ime koje postoji i u svezem kodu, VBA to vidi kao
@@ -329,7 +351,7 @@ def report_orphan_components(wb, log: list[str]) -> None:
     """
     STD, CLS, FRM = 1, 2, 3          # vbext_ct_StdModule / ClassModule / MSForm
     have = {os.path.splitext(n)[0].lower()
-            for n in os.listdir(SRC_VBA)
+            for n in os.listdir(src)
             if os.path.splitext(n)[1] in (".bas", ".cls", ".frm")}
 
     orphans = []
@@ -350,9 +372,14 @@ def report_orphan_components(wb, log: list[str]) -> None:
                    f"(mogu da daju 'Ambiguous name'): " + ", ".join(sorted(orphans)))
 
 
-def import_src_vba(wb, log: list[str]) -> None:
+def import_src_vba(wb, log: list[str], src: str = SRC_VBA) -> None:
+    """Uvezi izvor iz `src` (podrazumevano src-vba/).
+
+    `src` drugaciji od src-vba daje dokaz.py (D-6): mutacija se primenjuje u
+    njegovoj kopiji izvora, pa radno stablo tokom dokaza niko ne pise.
+    """
     proj = wb.VBProject
-    files = sorted(os.listdir(SRC_VBA))
+    files = sorted(os.listdir(src))
 
     # 1) document moduli (.doccls) -- kod se MERGE-uje u postojecu komponentu
     #
@@ -372,7 +399,7 @@ def import_src_vba(wb, log: list[str]) -> None:
         cm = vbc.CodeModule
         if cm.CountOfLines > 0:
             cm.DeleteLines(1, cm.CountOfLines)
-        cm.AddFromString(_read_code_body(os.path.join(SRC_VBA, name)))
+        cm.AddFromString(_read_code_body(os.path.join(src, name)))
 
     if missing:
         log.append(f"SKIP {len(missing)} .doccls (nema komponente u svesci): "
@@ -385,9 +412,9 @@ def import_src_vba(wb, log: list[str]) -> None:
             continue
         if base.lower() == SELF_MODULE.lower():
             continue
-        path = os.path.join(SRC_VBA, name)
+        path = os.path.join(src, name)
 
-        if ext == ".frm" and not os.path.exists(os.path.join(SRC_VBA, base + ".frx")):
+        if ext == ".frm" and not os.path.exists(os.path.join(src, base + ".frx")):
             log.append(f"SKIP {name} (nema .frx para)")
             continue
 
@@ -444,19 +471,30 @@ def self_test() -> int:
     kraj = sopstveni.find("\ndef ", poc + 1)
     tudje = sopstveni[:poc] + sopstveni[kraj if kraj > 0 else len(sopstveni):]
     for tekst, opis in (
-            ('_gate.snimi_kontekst(sveska=fixture,\n'
+            ('_gate.snimi_kontekst(src_dir=src, sveska=fixture,\n'
              '                                               sveska_hes_iz=wbpath)',
              "main() ne snima kontekst dokaza PRE run-a, nad temp kopijom "
-             "sveske"),
+             "sveske i nad izvorom koji se stvarno uvozi (--src)"),
             ('_gate.zabelezi_prolaz(\n'
-             '                report, rc, args.no_import, kontekst=kontekst_dokaza)',
-             "main() ne predaje SNIMLJEN kontekst, nego pusta da se otisci "
-             "racunaju na kraju run-a"),
+             '                report, rc, args.no_import, kontekst=kontekst_dokaza, src_dir=src)',
+             "main() ne predaje SNIMLJEN kontekst, ili marker racuna otisak nad "
+             "src-vba umesto nad uvezenim izvorom (--src)"),
+            ('import_src_vba(wb, report["import"], src)\n'
+             '            report_orphan_components(wb, report["import"], src)',
+             "main() uvozi src-vba umesto izvora iz --src (D-6: dokaz bi merio "
+             "radno stablo, ne svoju kopiju)"),
+            ('    src, razlog = izvor_iz_argumenata(args)',
+             "main() ne proverava --src pre Excela"),
             ('lines.append(f"GREEN   {report[\'green\']}")',
              "izvestaj ne ispisuje red GREEN -- upis markera bi bio nevidljiv"),
     ):
         if tekst not in tudje:
             leaks.append("WIRE-UP: " + opis)
+
+    leaks.extend(_self_test_izbor(tudje))
+    leaks.extend(_self_test_prekid(tudje))
+    leaks.extend(_self_test_src())
+    leaks.extend(_self_test_radnici(tudje))
 
     for line in leaks:
         print(line, file=sys.stderr)
@@ -465,6 +503,313 @@ def self_test() -> int:
         return 2
     print(f"self-test: cisto ({checked} .doccls fajlova + wire-up markera).")
     return 0
+
+
+def _self_test_prekid(tudje: str) -> list:
+    """Prekid po fazi, koban dijalog, compile proba, istorija, --bez-markera.
+
+    Sve bez Excela: Prekid dobija lazne tajmere i laznu funkciju ubijanja, pa se
+    redosled (nova faza -> pun budzet; koban dijalog -> KOBAN_SEKUNDI, jednom)
+    meri bez cekanja. Da ga main() zaista koristi tvrdi se nad izvorom.
+    """
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("PREKID: " + opis)
+
+    # Igla ne sme da pogodi sebe (v. self_test).
+    poc = tudje.find("def _self_test_prekid(")
+    kraj = tudje.find("\ndef ", poc + 1)
+    tudje = tudje[:poc] + tudje[kraj if kraj > 0 else len(tudje):]
+
+    # --- koban dijalog, u oba smera -------------------------------------------
+    for tekst in ("Microsoft Visual Basic for Applications | Compile error: | Syntax error",
+                  "Microsoft Visual Basic | Run-time error '9': | Subscript out of range",
+                  "Microsoft Visual Basic for Applications | Compile error: | "
+                  "Variable not defined"):
+        tvrdi(koban_dijalog(tekst), "koban dijalog nije prepoznat: %r" % tekst)
+    for tekst in ("AgriX | Business Flow Pro tests finished. | RunID=1 | Failed=0",
+                  "Microsoft Excel | Want to save your changes to 'otkup_test.xlsm'?",
+                  "AgriX | Pokrenuti test suite? Greske u podacima se vracaju.", ""):
+        tvrdi(not koban_dijalog(tekst), "obican dijalog proglasen kobnim: %r" % tekst)
+
+    # --- Prekid, sa laznim tajmerima ------------------------------------------
+    svi = []
+
+    class LazniTajmer:
+        def __init__(self, sekundi, fn):
+            self.sekundi, self.fn, self.otkazan, self.daemon = sekundi, fn, False, False
+            svi.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.otkazan = True
+
+    ubijeni = []
+
+    def lazno_ubij(pid, flag):
+        flag["fired"] = True
+        ubijeni.append(pid)
+
+    KOBAN = "Microsoft Visual Basic for Applications | Compile error: | Syntax error"
+    pr = Prekid(77, 1800.0, ubij=lazno_ubij, tajmer=LazniTajmer)
+    pr.naoruzaj("priprema")
+    pr.naoruzaj("RunAllTests")
+    tvrdi(len(svi) == 2 and svi[0].otkazan and not svi[1].otkazan
+          and svi[1].sekundi == 1800.0,
+          "nova faza ne otkazuje prethodni tajmer ili ne dobija pun budzet")
+    pr.dijalog("AgriX | Business Flow Pro tests finished.")
+    tvrdi(len(svi) == 2, "obican dijalog menja prekid")
+    pr.dijalog(KOBAN)
+    tvrdi(len(svi) == 3 and svi[1].otkazan and svi[2].sekundi == KOBAN_SEKUNDI,
+          "koban dijalog ne skracuje cekanje na KOBAN_SEKUNDI")
+    pr.dijalog(KOBAN)
+    tvrdi(len(svi) == 3,
+          "isti koban dijalog u sledecem obilasku pomera prekid (nikad ne bi okinuo)")
+    if len(svi) >= 3:
+        svi[2].fn()
+    tvrdi(ubijeni == [77] and pr.stanje["fired"] and pr.stanje["faza"] == "RunAllTests"
+          and "Syntax error" in pr.stanje["dijalog"],
+          "okinut prekid ne ubija proces ili ne belezi fazu i dijalog")
+    tvrdi("RunAllTests" in poruka_prekida(pr.stanje)
+          and "Syntax error" in poruka_prekida(pr.stanje),
+          "FATAL posle kobnog dijaloga ne imenuje fazu i dijalog")
+    # Izmereno 16.11.2026: VBA tekst dijaloga nosi prelome ("Compile error:\n\n
+    # Syntax error"), a dokaz.py cita samo red FATAL -- razlog mora biti u njemu.
+    lomljen = dict(pr.stanje, dijalog="Microsoft Visual Basic for Applications | "
+                                      "Compile error:\r\n\r\nSyntax error")
+    tvrdi("\n" not in poruka_prekida(lomljen)
+          and "Compile error: Syntax error" in poruka_prekida(lomljen),
+          "FATAL sa lomljenim tekstom dijaloga nije u jednom redu")
+    pr.naoruzaj("RunBusinessFlowProSuite")
+    tvrdi(svi[-1].sekundi == 1800.0 and not svi[-1].otkazan,
+          "posle kobnog dijaloga sledeca faza ne dobija pun budzet")
+    svi[-1].fn()
+    tvrdi(pr.stanje["faza"] == "RunAllTests" and "Syntax error" in pr.stanje["dijalog"],
+          "drugo okidanje brise PRVI uzrok iz FATAL poruke")
+    n = len(svi)
+    pr.dijalog(KOBAN)
+    tvrdi(len(svi) == n + 1 and svi[-1].sekundi == KOBAN_SEKUNDI,
+          "u novoj fazi koban dijalog vise ne skracuje cekanje")
+    pr.stop()
+    tvrdi(svi[-1].otkazan, "stop ne otkazuje tajmer")
+    # Zaustavljen prekid (kraj run-a) se ne naoruzava ni na koban dijalog. Meri
+    # se nad SVEZIM prekidom: kod `pr` je oznaka kobnog dijaloga vec upaljena,
+    # pa bi odbijanje dolazilo od nje, ne od zaustavljanja.
+    pr2 = Prekid(78, 1800.0, ubij=lazno_ubij, tajmer=LazniTajmer)
+    pr2.naoruzaj("zatvaranje")
+    pr2.stop()
+    n = len(svi)
+    pr2.dijalog(KOBAN)
+    tvrdi(len(svi) == n, "zaustavljen prekid se ponovo naoruzava na dijalog")
+    istekao = {"fired": True, "faza": "RunBusinessFlowProSuite", "dijalog": "",
+               "sekundi": 1800.0}
+    tvrdi("RunBusinessFlowProSuite" in poruka_prekida(istekao)
+          and "--timeout" in poruka_prekida(istekao),
+          "FATAL za istekao budzet ne imenuje fazu")
+
+    # --- istorija prolaza ----------------------------------------------------
+    tmp = tempfile.mkdtemp(prefix="runvba_ist_")
+    try:
+        put = os.path.join(tmp, "istorija.jsonl")
+        izv = {"faze": [{"ime": "uvoz src-vba", "sekundi": 6.5}],
+               "suites": [{"name": "RunAllTests", "status": "OK", "seconds": 230.9,
+                           "gate": True}]}
+        for _ in range(2):
+            dopisi_istoriju(izv, 0, ["--suite", "RunAllTests"], time.time() - 5, "abc",
+                            put=put)
+        with open(put, encoding="utf-8") as fh:
+            redovi = fh.read().splitlines()
+        poslednji = json.loads(redovi[-1]) if redovi else {}
+        tvrdi(len(redovi) == 2 and poslednji.get("faze") == izv["faze"]
+              and poslednji.get("izvor") == "abc"
+              and poslednji.get("suite") == [{"name": "RunAllTests", "status": "OK",
+                                              "seconds": 230.9}],
+              "istorija ne dopisuje red sa fazama, suitama i izvorom")
+        tvrdi(dopisi_istoriju(izv, 0, [], time.time(), "",
+                              put=os.path.join(put, "pod_fajlom.jsonl")) != "",
+              "neuspeo upis istorije se ne prijavljuje")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    tvrdi(parse_args(["--bez-markera"]).bez_markera, "nema argumenta --bez-markera")
+
+    # --- wire-up u main() -----------------------------------------------------
+    for tekst, opis in (
+            ('        if args.compile_only:\n'
+             '            report["compile"] = compile_project(xl, wb, watchdog)',
+             "compile proba se ne vezuje za --compile-only"),
+            ("na_dijalog=prekid.dijalog)", "watchdog ne javlja dijaloge prekidu"),
+            ("                    self.na_dijalog(text)\n",
+             "watchdog ne zove na_dijalog za vidjen dijalog"),
+            ("                prekid.naoruzaj(suite)\n",
+             "suite ne dobija svoj budzet (prekid bi merio ceo prolaz)"),
+            ("        if args.bez_markera:\n", "--bez-markera ne sprecava upis markera"),
+            ('report["fatal"] = poruka_prekida(prekid.stanje)',
+             "FATAL ne dolazi iz Prekid.stanje"),
+            ("    dopisi_istoriju(report, rc, argv, pocetak,", "main ne dopisuje istoriju"),
+            ('        report["faze"] = faze\n', "izvestaj ne nosi faze"),
+    ):
+        tvrdi(tekst in tudje, opis)
+    tvrdi(tudje.count("compile_project(") - tudje.count("def compile_project(") == 1,
+          "compile_project se zove i van --compile-only")
+    return nalazi
+
+
+def _vba_telo(fajl: str, zaglavlje: str) -> list:
+    """Logicki redovi tela procedure (bez komentara i praznih), ili [] ako je nema."""
+    with io.open(os.path.join(SRC_VBA, fajl), encoding="ascii",
+                 errors="replace", newline="") as fh:
+        redovi = fh.read().replace("\r\n", "\n").split("\n")
+    out, unutra = [], False
+    for red in redovi:
+        s = red.strip()
+        if not unutra:
+            unutra = s.startswith(zaglavlje)
+            continue
+        if s.startswith("End Sub"):
+            break
+        if s and not s.startswith("'"):
+            out.append(s)
+    return out
+
+
+def _self_test_izbor(tudje: str) -> list:
+    """Izbor testova (`--test`) i vreme po testu -- provere bez Excela.
+
+    Najopasniji kvar izbora je TIH: izbor koji prezivi prolaz pretvara sledeci
+    pun run u deo suite-a, zelen. VBA test (T_TestIzbor_TacnoImeIJednokratno)
+    meri pravilo, ali ne moze da izmeri da ga ulazna tacka ZOVE -- radi usred
+    tog istog prolaza. Zato se poziv tvrdi ovde, nad izvorom.
+    """
+    nalazi = []
+
+    # Igla ne sme da pogodi sebe (v. self_test): tekstovi koji se traze stoje i
+    # u OVOJ funkciji, kao literali, pa se njeno telo izbacuje iz pretrage.
+    poc = tudje.find("def _self_test_izbor(")
+    kraj = tudje.find("\ndef ", poc + 1)
+    if poc >= 0:
+        tudje = tudje[:poc] + (tudje[kraj:] if kraj > 0 else "")
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("IZBOR: " + opis)
+
+    # --- kombinacije argumenata, svaka u oba smera ---------------------------
+    def problem(*argv):
+        # Pad je NALAZ po imenu, ne traceback: pukla provera bi u izlazu nosila
+        # i tekst tvrdnje (iz ispisa izvornog reda), pa bi se cinilo da je pala
+        # bas ona.
+        try:
+            return problem_izbora(parse_args(list(argv)))
+        except Exception as exc:            # noqa: BLE001
+            nalazi.append("IZBOR: problem_izbora puca za %s -- %r" % (argv, exc))
+            return "PUKAO"
+
+    tvrdi(problem() == "", "run bez --test ima problem izbora")
+    tvrdi(problem("--suite", "RunAllTests", "--test", "T_A") == "",
+          "valjan izbor (jedna suite sa `izbor`) se odbija")
+    tvrdi("TACNO JEDNU" in problem("--test", "T_A"),
+          "--test bez --suite se prihvata")
+    tvrdi(problem("--suite", "RunAllTests", "--suite", "RunGoldenSuite",
+                  "--test", "T_A") != "", "--test uz DVE suite se prihvata")
+    tvrdi(problem("--all", "--suite", "RunAllTests", "--test", "T_A") != "",
+          "--test uz --all se prihvata")
+    tvrdi(problem("--suite", "RunIzvestajTests", "--test", "T_A") != "",
+          "--test nad suite BEZ ulazne tacke izbora se prihvata")
+    tvrdi(problem("--compile-only", "--suite", "RunAllTests", "--test", "T_A") != "",
+          "--test uz --compile-only se prihvata")
+    tvrdi(problem("--suite", "RunAllTests", "--test", " , ") != "",
+          "--test bez ijednog imena se prihvata")
+    tvrdi(izabrani_testovi(parse_args(["--test", "T_A, T_B", "--test", "T_A"]))
+          == ["T_A", "T_B"], "spisak testova se ne cisti (razmaci, duplikati)")
+    for ime, meta in SUITES.items():
+        if meta.get("izbor") and not meta.get("result_file"):
+            tvrdi(False, "suite %s ima `izbor` bez result_file -- izbor ne bi "
+                         "imao gde da procita koji je test pao" % ime)
+
+    # --- vreme po testu --------------------------------------------------------
+    tvrdi(vreme_fajl("last_run_bfp.txt") == "last_run_bfp_vreme.txt",
+          "ime fajla vremena ne prati rezultat-fajl")
+    tmpd = tempfile.mkdtemp(prefix="vreme_")
+    try:
+        put = os.path.join(tmpd, "v.txt")
+        with open(put, "w", encoding="utf-8", newline="") as fh:
+            # Str$ u VBA pise ".123" (bez nule), red na kraju nema TAB-ove.
+            fh.write(".123\tOK\tT_A\n12.5\tFAIL\tT_B\nnije broj\tOK\tT_C\nsmece\n")
+        tvrdi(procitaj_vreme(put) == [(12.5, "FAIL", "T_B"), (0.123, "OK", "T_A")],
+              "vreme se ne cita kako ga VBA pise (ili nije sortirano)")
+        tvrdi(procitaj_vreme(os.path.join(tmpd, "nema.txt")) == [],
+              "nepostojeci fajl vremena obara run")
+    finally:
+        shutil.rmtree(tmpd, ignore_errors=True)
+
+    # --- wire-up u ovom alatu ---------------------------------------------------
+    for tekst, opis in (
+            ("razlog = problem_izbora(args)", "main() ne proverava kombinaciju --test"),
+            ("xl.Run(f\"'{wb.Name}'!{meta['izbor']}\", \",\".join(testovi))",
+             "main() ne zove ulaznu tacku izbora sa spiskom testova"),
+            ('entry["izbor"] = testovi',
+             "izvestaj ne oznacava izbor -- vba_gate bi upisao marker cele suite"),
+    ):
+        tvrdi(tekst in tudje, opis)
+
+    # --- wire-up u VBA izvoru ---------------------------------------------------
+    run_all = _vba_telo("modTest.bas", "Public Sub RunAllTests()")
+    prvi_run = next((i for i, r in enumerate(run_all) if r.startswith("RunOne ")), -1)
+    preuzmi = next((i for i, r in enumerate(run_all)
+                    if r == "m_Izbor = PreuzmiIzbor(m_IzborZahtev)"), -1)
+    tvrdi(0 <= preuzmi < prvi_run,
+          "RunAllTests ne preuzima (i ne brise) izbor PRE prvog RunOne")
+    tvrdi("If Not TestIzabran(nm) Then Exit Sub"
+          in _vba_telo("modTest.bas", "Private Sub RunOne("),
+          "RunOne ne pita TestIzabran -- izbor bi pustio sve testove")
+
+    bfp = _vba_telo("modBusinessFlowProTests.bas",
+                    "Public Sub RunBusinessFlowProSuite()")
+    tvrdi(bfp[:1] == ["m_BfpIzbor = BfpPreuzmiIzbor(m_BfpIzborZahtev)"],
+          "RunBusinessFlowProSuite ne preuzima izbor kao PRVU naredbu")
+    # Telo suite je podeljeno na BfpDeo1..N (PROCEDURA_VELIKA). Deo koji suite
+    # ne pozove TIHO izbaci stotinu testova -- VBA nepozvan Private Sub ne
+    # prijavljuje, a suite ostaje zelena. Zato: svaki definisan deo je pozvan
+    # tacno jednom, redom, a deo nosi samo pozive kroz BfpIzabran.
+    with io.open(os.path.join(SRC_VBA, "modBusinessFlowProTests.bas"),
+                 encoding="ascii", errors="replace") as fh:
+        bfp_izvor = fh.read()
+    definisani = sorted(int(n) for n in
+                        re.findall(r"(?im)^Private Sub BfpDeo(\d+)\(\)", bfp_izvor))
+    pozvani = [int(r[len("BfpDeo"):]) for r in bfp if re.fullmatch(r"BfpDeo\d+", r)]
+    tvrdi(pozvani == definisani == list(range(1, len(definisani) + 1)),
+          "RunBusinessFlowProSuite ne zove svaki BfpDeoN tacno jednom i redom "
+          "(definisani %s, pozvani %s) -- nepozvan deo tiho izbaci svoje testove"
+          % (definisani, pozvani))
+    telo_delova = []
+    for n in definisani:
+        telo_delova += _vba_telo("modBusinessFlowProTests.bas",
+                                 "Private Sub BfpDeo%d()" % n)
+    tudje_u_delu = [r for r in telo_delova
+                    if not re.fullmatch(r'If BfpIzabran\("(Test_\w+)"\) Then \1', r)]
+    tvrdi(not tudje_u_delu,
+          "BfpDeoN nosi nesto osim poziva `If BfpIzabran(\"Test_X\") Then "
+          "Test_X`: %s" % ", ".join(tudje_u_delu[:3]))
+    gole = [r for r in bfp + telo_delova if re.fullmatch(r"Test_\w+", r)]
+    tvrdi(not gole,
+          "RunBusinessFlowProSuite zove test mimo BfpIzabran (izbor ga ne bi "
+          "preskocio, a vreme bi pripisao tudjem koraku): %s -- pisi "
+          "`If BfpIzabran(\"Test_X\") Then Test_X`" % ", ".join(gole[:5]))
+    # Ime u izboru i pozvan test moraju biti isti: `If BfpIzabran("Test_A")
+    # Then Test_B` bi za izbor Test_A pustio Test_B, a Test_B ne bi pustio nikad.
+    razliciti = []
+    for r in bfp + telo_delova:
+        m = re.fullmatch(r'If BfpIzabran\("(\w+)"\) Then (\w+)', r)
+        if m and m.group(1) != m.group(2):
+            razliciti.append(r)
+    tvrdi(not razliciti,
+          "BfpIzabran pita za jedan test, a zove drugi: %s" % ", ".join(razliciti[:3]))
+    return nalazi
 
 
 def _terminate_pid(pid: int, flag: dict) -> None:
@@ -477,6 +822,89 @@ def _terminate_pid(pid: int, flag: dict) -> None:
         win32api.TerminateProcess(h, 0)
     except Exception:
         pass
+
+
+# --- tvrdi prekid PO FAZI (KI-096) -------------------------------------------
+#
+# Budzet `--timeout` vazi za svaku fazu posebno: priprema (otvaranje, uvoz,
+# sema), pa svaka suite, pa zatvaranje. Jedan tajmer za ceo poziv je obarao
+# zdrav pun prolaz (BFP 688 s posle RunAllTests-a od 228 s, a granica je bila
+# 600 s), uz FATAL poruku koja upucuje na break mode.
+#
+# KOBAN DIJALOG skracuje cekanje. Posle "Compile error" ili "Run-time error"
+# Excel se ili vrati za nekoliko sekundi (watchdog je kliknuo End ili OK), ili
+# je VBE u break mode-u i nece se vratiti nikad. Bez ovoga je takav prolaz visio
+# do kraja budzeta -- 06.10.2026 je to bilo 585 s za "Syntax error" bez mesta,
+# a sa danasnjih 1800 s bilo bi pola sata -- i poruka nije imenovala dijalog.
+_KOBAN_DIJALOG = re.compile(r"compile error|run-time error|syntax error|"
+                            r"fehler beim kompilieren|laufzeitfehler", re.IGNORECASE)
+KOBAN_SEKUNDI = 15.0
+
+
+def koban_dijalog(tekst: str) -> bool:
+    """Da li je dijalog znak da je VBA stao (compile ili runtime greska)."""
+    return bool(_KOBAN_DIJALOG.search(tekst or ""))
+
+
+class Prekid:
+    """Tvrdi prekid sa budzetom po fazi i skracenim cekanjem posle kobnog dijaloga.
+
+    `stanje` je i zastavica za _terminate_pid ("fired"), i zapis za FATAL
+    poruku: u kojoj fazi, posle kog dijaloga i posle koliko sekundi.
+    `ubij` i `tajmer` su parametri samo zbog self-testa (bez Excela i bez cekanja).
+    """
+
+    def __init__(self, pid, budzet: float, ubij=None, tajmer=None):
+        self.pid = pid
+        self.budzet = budzet
+        self._ubij = ubij or _terminate_pid
+        self._tajmer = tajmer or threading.Timer
+        self._lock = threading.Lock()
+        self._t = None
+        self._koban = False
+        self.faza = ""
+        self.stanje = {"fired": False, "faza": "", "dijalog": "", "sekundi": 0.0}
+
+    def _pokreni(self, sekundi: float, dijalog: str = "") -> None:
+        if self._t is not None:
+            self._t.cancel()
+        faza = self.faza
+
+        def okini():
+            # Belezi se PRVI uzrok: posle ubijanja i sledeca faza moze da istekne,
+            # a FATAL treba da imenuje fazu u kojoj je Excel stvarno stao.
+            if not self.stanje["fired"]:
+                self.stanje.update(faza=faza, dijalog=dijalog, sekundi=sekundi)
+            self._ubij(self.pid, self.stanje)
+
+        self._t = self._tajmer(sekundi, okini)
+        self._t.daemon = True
+        self._t.start()
+
+    def naoruzaj(self, faza: str) -> None:
+        """Nova faza dobija pun budzet; skraceno cekanje iz prethodne se brise."""
+        with self._lock:
+            self.faza = faza
+            self._koban = False
+            self._pokreni(self.budzet)
+
+    def dijalog(self, tekst: str) -> None:
+        """Zove ga watchdog za SVAKI dijalog. Skracuje cekanje samo za koban, i
+        samo jednom po fazi: dijalog koji se ne zatvori vidi se u svakom obilasku,
+        pa bi ponovno naoruzavanje pomeralo prekid unedogled."""
+        if not koban_dijalog(tekst):
+            return
+        with self._lock:
+            if self._t is None or self._koban:
+                return
+            self._koban = True
+            self._pokreni(KOBAN_SEKUNDI, tekst)
+
+    def stop(self) -> None:
+        with self._lock:
+            if self._t is not None:
+                self._t.cancel()
+            self._t = None
 
 
 # --- Compile ------------------------------------------------------------------
@@ -691,6 +1119,372 @@ def create_blank_fixture(path: str, win32) -> None:
         pythoncom.CoUninitialize()
 
 
+# --- radnici (R-4): izlaz, brave, proces ---------------------------------------
+#
+# Vise run_vba poziva u isto vreme (dokaz.py --radnika N) ne sme da deli NISTA
+# sto pise ili ubija:
+#   --izlaz DIR    izvestaj (last_run.*), istorija i excel.pid idu u DIR, a DIR
+#                  je ZAKLJUCAN dok poziv traje: drugi poziv sa istim izlazom se
+#                  odbija PRE Excela (IZLAZ ZAUZET), umesto da tiho ispreplete
+#                  izvestaje. Bez --izlaz je to tests/, i brava vazi i tu -- dva
+#                  rucna poziva istovremeno su ranije tiho mesala last_run.*.
+#   start brava    DispatchEx i otvaranje sveske idu JEDAN PO JEDAN na celoj
+#                  masini: istovremen start vise Excel-a preko COM-a ume da
+#                  odbije poziv (RPC_E_CALL_REJECTED).
+#   handle procesa Excel se ceka i ubija preko handle-a uzetog odmah posle
+#                  starta, ne preko PID-a: posle izlaska PID moze vec da pripada
+#                  Excel-u drugog radnika.
+IZLAZ_PODRAZUMEVANO = os.path.join(ROOT, "tests")
+ISTORIJA_IME = "run_vba_istorija.jsonl"
+PID_FAJL = "excel.pid"
+START_BRAVA = os.path.join(tempfile.gettempdir(), "run_vba_start.lock")
+START_CEKANJE = 180.0   # najduze cekanje na start bravu; posle toga se ide bez nje
+
+PROCESS_TERMINATE = 0x0001
+SYNCHRONIZE = 0x00100000
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
+def _zakljucaj(put: str, cekaj: float = 0.0):
+    """Ekskluzivna brava nad fajlom `put`: otvoren fajl (drzi bravu) ili None.
+
+    `cekaj` = 0 -> odmah None ako je zauzeta; inace pokusava do `cekaj` sekundi.
+    Brava je OS-ova (msvcrt / fcntl), pa je pusta i proces koji umre.
+    """
+    os.makedirs(os.path.dirname(put) or ".", exist_ok=True)
+    kraj = time.time() + max(0.0, cekaj)
+    while True:
+        fh = open(put, "a+")
+        try:
+            if os.name == "nt":
+                import msvcrt
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fh
+        except OSError:
+            fh.close()
+            if time.time() >= kraj:
+                return None
+            time.sleep(0.2)
+
+
+def _pusti_bravu(fh) -> None:
+    if fh is not None:
+        try:
+            fh.close()
+        except OSError:
+            pass
+
+
+def izlaz_iz_argumenata(args) -> str:
+    """Folder za izvestaj, istoriju i excel.pid (`--izlaz`, inace tests/)."""
+    if getattr(args, "izlaz", None):
+        return os.path.abspath(args.izlaz)
+    return IZLAZ_PODRAZUMEVANO
+
+
+def _upisi_pid(izlaz: str, pid: int, kreiran: str) -> None:
+    """excel.pid: PID i VREME NASTANKA. dokaz.py posle svog timeout-a ubija
+    zaostali Excel samo ako se poklope oba -- isti PID kasnije moze biti tudji."""
+    try:
+        with open(os.path.join(izlaz, PID_FAJL), "w", encoding="ascii") as fh:
+            json.dump({"pid": int(pid), "kreiran": str(kreiran)}, fh)
+    except OSError:
+        pass
+
+
+def _obrisi_pid(izlaz: str) -> None:
+    try:
+        os.remove(os.path.join(izlaz, PID_FAJL))
+    except OSError:
+        pass
+
+
+def _otvori_proces(pid: int):
+    """Handle sa pravom da ceka, ubije i procita vreme nastanka; ili None."""
+    try:
+        import win32api
+        return win32api.OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE
+                                    | PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    except Exception:                       # noqa: BLE001
+        return None
+
+
+def vreme_nastanka(h) -> str:
+    """Vreme nastanka procesa kao tekst (identitet uz PID), ili ""."""
+    try:
+        import win32process
+        return str(win32process.GetProcessTimes(h)["CreationTime"])
+    except Exception:                       # noqa: BLE001
+        return ""
+
+
+def _terminate_handle(h, flag: dict) -> None:
+    """Kao _terminate_pid, ali preko handle-a -- ne moze da pogodi tudji proces."""
+    flag["fired"] = True
+    try:
+        import win32api
+        win32api.TerminateProcess(h, 0)
+    except Exception:                       # noqa: BLE001
+        pass
+
+
+def _ugasi_proces(h, cekaj_ms: int = 3000) -> bool:
+    """Sacekaj da Excel izadje (najvise `cekaj_ms`), inace ga ubij. True = ubijen.
+
+    Zamenjuje fiksnu sekundu posle CoUninitialize (R-1): proces se ceka koliko
+    stvarno traje, ne uvek pun sekund."""
+    if h is None:
+        return False
+    try:
+        import win32api
+        import win32event
+        if win32event.WaitForSingleObject(h, int(cekaj_ms)) == win32event.WAIT_TIMEOUT:
+            win32api.TerminateProcess(h, 0)
+            return True
+    except Exception:                       # noqa: BLE001
+        pass
+    return False
+
+
+# --- izvor (D-6) ---------------------------------------------------------------
+
+def izvor_iz_argumenata(args) -> tuple:
+    """(apsolutna putanja izvora, razlog odbijanja ili "").
+
+    Bez `--src` je to src-vba/. Folder bez ijednog .bas fajla nije izvor nego
+    greska u pozivu: uvoz bi prosao bez ijednog modula, a suite bi pala na
+    "Cannot run the macro" -- razlog bi pokazivao na VBA, ne na poziv.
+    """
+    if not getattr(args, "src", None):
+        return SRC_VBA, ""
+    src = os.path.abspath(args.src)
+    if not os.path.isdir(src):
+        return src, "--src %s: folder ne postoji" % src
+    if not any(n.lower().endswith(".bas") for n in os.listdir(src)):
+        return src, "--src %s: nema nijednog .bas fajla" % src
+    return src, ""
+
+
+def _self_test_src() -> list:
+    """--src (D-6): uvoz i trazenje siroceta citaju BAS zadati folder.
+
+    Lazna sveska belezi putanje koje joj se uvoze; SRC_VBA za to vreme pokazuje
+    na MAMAC sa istim imenima, pa uvoz iz pogresnog foldera pada po imenu.
+    """
+    nalazi = []
+    global SRC_VBA
+    uvezeno, tela = [], []
+
+    class _Kod:
+        CountOfLines = 0
+
+        def DeleteLines(self, *_a):
+            pass
+
+        def AddFromString(self, s):
+            tela.append(s)
+
+        def AddFromFile(self, p):
+            uvezeno.append(p)
+
+    class _Komp:
+        def __init__(self, ime, tip=1):
+            self.Name, self.Type, self.CodeModule = ime, tip, _Kod()
+
+    class _Komponente:
+        def __init__(self, imena):
+            self.d = {i.lower(): _Komp(i) for i in imena}
+            # dokument modul (Type 100): .doccls se u njega MERGE-uje
+            self.d["thisworkbook"] = _Komp("ThisWorkbook", 100)
+
+        def __call__(self, ime):
+            return self.d[ime.lower()]
+
+        def __iter__(self):
+            return iter(list(self.d.values()))
+
+        def Remove(self, _k):
+            pass
+
+        def Import(self, p):
+            uvezeno.append(p)
+
+        def Add(self, _tip):
+            return _Komp("novi")
+
+    class _Sveska:
+        def __init__(self, imena):
+            self.VBProject = type("P", (), {})()
+            self.VBProject.VBComponents = _Komponente(imena)
+
+    pravi = SRC_VBA
+    privremeni = tempfile.mkdtemp(prefix="run_vba_src_")
+    try:
+        cilj = os.path.join(privremeni, "cilj")
+        mamac = os.path.join(privremeni, "mamac")
+        # Mamac nosi DRUGACIJI skup modula (modStari umesto modB): sirocad
+        # racunata prema pogresnom folderu tako daju drugaciji spisak, pa se
+        # i ta zamena vidi -- sa istim imenima bi bila nevidljiva.
+        for d, imena in ((cilj, ("modA.bas", "modB.bas")),
+                         (mamac, ("modA.bas", "modStari.bas"))):
+            os.makedirs(d)
+            for ime in imena:
+                with open(os.path.join(d, ime), "w", newline="\r\n") as fh:
+                    fh.write('Attribute VB_Name = "%s"\n' % ime[:-4])
+            # .doccls ide drugim putem (merge u postojecu komponentu), pa ga
+            # telo razlikuje: uvoz iz pogresnog foldera nosi rec MAMAC.
+            with open(os.path.join(d, "ThisWorkbook.doccls"), "w",
+                      newline="\r\n") as fh:
+                fh.write("' %s\n" % ("CILJ" if d == cilj else "MAMAC"))
+        # Forma sa .frx parom SAMO u cilju: par trazen u pogresnom folderu
+        # daje "nema .frx para" i forma ispada iz uvoza.
+        with open(os.path.join(cilj, "frmA.frm"), "w", newline="\r\n") as fh:
+            fh.write("VERSION 5.00\n")
+        with open(os.path.join(cilj, "frmA.frx"), "wb") as fh:
+            fh.write(b"\0")
+        SRC_VBA = mamac
+        log: list = []
+        try:
+            import_src_vba(_Sveska([]), log, cilj)
+        except Exception as exc:            # noqa: BLE001 -- pad je nalaz, ne traceback
+            nalazi.append("SRC: uvoz iz --src je pukao (%s: %s) -- cita fajlove "
+                          "van zadatog foldera" % (type(exc).__name__, exc))
+        report_orphan_components(_Sveska(["modA", "modStari"]), log, cilj)
+        args = argparse.Namespace(src=cilj)
+        izv, razlog = izvor_iz_argumenata(args)
+        prazan = os.path.join(privremeni, "prazan")
+        os.makedirs(prazan)
+        _i, razlog_prazan = izvor_iz_argumenata(argparse.Namespace(src=prazan))
+        _i, razlog_nema = izvor_iz_argumenata(
+            argparse.Namespace(src=os.path.join(privremeni, "nema")))
+    finally:
+        SRC_VBA = pravi
+        shutil.rmtree(privremeni, ignore_errors=True)
+    bez, razlog_bez = izvor_iz_argumenata(argparse.Namespace(src=None))
+
+    if tela != ["' CILJ"]:
+        nalazi.append("SRC: .doccls se ne uvozi iz --src foldera (tela: %r)" % tela)
+    if not uvezeno or any(os.path.dirname(p) != cilj for p in uvezeno):
+        nalazi.append("SRC: uvoz ne cita zadati --src folder (uvezeno: %r)"
+                      % [os.path.basename(os.path.dirname(p)) for p in uvezeno])
+    if sorted(os.path.basename(p) for p in uvezeno) != ["frmA.frm", "modA.bas",
+                                                         "modB.bas"]:
+        nalazi.append("SRC: uvoz iz --src nije uvezao tacno modA, modB i frmA (%r)"
+                      % sorted(os.path.basename(p) for p in uvezeno))
+    sirocad = [r for r in log if r.startswith("ORPHAN")]
+    if len(sirocad) != 1 or "modStari" not in sirocad[0] or "modA" in sirocad[0]:
+        nalazi.append("SRC: sirocad se ne racunaju prema --src folderu (%r)" % sirocad)
+    if razlog or izv != cilj:
+        nalazi.append("SRC: ispravan --src je odbijen (%r)" % razlog)
+    if not razlog_prazan or not razlog_nema:
+        nalazi.append("SRC: --src bez .bas fajlova ili nepostojeci folder je prihvacen")
+    if razlog_bez or bez != pravi:
+        nalazi.append("SRC: bez --src izvor nije src-vba/")
+    return nalazi
+
+
+def _self_test_radnici(tudje: str) -> list:
+    """R-4: brava izlaza, pid fajl, i da ih main zaista koristi (nad izvorom)."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("RADNICI: " + opis)
+
+    # Igla ne sme da pogodi sebe: telo OVE funkcije se izbacuje iz pretrage.
+    poc = tudje.find("def _self_test_radnici(")
+    kraj = tudje.find("\ndef ", poc + 1)
+    tudje = tudje[:poc] + tudje[kraj if kraj > 0 else len(tudje):]
+
+    privremeni = tempfile.mkdtemp(prefix="run_vba_radnici_")
+    try:
+        p1 = os.path.join(privremeni, "a", ".run_vba.lock")
+        p2 = os.path.join(privremeni, "b", ".run_vba.lock")
+        # Svaki poziv koji MOZE da naidje na zauzetu bravu ide u nit sa rokom:
+        # brava koja ceka zauvek bi inace zaglavila self-test (i hook), umesto
+        # da ga obori po imenu.
+        def u_niti(fn, rok=3.0):
+            rez = {}
+
+            def telo():
+                t0 = time.time()
+                rez["v"] = fn()
+                rez["s"] = time.time() - t0
+
+            nit = threading.Thread(target=telo, daemon=True)
+            nit.start()
+            nit.join(rok)
+            return (not nit.is_alive()), rez.get("v"), rez.get("s", 99.0)
+
+        a = _zakljucaj(p1)
+        gotov_b, b, _s = u_niti(lambda: _zakljucaj(p1))
+        c = _zakljucaj(p2)
+        gotov_b2, b2, cekano = u_niti(lambda: _zakljucaj(p1, cekaj=0.3))
+        tvrdi(gotov_b and gotov_b2,
+              "zauzeta brava visi umesto da se vrati (cekanje bez granice)")
+        tvrdi(a is not None and b is None and b2 is None and gotov_b,
+              "drugi poziv sa istim izlazom nije odbijen")
+        tvrdi(gotov_b2 and 0.25 <= cekano < 3.0,
+              "cekanje na zauzetu bravu nije ograniceno (%s)"
+              % ("visi" if not gotov_b2 else "%.2fs" % cekano))
+        tvrdi(c is not None, "razliciti izlazi se medjusobno zakljucavaju")
+        _pusti_bravu(a)
+        gotov_d, d, _s = u_niti(lambda: _zakljucaj(p1))
+        tvrdi(gotov_d and d is not None, "pustena brava se ne moze ponovo uzeti")
+        for fh in (b, b2, c, d):
+            _pusti_bravu(fh)
+
+        izl = os.path.join(privremeni, "izl")
+        os.makedirs(izl)
+        _upisi_pid(izl, 4242, "2026-11-17 10:00:00")
+        with open(os.path.join(izl, PID_FAJL), encoding="ascii") as fh:
+            zapis = json.load(fh)
+        tvrdi(zapis == {"pid": 4242, "kreiran": "2026-11-17 10:00:00"},
+              "excel.pid ne nosi PID i vreme nastanka (%r)" % zapis)
+        _obrisi_pid(izl)
+        tvrdi(not os.path.exists(os.path.join(izl, PID_FAJL)),
+              "excel.pid se ne brise posle gasenja")
+    finally:
+        shutil.rmtree(privremeni, ignore_errors=True)
+
+    tvrdi(izlaz_iz_argumenata(argparse.Namespace(izlaz=None)) == IZLAZ_PODRAZUMEVANO
+          and izlaz_iz_argumenata(argparse.Namespace(izlaz="x")) == os.path.abspath("x"),
+          "izlaz bez --izlaz nije tests/, ili --izlaz nije apsolutan")
+
+    # Ozicenje main-a, nad izvorom (main trazi Excel).
+    i_main = tudje.find("def main(")
+    glavni = tudje[i_main:tudje.find("\ndef ", i_main + 1)]
+
+    def pre(a, b):
+        return 0 <= glavni.find(a) < glavni.find(b)
+
+    tvrdi(pre('brava = _zakljucaj(os.path.join(izlaz, ".run_vba.lock"))',
+              "win32.DispatchEx("),
+          "main ne zakljucava izlaz PRE Excela")
+    tvrdi(pre("start_brava = _zakljucaj(START_BRAVA, cekaj=START_CEKANJE)",
+              "xl = win32.DispatchEx(")
+          and pre("wb = xl.Workbooks.Open(", "_pusti_bravu(start_brava)"),
+          "start Excela nije pod start bravom (od DispatchEx do otvaranja sveske)")
+    tvrdi(pre("hproc = _otvori_proces(pid)", "prekid = Prekid(")
+          and "_upisi_pid(izlaz, pid, vreme_nastanka(hproc))" in glavni
+          and "_obrisi_pid(izlaz)" in glavni,
+          "main ne drzi handle Excela ili ne vodi excel.pid")
+    tvrdi("_ugasi_proces(hproc, cekaj_ms=3000)" in glavni
+          and "_terminate_handle(hproc, flag)" in glavni,
+          "gasenje i prekid ne idu preko zadrzanog handle-a")
+    tvrdi("if not args.izlaz:\n            _copy_golden(os.path.join(tmp, \"golden\"), GOLDEN_DIR)"
+          in glavni,
+          "golden se vraca u repo i uz --izlaz (radnici bi ga prepisivali)")
+    tvrdi("_write_report(report, rc, izlaz)" in glavni
+          and "put=os.path.join(izlaz, ISTORIJA_IME))" in glavni,
+          "izvestaj ili istorija ne idu u --izlaz")
+    return nalazi
+
+
 # --- Glavni tok --------------------------------------------------------------
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -699,11 +1493,29 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--compile-only", action="store_true", help="stani posle compile-a")
     ap.add_argument("--no-import", action="store_true", help="ne uvozi src-vba (testiraj zatecen kod)")
     ap.add_argument("--suite", action="append", default=[], help="pokreni bas ovu suite (moze vise puta)")
+    ap.add_argument("--test", action="append", default=[], metavar="IME",
+                    help="pusti samo ovaj test (moze vise puta, ili \"T_A,T_B\"); "
+                         "trazi tacno jednu --suite koja ima `izbor` u SUITES")
     ap.add_argument("--all", action="store_true", help="pokreni sve suite iz kataloga")
     ap.add_argument("--keep", action="store_true", help="ne brisi temp kopiju sveske")
     ap.add_argument("--timeout-dialog", type=float, default=0.4, help="interval watchdog-a u sekundama")
-    ap.add_argument("--timeout", type=float, default=600.0,
-                    help="tvrdi prekid u sekundama (ubija Excel proces; default 600)")
+    # Prekid se meri PO FAZI (priprema, svaka suite, zatvaranje), v. Prekid.
+    # Najduza faza od 11.2026 je BFP (~700 s posle RunAllTests-a); 1800 s i dalje
+    # hvata pravo visenje, a koban dijalog ga skracuje na KOBAN_SEKUNDI.
+    ap.add_argument("--timeout", type=float, default=1800.0,
+                    help="tvrdi prekid u sekundama za SVAKU fazu posebno (priprema, "
+                         "svaka suite, zatvaranje); ubija Excel proces; default 1800")
+    ap.add_argument("--bez-markera", action="store_true",
+                    help="ne upisuj marker zelenog (dokaz.py nad namerno pokvarenim "
+                         "izvorom, KI-036)")
+    ap.add_argument("--izlaz", metavar="DIR",
+                    help="izvestaj, istorija i excel.pid u ovaj folder (zakljucan dok "
+                         "poziv traje); dokaz.py daje svaki radniku svoj (R-4). "
+                         "Podrazumevano tests/; uz --izlaz se golden ne vraca u repo")
+    ap.add_argument("--src", metavar="DIR",
+                    help="uvezi izvor iz ovog foldera umesto iz src-vba/ (dokaz.py "
+                         "daje svoju kopiju, D-6); marker nosi otisak SADRZAJA, pa "
+                         "vazi za src-vba tacno kad je sadrzaj isti")
     ap.add_argument("--self-test", action="store_true",
                     help="provere koje ne traze Excel (radi i na Linux/macOS)")
     ap.add_argument("--ignore-fixture-sig", action="store_true",
@@ -779,6 +1591,80 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
     return 2
 
 
+def izabrani_testovi(args: argparse.Namespace) -> list[str]:
+    """Imena iz `--test`, bez praznih i bez duplikata, u redosledu navodjenja.
+
+    Redosled izvrsavanja ionako odredjuje suite (VBA pusta izabrane u svom
+    redosledu); ovde se samo cisti spisak.
+    """
+    out: list[str] = []
+    for arg in args.test:
+        for ime in arg.split(","):
+            ime = ime.strip()
+            if ime and ime not in out:
+                out.append(ime)
+    return out
+
+
+def problem_izbora(args: argparse.Namespace) -> str:
+    """Razlog zbog koga `--test` ne moze da se izvrsi, ili "" kad moze.
+
+    Izbor je deo JEDNE suite: ime testa ne kaze kojoj pripada, a ulazna tacka
+    izbora postoji samo za suite sa kljucem `izbor`. Svaka druga kombinacija bi
+    tiho pustila celu suite (ili nijednu) i izgledala kao izbor.
+    """
+    if not args.test:
+        return ""
+    if not izabrani_testovi(args):
+        return "--test bez ijednog imena"
+    if args.compile_only:
+        return "--test uz --compile-only nema sta da pusti"
+    if args.all or len(args.suite) != 1:
+        return "--test trazi TACNO JEDNU --suite (ime testa ne kaze kojoj pripada)"
+    meta = SUITES.get(args.suite[0])
+    if meta is None:
+        return ""                    # nepoznatu suite prijavljuje chosen_suites
+    if not meta.get("izbor"):
+        sa = sorted(k for k, v in SUITES.items() if v.get("izbor"))
+        return ("suite %s nema ulaznu tacku izbora (`izbor` u SUITES); "
+                "izbor primaju: %s" % (args.suite[0], ", ".join(sa)))
+    return ""
+
+
+def vreme_fajl(result_file: str) -> str:
+    """`last_run.txt` -> `last_run_vreme.txt`: vremena po testu pored rezultata."""
+    koren, nastavak = os.path.splitext(result_file)
+    return koren + "_vreme" + nastavak
+
+
+def procitaj_vreme(path: str) -> list:
+    """[(sekunde, status, ime)] iz fajla vremena, najsporiji prvi.
+
+    Dijagnostika, ne verdikt: fajla nema ili je red necitljiv -> taj red se
+    preskace, a run ne pada. Verdikt nosi rezultat-fajl.
+    """
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            redovi = fh.read().split("\n")
+    except OSError:
+        return out
+    for red in redovi:
+        delovi = red.rstrip("\r").split("\t")
+        if len(delovi) != 3:
+            continue
+        try:
+            sek = float(delovi[0])
+        except ValueError:
+            continue
+        out.append((sek, delovi[1], delovi[2]))
+    out.sort(key=lambda x: -x[0])
+    return out
+
+
+VREME_NAJSPORIJIH = 10
+
+
 def chosen_suites(args: argparse.Namespace) -> list[str]:
     if args.suite:
         unknown = [s for s in args.suite if s not in SUITES]
@@ -798,8 +1684,27 @@ def main(argv: list[str]) -> int:
     if args.self_test:
         return self_test()
 
+    # Pre Excela i pre provere platforme: pogresna kombinacija je greska u
+    # pozivu, ne u VBA kodu, i mora da se vidi i na masini bez Excela.
+    razlog = problem_izbora(args)
+    if razlog:
+        print("IZBOR: " + razlog, file=sys.stderr)
+        return 2
+    src, razlog = izvor_iz_argumenata(args)
+    if razlog:
+        print("IZVOR: " + razlog, file=sys.stderr)
+        return 2
+
     if os.name != "nt":
         print("run_vba.py radi samo na Windows-u (Excel COM).", file=sys.stderr)
+        return 2
+
+    # Izlaz se zakljucava PRE Excela i drzi do kraja poziva (v. R-4 iznad).
+    izlaz = izlaz_iz_argumenata(args)
+    brava = _zakljucaj(os.path.join(izlaz, ".run_vba.lock"))
+    if brava is None:
+        print("IZLAZ ZAUZET: %s -- drugi run_vba vec pise tu; sacekaj ga ili daj "
+              "--izlaz" % izlaz, file=sys.stderr)
         return 2
 
     import pythoncom
@@ -807,6 +1712,17 @@ def main(argv: list[str]) -> int:
     import win32com.client as win32
     import win32con
     import win32process
+
+    # Vreme po fazi poziva (M-2): bez njega se zna samo zbir, pa se ne vidi sta
+    # od ~18 s rezije po pozivu je start Excela, uvoz ili gasenje.
+    pocetak = time.time()
+    faze: list = []
+    oznaka = [pocetak]
+
+    def zabelezi_fazu(ime: str) -> None:
+        sada = time.time()
+        faze.append({"ime": ime, "sekundi": round(sada - oznaka[0], 1)})
+        oznaka[0] = sada
 
     fixture = args.workbook or DEFAULT_FIXTURE
     if not os.path.exists(fixture):
@@ -857,50 +1773,81 @@ def main(argv: list[str]) -> int:
             "_vba_gate_za_run", os.path.join(ROOT, "tools", "vba_gate.py"))
         _gate = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_gate)
-        kontekst_dokaza = _gate.snimi_kontekst(sveska=fixture,
+        kontekst_dokaza = _gate.snimi_kontekst(src_dir=src, sveska=fixture,
                                                sveska_hes_iz=wbpath)
     except Exception as exc:                # noqa: BLE001
         kontekst_greska = "snimak konteksta nije uzet -- %s" % exc
 
     report: dict = {"workbook": fixture, "import": [], "compile": None, "suites": [], "dialogs": []}
+    if src != SRC_VBA:
+        report["izvor_dir"] = src
     rc = 2
     xl = None
     pid = None
+    hproc = None
+    start_brava = None
     watchdog = None
-    killer = None
-    hard_stop: dict = {"fired": False}
+    prekid = None
+    zabelezi_fazu("priprema bez Excela")
 
     pythoncom.CoInitialize()
     try:
+        start_brava = _zakljucaj(START_BRAVA, cekaj=START_CEKANJE)
+        if start_brava is None:
+            print("START BRAVA nije dobijena za %ds -- Excel se pali bez nje"
+                  % START_CEKANJE, file=sys.stderr)
         xl = win32.DispatchEx("Excel.Application")
         pid = win32process.GetWindowThreadProcessId(xl.Hwnd)[1]
-
-        watchdog = DialogWatchdog(pid, poll=args.timeout_dialog)
-        watchdog.start()
+        hproc = _otvori_proces(pid)
+        _upisi_pid(izlaz, pid, vreme_nastanka(hproc))
 
         # Tvrdi prekid: ako Excel iz bilo kog razloga prestane da odgovara (break
         # mode, dijalog koji watchdog ne prepozna), COM poziv ne puca -- samo
-        # stoji. Bez ovoga run visi dok ga neko ne ubije rukom.
-        killer = threading.Timer(args.timeout, _terminate_pid, args=(pid, hard_stop))
-        killer.daemon = True
-        killer.start()
+        # stoji. Bez ovoga run visi dok ga neko ne ubije rukom. Budzet je po fazi.
+        # Ubija preko ZADRZANOG handle-a kad ga ima (v. R-4).
+        prekid = Prekid(pid, args.timeout,
+                        ubij=(lambda _pid, flag: _terminate_handle(hproc, flag))
+                        if hproc is not None else None)
+        prekid.naoruzaj("priprema")
+
+        watchdog = DialogWatchdog(pid, poll=args.timeout_dialog,
+                                  na_dijalog=prekid.dijalog)
+        watchdog.start()
 
         xl.Visible = False
         xl.DisplayAlerts = False
         xl.AutomationSecurity = 1      # msoAutomationSecurityLow -- makroi bez pitanja
         xl.EnableEvents = False        # KLJUCNO: Workbook_Open (StartApp/self-update) se ne pokrece
 
+        zabelezi_fazu("start Excela")
         wb = xl.Workbooks.Open(wbpath, UpdateLinks=0)
+        _pusti_bravu(start_brava)
+        start_brava = None
+        zabelezi_fazu("otvaranje sveske")
 
         if not args.no_import:
-            import_src_vba(wb, report["import"])
-            report_orphan_components(wb, report["import"])
+            import_src_vba(wb, report["import"], src)
+            report_orphan_components(wb, report["import"], src)
+            zabelezi_fazu("uvoz src-vba")
 
-        # Compile se radi UVEK -- i uz --compile-only i pre suite-ova. To je
-        # najjeftiniji gate koji hvata najcescu klasu kvara posle Edit/Write nad
-        # src-vba (duple definicije, deklaracija posle prve procedure, ime koje
-        # se poklapa sa rezervisanom reci).
-        report["compile"] = compile_project(xl, wb, watchdog)
+        # COMPILE PROBA SAMO UZ --compile-only.
+        #
+        # Uz suite je proba bila ritual: verdikt je skoro uvek NEJASNO, ne obara
+        # run i ne ide u marker, a jedinu zabelezenu pravu compile gresku
+        # (06.10.2026, "Syntax error") nije uhvatila -- prolaz je visio 585 s.
+        # Kostala je 5,9 s fiksnog cekanja po pozivu (COM pa SendKeys, izmereno
+        # 16.11.2026), otvarala VBE i otimala fokus, a posle nje nekvalifikovan
+        # Application.Run prestaje da radi. Projekat koji se ne kompajlira sada
+        # hvata koban dijalog tokom suite (Prekid.dijalog): prekid za
+        # KOBAN_SEKUNDI, uz tekst dijaloga. --compile-only ostaje kakav je: tu je
+        # proba jedini signal, i on priprema svesku za rucni Compile.
+        if args.compile_only:
+            report["compile"] = compile_project(xl, wb, watchdog)
+            zabelezi_fazu("compile proba")
+        else:
+            report["compile"] = {"ok": None, "preskocen": True, "detail": {},
+                                 "error": "preskocena uz suite -- rucni Compile "
+                                          "ostaje kapija pred release"}
 
         compile_ok = report["compile"].get("ok")
 
@@ -939,14 +1886,23 @@ def main(argv: list[str]) -> int:
                 report["schema"] = "OK"
             except Exception as exc:        # noqa: BLE001
                 report["schema"] = f"FAIL {exc}"
+            zabelezi_fazu("sema")
 
             failed = 0
+            testovi = izabrani_testovi(args)
             for suite in chosen_suites(args):
                 meta = SUITES[suite]
                 entry = {"name": suite, "gate": meta["gate"]}
+                prekid.naoruzaj(suite)
                 t0 = time.time()
                 try:
-                    xl.Run(f"'{wb.Name}'!{suite}")
+                    if testovi:
+                        # Izbor nosi ime suite-a u izvestaju, ali i oznaku
+                        # `izbor` -- po njoj vba_gate ne upisuje marker.
+                        entry["izbor"] = testovi
+                        xl.Run(f"'{wb.Name}'!{meta['izbor']}", ",".join(testovi))
+                    else:
+                        xl.Run(f"'{wb.Name}'!{suite}")
                 except Exception as exc:    # noqa: BLE001
                     entry["status"] = "FAIL"
                     entry["error"] = str(exc)
@@ -969,7 +1925,14 @@ def main(argv: list[str]) -> int:
                     else:
                         entry["status"] = "OK" if meta["gate"] else "BLIND"
                 entry["seconds"] = round(time.time() - t0, 1)
+                if meta.get("result_file"):
+                    vreme = procitaj_vreme(os.path.join(
+                        tmp, vreme_fajl(meta["result_file"])))
+                    if vreme:
+                        report.setdefault("suite_results", {}).setdefault(
+                            suite, {})["vreme"] = vreme
                 report["suites"].append(entry)
+                oznaka[0] = time.time()      # suite nije rezija -- meri se sama
             # Pala priprema seme = rezultati nisu merodavni, pa run pada i kad su
             # sve suite zelene. Neuspela pretpostavka se ne precutkuje.
             rc = 2 if (failed or report.get("schema", "OK") != "OK") else 0
@@ -978,11 +1941,14 @@ def main(argv: list[str]) -> int:
         report["fatal"] = str(exc)
         rc = 2
     finally:
+        _pusti_bravu(start_brava)
         # Sveska se zatvara PRE gasenja cuvara. Close() ume da podigne
         # "Want to save your changes?" -- dovoljno je da jedna suite u svom
         # ciscenju vrati Application.DisplayAlerts na True. Ranije su i watchdog
         # i killer vec bili ugaseni na tom mestu, pa je taj dijalog visio zauvek:
         # nije imao ko da ga klikne ni ko da ubije proces.
+        if prekid is not None:
+            prekid.naoruzaj("zatvaranje")
         try:
             xl.DisplayAlerts = False
         except Exception:
@@ -1001,13 +1967,12 @@ def main(argv: list[str]) -> int:
         except Exception:
             pass
 
-        if killer is not None:
-            killer.cancel()
-        if hard_stop["fired"]:
-            report["fatal"] = (f"Excel nije odgovarao {args.timeout:g}s -- proces je ubijen. "
-                               "Najcesci uzrok: VBE je u break mode-u (vidi "
-                               "docs/EXCEL_TEST_HARNESS.md).")
-            rc = 2
+        if prekid is not None:
+            prekid.stop()
+            if prekid.stanje["fired"]:
+                report["fatal"] = poruka_prekida(prekid.stanje)
+                report["prekid"] = dict(prekid.stanje)
+                rc = 2
         if watchdog is not None:
             time.sleep(1.0)
             watchdog.stop()
@@ -1018,22 +1983,34 @@ def main(argv: list[str]) -> int:
             pass
         del xl
         pythoncom.CoUninitialize()
-        time.sleep(1.0)
-        if pid:
+        if hproc is not None:
+            # R-1/R-4: ceka se SAM proces (najvise 3 s), ne fiksna sekunda, i
+            # ubija se preko zadrzanog handle-a -- PID iz Hwnd-a posle izlaska
+            # moze vec da pripada Excel-u drugog radnika.
+            _ugasi_proces(hproc, cekaj_ms=3000)
+        elif pid:
+            # Handle nije dobijen: stari put, po PID-u posle sekunde.
+            time.sleep(1.0)
             try:
                 h = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
                 win32api.TerminateProcess(h, 0)
             except Exception:
                 pass
+        _obrisi_pid(izlaz)
         # Nov golden nastaje u temp-u -- vrati ga u repo da ga covek pregleda i
         # commit-uje. Bez ovoga bi ga svaki sledeci run pravio iznova i test bi
-        # zauvek padao istom porukom.
-        _copy_golden(os.path.join(tmp, "golden"), GOLDEN_DIR)
+        # zauvek padao istom porukom. Uz --izlaz (dokaz.py, radnici) NE: golden
+        # pravi samo RunGoldenSuite, a pet radnika bi istovremeno prepisivalo
+        # fajlove koji su deo ugovora alata.
+        if not args.izlaz:
+            _copy_golden(os.path.join(tmp, "golden"), GOLDEN_DIR)
 
         if args.keep:
             print(f"\nTemp kopija zadrzana: {tmp}")
         else:
             shutil.rmtree(tmp, ignore_errors=True)
+        zabelezi_fazu("zatvaranje i gasenje")
+        report["faze"] = faze
 
     # MARKER ZELENOG: "suite su bile zelene" je tvrdnja o NEKOM izvoru, pod NEKIM
     # test sistemom, nad NEKOM svescom -- i do sada se znalo samo iz recenice uz
@@ -1049,30 +2026,96 @@ def main(argv: list[str]) -> int:
     #
     # Nalaz alata ne sme da obori run: greska u markeru nije greska u VBA kodu.
     try:
-        if kontekst_greska:
+        if args.bez_markera:
+            # KI-036: dokaz.py pusta suite nad NAMERNO pokvarenim izvorom. Prolaz
+            # u kome sabotaza ne obori nista je zelen, pa bi upisao marker nad
+            # izvorom koji nije cist -- i posle dokaza bi --require-green trazio
+            # ponovljen prolaz.
+            report["green"] = ("marker nije upisan: --bez-markera (prolaz nad "
+                               "namerno pokvarenim izvorom)")
+        elif kontekst_greska:
             report["green"] = "marker nije upisan: " + kontekst_greska
         else:
             report["green"] = _gate.zabelezi_prolaz(
-                report, rc, args.no_import, kontekst=kontekst_dokaza)
+                report, rc, args.no_import, kontekst=kontekst_dokaza, src_dir=src)
     except Exception as exc:                # noqa: BLE001
         report["green"] = "marker nije upisan: %s" % exc
 
-    _write_report(report, rc)
+    _write_report(report, rc, izlaz)
+    dopisi_istoriju(report, rc, argv, pocetak,
+                    (kontekst_dokaza or {}).get("izvor", ""),
+                    put=os.path.join(izlaz, ISTORIJA_IME))
+    _pusti_bravu(brava)
     return rc
 
 
-def _write_report(report: dict, rc: int) -> None:
-    outdir = os.path.join(ROOT, "tests")
+def jedan_red(tekst: str) -> str:
+    """Tekst dijaloga u jednom redu: VBA ga lomi ("Compile error:\n\nSyntax error"),
+    a citaci izvestaja (dokaz.py, FATAL) citaju red po red -- pa bi bez ovoga
+    ostali bez razloga."""
+    return " ".join((tekst or "").split())
+
+
+def poruka_prekida(stanje: dict) -> str:
+    """FATAL tekst iz Prekid.stanje: imenuje fazu, a uz koban dijalog i dijalog."""
+    if stanje.get("dijalog"):
+        return (f"Excel se nije vratio {stanje['sekundi']:g}s posle dijaloga u fazi "
+                f"'{stanje['faza']}' -- proces je ubijen. Dijalog: "
+                f"{jedan_red(stanje['dijalog'])}. "
+                "Najcesci uzrok: kod se ne kompajlira ili je VBE u break mode-u.")
+    return (f"Faza '{stanje['faza']}' je trajala duze od {stanje['sekundi']:g}s -- "
+            "proces je ubijen. Uzrok je break mode u VBE-u ILI faza duza od --timeout "
+            "(prekid se meri po fazi); vidi docs/EXCEL_TEST_HARNESS.md.")
+
+
+ISTORIJA = os.path.join(ROOT, "tests", "run_vba_istorija.jsonl")
+
+
+def dopisi_istoriju(report: dict, rc: int, argv: list, pocetak: float,
+                    izvor: str, put: str = ISTORIJA) -> str:
+    """Dopisi JEDAN red po pozivu (M-2). Vraca "" ili razlog zasto nije upisano.
+
+    tests/last_run.* prepisuje svaki poziv, pa se trajanja do sada nisu nigde
+    cuvala. Greska u upisu istorije ne sme da obori run: to nije nalaz o kodu.
+    """
+    red = {
+        "pocetak": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(pocetak)),
+        "sekundi": round(time.time() - pocetak, 1),
+        "argv": list(argv),
+        "rc": rc,
+        "izvor": izvor,
+        "faze": report.get("faze", []),
+        "suite": [{k: s.get(k) for k in ("name", "status", "seconds")}
+                  for s in report.get("suites", [])],
+        "fatal": report.get("fatal", ""),
+    }
+    try:
+        os.makedirs(os.path.dirname(put), exist_ok=True)
+        with open(put, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(red, ensure_ascii=True) + "\n")
+        return ""
+    except Exception as exc:                # noqa: BLE001
+        return str(exc)
+
+
+def _write_report(report: dict, rc: int, outdir: str = None) -> None:
+    outdir = outdir or IZLAZ_PODRAZUMEVANO
     os.makedirs(outdir, exist_ok=True)
     with open(os.path.join(outdir, "last_run.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
 
     lines = []
+    if outdir != IZLAZ_PODRAZUMEVANO:
+        lines.append(f"IZLAZ   {outdir}")
+    if report.get("izvor_dir"):
+        lines.append(f"IZVOR   {report['izvor_dir']}")
     for msg in report["import"]:
         lines.append(f"IMPORT  {msg}")
 
     c = report.get("compile")
-    if c:
+    if c and c.get("preskocen"):
+        lines.append(f"COMPILE PRESKOCEN  {c['error']}")
+    elif c:
         state = {True: "OK", False: "FAIL", None: "NEJASNO"}[c.get("ok")]
         lines.append(f"COMPILE {state}" + (f"  {c['error']}" if c.get("error") else ""))
         # Sirovo stanje ide u ispis uvek: tri puta je "zeleno" bilo netacno, pa
@@ -1090,6 +2133,11 @@ def _write_report(report: dict, rc: int) -> None:
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
                      + (f"  {s.get('error', '')}" if s["status"] == "FAIL" else ""))
+        if s.get("izbor"):
+            # Izbor mora da se vidi u istom bloku: "SUITE OK RunAllTests" bez
+            # ovoga cita se kao cela suite.
+            lines.append(f"IZBOR   {s['name']}: {len(s['izbor'])} testova -- "
+                         + ", ".join(s["izbor"]))
         t = slotovi.get(s["name"])
         if not t:
             continue
@@ -1102,9 +2150,24 @@ def _write_report(report: dict, rc: int) -> None:
         # "nesto je palo" i upotrebljivog nalaza.
         for ln in t.get("detail", []):
             lines.append(f"        {ln}")
+        # Najsporiji koraci. Red pocinje brojem, ne statusom, pa ga citaci
+        # palih (dokaz.py: "FAIL ...", banka: "PAO ...") ne mogu procitati kao pad.
+        vreme = t.get("vreme") or []
+        if vreme:
+            lines.append(f"VREME   {s['name']}: {sum(v[0] for v in vreme):.1f}s "
+                         f"u {len(vreme)} koraka; najsporiji:")
+            for sek, status, ime in vreme[:VREME_NAJSPORIJIH]:
+                lines.append(f"        {sek:8.3f}s  {status:5} {ime}")
+
+    # Rezija poziva po fazi (sve sto nije suite). Red pocinje sa FAZE, pa ga
+    # citaci palih ne mogu procitati kao pad.
+    faze = report.get("faze") or []
+    if faze:
+        lines.append("FAZE    " + " | ".join(f"{f['ime']} {f['sekundi']:.1f}s" for f in faze)
+                     + f"  -> rezija {sum(f['sekundi'] for f in faze):.1f}s")
 
     for d in report.get("dialogs", []):
-        lines.append(f"DIALOG  {d}")
+        lines.append(f"DIALOG  {jedan_red(d)}")
 
     if "fatal" in report:
         lines.append(f"FATAL   {report['fatal']}")

@@ -85,6 +85,13 @@ jobs:
       - name: vba_check self-test
         run: python3 tools/vba_check.py --self-test
 
+      # Provera sidara kataloga sabotaza ide kroz vba_check (korak iznad), ali
+      # njen dvosmerni dokaz je u sabotaza.py: pravila nad izmisljenim unosima,
+      # granica pravila o dodeli imenu procedure, i brojac rada koji pada kad se
+      # fajl razlaze po sabotazi umesto jednom. Do sada ga niko nije pustao.
+      - name: sabotaza self-test
+        run: python3 tools/sabotaza.py --self-test
+
       # HARD/SOFT algoritam self-update-a zivi u DVE privatne kopije
       # (modSelfUpdate frozen + modVbaTools dev alat) i ne moze da se spoji.
       # Kopije su vec divergirale jednom: PR #274 je popravio detekciju

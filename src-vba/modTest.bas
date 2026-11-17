@@ -270,10 +270,26 @@ Private Const FX_ZBIRNA_AMB As Long = 100
 
 Private Const ERR_ASSERT As Long = vbObjectError + 9500
 Private Const ERR_GOLDEN As Long = vbObjectError + 9501
+Private Const ERR_IZBOR As Long = vbObjectError + 9502
 
 Private m_Total As Long
 Private m_Failed As Long
 Private m_Report As String
+
+' IZBOR TESTOVA ZA JEDAN PROLAZ (tools/run_vba.py --test, tools/dokaz.py --izbor).
+'
+' m_IzborZahtev postavlja SAMO RunAllTestsIzbor, a RunAllTests ga POTROSI na
+' ulazu (PreuzmiIzbor) i prenese u m_Izbor. Sledeci goli RunAllTests je zato
+' uvek pun: izbor koji bi prezivio prolaz pretvorio bi pun run u tih deo suite-a
+' -- zelen, sa manje testova. Oblik je ",T_A,T_B," (zarez i na krajevima), da se
+' ime trazi CELO: izbor "T_A" ne sme da pusti "T_AB".
+Private m_IzborZahtev As String
+Private m_Izbor As String
+Private m_IzborPusteni As String
+' VREME PO TESTU: redovi "sekunde<TAB>status<TAB>ime" za last_run_vreme.txt.
+' Meri se telo testa (InvokeTest), ne ciscenje posle pada. Dijagnostika, ne
+' verdikt -- run_vba ispisuje najsporije, a verdikt i dalje nosi last_run.txt.
+Private m_Vreme As String
 
 ' ============================================================
 ' Ulazna tacka
@@ -282,6 +298,15 @@ Public Sub RunAllTests()
     Dim prevMode As Boolean
     prevMode = IsTestMode()
     SetTestMode True
+    ' TIHI REZIM DNEVNIKA (S-1). Bez njega svaki AppendRow dopisuje CSV journal,
+    ' a svaki commit zakazuje AutoSave (OnTime) i pise red loga -- posao koji
+    ' nijedna tvrdnja ove suite ne meri, a placa se u svakom prolazu i dokazu. Na
+    ' DEV svesci journal posle rollback-a ostaje i sledeci start ga javlja kao
+    ' gubitak podataka (isti razlog kao u modTestBanka). Kapiju tihog rezima meri
+    ' T_Journal_TihiRezimGasiZakazivanje, u oba smera.
+    Dim prevQuiet As Boolean
+    prevQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
     ' Seam zapamcen iz prethodnog run-a je bio inertan dok je test rezim bio
     ' iskljucen -- ali se aktivira tacno sada. Ciscenje ide POSLE SetTestMode
     ' True, jer sami seam-ovi odbijaju postavljanje van test rezima.
@@ -290,6 +315,11 @@ Public Sub RunAllTests()
     m_Total = 0
     m_Failed = 0
     m_Report = ""
+    ' Izbor se preuzima PRE prvog RunOne i brise se iz zahteva istim potezom
+    ' (v. deklaraciju m_IzborZahtev).
+    m_Izbor = PreuzmiIzbor(m_IzborZahtev)
+    m_IzborPusteni = ""
+    m_Vreme = ""
 
     RunOne 1
     RunOne 2
@@ -415,6 +445,10 @@ Public Sub RunAllTests()
     RunOne 308
     RunOne 309
     RunOne 310
+    ' Ciste funkcije, bez fixture-a -- redosled nije nosec.
+    RunOne 354
+    ' Kapija tihog rezima dnevnika; vraca rezim i otkazuje tajmer sam.
+    RunOne 355
     RunOne 311
     RunOne 312
     RunOne 313
@@ -673,8 +707,39 @@ Public Sub RunAllTests()
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
+    ' Trazen a nepusten test je PAD, ne tisina: pogresno ime u izboru bi inace
+    ' dalo zelen prolaz sa nula testova.
+    ProveriIzbor
+    m_Izbor = ""
+
     SetTestMode prevMode
+    modJournaling.SetTestModeQuiet prevQuiet
+    ' Tajmeri koje je suite zakazala ne smeju da je prezive. Warm kes storna
+    ' zakazuje SVAKI commit (tihi rezim ga ne gasi), AutoSave samo test koji
+    ' izricito ugasi tihi rezim. OnTime opali cim Excel predahne -- izmedju dve
+    ' suite (warm gradi kes storna, AutoSave snima svesku), a posle zatvaranja
+    ' svesku ponovo otvori.
+    modJournaling.StopAutoSaveTimer
+    modStornoWarm.StopStornoWarm
     WriteResultFile
+    WriteVremeFile
+End Sub
+
+' Isti prolaz kao RunAllTests, ali samo nad imenovanim testovima -- i to u ISTOM
+' redosledu u kome ih RunAllTests pusta, jer je redosled nosec (v. komentare uz
+' 124-126). Spisak je "T_A,T_B"; prazan spisak je greska, ne pun run. Zove ga
+' tools/run_vba.py --test, a rezultat ide u isti last_run.txt.
+'
+' Test koji SAM ne prolazi, a u punom prolazu prolazi, zavisi od stanja koje mu
+' ostavlja raniji test. To nije kvar izbora nego nalaz o testu -- dokaz.py ga
+' zato meri celom suite-om, a `dokaz.py --izolacija` ih nabraja.
+Public Sub RunAllTestsIzbor(ByVal spisak As String)
+    m_IzborZahtev = NormalizujIzbor(spisak)
+    If Len(m_IzborZahtev) = 0 Then
+        Err.Raise ERR_IZBOR, "modTest.RunAllTestsIzbor", _
+                  "IZBOR: prazan spisak testova"
+    End If
+    RunAllTests
 End Sub
 
 ' Svaki test se zove kroz ovu omotnicu: broji se, greska mu se hvata i upisuje
@@ -683,11 +748,16 @@ End Sub
 Private Sub RunOne(ByVal idx As Long)
     Dim nm As String
     Dim errNum As Long, errDesc As String
+    Dim t0 As Single
     nm = TestName(idx)
+    ' Test van izbora se ne broji -- ni u TESTS= ni u vremenu.
+    If Not TestIzabran(nm) Then Exit Sub
 
     On Error GoTo EH
     m_Total = m_Total + 1
+    t0 = Timer
     InvokeTest idx
+    ZapisiVreme nm, "OK", t0
     AppendReport nm, "OK", ""
     Exit Sub
 
@@ -697,12 +767,107 @@ EH:
     ' ostao prazan.
     errNum = Err.Number
     errDesc = Err.description
+    ZapisiVreme nm, "FAIL", t0
     m_Failed = m_Failed + 1
     CleanupPosleTesta
     ' Pad bez opisa je vec jednom kostao dva rana dijagnostike: "FAIL T_X" bez
     ' razloga ne kaze operateru nista. Broj greske je tada jedini trag.
     If Len(errDesc) = 0 Then errDesc = "greska bez opisa (Err.Number=" & errNum & ")"
     AppendReport nm, "FAIL", errDesc
+End Sub
+
+' --- izbor testova i vreme po testu -----------------------------------------
+'
+' Blizanac u modBusinessFlowProTests (Bfp*): iste cetiri funkcije izbora, jer
+' modul te suite ne sme da zavisi od modTest. Menjas pravilo ovde -- menjaj i
+' tamo; tvrdnje o oba stoje u T_TestIzbor_TacnoImeIJednokratno i
+' Test_BFP_IzborBiraCeloIme.
+
+' ",T_A,T_B," iz "T_A, T_B" -- prazni clanovi i razmaci otpadaju. Prazno kad u
+' spisku nema nijednog imena.
+Private Function NormalizujIzbor(ByVal spisak As String) As String
+    Dim delovi As Variant
+    Dim i As Long
+    Dim ime As String, izlaz As String
+    delovi = Split(spisak, ",")
+    For i = LBound(delovi) To UBound(delovi)
+        ime = Trim$(CStr(delovi(i)))
+        If Len(ime) > 0 Then izlaz = izlaz & "," & ime
+    Next i
+    If Len(izlaz) > 0 Then NormalizujIzbor = izlaz & ","
+End Function
+
+' Celo ime, ne podniz: zarezi sa obe strane su deo trazenog teksta.
+Private Function IzborSadrzi(ByVal izbor As String, ByVal ime As String) As Boolean
+    IzborSadrzi = (InStr(1, izbor, "," & ime & ",", vbTextCompare) > 0)
+End Function
+
+' Vrati zahtev i ISPRAZNI ga -- izbor traje tacno jedan prolaz.
+Private Function PreuzmiIzbor(ByRef zahtev As String) As String
+    PreuzmiIzbor = zahtev
+    zahtev = ""
+End Function
+
+' Imena iz izbora koja se nisu pojavila u `pusteni`, razdvojena zarezom.
+Private Function IzborNepusteni(ByVal izbor As String, ByVal pusteni As String) As String
+    Dim delovi As Variant
+    Dim i As Long
+    Dim izlaz As String
+    delovi = Split(izbor, ",")
+    For i = LBound(delovi) To UBound(delovi)
+        If Len(delovi(i)) > 0 Then
+            If Not IzborSadrzi(pusteni, CStr(delovi(i))) Then
+                If Len(izlaz) > 0 Then izlaz = izlaz & ","
+                izlaz = izlaz & CStr(delovi(i))
+            End If
+        End If
+    Next i
+    IzborNepusteni = izlaz
+End Function
+
+Private Function TestIzabran(ByVal nm As String) As Boolean
+    If Len(m_Izbor) = 0 Then
+        TestIzabran = True
+    ElseIf IzborSadrzi(m_Izbor, nm) Then
+        m_IzborPusteni = m_IzborPusteni & "," & nm & ","
+        TestIzabran = True
+    End If
+End Function
+
+Private Sub ProveriIzbor()
+    Dim nepusteni As Variant
+    Dim i As Long
+    If Len(m_Izbor) = 0 Then Exit Sub
+    nepusteni = Split(IzborNepusteni(m_Izbor, m_IzborPusteni), ",")
+    For i = LBound(nepusteni) To UBound(nepusteni)
+        m_Total = m_Total + 1
+        m_Failed = m_Failed + 1
+        AppendReport CStr(nepusteni(i)), "FAIL", _
+            "IZBOR: test se ne pusta u RunAllTests (nepoznato ime ili nema RunOne)"
+    Next i
+End Sub
+
+Private Sub ZapisiVreme(ByVal nm As String, ByVal status As String, ByVal t0 As Single)
+    m_Vreme = m_Vreme & SekundeOd(t0) & vbTab & status & vbTab & nm & vbLf
+End Sub
+
+' Proteklo vreme kao tekst sa TACKOM: Str$ ne zavisi od regionalnih
+' podesavanja, a Format$ bi na srpskom Windows-u dao zarez. Timer se u ponoc
+' vraca na nulu, pa negativna razlika znaci prelaz dana.
+Private Function SekundeOd(ByVal t0 As Single) As String
+    Dim d As Double
+    d = CDbl(Timer) - CDbl(t0)
+    If d < 0 Then d = d + 86400#
+    SekundeOd = Trim$(Str$(Round(d, 3)))
+End Function
+
+' Dijagnostika, ne verdikt: neuspeh upisa ne sme da obori prolaz, pa ni da
+' ostavi gresku u Err pozivaocu.
+Private Sub WriteVremeFile()
+    On Error Resume Next
+    WriteTextFile ThisWorkbook.path & Application.PathSeparator & _
+                  "last_run_vreme.txt", m_Vreme
+    Err.Clear
 End Sub
 
 ' Svi seam-ovi koji SUZAVAJU ponasanje, na jednom mestu.
@@ -1126,6 +1291,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 351: TestName = "T_Doplata_ObuhvatKooperanta"
         Case 352: TestName = "T_Doplata_ObuhvatNaEkranu"
         Case 353: TestName = "T_Doplata_ObuhvatZastoj"
+        Case 354: TestName = "T_TestIzbor_TacnoImeIJednokratno"
+        Case 355: TestName = "T_Journal_TihiRezimGasiZakazivanje"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1487,6 +1654,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 351: T_Doplata_ObuhvatKooperanta
         Case 352: T_Doplata_ObuhvatNaEkranu
         Case 353: T_Doplata_ObuhvatZastoj
+        Case 354: T_TestIzbor_TacnoImeIJednokratno
+        Case 355: T_Journal_TihiRezimGasiZakazivanje
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -1752,6 +1921,87 @@ Private Sub T_ParseDatum_Ugovor()
     ' Kapija poslovnih godina dolazi iz zajednickog parsera (modParse), ali se
     ' vidi kroz ovo polje -- zato stoji ovde, uz ostatak ugovora.
     AssertEq modOtkupUI.ParseDatum("11.08.1899"), 0, "godina van poslovnog opsega"
+End Sub
+
+' IZBOR TESTOVA (run_vba.py --test, dokaz.py --izbor) BIRA CELO IME I TRAJE
+' JEDAN PROLAZ.
+'
+' Oba kvara bi bila TIHA i oba bi davala zelen prolaz sa pogresnim testovima:
+'   - podniz umesto celog imena: izbor "T_A" pusti i "T_AB", pa dokaz meri tudji
+'     test, a nepusten trazeni ostaje neprimecen ako se poklopi sa drugim;
+'   - izbor koji prezivi prolaz: sledeci goli RunAllTests tiho pusta samo
+'     prethodni izbor.
+' Treci -- trazen a nepusten test -- mora da bude imenovan, jer ProveriIzbor od
+' njega pravi FAIL.
+'
+' Sta ovaj test NE meri: da RunAllTests zaista zove PreuzmiIzbor. To se ne moze
+' izmeriti iznutra (test radi usred tog prolaza), pa ga tvrdi
+' `run_vba.py --self-test` nad izvorom.
+Private Sub T_TestIzbor_TacnoImeIJednokratno()
+    Dim zahtev As String
+
+    AssertEq NormalizujIzbor(" T_A, ,T_B "), ",T_A,T_B,", _
+             "izbor se normalizuje u ,ime,ime,"
+    AssertEq NormalizujIzbor(" , "), "", "spisak bez imena je prazan izbor"
+
+    AssertEq IzborSadrzi(",T_A,T_B,", "T_B"), True, "izbor nalazi svoje ime"
+    AssertEq IzborSadrzi(",T_AB,", "T_A"), False, "izbor T_AB ne pusta T_A"
+    AssertEq IzborSadrzi(",T_A,", "T_AB"), False, "izbor T_A ne pusta T_AB"
+
+    AssertEq IzborNepusteni(",T_A,T_B,", ",T_A,"), "T_B", _
+             "nepusten test iz izbora se imenuje"
+    AssertEq IzborNepusteni(",T_A,", ",T_A,"), "", "pusten izbor nema nepustenih"
+
+    zahtev = ",T_X,"
+    AssertEq PreuzmiIzbor(zahtev), ",T_X,", "prolaz preuzima zahtevan izbor"
+    AssertEq PreuzmiIzbor(zahtev), "", _
+             "izbor traje jedan prolaz -- sledeci RunAllTests je pun"
+End Sub
+
+' TIHI REZIM GASI ZAKAZIVANJE, A BEZ NJEGA COMMIT ZAKAZUJE AUTOSAVE (S-1).
+'
+' RunAllTests i BFP rade u tihom rezimu dnevnika, pa nijedan njihov commit vise
+' ni usput ne prolazi kroz MarkDirtyAndSchedule. Ovaj test tu putanju meri
+' IZRICITO, u oba smera: bez tihog rezima commit zakazuje AutoSave, sa njim ne.
+' Kvar u kapiji (zakazivanje ugaseno i u produkciji, ili upaljeno u testu) bi
+' inace prosao neprimecen.
+'
+' Upis CSV dnevnika se ovde NE meri: pisao bi u pravi Journal folder DEV sveske,
+' a sledeci start bi to javio kao gubitak podataka (v. modTestBanka). Usputno
+' izvrsavanje ga ni ranije nije merilo -- WriteJournalRow guta svaku gresku.
+Private Sub T_Journal_TihiRezimGasiZakazivanje()
+    Dim bioTih As Boolean
+    Dim errNum As Long, errDesc As String
+    bioTih = modJournaling.IsTestModeQuiet()
+    On Error GoTo EH
+
+    AssertEq bioTih, True, "RunAllTests radi u tihom rezimu dnevnika"
+    AssertEq modTxState.SnimanjeDozvoljeno(), True, _
+             "preduslov: snimanje je dozvoljeno (nema zaostalog markera rollback-a)"
+
+    modJournaling.StopAutoSaveTimer
+    modJournaling.SetTestModeQuiet False
+    modJournaling.MarkDirtyAndSchedule "T_Journal.bez-tihog"
+    AssertEq modJournaling.AutoSaveZakazan(), True, _
+             "bez tihog rezima commit zakazuje AutoSave"
+    modJournaling.StopAutoSaveTimer
+    AssertEq modJournaling.AutoSaveZakazan(), False, _
+             "StopAutoSaveTimer otkazuje zakazan AutoSave"
+
+    modJournaling.SetTestModeQuiet True
+    modJournaling.MarkDirtyAndSchedule "T_Journal.tiho"
+    AssertEq modJournaling.AutoSaveZakazan(), False, _
+             "tihi rezim ne zakazuje AutoSave"
+
+    modJournaling.SetTestModeQuiet bioTih
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modJournaling.StopAutoSaveTimer
+    modJournaling.SetTestModeQuiet bioTih
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Journal_TihiRezimGasiZakazivanje", errDesc
 End Sub
 
 ' ID PARCELE JE SKRIVENA DRUGA KOLONA combo-a, kao kod svih ostalih dropdown-a
@@ -17699,6 +17949,14 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     Dim tmp As String, imaFajl As Boolean
     Dim errNum As Long, errDesc As String
 
+    ' Folder POD SVESKOM, ne u %TEMP%. run_vba svaki poziv pusta nad svojom temp
+    ' kopijom sveske, pa je ThisWorkbook.path privatan za taj poziv; %TEMP% je
+    ' zajednicki za celu masinu -- dva radnika (dokaz.py --radnika) bi se tu
+    ' sudarila (ista imena kopija u istom minutu). Reprodukovano 17.11.2026:
+    ' FAJL agrix_backup_test podmetnut u %TEMP% obarao je test. Postavlja se
+    ' PRVI, da ga ciscenje posle greske nikad ne zatekne praznog.
+    tmp = ThisWorkbook.path & "\agrix_backup_test"
+
     sada = DateSerial(2026, 9, 12) + TimeSerial(18, 0, 0)
 
     ' --- oba kanonska oblika daju PUNO vreme, ne samo datum
@@ -17769,11 +18027,12 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     ' --- pozitivan smer: validan folder vraca True I fajl stvarno nastane.
     '     Bez ove tvrdnje je suite bio zelen nad ugovorom u kome uspesan backup
     '     prijavljuje neuspeh -- operater bi na svakom startu video lazno upozorenje.
-    tmp = Environ$("TEMP") & "\agrix_backup_test"
     If Len(Dir(tmp, vbDirectory)) = 0 Then MkDir tmp
     uspeoValidan = modJournaling.BackupFileOnStart(tmp)
     imaFajl = (Len(Dir(tmp & "\*.xls*")) > 0)
-    Kill tmp & "\*.*"
+    ' Prazan folder: Kill bez pogotka podize "File not found" i odvodi u EH,
+    ' pa bi neuspeo backup pao kao greska umesto svojom tvrdnjom ispod.
+    If Len(Dir(tmp & "\*.*")) > 0 Then Kill tmp & "\*.*"
     RmDir tmp
     On Error GoTo 0
 
@@ -17783,9 +18042,15 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    ' Ciscenje POSLE Resume, ne u obradjivacu: dok je obradjivac aktivan, nova
+    ' greska (Kill nad praznim ili nepostojecim folderom) izlazi iz procedure i
+    ' pored Resume Next -- test je tako padao golim "File not found" umesto
+    ' tvrdnjom ispod (17.11.2026).
+    Resume CistiPosleGreske
+CistiPosleGreske:
     On Error Resume Next
-    Kill Environ$("TEMP") & "\agrix_backup_test\*.*"
-    RmDir Environ$("TEMP") & "\agrix_backup_test"
+    Kill tmp & "\*.*"
+    RmDir tmp
     On Error GoTo 0
     AssertEq "podigao gresku " & errNum & " " & errDesc, "bez greske", _
              "BackupFileOnStart NE SME da podigne gresku -- start bi pao"
