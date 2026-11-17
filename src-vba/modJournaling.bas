@@ -846,6 +846,14 @@ Public Sub StopAutoSaveTimer()
     CancelAutoSaveTimer
 End Sub
 
+' Da li AutoSave ceka na OnTime. Samo POSMATRA -- ne menja stanje. Treba ga test
+' koji meri kapiju tihog rezima u oba smera (modTest.T_Journal_TihiRezimGasiZakazivanje):
+' RunAllTests i BFP rade u tihom rezimu, pa njihovi commit-i vise ne prolaze kroz
+' MarkDirtyAndSchedule ni usput.
+Public Function AutoSaveZakazan() As Boolean
+    AutoSaveZakazan = m_SaveScheduled
+End Function
+
 Private Sub ScheduleAutoSaveTimer(ByVal delaySec As Long)
     CancelAutoSaveTimer                          ' uvek otkazi prethodni pre novog
     If delaySec < 0 Then delaySec = 0

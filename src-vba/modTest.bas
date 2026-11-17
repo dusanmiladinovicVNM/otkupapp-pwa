@@ -298,6 +298,15 @@ Public Sub RunAllTests()
     Dim prevMode As Boolean
     prevMode = IsTestMode()
     SetTestMode True
+    ' TIHI REZIM DNEVNIKA (S-1). Bez njega svaki AppendRow dopisuje CSV journal,
+    ' a svaki commit zakazuje AutoSave (OnTime) i pise red loga -- posao koji
+    ' nijedna tvrdnja ove suite ne meri, a placa se u svakom prolazu i dokazu. Na
+    ' DEV svesci journal posle rollback-a ostaje i sledeci start ga javlja kao
+    ' gubitak podataka (isti razlog kao u modTestBanka). Kapiju tihog rezima meri
+    ' T_Journal_TihiRezimGasiZakazivanje, u oba smera.
+    Dim prevQuiet As Boolean
+    prevQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
     ' Seam zapamcen iz prethodnog run-a je bio inertan dok je test rezim bio
     ' iskljucen -- ali se aktivira tacno sada. Ciscenje ide POSLE SetTestMode
     ' True, jer sami seam-ovi odbijaju postavljanje van test rezima.
@@ -438,6 +447,8 @@ Public Sub RunAllTests()
     RunOne 310
     ' Ciste funkcije, bez fixture-a -- redosled nije nosec.
     RunOne 354
+    ' Kapija tihog rezima dnevnika; vraca rezim i otkazuje tajmer sam.
+    RunOne 355
     RunOne 311
     RunOne 312
     RunOne 313
@@ -702,6 +713,14 @@ Public Sub RunAllTests()
     m_Izbor = ""
 
     SetTestMode prevMode
+    modJournaling.SetTestModeQuiet prevQuiet
+    ' Tajmeri koje je suite zakazala ne smeju da je prezive. Warm kes storna
+    ' zakazuje SVAKI commit (tihi rezim ga ne gasi), AutoSave samo test koji
+    ' izricito ugasi tihi rezim. OnTime opali cim Excel predahne -- izmedju dve
+    ' suite (warm gradi kes storna, AutoSave snima svesku), a posle zatvaranja
+    ' svesku ponovo otvori.
+    modJournaling.StopAutoSaveTimer
+    modStornoWarm.StopStornoWarm
     WriteResultFile
     WriteVremeFile
 End Sub
@@ -1273,6 +1292,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 352: TestName = "T_Doplata_ObuhvatNaEkranu"
         Case 353: TestName = "T_Doplata_ObuhvatZastoj"
         Case 354: TestName = "T_TestIzbor_TacnoImeIJednokratno"
+        Case 355: TestName = "T_Journal_TihiRezimGasiZakazivanje"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1635,6 +1655,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 352: T_Doplata_ObuhvatNaEkranu
         Case 353: T_Doplata_ObuhvatZastoj
         Case 354: T_TestIzbor_TacnoImeIJednokratno
+        Case 355: T_Journal_TihiRezimGasiZakazivanje
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -1935,6 +1956,52 @@ Private Sub T_TestIzbor_TacnoImeIJednokratno()
     AssertEq PreuzmiIzbor(zahtev), ",T_X,", "prolaz preuzima zahtevan izbor"
     AssertEq PreuzmiIzbor(zahtev), "", _
              "izbor traje jedan prolaz -- sledeci RunAllTests je pun"
+End Sub
+
+' TIHI REZIM GASI ZAKAZIVANJE, A BEZ NJEGA COMMIT ZAKAZUJE AUTOSAVE (S-1).
+'
+' RunAllTests i BFP rade u tihom rezimu dnevnika, pa nijedan njihov commit vise
+' ni usput ne prolazi kroz MarkDirtyAndSchedule. Ovaj test tu putanju meri
+' IZRICITO, u oba smera: bez tihog rezima commit zakazuje AutoSave, sa njim ne.
+' Kvar u kapiji (zakazivanje ugaseno i u produkciji, ili upaljeno u testu) bi
+' inace prosao neprimecen.
+'
+' Upis CSV dnevnika se ovde NE meri: pisao bi u pravi Journal folder DEV sveske,
+' a sledeci start bi to javio kao gubitak podataka (v. modTestBanka). Usputno
+' izvrsavanje ga ni ranije nije merilo -- WriteJournalRow guta svaku gresku.
+Private Sub T_Journal_TihiRezimGasiZakazivanje()
+    Dim bioTih As Boolean
+    Dim errNum As Long, errDesc As String
+    bioTih = modJournaling.IsTestModeQuiet()
+    On Error GoTo EH
+
+    AssertEq bioTih, True, "RunAllTests radi u tihom rezimu dnevnika"
+    AssertEq modTxState.SnimanjeDozvoljeno(), True, _
+             "preduslov: snimanje je dozvoljeno (nema zaostalog markera rollback-a)"
+
+    modJournaling.StopAutoSaveTimer
+    modJournaling.SetTestModeQuiet False
+    modJournaling.MarkDirtyAndSchedule "T_Journal.bez-tihog"
+    AssertEq modJournaling.AutoSaveZakazan(), True, _
+             "bez tihog rezima commit zakazuje AutoSave"
+    modJournaling.StopAutoSaveTimer
+    AssertEq modJournaling.AutoSaveZakazan(), False, _
+             "StopAutoSaveTimer otkazuje zakazan AutoSave"
+
+    modJournaling.SetTestModeQuiet True
+    modJournaling.MarkDirtyAndSchedule "T_Journal.tiho"
+    AssertEq modJournaling.AutoSaveZakazan(), False, _
+             "tihi rezim ne zakazuje AutoSave"
+
+    modJournaling.SetTestModeQuiet bioTih
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modJournaling.StopAutoSaveTimer
+    modJournaling.SetTestModeQuiet bioTih
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Journal_TihiRezimGasiZakazivanje", errDesc
 End Sub
 
 ' ID PARCELE JE SKRIVENA DRUGA KOLONA combo-a, kao kod svih ostalih dropdown-a
