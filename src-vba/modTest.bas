@@ -17949,6 +17949,14 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     Dim tmp As String, imaFajl As Boolean
     Dim errNum As Long, errDesc As String
 
+    ' Folder POD SVESKOM, ne u %TEMP%. run_vba svaki poziv pusta nad svojom temp
+    ' kopijom sveske, pa je ThisWorkbook.path privatan za taj poziv; %TEMP% je
+    ' zajednicki za celu masinu -- dva radnika (dokaz.py --radnika) bi se tu
+    ' sudarila (ista imena kopija u istom minutu). Reprodukovano 17.11.2026:
+    ' FAJL agrix_backup_test podmetnut u %TEMP% obarao je test. Postavlja se
+    ' PRVI, da ga ciscenje posle greske nikad ne zatekne praznog.
+    tmp = ThisWorkbook.path & "\agrix_backup_test"
+
     sada = DateSerial(2026, 9, 12) + TimeSerial(18, 0, 0)
 
     ' --- oba kanonska oblika daju PUNO vreme, ne samo datum
@@ -18019,11 +18027,12 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     ' --- pozitivan smer: validan folder vraca True I fajl stvarno nastane.
     '     Bez ove tvrdnje je suite bio zelen nad ugovorom u kome uspesan backup
     '     prijavljuje neuspeh -- operater bi na svakom startu video lazno upozorenje.
-    tmp = Environ$("TEMP") & "\agrix_backup_test"
     If Len(Dir(tmp, vbDirectory)) = 0 Then MkDir tmp
     uspeoValidan = modJournaling.BackupFileOnStart(tmp)
     imaFajl = (Len(Dir(tmp & "\*.xls*")) > 0)
-    Kill tmp & "\*.*"
+    ' Prazan folder: Kill bez pogotka podize "File not found" i odvodi u EH,
+    ' pa bi neuspeo backup pao kao greska umesto svojom tvrdnjom ispod.
+    If Len(Dir(tmp & "\*.*")) > 0 Then Kill tmp & "\*.*"
     RmDir tmp
     On Error GoTo 0
 
@@ -18033,9 +18042,15 @@ Private Sub T_Backup_NeObaraStartINeRasteBezGranice()
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    ' Ciscenje POSLE Resume, ne u obradjivacu: dok je obradjivac aktivan, nova
+    ' greska (Kill nad praznim ili nepostojecim folderom) izlazi iz procedure i
+    ' pored Resume Next -- test je tako padao golim "File not found" umesto
+    ' tvrdnjom ispod (17.11.2026).
+    Resume CistiPosleGreske
+CistiPosleGreske:
     On Error Resume Next
-    Kill Environ$("TEMP") & "\agrix_backup_test\*.*"
-    RmDir Environ$("TEMP") & "\agrix_backup_test"
+    Kill tmp & "\*.*"
+    RmDir tmp
     On Error GoTo 0
     AssertEq "podigao gresku " & errNum & " " & errDesc, "bez greske", _
              "BackupFileOnStart NE SME da podigne gresku -- start bi pao"

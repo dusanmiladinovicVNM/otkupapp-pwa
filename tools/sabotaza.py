@@ -13474,6 +13474,29 @@ SABOTAZE = {
         "Test_BFP_TihiRezimDnevnika",
         "BFP radi u tihom rezimu dnevnika do kraja suite",
     ),
+    # #184. Backup se ne napravi -- a funkcija ne sme da tvrdi uspeh. Do sada
+    # nijedna sabotaza nije gadjala ovaj test; uz to meri i da test vise ne
+    # pada golim "File not found" (prazan folder pri ciscenju).
+    "backup-kopija-se-ne-pravi": (
+        "modJournaling.bas",
+        "    ThisWorkbook.SaveCopyAs destPath\n",
+        "    ' SABOTAZA: kopija se ne pravi\n",
+        "T_Backup_NeObaraStartINeRasteBezGranice",
+        "uspesan backup vraca True (ne lazno upozorenje na startu)",
+    ),
+    # #184. Ugovor "NIKAD NE PODIZE GRESKU" prekrsen: greska izlazi iz
+    # BackupFileOnStart. Test mora da padne SVOJOM tvrdnjom iz EH grane -- pre
+    # ispravke je ciscenje u aktivnom obradjivacu puklo i dalo "File not found".
+    "backup-podize-gresku": (
+        "modJournaling.bas",
+        "    ' Namerno BEZ Err.Raise -- v. zaglavlje procedure.\n"
+        "    BackupFileOnStart = False\n",
+        "    ' SABOTAZA: greska izlazi iz procedure\n"
+        "    BackupFileOnStart = False\n"
+        "    Err.Raise errNo, \"BackupFileOnStart\", errDesc\n",
+        "T_Backup_NeObaraStartINeRasteBezGranice",
+        "BackupFileOnStart NE SME da podigne gresku -- start bi pao",
+    ),
 }
 
 

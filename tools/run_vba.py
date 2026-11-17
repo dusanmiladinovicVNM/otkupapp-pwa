@@ -494,6 +494,7 @@ def self_test() -> int:
     leaks.extend(_self_test_izbor(tudje))
     leaks.extend(_self_test_prekid(tudje))
     leaks.extend(_self_test_src())
+    leaks.extend(_self_test_radnici(tudje))
 
     for line in leaks:
         print(line, file=sys.stderr)
@@ -1118,6 +1119,137 @@ def create_blank_fixture(path: str, win32) -> None:
         pythoncom.CoUninitialize()
 
 
+# --- radnici (R-4): izlaz, brave, proces ---------------------------------------
+#
+# Vise run_vba poziva u isto vreme (dokaz.py --radnika N) ne sme da deli NISTA
+# sto pise ili ubija:
+#   --izlaz DIR    izvestaj (last_run.*), istorija i excel.pid idu u DIR, a DIR
+#                  je ZAKLJUCAN dok poziv traje: drugi poziv sa istim izlazom se
+#                  odbija PRE Excela (IZLAZ ZAUZET), umesto da tiho ispreplete
+#                  izvestaje. Bez --izlaz je to tests/, i brava vazi i tu -- dva
+#                  rucna poziva istovremeno su ranije tiho mesala last_run.*.
+#   start brava    DispatchEx i otvaranje sveske idu JEDAN PO JEDAN na celoj
+#                  masini: istovremen start vise Excel-a preko COM-a ume da
+#                  odbije poziv (RPC_E_CALL_REJECTED).
+#   handle procesa Excel se ceka i ubija preko handle-a uzetog odmah posle
+#                  starta, ne preko PID-a: posle izlaska PID moze vec da pripada
+#                  Excel-u drugog radnika.
+IZLAZ_PODRAZUMEVANO = os.path.join(ROOT, "tests")
+ISTORIJA_IME = "run_vba_istorija.jsonl"
+PID_FAJL = "excel.pid"
+START_BRAVA = os.path.join(tempfile.gettempdir(), "run_vba_start.lock")
+START_CEKANJE = 180.0   # najduze cekanje na start bravu; posle toga se ide bez nje
+
+PROCESS_TERMINATE = 0x0001
+SYNCHRONIZE = 0x00100000
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
+def _zakljucaj(put: str, cekaj: float = 0.0):
+    """Ekskluzivna brava nad fajlom `put`: otvoren fajl (drzi bravu) ili None.
+
+    `cekaj` = 0 -> odmah None ako je zauzeta; inace pokusava do `cekaj` sekundi.
+    Brava je OS-ova (msvcrt / fcntl), pa je pusta i proces koji umre.
+    """
+    os.makedirs(os.path.dirname(put) or ".", exist_ok=True)
+    kraj = time.time() + max(0.0, cekaj)
+    while True:
+        fh = open(put, "a+")
+        try:
+            if os.name == "nt":
+                import msvcrt
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fh
+        except OSError:
+            fh.close()
+            if time.time() >= kraj:
+                return None
+            time.sleep(0.2)
+
+
+def _pusti_bravu(fh) -> None:
+    if fh is not None:
+        try:
+            fh.close()
+        except OSError:
+            pass
+
+
+def izlaz_iz_argumenata(args) -> str:
+    """Folder za izvestaj, istoriju i excel.pid (`--izlaz`, inace tests/)."""
+    if getattr(args, "izlaz", None):
+        return os.path.abspath(args.izlaz)
+    return IZLAZ_PODRAZUMEVANO
+
+
+def _upisi_pid(izlaz: str, pid: int, kreiran: str) -> None:
+    """excel.pid: PID i VREME NASTANKA. dokaz.py posle svog timeout-a ubija
+    zaostali Excel samo ako se poklope oba -- isti PID kasnije moze biti tudji."""
+    try:
+        with open(os.path.join(izlaz, PID_FAJL), "w", encoding="ascii") as fh:
+            json.dump({"pid": int(pid), "kreiran": str(kreiran)}, fh)
+    except OSError:
+        pass
+
+
+def _obrisi_pid(izlaz: str) -> None:
+    try:
+        os.remove(os.path.join(izlaz, PID_FAJL))
+    except OSError:
+        pass
+
+
+def _otvori_proces(pid: int):
+    """Handle sa pravom da ceka, ubije i procita vreme nastanka; ili None."""
+    try:
+        import win32api
+        return win32api.OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE
+                                    | PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    except Exception:                       # noqa: BLE001
+        return None
+
+
+def vreme_nastanka(h) -> str:
+    """Vreme nastanka procesa kao tekst (identitet uz PID), ili ""."""
+    try:
+        import win32process
+        return str(win32process.GetProcessTimes(h)["CreationTime"])
+    except Exception:                       # noqa: BLE001
+        return ""
+
+
+def _terminate_handle(h, flag: dict) -> None:
+    """Kao _terminate_pid, ali preko handle-a -- ne moze da pogodi tudji proces."""
+    flag["fired"] = True
+    try:
+        import win32api
+        win32api.TerminateProcess(h, 0)
+    except Exception:                       # noqa: BLE001
+        pass
+
+
+def _ugasi_proces(h, cekaj_ms: int = 3000) -> bool:
+    """Sacekaj da Excel izadje (najvise `cekaj_ms`), inace ga ubij. True = ubijen.
+
+    Zamenjuje fiksnu sekundu posle CoUninitialize (R-1): proces se ceka koliko
+    stvarno traje, ne uvek pun sekund."""
+    if h is None:
+        return False
+    try:
+        import win32api
+        import win32event
+        if win32event.WaitForSingleObject(h, int(cekaj_ms)) == win32event.WAIT_TIMEOUT:
+            win32api.TerminateProcess(h, 0)
+            return True
+    except Exception:                       # noqa: BLE001
+        pass
+    return False
+
+
 # --- izvor (D-6) ---------------------------------------------------------------
 
 def izvor_iz_argumenata(args) -> tuple:
@@ -1255,6 +1387,104 @@ def _self_test_src() -> list:
     return nalazi
 
 
+def _self_test_radnici(tudje: str) -> list:
+    """R-4: brava izlaza, pid fajl, i da ih main zaista koristi (nad izvorom)."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("RADNICI: " + opis)
+
+    # Igla ne sme da pogodi sebe: telo OVE funkcije se izbacuje iz pretrage.
+    poc = tudje.find("def _self_test_radnici(")
+    kraj = tudje.find("\ndef ", poc + 1)
+    tudje = tudje[:poc] + tudje[kraj if kraj > 0 else len(tudje):]
+
+    privremeni = tempfile.mkdtemp(prefix="run_vba_radnici_")
+    try:
+        p1 = os.path.join(privremeni, "a", ".run_vba.lock")
+        p2 = os.path.join(privremeni, "b", ".run_vba.lock")
+        # Svaki poziv koji MOZE da naidje na zauzetu bravu ide u nit sa rokom:
+        # brava koja ceka zauvek bi inace zaglavila self-test (i hook), umesto
+        # da ga obori po imenu.
+        def u_niti(fn, rok=3.0):
+            rez = {}
+
+            def telo():
+                t0 = time.time()
+                rez["v"] = fn()
+                rez["s"] = time.time() - t0
+
+            nit = threading.Thread(target=telo, daemon=True)
+            nit.start()
+            nit.join(rok)
+            return (not nit.is_alive()), rez.get("v"), rez.get("s", 99.0)
+
+        a = _zakljucaj(p1)
+        gotov_b, b, _s = u_niti(lambda: _zakljucaj(p1))
+        c = _zakljucaj(p2)
+        gotov_b2, b2, cekano = u_niti(lambda: _zakljucaj(p1, cekaj=0.3))
+        tvrdi(gotov_b and gotov_b2,
+              "zauzeta brava visi umesto da se vrati (cekanje bez granice)")
+        tvrdi(a is not None and b is None and b2 is None and gotov_b,
+              "drugi poziv sa istim izlazom nije odbijen")
+        tvrdi(gotov_b2 and 0.25 <= cekano < 3.0,
+              "cekanje na zauzetu bravu nije ograniceno (%s)"
+              % ("visi" if not gotov_b2 else "%.2fs" % cekano))
+        tvrdi(c is not None, "razliciti izlazi se medjusobno zakljucavaju")
+        _pusti_bravu(a)
+        gotov_d, d, _s = u_niti(lambda: _zakljucaj(p1))
+        tvrdi(gotov_d and d is not None, "pustena brava se ne moze ponovo uzeti")
+        for fh in (b, b2, c, d):
+            _pusti_bravu(fh)
+
+        izl = os.path.join(privremeni, "izl")
+        os.makedirs(izl)
+        _upisi_pid(izl, 4242, "2026-11-17 10:00:00")
+        with open(os.path.join(izl, PID_FAJL), encoding="ascii") as fh:
+            zapis = json.load(fh)
+        tvrdi(zapis == {"pid": 4242, "kreiran": "2026-11-17 10:00:00"},
+              "excel.pid ne nosi PID i vreme nastanka (%r)" % zapis)
+        _obrisi_pid(izl)
+        tvrdi(not os.path.exists(os.path.join(izl, PID_FAJL)),
+              "excel.pid se ne brise posle gasenja")
+    finally:
+        shutil.rmtree(privremeni, ignore_errors=True)
+
+    tvrdi(izlaz_iz_argumenata(argparse.Namespace(izlaz=None)) == IZLAZ_PODRAZUMEVANO
+          and izlaz_iz_argumenata(argparse.Namespace(izlaz="x")) == os.path.abspath("x"),
+          "izlaz bez --izlaz nije tests/, ili --izlaz nije apsolutan")
+
+    # Ozicenje main-a, nad izvorom (main trazi Excel).
+    i_main = tudje.find("def main(")
+    glavni = tudje[i_main:tudje.find("\ndef ", i_main + 1)]
+
+    def pre(a, b):
+        return 0 <= glavni.find(a) < glavni.find(b)
+
+    tvrdi(pre('brava = _zakljucaj(os.path.join(izlaz, ".run_vba.lock"))',
+              "win32.DispatchEx("),
+          "main ne zakljucava izlaz PRE Excela")
+    tvrdi(pre("start_brava = _zakljucaj(START_BRAVA, cekaj=START_CEKANJE)",
+              "xl = win32.DispatchEx(")
+          and pre("wb = xl.Workbooks.Open(", "_pusti_bravu(start_brava)"),
+          "start Excela nije pod start bravom (od DispatchEx do otvaranja sveske)")
+    tvrdi(pre("hproc = _otvori_proces(pid)", "prekid = Prekid(")
+          and "_upisi_pid(izlaz, pid, vreme_nastanka(hproc))" in glavni
+          and "_obrisi_pid(izlaz)" in glavni,
+          "main ne drzi handle Excela ili ne vodi excel.pid")
+    tvrdi("_ugasi_proces(hproc, cekaj_ms=3000)" in glavni
+          and "_terminate_handle(hproc, flag)" in glavni,
+          "gasenje i prekid ne idu preko zadrzanog handle-a")
+    tvrdi("if not args.izlaz:\n            _copy_golden(os.path.join(tmp, \"golden\"), GOLDEN_DIR)"
+          in glavni,
+          "golden se vraca u repo i uz --izlaz (radnici bi ga prepisivali)")
+    tvrdi("_write_report(report, rc, izlaz)" in glavni
+          and "put=os.path.join(izlaz, ISTORIJA_IME))" in glavni,
+          "izvestaj ili istorija ne idu u --izlaz")
+    return nalazi
+
+
 # --- Glavni tok --------------------------------------------------------------
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -1278,6 +1508,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--bez-markera", action="store_true",
                     help="ne upisuj marker zelenog (dokaz.py nad namerno pokvarenim "
                          "izvorom, KI-036)")
+    ap.add_argument("--izlaz", metavar="DIR",
+                    help="izvestaj, istorija i excel.pid u ovaj folder (zakljucan dok "
+                         "poziv traje); dokaz.py daje svaki radniku svoj (R-4). "
+                         "Podrazumevano tests/; uz --izlaz se golden ne vraca u repo")
     ap.add_argument("--src", metavar="DIR",
                     help="uvezi izvor iz ovog foldera umesto iz src-vba/ (dokaz.py "
                          "daje svoju kopiju, D-6); marker nosi otisak SADRZAJA, pa "
@@ -1465,6 +1699,14 @@ def main(argv: list[str]) -> int:
         print("run_vba.py radi samo na Windows-u (Excel COM).", file=sys.stderr)
         return 2
 
+    # Izlaz se zakljucava PRE Excela i drzi do kraja poziva (v. R-4 iznad).
+    izlaz = izlaz_iz_argumenata(args)
+    brava = _zakljucaj(os.path.join(izlaz, ".run_vba.lock"))
+    if brava is None:
+        print("IZLAZ ZAUZET: %s -- drugi run_vba vec pise tu; sacekaj ga ili daj "
+              "--izlaz" % izlaz, file=sys.stderr)
+        return 2
+
     import pythoncom
     import win32api
     import win32com.client as win32
@@ -1542,19 +1784,30 @@ def main(argv: list[str]) -> int:
     rc = 2
     xl = None
     pid = None
+    hproc = None
+    start_brava = None
     watchdog = None
     prekid = None
     zabelezi_fazu("priprema bez Excela")
 
     pythoncom.CoInitialize()
     try:
+        start_brava = _zakljucaj(START_BRAVA, cekaj=START_CEKANJE)
+        if start_brava is None:
+            print("START BRAVA nije dobijena za %ds -- Excel se pali bez nje"
+                  % START_CEKANJE, file=sys.stderr)
         xl = win32.DispatchEx("Excel.Application")
         pid = win32process.GetWindowThreadProcessId(xl.Hwnd)[1]
+        hproc = _otvori_proces(pid)
+        _upisi_pid(izlaz, pid, vreme_nastanka(hproc))
 
         # Tvrdi prekid: ako Excel iz bilo kog razloga prestane da odgovara (break
         # mode, dijalog koji watchdog ne prepozna), COM poziv ne puca -- samo
         # stoji. Bez ovoga run visi dok ga neko ne ubije rukom. Budzet je po fazi.
-        prekid = Prekid(pid, args.timeout)
+        # Ubija preko ZADRZANOG handle-a kad ga ima (v. R-4).
+        prekid = Prekid(pid, args.timeout,
+                        ubij=(lambda _pid, flag: _terminate_handle(hproc, flag))
+                        if hproc is not None else None)
         prekid.naoruzaj("priprema")
 
         watchdog = DialogWatchdog(pid, poll=args.timeout_dialog,
@@ -1568,6 +1821,8 @@ def main(argv: list[str]) -> int:
 
         zabelezi_fazu("start Excela")
         wb = xl.Workbooks.Open(wbpath, UpdateLinks=0)
+        _pusti_bravu(start_brava)
+        start_brava = None
         zabelezi_fazu("otvaranje sveske")
 
         if not args.no_import:
@@ -1686,6 +1941,7 @@ def main(argv: list[str]) -> int:
         report["fatal"] = str(exc)
         rc = 2
     finally:
+        _pusti_bravu(start_brava)
         # Sveska se zatvara PRE gasenja cuvara. Close() ume da podigne
         # "Want to save your changes?" -- dovoljno je da jedna suite u svom
         # ciscenju vrati Application.DisplayAlerts na True. Ranije su i watchdog
@@ -1727,17 +1983,27 @@ def main(argv: list[str]) -> int:
             pass
         del xl
         pythoncom.CoUninitialize()
-        time.sleep(1.0)
-        if pid:
+        if hproc is not None:
+            # R-1/R-4: ceka se SAM proces (najvise 3 s), ne fiksna sekunda, i
+            # ubija se preko zadrzanog handle-a -- PID iz Hwnd-a posle izlaska
+            # moze vec da pripada Excel-u drugog radnika.
+            _ugasi_proces(hproc, cekaj_ms=3000)
+        elif pid:
+            # Handle nije dobijen: stari put, po PID-u posle sekunde.
+            time.sleep(1.0)
             try:
                 h = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
                 win32api.TerminateProcess(h, 0)
             except Exception:
                 pass
+        _obrisi_pid(izlaz)
         # Nov golden nastaje u temp-u -- vrati ga u repo da ga covek pregleda i
         # commit-uje. Bez ovoga bi ga svaki sledeci run pravio iznova i test bi
-        # zauvek padao istom porukom.
-        _copy_golden(os.path.join(tmp, "golden"), GOLDEN_DIR)
+        # zauvek padao istom porukom. Uz --izlaz (dokaz.py, radnici) NE: golden
+        # pravi samo RunGoldenSuite, a pet radnika bi istovremeno prepisivalo
+        # fajlove koji su deo ugovora alata.
+        if not args.izlaz:
+            _copy_golden(os.path.join(tmp, "golden"), GOLDEN_DIR)
 
         if args.keep:
             print(f"\nTemp kopija zadrzana: {tmp}")
@@ -1775,9 +2041,11 @@ def main(argv: list[str]) -> int:
     except Exception as exc:                # noqa: BLE001
         report["green"] = "marker nije upisan: %s" % exc
 
-    _write_report(report, rc)
+    _write_report(report, rc, izlaz)
     dopisi_istoriju(report, rc, argv, pocetak,
-                    (kontekst_dokaza or {}).get("izvor", ""))
+                    (kontekst_dokaza or {}).get("izvor", ""),
+                    put=os.path.join(izlaz, ISTORIJA_IME))
+    _pusti_bravu(brava)
     return rc
 
 
@@ -1830,13 +2098,15 @@ def dopisi_istoriju(report: dict, rc: int, argv: list, pocetak: float,
         return str(exc)
 
 
-def _write_report(report: dict, rc: int) -> None:
-    outdir = os.path.join(ROOT, "tests")
+def _write_report(report: dict, rc: int, outdir: str = None) -> None:
+    outdir = outdir or IZLAZ_PODRAZUMEVANO
     os.makedirs(outdir, exist_ok=True)
     with open(os.path.join(outdir, "last_run.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
 
     lines = []
+    if outdir != IZLAZ_PODRAZUMEVANO:
+        lines.append(f"IZLAZ   {outdir}")
     if report.get("izvor_dir"):
         lines.append(f"IZVOR   {report['izvor_dir']}")
     for msg in report["import"]:
