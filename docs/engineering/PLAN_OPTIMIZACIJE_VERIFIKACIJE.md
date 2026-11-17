@@ -369,7 +369,7 @@ celog kataloga do commit-a, a F-2 i F-8 daju isto ubrzanje bez tog slabljenja.
 | **S-3** | „Neočekivan dijalog = pad" se sprovodi; `MsgBox` se preskače pod harnesom (`RV-10`) | pouzdanost; oko 11 dijaloga manje po FULL-u | dira 7 test modula; menja ugovor (N6) | S–M | L + W | dijalog u suiti sa `dialogs: False` → rc=2 po imenu; FULL bez reda `DIALOG` |
 | **S-4a** | Svaki ciljani test sam: `dokaz.py --izolacija` nad celim katalogom, noću (`T-09`, `P5`) | izmeren spisak testova koji sami ne prolaze; uslov da izbor postane podrazumevan | 545 podizanja Excela, oko 3,3 h `[I]` | S | W | spisak imena; namerno zavisan test je u njemu |
 | **S-4b** | Obrnut redosled i 3–5 permutacija sa zapisanim semenom; zavisnosti postaju deklaracije u registru (`T-09`) | zavisnost od redosleda postaje podatak; preduslov za K-4 | traži redosled kao podatak (K-2); može otkriti više zavisnosti nego što se očekuje | M | W | isti skup PASS/FAIL po imenu u svim permutacijama; namerno zavisan par je prijavljen |
-| **S-5** | Trijaža najsporijih testova po izmerenom vremenu; vruća putanja pristupa podacima samo ako merenje pokaže, svaki rez uz `pre-flight` (`T-13`) — **uslovno, posle G0** | nepoznat dok M-7 ne da brojeve | visok: jezgro kroz koje ide svaki upis | M po rezu | W | vreme po testu pre i posle; nov test poništavanja keša crven svojom sabotažom |
+| **S-5** | Trijaža najsporijih testova po izmerenom vremenu; vruća putanja pristupa podacima samo ako merenje pokaže, svaki rez uz `pre-flight` (`T-13`) — **uslovno, posle G0** **Prvi rez (17.11.2026):** `Test_OTP_AutoKvarGrupeNeObaraOstale` 69,5 s → ispod 6,4 s (test više ne obrađuje ~150 tuđih grupa iz sesije), dokaz 4/4; v. §2.2 | nepoznat dok M-7 ne da brojeve | visok: jezgro kroz koje ide svaki upis | M po rezu | W | vreme po testu pre i posle; nov test poništavanja keša crven svojom sabotažom |
 | **S-6** | Podrazumevane suite u dva paralelna Excela (`T-10`) | FULL preko 600 s → oko 265–330 s `[I]` | sužava (§5.3, O-11); pravilo unije u markeru je mesto za lažno zeleno; menja ugovor (N6) | M | L + W | svaka podrazumevana suita zelena sama nad čistom kopijom; isti skup imena i verdikata; tri negativna slučaja markera u self-testu |
 | **S-7** | Provera okruženja pre podizanja Excela: slobodan disk (`IM-7`) | sprečava „tri prolaza za nula nalaza" | nizak | S | L | lažiran disk ispod praga → odbijeno po imenu |
 | **S-8** | Hermetički `RunOne`: snimak pre testa i vraćanje izmenjenih tabela (`T-12`) — **uslovno, posle M-5 i S-4a** | svaki test kreće od istog stanja, pa izolovan test i test u suiti mere isto | srednji do visok: nov kritičan mehanizam; u BFP-u se ne primenjuje bez posebne odluke | M | W | test koji ostavi red → sledeći vidi čistu tabelu; isti verdikti u pravom i obrnutom redosledu |
@@ -383,7 +383,7 @@ celog kataloga do commit-a, a F-2 i F-8 daju isto ubrzanje bez tog slabljenja.
 | **D-3** | Kontrolne sabotaže u svakom pozivu: placebo mutacija koja menja samo komentar ne sme biti priznata (`D12`) | dvosmerni dokaz samog dokaza u Excelu | jedan prolaz više | S | L + W | lažan izlaz u kome placebo „obara" tvrdnju → NIJE DOKAZANO |
 | **D-4** | Opcija `--baza-iz-markera`, samo za suite koje se mere celom suitom (`D3`, `RV-12`) — **uslovno, posle G1** | 4–11 min po pozivu bez izbora `[I]`; uz izbor približno ništa | sužava (§5.3); marker ne hvata nedeterminizam između dva puštanja | S | L | važeći marker → nula baznih poziva cele suite; drugi otisak → baza se pušta; uz `--izbor` se baza izbora uvek pušta |
 | **D-5** | Obim reza bira alat: `dokaz.py --od <ref>` (izmenjeni unosi, sabotaže čiji je fajl, procedura ili test diran) (`D8`, `P4`) | nema propuštenih i odloženih „dirnutih" stavki (2 od 11 odloženih je istrunulo) | pravilo o pomoćnom kodu može izabrati previše | M | L | sintetički diff: svaka vrsta pogotka bira svoju stavku; nad diff-om stavke 288 bira svih 11 |
-| **D-6** | Mutacija van radnog stabla: `run_vba --src <kopija>`, `dokaz.py` nikad ne piše u `src-vba` (`D5`, `RV-05`) | radno stablo nije zaključano; nestaje klasa REVERT-FAIL; otvara paralelne instance | `sabotaza.py` primena traži ciljni direktorijum; menja ugovor (N6) | M | L + W | otisak `src-vba` isti pre, tokom i posle; ista sabotaža starim i novim putem daje isti verdikt |
+| **D-6** | Mutacija van radnog stabla: `run_vba --src <kopija>`, `dokaz.py` nikad ne piše u `src-vba` (`D5`, `RV-05`) **Urađeno (17.11.2026):** snimak + kopija + zamrznut katalog, obnova iz snimka, straža; Windows: isti verdikti starim i novim putem (4/4), `src-vba` čist posle dokaza | radno stablo nije zaključano; nestaje klasa REVERT-FAIL; otvara paralelne instance | `sabotaza.py` primena traži ciljni direktorijum; menja ugovor (N6) | M | L + W | otisak `src-vba` isti pre, tokom i posle; ista sabotaža starim i novim putem daje isti verdikt |
 | **D-7** | Nastavak prekinutog dokaza po konzervativnom ključu (ceo izvor, unos, sveska, alati, režim) (`D7`) | prekid posle 20 od 40 h ne košta 20 h | nizak | S | L | promena bilo kog sastojka ključa → stavka se ponovo meri |
 | **D-8** | Statička predprovera novih i izmenjenih sabotaža: mutirani tekst kroz provere `vba_check` po fajlu (`P7c`) | sabotaža koja obara compile se hvata bez Excela | nizak | S | L | sabotaža sa duplom deklaracijom → statički nalaz |
 
@@ -416,7 +416,7 @@ unutar oblasti ostaje.
 | **R-1** | Čekanje na događaj umesto fiksnih `sleep`-ova; compile proba samo tamo gde nešto tvrdi (`RV-02`, `RV-03`) | compile deo urađen na grani `claude/run-vba-ugovor` (5,9 s); preostalo 2,0 s fiksnog čekanja pri gašenju `[M]` | slomljen izvor se u suite režimu vidi kasnije, zato L-1 pre; menja ugovor (N6) | S–M | L + W | `--compile-only` daje isti verdikt nad čistim i nad slomljenim modulom; 20 poziva bez zaostalog procesa |
 | **R-2** | Proba: 50 puta zamena 6 modula u uvezenoj, kompajliranoj svesci (`RV-06`, preduslov) | odgovor na pitanje da li je R-3 izvodljiv | — | S | W | bez pada VBE-a i bez modula sa sufiksom `1` |
 | **R-3** | Jedan uvoz po pozivu dokaza i zamena samo izmenjenih modula u svežoj kopiji sveske (`RV-06`, `D6a`) — **odloženo posle G0** | najviše oko 2 s po pozivu: ceo uvoz je 2,2 s `[M]` | ponašanje `Remove` + `Import` nad kompajliranim projektom `[?]`; menja ugovor (N6) | M | W | isti skup sabotaža hladno i delta putem daje isti verdikt; prazna delta → ista baza; pokvaren read-back pada po imenu modula |
-| **R-4** | Paralelni Excel radnici, svaki nad svojom kopijom izvora; podela po izmerenom vremenu (`RV-09`, `P4`) | približno N puta kraće, realno 2–4× `[I]` | fokus i memorija; mašina zauzeta; menja ugovor (N6) | M | W | isti skup serijski i paralelno, tri ponavljanja bez razlike; dva radnika sa istim izlazom → alat odbija |
+| **R-4** | Paralelni Excel radnici, svaki nad svojom kopijom izvora; podela po izmerenom vremenu (`RV-09`, `P4`) **Povučeno napred posle G0:** zavisi samo od D-6 (R-3 je odložen); 6 fizičkih jezgara → podrazumevano 5 radnika | približno N puta kraće, realno 2–4× `[I]` | fokus i memorija; mašina zauzeta; menja ugovor (N6) | M | W | isti skup serijski i paralelno, tri ponavljanja bez razlike; dva radnika sa istim izlazom → alat odbija |
 | **R-5** | Topla sesija sa „sendvičem": mutacija, test, vraćanje, isti test mora biti zelen; recikliranje na N mutacija (`RV-08`, `P3`) — **odloženo posle G0** | najviše oko 1 s po pozivu: start Excela 0,4 s, otvaranje 0,3 s `[M]` | visok: `OnTime`, zastavice aplikacije, break mode | L | W | ekvivalencija nad celim katalogom; namerno „curava" pseudo-sabotaža uhvaćena po imenu |
 
 ### Faza 5 — Ritam i evidencija
@@ -486,7 +486,7 @@ N-4 nije u talasima jer je odluka (O-1), a P-1 je isto što i F-6.
   spajanje baznih suita u jedan poziv (215,8 + 350–390 + 18 = 584–624 s prema
   jednom tajmeru od 600 s).
 - M-1 → M-7 → D-2 → D-5, D-7. S-4a → D-2 kao podrazumevan put.
-- D-6 → R-3 → R-4; R-1 → R-3 (režija 6–8 s važi samo za obe); R-3 → R-5.
+- D-6 → R-4 (posle G0; ranije D-6 → R-3 → R-4, ali R-3 je odložen, a radnicima treba samo privatna kopija izvora); R-1 → R-3 (režija 6–8 s važi samo za obe); R-3 → R-5.
 - M-3 → D-7, N-1, N-5, N-6. L-2 i D-3 → N-1.
 - M-1 → K-1 (katalog se deli kad grana sa izborom uđe u `main`).
 - K-2 → S-4b → K-4; prvi deo K-3 → K-4.
@@ -509,6 +509,11 @@ N-4 nije u talasima jer je odluka (O-1), a P-1 je isto što i F-6.
   **S-1 posle G0 (16.11.2026):** −6,5% obe suite (§2.2), na donjoj granici
   hipoteze. `Test_OTP_AutoKvarGrupeNeObaraOstale` (69,5 s, 10,7% BFP-a) je sam
   skuplji od cele uštede S-1, pa je on prvi kandidat za S-5.
+  **S-5, prvi rez (17.11.2026):** taj test je ispao iz top-10 (< 6,4 s); BFP
+  651,2 → 617,6 s, ali je isti prolaz bio sporiji i za testove koje rez ne
+  dira (devet ostalih iz top-10 +6,4 %, od toga sedam PRE ovog testa;
+  RunAllTests +1,8 %), pa suite-nivo uštede nije čisto izmeren.
+  **D-6 urađen (17.11.2026)**, a R-4 povučen napred: zavisi samo od D-6.
 - **G1, posle D-2 i S-4a.** Izbor postaje podrazumevan u rezu kad je razlika
   prema celoj suiti nula nad najmanje 50 sabotaža **i** kad postoji spisak testova
   koji sami ne prolaze. Za release (O-1, V2) traži se nula nad najmanje 100.
