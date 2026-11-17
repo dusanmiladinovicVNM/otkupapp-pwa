@@ -376,6 +376,7 @@ def _pusti_suite(*a, izlaz_dir: str = None, prekini=None):
             raise
         tekst = (r.stdout or "") + (r.stderr or "")
         if (pokusaj == 1 and _fatal(tekst) and not _STOP.is_set()
+                and not (prekini is not None and prekini.is_set())
                 and not re.search(r"^SUITE\s", tekst, re.M)):
             with _START["lock"]:
                 _START["ponovljeno"] += 1
@@ -927,6 +928,7 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
 
 _BAZEN = []        # radnici tekuceg dokaza -- za ciscenje pri prekidu
 _AKTIVNI = []      # izvrsioci u toku -- prekid ceka njih PRE ciscenja
+_UNAPRED = []      # baze unapred u toku -- prekid ih OTKAZUJE pre cekanja
 
 
 class _BazeUnapred:
@@ -947,33 +949,48 @@ class _BazeUnapred:
         self.suite = list(suite)
         self.ctx = ctx
         self.rez = {}
+        self._brava = threading.Lock()
         self._otkazi = threading.Event()
         self._ubij = ubij or (lambda: _ubij_zaostali(ctx.get("izlaz")))
         self._ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         _AKTIVNI.append(self._ex)
+        _UNAPRED.append(self)
         self._f = self._ex.submit(self._radi)
 
     def _radi(self) -> None:
         for suite in self.suite:
             if self._otkazi.is_set() or _STOP.is_set():
                 return
-            self.rez[suite] = _baza_zelena(suite, src=self.ctx["kopija"],
-                                           izlaz=self.ctx.get("izlaz"),
-                                           prekini=self._otkazi)
+            rez = _baza_zelena(suite, src=self.ctx["kopija"],
+                               izlaz=self.ctx.get("izlaz"), prekini=self._otkazi)
+            with self._brava:
+                self.rez[suite] = rez
 
     def gotovo(self) -> bool:
         return self._f.done()
 
-    def sacekaj(self) -> dict:
-        """Sacekaj baze (u koracima -- Ctrl+C mora da stigne) i vrati ih."""
-        while True:
+    def gotove(self) -> set:
+        with self._brava:
+            return set(self.rez)
+
+    def sacekaj(self, potrebne=None) -> dict:
+        """Sacekaj baze koje faza 3 TREBA (u koracima -- Ctrl+C mora da stigne)
+        i vrati gotove. Cim su potrebne gotove, ostatak se otkazuje: faza 3 ne
+        ceka punu suite koja joj ne treba."""
+        potrebne = set(self.suite if potrebne is None else potrebne) & set(self.suite)
+        while not self._f.done():
+            if potrebne <= self.gotove():
+                self.otkazi()
+                break
             try:
                 self._f.result(timeout=0.5)
-                break
             except concurrent.futures.TimeoutError:
                 continue
+        if self._f.done() and not self._otkazi.is_set():
+            self._f.result()            # izuzetak iz baze ide gore, kao do sada
         self._zatvori()
-        return dict(self.rez)
+        with self._brava:
+            return dict(self.rez)
 
     def otkazi(self) -> None:
         """Baze nisu potrebne: ne pokreci sledecu, a tekucu prekini."""
@@ -992,6 +1009,8 @@ class _BazeUnapred:
         self._ex.shutdown(wait=True)
         if self._ex in _AKTIVNI:
             _AKTIVNI.remove(self._ex)
+        if self in _UNAPRED:
+            _UNAPRED.remove(self)
 
 
 def _serijska_traka(stavke: list, radnika: int) -> str:
@@ -1339,7 +1358,10 @@ def main(argv: list) -> int:
         for s, razlog in cela_suite:
             print("  %-46s <- %s" % (s["ime"], razlog), flush=True)
         if unapred is not None:
-            for suite, ok_opis in sorted(unapred.sacekaj().items()):
+            potrebne_3 = {s["suite"] for s, _r in cela_suite}
+            for suite, ok_opis in sorted(unapred.sacekaj(potrebne_3).items()):
+                if suite not in potrebne_3:
+                    continue
                 cele_baze[suite] = ok_opis
                 print("BAZNO (unapred): %s" % ok_opis[1], flush=True)
             unapred = None
@@ -1395,8 +1417,10 @@ def main(argv: list) -> int:
 
     if unapred is not None:
         # Faza 3 nije trebala (ili je dokaz stao): baza unapred se otkazuje.
+        vec_gotove = unapred.gotovo()
         unapred.otkazi()
-        print("BAZE UNAPRED nisu zatrebale -- otkazane", flush=True)
+        print("BAZE UNAPRED nisu zatrebale -- %s" % (
+            "bile su vec gotove" if vec_gotove else "otkazane"), flush=True)
         unapred = None
 
     posle = _otisak(ctx["snimak"])
@@ -1883,18 +1907,23 @@ def _self_test_r4() -> list:
             _STOP.set()
 
         def lazni_otkaz(*a, **kw):
-            otkaz.set()             # otkaz stize DOK prvi run traje
-            return lazni(*a, **kw)
+            otkaz.set()             # otkaz stize DOK prvi run traje: Excel ubijen
+            broj[0] += 1
+            return _LazniOdgovor(2, PRE_SUITE)
 
         if stop == "otkaz":
             globals()["_pusti"] = lazni_otkaz
+        pon_pre = _START["ponovljeno"]
         try:
             _pusti_suite("x", "tools/run_vba.py",
                          prekini=otkaz if stop == "otkaz" else None)
         finally:
             globals()["_pusti"] = pravi
             _STOP.clear()
-        tvrdi(broj[0] == ocekivano_poziva, "%s (poziva %d)" % (opis, broj[0]))
+        pon = _START["ponovljeno"] - pon_pre
+        _START["ponovljeno"] = pon_pre
+        tvrdi(broj[0] == ocekivano_poziva and (stop != "otkaz" or pon == 0),
+              "%s (poziva %d, ponovljenih %d)" % (opis, broj[0], pon))
 
     # --- zaostali Excel: samo uz isti PID I isto vreme nastanka --------------
     izl = tempfile.mkdtemp(prefix="dokaz_r4_")
@@ -2057,14 +2086,42 @@ def _self_test_r4() -> list:
         bu = _BazeUnapred(["S1", "S2"], {"kopija": "/k5", "izlaz": "/i5"},
                           ubij=lambda: (ubijeno.append(1), pusti.set()))
         time.sleep(0.02)
+        u_registru = bu in _UNAPRED
         t0 = time.time()
         bu.otkazi()
         trajalo = time.time() - t0
     finally:
         globals()["_baza_zelena"] = pravi_bz
+    tvrdi(u_registru and bu not in _UNAPRED,
+          "baza unapred nije u registru dok radi (prekid je ne bi otkazao), "
+          "ili ostaje u njemu posle otkaza")
     tvrdi(redosled == ["S1"] and ubijeno and trajalo < 1.5,
           "otkaz baze unapred ne prekida tekucu suite ili pusta sledecu (%r, %.2fs)"
           % (redosled, trajalo))
+
+    # Faza 3 treba samo S1: cim je S1 gotova, S2 (puna suite) se otkazuje.
+    redosled[:] = []
+    ubijeno2, pusti2 = [], threading.Event()
+
+    def s1_brza(suite, testovi=None, src=None, izlaz=None, prekini=None):
+        redosled.append(suite)
+        if suite == "S2":
+            pusti2.wait(2.0)
+            return False, "ubijen"
+        return True, "ok S1"
+
+    globals()["_baza_zelena"] = s1_brza
+    try:
+        bu = _BazeUnapred(["S1", "S2"], {"kopija": "/k5", "izlaz": "/i5"},
+                          ubij=lambda: (ubijeno2.append(1), pusti2.set()))
+        t0 = time.time()
+        dobijeno = bu.sacekaj({"S1"})
+        trajalo = time.time() - t0
+    finally:
+        globals()["_baza_zelena"] = pravi_bz
+    tvrdi(dobijeno.get("S1") == (True, "ok S1") and ubijeno2 and trajalo < 1.5
+          and bu not in _UNAPRED,
+          "faza 3 ceka baze koje joj ne trebaju (%.2fs, ubijeno=%r)" % (trajalo, ubijeno2))
 
     # --- ozicenje main-a i _prolaz-a (tekst; main trazi Excel) -----------------
     izvor_main = inspect.getsource(main)
@@ -2081,8 +2138,9 @@ def _self_test_r4() -> list:
           and "return bazen[:-1]" in izvor_main
           and izvor_main.count("bazen_faze())) as tok:") == 2
           and 0 <= izvor_main.find("        if unapred is not None:\n"
+                                   "            potrebne_3 = {s[\"suite\"] for s, _r in cela_suite}\n"
                                    "            for suite, ok_opis in sorted("
-                                   "unapred.sacekaj().items()):")
+                                   "unapred.sacekaj(potrebne_3).items()):")
           < izvor_main.find('for suite in sorted({s["suite"] for s, _r in cela_suite}')
           and "unapred.otkazi()" in izvor_main,
           "baze unapred: pogresan uslov, rezervisani radnik nije izuzet iz faza, "
@@ -2098,6 +2156,11 @@ def _self_test_r4() -> list:
     tvrdi(0 <= glavni.find("ex.shutdown(wait=True, cancel_futures=True)")
           < glavni.find("shutil.rmtree(_RADNI"),
           "Ctrl+C brise radni folder pre nego sto radnici stanu")
+    tvrdi(0 <= glavni.find("for bu in list(_UNAPRED):\n                bu.otkazi()")
+          < glavni.find("ex.shutdown(wait=True, cancel_futures=True)")
+          and "    except BaseException:\n" in glavni
+          and glavni.count("bu.otkazi()") == 2,
+          "prekid ili izuzetak ne otkazuju bazu unapred (cekali bi punu suite)")
     tvrdi("_baza_izbora(baze, kljuc, suite, testovi, ctx)" in izvor_prolaz
           and izvor_prolaz.count("_pusti_suite(") == 1
           and 'izlaz=ctx.get("izlaz")' in izvor_prolaz,
@@ -2455,8 +2518,11 @@ if __name__ == "__main__":
         # (samo uz isto vreme nastanka), a radni folder se brise.
         _STOP.set()
         # PRVO sacekaj radnike: brisanje radnog foldera dok run_vba jos pise u
-        # njega ostavilo bi polu-obrisan folder (i lazno "obrisan").
+        # njega ostavilo bi polu-obrisan folder (i lazno "obrisan"). Baza
+        # unapred je puna suite u jednom COM pozivu -- ne ceka se nego OTKAZUJE.
         try:
+            for bu in list(_UNAPRED):
+                bu.otkazi()
             for ex in list(_AKTIVNI):
                 ex.shutdown(wait=True, cancel_futures=True)
         except KeyboardInterrupt:
@@ -2473,3 +2539,10 @@ if __name__ == "__main__":
                  ", zaostalih Excel-a ubijeno: %d" % ubijeno if ubijeno else ""),
               file=sys.stderr)
         sys.exit(130)
+    except BaseException:
+        # Neuhvacen izuzetak iz main-a: baza unapred ne sme da drzi proces dok
+        # se puna suite ne zavrsi (atexit bi cekao njenu nit).
+        _STOP.set()
+        for bu in list(_UNAPRED):
+            bu.otkazi()
+        raise
