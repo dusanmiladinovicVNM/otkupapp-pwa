@@ -809,18 +809,20 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
   `excel.pid`, samo ako se PID **i vreme nastanka** poklope.
 - **Baze cele suite idu jedna po jedna**, jer pišu marker zelenog. Baza izbora
   se meri jednom po izboru, i kad je traže dva radnika odjednom.
-- **Baze unapred** (uz `--izbor` i `--radnika > 1`). Puna baza je potrebna samo
-  sabotažama koje izbor ne obori, a one dolaze na red tek na kraju („MERI SE
-  CELOM SUITE-OM"). Ranije je zato kraj dokaza bio puna suite za bazu pa puna
-  suite za mutaciju, jedna za drugom, dok ostali radnici stoje. Sada baza kreće
-  na početku, na rezervisanom radniku, koga faze za to vreme ne koriste, pa
-  Excel-a i dalje ima N. Ako faza 3 ne zatreba, baza se otkazuje: njen Excel se
-  ubija po `excel.pid` i ne pokreće se ponovo. Ispis to kaže redovima
-  `BAZE UNAPRED`.
+- **Baze unapred** (uz `--izbor` i `--radnika > 1`), **na zahtev**. Puna baza
+  je potrebna samo sabotažama koje izbor ne obori, a one dolaze na red tek na
+  kraju („MERI SE CELOM SUITE-OM"). Baza zato kreće ranije, ali tek uz **prvu
+  stavku koja vodi u fazu 3**: stavku koja se ponavlja sama ili traži celu
+  suite. Rez bez faze 3 je ne plaća. Kod `dop-spec` je spekulativna baza
+  zauzimala radnika i jezgro ceo prolaz, pa je bila otkazana. Radnici su
+  zajednički za sve faze i bazu. Baza pozajmljuje prvog slobodnog radnika, pre
+  poslova koji čekaju, i vraća ga posle svake suite, pa Excel-a i dalje ima N.
+  Meri samo nad kopijom u stanju snimka, a otkaz ubija njen Excel samo dok je
+  radnik kod nje. Ispis to kaže redovima `BAZE UNAPRED`.
 - **Rana mutacija cele suite** (uz baze unapred). Mutacije faze 3 ne čekaju
   bazu: kreću odmah, na ostalim radnicima, a ocenjuju se kad je baza gotova.
   Kraj dokaza je tako max(baza, mutacija), ne zbir. Rano se kreće samo kad sve
-  stavke faze 3 staju na radnike bez rezervisanog; inače se baza čeka pre
+  stavke faze 3 staju na radnike koje baza ne drži; inače se baza čeka pre
   mutacija, kao ranije, jer bi N−1 radnika bilo sporije.
 - **Faza 3 ima jednu ocenu za N=1 i N>1** (`_faza3_ocena`), pa je izlaz isti po
   konstrukciji, ne po disciplini. Mutacija se priznaje samo uz zelenu bazu.
