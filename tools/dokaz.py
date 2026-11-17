@@ -14,6 +14,7 @@ se citalo kao zeleno (v. docs/engineering/postmortems/2026-08-verifikacija.md 10
     python tools/dokaz.py --grupe 8 --plan     # samo plan grupa, bez Excela
     python tools/dokaz.py amb-pisac --izbor    # pusta samo SVOJ test, ne celu suite
     python tools/dokaz.py --izolacija          # koji ciljani testovi ne prolaze SAMI
+    python tools/dokaz.py --prijem --radnika 4 # G1: izbor prema celoj suiti, po stavci
 
 CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
 
@@ -68,6 +69,17 @@ CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
    (uz grupe `DOKAZANO (grupno, izbor)`); golo `DOKAZANO` ostaje samo za
    pojedinacan dokaz u celoj suiti.
 
+6. PRIJEM (`--prijem [N]`, G1) MERI KOLIKO IZBOR TVRDI MANJE. Nad uzorkom
+   (ciljani sloj -- S-4a, testovi mehanizma izbora, POZNATI_NALAZI_DOKAZ -- i N
+   slucajnih po deterministickom pravilu, v. `_g1_uzorak`) svaka stavka ide
+   izborom, verdikt izbora se zapamti (`_prijem_ishod`, u `najavi`, PRE
+   knjizenja), pa se ista stavka meri celom suite-om (faza 3, nepromenjena).
+   Na kraju se dva verdikta porede po stavci: OPASNA (izbor priznaje, cela
+   suite ne) ili STROZA obara prijem (rc 1); stavka koju izbor nije presudio
+   sam (SKUPA) ne ulazi u imenilac, jer bi tu cela suite poredila samu sebe.
+   Premalo presudjenih, STOP, NEJASNO stavka ili filter daju rc 2. Bez
+   `--prijem` se nista ne menja.
+
 Banka-suite ne ispisuje ime testa uz pad, ali svaka njena tvrdnja nosi stabilan
 prefiks ("T21 izabran placen blok: ..."), pa se identitet vadi iz njega. Bez toga
 bi za te sabotaze tvrdnja bila samo "nesto je palo".
@@ -107,6 +119,39 @@ SUITE_BFP = "RunBusinessFlowProSuite"
 # manje (v. tacka 4 u docstring-u). Nad celim katalogom je 6 dovoljno -- pravila
 # grupisanja ionako vezu grupu na ~5 clanova, pa veci broj skoro nista ne doda.
 GRUPA_PODRAZUMEVANO = 6
+
+# --- G1: prijem izbora (v. tacka 6 u docstring-u i `--prijem`) --------------
+#
+# G1_N slucajnih stavki ima rezervu za povratke: stavka koju izbor ne presudi
+# sam (SKUPA) ne ulazi u imenilac, a ocekivani udeo povrataka nije meren.
+# G1_MIN presudjenih izborom daje gornju granicu ~5,8% (95%) uz 0 razlika;
+# G1_MIN_SUITE drzi da ni RAT ni BFP ne budu prazni u imeniocu. Release (O-1 V2,
+# >= 100 presudjenih) je `--prijem 115`, a red G1 PRIJEM ispisuje stvarno M.
+G1_N = 60
+G1_MIN = 50
+G1_MIN_SUITE = 15
+G1_SEME = "G1"
+# Testovi S-4a (fa53eb32): prolazili su SAMO u punoj suite-i, pa je njihov
+# povratak na celu suite ono sto G1 mora da vidi.
+G1_S4A_TESTOVI = (
+    "T_Analiza_EkranUIzradi", "T_Doplata_PonavljanjeTraziPotvrdu",
+    "T_Doplata_SaldoOMPoStanici", "T_AmbPartneri_ListaIzvestaja",
+    "T_AmbBilans_ListaIzvestaja", "T_Gotovina_NajviseNaIzboru",
+    "T_S6K4_UvidKazeOdbijanje", "Test_S6K7_LanacBezKupcaNePise",
+    "T_CiljZbirna_NePoPrvomRedu", "T_Prijemnica_PomeraSamoAktivan",
+    "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
+    "T_AmbPoslovno_OtkupniListKaoKartica",
+    "Test_PrijemnicaMissingZbirnaDoesNotAppend")
+# Testovi mehanizma izbora i sabotaze dodate posle #479 -- merene samo izborom.
+G1_POSLE_IZBORA_TESTOVI = (
+    "T_TestIzbor_TacnoImeIJednokratno", "Test_BFP_IzborBiraCeloIme",
+    "T_Journal_TihiRezimGasiZakazivanje", "Test_BFP_TihiRezimDnevnika",
+    "Test_OTP_AutoKvarGrupeNeObaraOstale",
+    "T_Backup_NeObaraStartINeRasteBezGranice")
+# Stanja koja ne kazu nista o tvrdnji (prolaz nije stigao do kraja): razlika
+# uz njih je NEJASNO, ne OPASNA.
+_G1_INFRA = ("TIMEOUT", "EXCEL UBIJEN", "PREKID", "REVERT-FAIL", "STRAZA")
+_G1_KRATKO = {SUITE_ALL: "RAT", SUITE_BFP: "BFP", SUITE_BANKA: "banka"}
 
 # Radni folder tekuceg dokaza (snimak, kopija, zamrznut katalog). Pamti se samo
 # zbog poruke pri prekidu -- izvor koji treba vratiti vise ne postoji.
@@ -1391,6 +1436,304 @@ def _izolacija(stavke: list, izbor: set, src: str = None, bazen=None) -> list:
     return crveni
 
 
+# --- G1: prijem izbora -------------------------------------------------------
+#
+# Svaka stavka uzorka ide izborom (faza 1, kao inace), pa se verdikt izbora
+# ZAPAMTI i stavka ipak meri celom suite-om (faza 3, nepromenjena). Na kraju se
+# dva verdikta porede po stavci. Sve ispod je cisto -- main samo zove.
+
+def _prijem_ishod(ishod):
+    """Ishod faze 1 za prijem: verdikt izbora u "prijem", svaka stavka u
+    "cela_suite" (tacno jednom), "ishodi" prazni -- konacni verdikt daje faza 3.
+
+    prijem = [(stavka, priznato, stanje, vrsta)]; vrsta je 'izbor' (izbor je
+    priznao), 'konacno' (izbor je presudio NE bez povratka: APPLY-FAIL,
+    TIMEOUT, EXCEL UBIJEN) ili 'povratak' (izbor nije presudio -- stanje je
+    razlog povratka). Ishod bez izbora ili sa stop-om vraca se NETAKNUT.
+
+    Verdikt se hvata OVDE, pre knjizenja: kad stavka jednom stigne u
+    cela_suite, njen konacni verdikt dolazi iz faze 3, pa bi poredjenje posle
+    toga bilo cela suite prema samoj sebi (placebo)."""
+    if not isinstance(ishod, dict) or not ishod.get("izbor") or ishod.get("stop"):
+        return ishod
+    prijem, cela = [], []
+    for s, priznato, stanje, _crveno in ishod.get("ishodi", ()):
+        prijem.append((s, priznato, stanje, "izbor" if priznato else "konacno"))
+        cela.append((s, "prijem: izbor %s" % stanje))
+    for s, razlog in ishod.get("cela_suite", ()):
+        prijem.append((s, False, razlog, "povratak"))
+        cela.append((s, "prijem: izbor %s" % razlog))
+    novi = dict(ishod)
+    novi.update(ishodi=[], cela_suite=cela, prijem=prijem)
+    return novi
+
+
+def _g1_hes(seme: str, x: str) -> str:
+    return hashlib.sha256(("%s|%s" % (seme, x)).encode("utf-8")).hexdigest()
+
+
+def _g1_otisak(imena) -> str:
+    """Otisak uzorka: sha256 sortiranih imena, 16 hex."""
+    return hashlib.sha256("\n".join(sorted(imena)).encode("utf-8")).hexdigest()[:16]
+
+
+def _g1_uzorak(stavke: list, n: int, izbor_suite, s4a, posle, poznati_dokaz,
+               poznati_staticki, seme: str = G1_SEME) -> tuple:
+    """(sloj_po_imenu, problem) -- deterministicki uzorak prijema.
+
+    Okvir su suite izbora (banka nema izbor, pa bi oba merenja bila ista).
+    CILJANI sloj su sve stavke testova iz s4a i posle, i kljucevi poznati_dokaz
+    (negativne kontrole). Ime sa spiska bez ijedne stavke je problem, nikad
+    tiho preskakanje. SLUCAJNI sloj: okvir bez ciljanih i bez statickih
+    POZNATI (njihov kljuc se ne poklapa ni u jednom rezimu), kvota po suiti
+    srazmerna okviru; po suiti se fajlovi redjaju po sha256(seme|fajl), stavke
+    u fajlu po sha256(seme|ime), bira se round-robin po fajlu, jedna po testu,
+    i uzima prvih k. Sekvenca ne zavisi od k, pa je uzorak za veci n NADSKUP
+    uzorka za manji. Izbor je clanstvo po imenu, nikad prefiks."""
+    okvir = [s for s in stavke if s["suite"] in izbor_suite]
+    ciljani_testovi = set(s4a) | set(posle)
+    imena_okvira = {s["ime"] for s in okvir}
+    testovi_okvira = {s["test"] for s in okvir}
+    for test in sorted(ciljani_testovi - testovi_okvira):
+        return {}, ("G1: ciljani test %s nema nijednu sabotazu u suite-ama "
+                    "izbora -- ispravi G1_S4A_TESTOVI / G1_POSLE_IZBORA_TESTOVI" % test)
+    for ime in sorted(set(poznati_dokaz) - imena_okvira):
+        return {}, ("G1: POZNATI_NALAZI_DOKAZ['%s'] nema sabotazu u suite-ama "
+                    "izbora" % ime)
+    sloj = {}
+    for s in okvir:
+        if s["test"] in ciljani_testovi or s["ime"] in poznati_dokaz:
+            sloj[s["ime"]] = "ciljani"
+    van = set(poznati_staticki) - set(poznati_dokaz)
+    bazen = [s for s in okvir if s["ime"] not in sloj and s["ime"] not in van]
+    suite_redom = sorted({s["suite"] for s in okvir})
+    dodeljeno = 0
+    for i, suite in enumerate(suite_redom):
+        u_okviru = sum(1 for s in okvir if s["suite"] == suite)
+        k = (n - dodeljeno if i == len(suite_redom) - 1
+             else int(round(n * u_okviru / float(len(okvir)))))
+        dodeljeno += k
+        po_fajlu = {}
+        for s in bazen:
+            if s["suite"] == suite:
+                po_fajlu.setdefault(s["fajl"], []).append(s)
+        redovi = [sorted(po_fajlu[f], key=lambda s: (_g1_hes(seme, s["ime"]), s["ime"]))
+                  for f in sorted(po_fajlu, key=lambda f: (_g1_hes(seme, f), f))]
+        poz, vidjeni, niz = [0] * len(redovi), set(), []
+        while len(niz) < k:
+            pomak = False
+            for j, red in enumerate(redovi):
+                while poz[j] < len(red):
+                    s = red[poz[j]]
+                    poz[j] += 1
+                    if s["test"] not in vidjeni:
+                        vidjeni.add(s["test"])
+                        niz.append(s)
+                        pomak = True
+                        break
+            if not pomak:
+                break
+        if len(niz) < k:
+            return {}, ("G1: %s ima %d razlicitih testova van ciljanih, a kvota "
+                        "je %d" % (suite, len(niz), k))
+        for s in niz[:k]:
+            sloj[s["ime"]] = "slucajni"
+    return sloj, ""
+
+
+def _g1_po_suiti(suite_spisak) -> str:
+    """'RAT 34, BFP 9' -- redom RAT, BFP, banka, pa ostale."""
+    broj = {}
+    for suite in suite_spisak:
+        broj[suite] = broj.get(suite, 0) + 1
+    redom = [s for s in (SUITE_ALL, SUITE_BFP, SUITE_BANKA) if s in broj]
+    redom += sorted(set(broj) - set(redom))
+    return ", ".join("%s %d" % (_G1_KRATKO.get(s, s), broj[s]) for s in redom)
+
+
+def _g1_uzorak_red(stavke: list, sloj: dict, presudjeni=None) -> str:
+    """Red G1 UZORAK: otisak i velicina slojeva (i presudjeni, na kraju)."""
+    delovi = []
+    for ime_sloja, rec in (("ciljani", "ciljanih"), ("slucajni", "slucajnih"),
+                           ("filter", "filter")):
+        clanovi = [s["suite"] for s in stavke if sloj.get(s["ime"]) == ime_sloja]
+        if clanovi:
+            delovi.append("%s %d (%s)" % (rec, len(clanovi), _g1_po_suiti(clanovi)))
+    red = "G1 UZORAK: otisak %s -- %s" % (
+        _g1_otisak(s["ime"] for s in stavke if s["ime"] in sloj), ", ".join(delovi))
+    if presudjeni is not None:
+        red += "; presudjeno izborom %d (%s)" % (
+            len(presudjeni), _g1_po_suiti(r["suite"] for r in presudjeni) or "-")
+    return red
+
+
+def _g1_infra(stanje: str) -> str:
+    return next((p for p in _G1_INFRA if stanje.startswith(p)), "")
+
+
+def _g1_nemereno(stanje: str) -> bool:
+    """Strana koja tvrdnju NIJE posmatrala: sidro se nije primenilo, ili prolaz
+    nije stigao do kraja. Jednakost dve takve strane nije poredjenje."""
+    return stanje.startswith("APPLY-FAIL") or bool(_g1_infra(stanje))
+
+
+# Razlog crvene baze izbora je "<suite>: <opis>" (_baza_zelena). Ovi opisi kazu
+# da baza NIJE ODRADJENA, ne da test sam ne prolazi -- pa nisu S-4a regresija.
+_G1_BAZA_INFRA = ("timeout", "EXCEL UBIJEN", "nema oznacenog reda TESTS")
+
+
+def _g1_klasa(izb, cela) -> tuple:
+    """(klasa, podtip) jedne stavke. izb = (priznato, stanje, vrsta) iz
+    _prijem_ishod ili None; cela = (priznato, stanje) iz faze 3 ili None.
+    Poredi se PRIZNANJE (bool), ne tekst stanja: "OK (uz jos 2)" je OK."""
+    if izb is None or cela is None:
+        return "NEUPOREDIVO", ""
+    i_ok, i_st, vrsta = izb
+    c_ok, c_st = cela
+    if vrsta == "povratak":
+        if not i_st.startswith("u izboru:"):
+            opis = i_st.split(": ", 1)[-1]
+            if opis.startswith(_G1_BAZA_INFRA):
+                return "SKUPA", "baza izbora infra"
+            return "SKUPA", "baza izbora crvena"
+        return "SKUPA", "cela OK" if c_ok else "cela NE"
+    if vrsta == "izbor":
+        if c_ok:
+            return "ISTO", ""
+        if _g1_infra(c_st):
+            return "NEJASNO", ""
+        if c_st.startswith("NE OBARA NISTA"):
+            return "OPASNA", "MASKA"
+        return "OPASNA", "DRUGI PAD"
+    if vrsta != "konacno":
+        return "NEUPOREDIVO", ""
+    # 'konacno' znaci da izbor tvrdnju NIJE posmatrao (APPLY-FAIL, TIMEOUT,
+    # EXCEL UBIJEN), pa ISTO ovde ne postoji. Ni cela suite nije stigla do
+    # tvrdnje: par je NEUPOREDIV i ne ulazi u imenilac -- jednakost bez merenja
+    # je placebo iz istog razloga kao SKUPA (review G1, 17.11.2026).
+    if not c_ok and _g1_nemereno(c_st):
+        return "NEUPOREDIVO", "nijedna strana ne meri"
+    if _g1_infra(i_st) or not c_ok:
+        return "NEJASNO", ""
+    return "STROZA", ""
+
+
+def _g1_poredi(stavke: list, prijem: list, verdikt: dict, sloj: dict) -> list:
+    """Redovi poredjenja, redom kataloga, za svaku stavku uzorka."""
+    izb = {s["ime"]: (p, st, v) for s, p, st, v in prijem}
+    redovi = []
+    for s in stavke:
+        if s["ime"] not in sloj:
+            continue
+        i, c = izb.get(s["ime"]), verdikt.get(s["ime"])
+        klasa, podtip = _g1_klasa(i, c)
+        redovi.append({"ime": s["ime"], "suite": s["suite"], "test": s["test"],
+                       "sloj": sloj[s["ime"]], "klasa": klasa, "podtip": podtip,
+                       "izbor": i, "cela": c})
+    return redovi
+
+
+def _g1_presudjeni(redovi: list) -> list:
+    """Imenilac: SLUCAJNE stavke koje je izbor presudio sam, uz izmerenu celu
+    suite. SKUPA (placebo), NEJASNO i NEUPOREDIVO ne ulaze."""
+    return [r for r in redovi if r["sloj"] == "slucajni"
+            and r["izbor"] is not None and r["izbor"][2] in ("izbor", "konacno")
+            and r["cela"] is not None
+            and r["klasa"] in ("ISTO", "OPASNA", "STROZA")]
+
+
+def _g1_presuda(redovi: list, stop: str, celovit: bool, n_min: int,
+                suite_min: int) -> tuple:
+    """(rc, red G1 PRIJEM). 1 PAO: bar jedna OPASNA ili STROZA, u bilo kom
+    sloju. 2 NEJASNO: STOP, snimak se menjao, NEJASNO stavka, ciljana
+    NEUPOREDIVO, premalo presudjenih (ukupno ili u RAT/BFP), filter. 0 PROSAO."""
+    presudjeni = _g1_presudjeni(redovi)
+    m = len(presudjeni)
+    razlike = [r for r in redovi if r["klasa"] in ("OPASNA", "STROZA")]
+    razlika_slucajnih = sum(1 for r in presudjeni if r["klasa"] != "ISTO")
+    # Udeo povrataka PO SLOJU: samo slucajni procenjuje trosak podrazumevanog
+    # izbora (D-2, "[?]"); ciljani je namerno pristrasan (POZNATI su negativne
+    # kontrole, ocekuje se SKUPA).
+    skupa = ", ".join(
+        "%s %d/%d" % (sl, sum(1 for r in redovi if r["sloj"] == sl
+                              and r["klasa"] == "SKUPA"),
+                      sum(1 for r in redovi if r["sloj"] == sl))
+        for sl in ("slucajni", "ciljani", "filter")
+        if any(r["sloj"] == sl for r in redovi))
+    nejasno = []
+    if stop:
+        nejasno.append("dokaz je stao (%s)" % stop.split(":")[0])
+    elif not celovit:
+        nejasno.append("snimak pre/posle se razlikuje")
+    imena = [r["ime"] for r in redovi if r["klasa"] == "NEJASNO"]
+    if imena:
+        nejasno.append("NEJASNO: %s" % ", ".join(imena))
+    imena = [r["ime"] for r in redovi
+             if r["sloj"] == "ciljani" and r["klasa"] == "NEUPOREDIVO"]
+    if imena:
+        nejasno.append("ciljani NEUPOREDIVO: %s" % ", ".join(imena))
+    if any(r["sloj"] == "filter" for r in redovi):
+        nejasno.append("poziv sa filterom nije uzorak")
+    else:
+        if m < n_min:
+            nejasno.append("presudjeno izborom %d < %d (npr. --prijem 75)" % (m, n_min))
+        for suite in (SUITE_ALL, SUITE_BFP):
+            k = sum(1 for r in presudjeni if r["suite"] == suite)
+            if k < suite_min:
+                nejasno.append("presudjeno u %s %d < %d"
+                               % (_G1_KRATKO[suite], k, suite_min))
+    if razlike:
+        rc, ishod = 1, "PAO"
+        razlog = "; ".join(
+            "%s: %s" % (k, ", ".join(r["ime"] for r in razlike if r["klasa"] == k))
+            for k in ("OPASNA", "STROZA") if any(r["klasa"] == k for r in razlike))
+    elif nejasno:
+        rc, ishod, razlog = 2, "NEJASNO", " / ".join(nejasno)
+    else:
+        rc, ishod, razlog = 0, "PROSAO", "nijedna razlika"
+    if m and not razlika_slucajnih:
+        granica = "van ciljanih najvise %s%% uz 95%%" % (
+            ("%.1f" % (100.0 * (1.0 - 0.05 ** (1.0 / m)))).replace(".", ","))
+    else:
+        granica = "granica ne vazi"
+    return rc, ("G1 PRIJEM: %s -- %s; %d razlika nad %d presudjenih slucajnih; "
+                "%s; SKUPA %s" % (ishod, razlog, razlika_slucajnih, m, granica,
+                                  skupa))
+
+
+def _g1_ispis(redovi: list, stavke: list, sloj: dict) -> list:
+    """Redovi izvestaja pre G1 PRIJEM: svaka stavka, KLASE, S-4a, UZORAK."""
+    out = []
+    for r in redovi:
+        i, c = r["izbor"], r["cela"]
+        out.append("G1 %s%s %s %s %s | izbor: %s%s | cela: %s" % (
+            r["klasa"], "/" + r["podtip"] if r["podtip"] else "", r["sloj"],
+            _G1_KRATKO.get(r["suite"], r["suite"]), r["ime"],
+            i[1] if i else "nije izmereno",
+            " -> cela suite" if i and i[2] == "povratak" else "",
+            c[1] if c else "nije izmerena"))
+        if r["klasa"] not in ("ISTO", "SKUPA"):
+            out.append("  ponovi: python tools/dokaz.py --prijem %s --radnika 1"
+                       % r["ime"])
+
+    def broj(k, podtip=None):
+        return sum(1 for r in redovi if r["klasa"] == k
+                   and (podtip is None or r["podtip"] in podtip))
+    out.append("G1 KLASE: ISTO %d, SKUPA %d (izbor ne obara %d, baza izbora "
+               "crvena %d, baza izbora infra %d), OPASNA %d, STROZA %d, "
+               "NEJASNO %d, NEUPOREDIVO %d" % (
+                   broj("ISTO"), broj("SKUPA"),
+                   broj("SKUPA", ("cela OK", "cela NE")),
+                   broj("SKUPA", ("baza izbora crvena",)),
+                   broj("SKUPA", ("baza izbora infra",)), broj("OPASNA"),
+                   broj("STROZA"), broj("NEJASNO"), broj("NEUPOREDIVO")))
+    for test in sorted({r["test"] for r in redovi if r["test"] in G1_S4A_TESTOVI
+                        and r["podtip"] == "baza izbora crvena"}):
+        out.append("G1 S-4a REGRESIJA: %s" % test)
+    out.append(_g1_uzorak_red(stavke, sloj, _g1_presudjeni(redovi)))
+    return out
+
+
 def _plan(stavke: list, cap: int) -> int:
     """Podela na grupe bez ijednog poziva Excela -- i tvrdnja da je potpuna."""
     grupe = naprav_grupe(stavke, cap)
@@ -1436,9 +1779,28 @@ def main(argv: list) -> int:
     ap.add_argument("--razmak", type=float, default=1.0, metavar="S",
                     help="najmanje S sekundi izmedju dva run_vba poziva (uz "
                          "--radnika > 1); podrazumevano 1.0")
+    ap.add_argument("--prijem", nargs="?", const=str(G1_N), default=None,
+                    metavar="N",
+                    help="G1 prijem izbora: svaka stavka uzorka (ciljani + N "
+                         "slucajnih, podrazumevano %d) ide izborom PA celom "
+                         "suite-om, i verdikti se porede; uz filter meri samo "
+                         "filtrirane stavke (presuda je tada NEJASNO)" % G1_N)
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da pravila grupisanja, ocena i orkestracija prolaza grizu")
     args = ap.parse_args(argv)
+    # `--prijem ime`: argparse uzme ime kao N (nargs='?'), pa se vraca filteru.
+    # Bez opcije je None (ugaseno). Izricito 0 se ODBIJA (dole): da je 0 isto
+    # sto i izostavljena opcija, `--prijem 0` bi tiho pustio pun obican dokaz
+    # celog kataloga, bez ijednog G1 reda.
+    prijem_nula = False
+    if args.prijem is None:
+        args.prijem = 0
+    elif str(args.prijem).isdigit():
+        args.prijem = int(args.prijem)
+        prijem_nula = args.prijem == 0
+    else:
+        args.filter.insert(0, args.prijem)
+        args.prijem = G1_N
 
     if args.self_test:
         return _self_test()
@@ -1448,6 +1810,21 @@ def main(argv: list) -> int:
     if args.radnika < 1:
         print("--radnika mora biti >= 1", file=sys.stderr)
         return 2
+    if prijem_nula:
+        print("--prijem 0: prijem bez slucajnih ne postoji -- izostavi opciju "
+              "ili zadaj N >= %d" % G1_MIN, file=sys.stderr)
+        return 2
+    if args.prijem:
+        if args.grupe > 1 or args.izolacija:
+            print("--prijem meri svaku stavku POJEDINACNO, izborom pa celom "
+                  "suite-om -- ne ide uz --grupe > 1 ni uz --izolacija",
+                  file=sys.stderr)
+            return 2
+        if args.prijem < G1_MIN and not args.filter:
+            print("--prijem %d: manje od %d slucajnih ne moze da da PROSAO "
+                  "(G1_MIN)" % (args.prijem, G1_MIN), file=sys.stderr)
+            return 2
+        args.izbor = True
     _STOP.clear()
     _START.update(poslednji=0.0, ponovljeno=0,
                   razmak=args.razmak if args.radnika > 1 else 0.0)
@@ -1460,8 +1837,28 @@ def main(argv: list) -> int:
         print("filter ne pogadja nijednu sabotazu", file=sys.stderr)
         return 2
 
+    sloj = {}
+    if args.prijem and args.filter:
+        sloj = {s["ime"]: "filter" for s in stavke}
+    elif args.prijem:
+        sloj, problem = _g1_uzorak(
+            stavke, args.prijem, _suite_izbor(), G1_S4A_TESTOVI,
+            G1_POSLE_IZBORA_TESTOVI, poznati_spisak,
+            set(getattr(sab, "POZNATI_NALAZI", {})) - set(poznati_spisak), G1_SEME)
+        if problem:
+            print("STOP: " + problem, file=sys.stderr)
+            return 2
+        stavke = [s for s in stavke if s["ime"] in sloj]
+
     if args.plan:
-        return _plan(stavke, args.grupe)
+        if not args.prijem:
+            return _plan(stavke, args.grupe)
+        for s in stavke:
+            print("G1 %-8s %-5s %s" % (sloj[s["ime"]],
+                                       _G1_KRATKO.get(s["suite"], s["suite"]), s["ime"]))
+        rc = _plan(stavke, args.grupe)
+        print(_g1_uzorak_red(stavke, sloj))
+        return rc
 
     problem = _serijska_traka(stavke, args.radnika)
     if problem:
@@ -1483,6 +1880,14 @@ def main(argv: list) -> int:
         shutil.rmtree(ctx["radni"], ignore_errors=True)
         return 2
     stavke = _izaberi(sab, args.filter, ctx["snimak"])
+    if args.prijem:
+        stavke = [s for s in stavke if s["ime"] in sloj]
+        if len(stavke) != len(sloj):
+            print("STOP: G1: nad snimkom je %d stavki uzorka, a plan ih ima %d "
+                  "-- katalog se menjao" % (len(stavke), len(sloj)), file=sys.stderr)
+            shutil.rmtree(ctx["radni"], ignore_errors=True)
+            return 2
+        print(_g1_uzorak_red(stavke, sloj), flush=True)
 
     izbor = _suite_izbor() if (args.izbor or args.izolacija) else set()
     if args.izolacija:
@@ -1537,7 +1942,12 @@ def main(argv: list) -> int:
         """Stavka koja SIGURNO ide u fazu 3 (cela suite) trazi bazu svoje suite
         ODMAH, iz niti radnika -- ne ceka redosled ispisa. Ponavljanje sama se
         ne racuna: ta stavka cesto prodje u fazi 2, a njena baza bi stala u red
-        ISPRED baze koja fazi 3 stvarno treba (baze idu jedna po jedna)."""
+        ISPRED baze koja fazi 3 stvarno treba (baze idu jedna po jedna).
+
+        G1 (--prijem): verdikt izbora se hvata OVDE, pre svakog knjizenja, a
+        svaka stavka ide u fazu 3 -- pa baze unapred krecu uz prvu stavku."""
+        if args.prijem:
+            ishod = _prijem_ishod(ishod)
         if unapred is not None and isinstance(ishod, dict):
             kandidati = [s for s, _r in ishod.get("cela_suite", [])]
             nove = unapred.trazi(sorted({s["suite"] for s in kandidati} & moguce))
@@ -1549,11 +1959,13 @@ def main(argv: list) -> int:
 
     crvenih, lose, poznati = 0, [], []
     grupno_priznatih, izborom_priznatih, stop = 0, 0, ""
+    verdikt, prijem_izbor = {}, []    # G1: sirov verdikt po imenu; verdikti izbora
 
     def upisi(ishodi, uvlaka=""):
         """Zajednicki ispis i knjizenje za grupni i pojedinacni prolaz."""
         nonlocal crvenih
         for s, priznato, stanje, crveno in ishodi:
+            verdikt[s["ime"]] = (priznato, stanje)
             if crveno:
                 crvenih += 1
             if not priznato:
@@ -1589,6 +2001,7 @@ def main(argv: list) -> int:
                       % (i, len(grupe), g[0]["suite"], len(g)), flush=True)
             koren_tokom.add(ishod.get("koren") or koren_pre)
             cela_suite.extend(ishod["cela_suite"])
+            prijem_izbor.extend(ishod.get("prijem", ()))
             if len(g) > 1:
                 grupno_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
             if ishod.get("izbor"):
@@ -1613,6 +2026,7 @@ def main(argv: list) -> int:
                     break
                 koren_tokom.add(ishod.get("koren") or koren_pre)
                 cela_suite.extend(ishod["cela_suite"])
+                prijem_izbor.extend(ishod.get("prijem", ()))
                 if ishod.get("izbor"):
                     izborom_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
                 upisi(ishod["ishodi"])
@@ -1762,12 +2176,21 @@ def main(argv: list) -> int:
           and crvenih >= len(stavke) - len(pokriveni))
     print("=== %s ===" % _verdikt(ok, grupno_priznatih, izborom_priznatih,
                                  pre if koren_menjan else ""))
+    rc_g1 = None
+    if args.prijem:
+        # G1: verdikt izbora (faza 1) prema celoj suiti (faza 3), po stavci.
+        celovit = not stop and pre == posle
+        redovi = _g1_poredi(stavke, prijem_izbor, verdikt, sloj)
+        rc_g1, red_g1 = _g1_presuda(redovi, stop, celovit, G1_MIN, G1_MIN_SUITE)
+        for linija in _g1_ispis(redovi, stavke, sloj):
+            print(linija)
+        print(red_g1, flush=True)
     sacuvana = _zavrsi_istoriju(bazen, args.radnika)
     if stop or not sacuvana:
         print("radni folder ostaje: %s" % ctx["radni"], file=sys.stderr)
     else:
         shutil.rmtree(ctx["radni"], ignore_errors=True)
-    return 0 if ok else 1
+    return rc_g1 if args.prijem else (0 if ok else 1)
 
 
 # --- self-test: dokaz u oba smera nad pravilima ------------------------------
@@ -2947,11 +3370,298 @@ def _self_test_faza3() -> list:
     return nalazi
 
 
+def _self_test_g1() -> list:
+    """G1 (--prijem) u oba smera, PONASANJEM gde se moze: verdikt izbora se
+    hvata iz pravog _prolaz-a, poredjenje ne meri celu suite prema samoj sebi,
+    imenilac ne broji placebo, uzorak je deterministican i ne bira po prefiksu."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("G1: " + opis)
+
+    IZB = frozenset({SUITE_ALL})
+    ZELENA = "TESTS   RunAllTests: 3 ukupno, 0 palo\n"
+    CRVENA = "TESTS   RunAllTests: 3 ukupno, 1 palo\nFAIL T_A -- sam ne prolazi\n"
+    a = _s("a", tvrdnja="razlog a")
+
+    def lanac(izlaz, **kw):
+        try:
+            rez, _p = _lazni_prolaz([a], izlaz, grupno=False, **kw)
+        except Exception as e:              # pad je nalaz, ne goli traceback
+            nalazi.append("G1: lanac je pukao -- %r" % (e,))
+            return {}, {}
+        return rez, _prijem_ishod(rez)
+
+    def imena_cele(p):
+        return [s["ime"] for s, _r in p.get("cela_suite", [])]
+
+    def prijem(p):
+        return [(s["ime"],) + tuple(r) for s, *r in p.get("prijem", [])]
+
+    # --- 1. lanac kroz pravi _prolaz -> _prijem_ishod ---------------------
+    _r, p1a = lanac("FAIL T_A -- razlog a\n", izbor=IZB, baze={}, izlaz_baze=ZELENA)
+    tvrdi(prijem(p1a) == [("a", True, "OK", "izbor")] and p1a.get("ishodi") == []
+          and imena_cele(p1a) == ["a"],
+          "1a: priznanje izbora se ne hvata kao 'izbor', ostaje u ishodi, ili "
+          "stavka nije TACNO jednom u cela_suite (%r)" % (p1a,))
+    _r, p1b = lanac(ZELENA, izbor=IZB, baze={}, izlaz_baze=ZELENA)
+    tvrdi(prijem(p1b) == [("a", False, "u izboru: NE OBARA NISTA", "povratak")]
+          and imena_cele(p1b) == ["a"] and p1b.get("ishodi") == [],
+          "1b: izbor koji ne obara nije 'povratak', ili stavka nije TACNO jednom "
+          "u cela_suite (%r)" % (p1b,))
+    _r, p1c = lanac("FAIL T_A -- razlog a\n", izbor=IZB, baze={}, izlaz_baze=CRVENA)
+    tvrdi([v[3] for v in prijem(p1c)] == ["povratak"] and imena_cele(p1c) == ["a"]
+          and not prijem(p1c)[0][2].startswith("u izboru:"),
+          "1c: crvena baza izbora nije 'povratak' sa razlogom baze (%r)" % (p1c,))
+    _r, p1d = lanac("FAIL T_A -- razlog a\n", izbor=IZB, baze={},
+                    izlaz_baze=ZELENA, timeout=True)
+    tvrdi(prijem(p1d) == [("a", False, "TIMEOUT suite", "konacno")]
+          and imena_cele(p1d) == ["a"] and p1d.get("ishodi") == [],
+          "1d: timeout izbora nije 'konacno', ili ne ide i celom suite-om (%r)" % (p1d,))
+    tvrdi(all(k in p1a for k in ("koren", "izbor", "ostatak")),
+          "1: _prijem_ishod gubi kljuceve koren/izbor/ostatak")
+    rez, p1e = lanac(ZELENA)
+    tvrdi(p1e is rez and "prijem" not in rez,
+          "1e: prolaz BEZ izbora se transformise")
+    rez, p1f = lanac("FAIL T_A -- razlog a\n", izbor=IZB, baze={},
+                     izlaz_baze=ZELENA, potpis="DRUGI")
+    tvrdi(rez.get("stop", "").startswith("REVERT-FAIL") and p1f is rez
+          and "prijem" not in rez,
+          "1e: prolaz sa stop-om (REVERT-FAIL) se transformise")
+
+    # --- 2. _g1_klasa: svaki slucaj se od ISTO razlikuje po jednoj osi ------
+    IZ_OK = (True, "OK", "izbor")
+    for izb, cela, ocekivano in (
+            (IZ_OK, (True, "OK"), ("ISTO", "")),
+            (IZ_OK, (True, "OK (uz jos 2 testa)"), ("ISTO", "")),
+            (IZ_OK, (False, "NE OBARA NISTA"), ("OPASNA", "MASKA")),
+            (IZ_OK, (False, "PALA DRUGA TVRDNJA: x"), ("OPASNA", "DRUGI PAD")),
+            (IZ_OK, (False, "EXCEL UBIJEN -- d"), ("NEJASNO", "")),
+            ((False, "u izboru: NE OBARA NISTA", "povratak"), (True, "OK"),
+             ("SKUPA", "cela OK")),
+            ((False, "u izboru: NE OBARA NISTA", "povratak"),
+             (False, "NE OBARA NISTA"), ("SKUPA", "cela NE")),
+            ((False, "baza izbora: 1 palo", "povratak"), (True, "OK"),
+             ("SKUPA", "baza izbora crvena")),
+            ((False, "RunAllTests: TESTS RunAllTests: 3 ukupno, 1 palo", "povratak"),
+             (True, "OK"), ("SKUPA", "baza izbora crvena")),
+            # Baza koja NIJE odradjena nije S-4a regresija (review G1).
+            ((False, "RunAllTests: timeout", "povratak"), (True, "OK"),
+             ("SKUPA", "baza izbora infra")),
+            ((False, "RunBusinessFlowProSuite: EXCEL UBIJEN -- x", "povratak"),
+             (True, "OK"), ("SKUPA", "baza izbora infra")),
+            # 'konacno' = izbor nije posmatrao tvrdnju; bez merenja ni na celoj
+            # strani par nije ISTO nego NEUPOREDIV (van imenioca, review G1).
+            ((False, "APPLY-FAIL -- x", "konacno"), (False, "APPLY-FAIL -- x"),
+             ("NEUPOREDIVO", "nijedna strana ne meri")),
+            ((False, "TIMEOUT suite", "konacno"), (False, "TIMEOUT suite"),
+             ("NEUPOREDIVO", "nijedna strana ne meri")),
+            ((False, "EXCEL UBIJEN -- d", "konacno"), (False, "TIMEOUT suite"),
+             ("NEUPOREDIVO", "nijedna strana ne meri")),
+            ((False, "TIMEOUT suite", "konacno"), (False, "NE OBARA NISTA"),
+             ("NEJASNO", "")),
+            ((False, "TIMEOUT suite", "konacno"), (True, "OK"), ("NEJASNO", "")),
+            ((False, "APPLY-FAIL -- x", "konacno"), (True, "OK"), ("STROZA", "")),
+            (None, (True, "OK"), ("NEUPOREDIVO", "")),
+            (IZ_OK, None, ("NEUPOREDIVO", ""))):
+        tvrdi(_g1_klasa(izb, cela) == ocekivano,
+              "2: klasa %r / %r je %r umesto %r"
+              % (izb, cela, _g1_klasa(izb, cela), ocekivano))
+
+    # --- 3. lanac bez placeba: zapis izbora + cela suite -> red -------------
+    sloj_a = {"a": "slucajni"}
+    r3 = _g1_poredi([a], p1a.get("prijem", []), {"a": (False, "NE OBARA NISTA")}, sloj_a)
+    tvrdi([(r["ime"], r["klasa"]) for r in r3] == [("a", "OPASNA")]
+          and any(l.startswith("G1 OPASNA/MASKA slucajni RAT a |")
+                  for l in _g1_ispis(r3, [a], sloj_a)),
+          "3: izbor OK + cela NE OBARA NISTA ne daje red OPASNA sa imenom")
+    r3 = _g1_poredi([a], p1b.get("prijem", []), {"a": (True, "OK")}, sloj_a)
+    tvrdi([(r["ime"], r["klasa"]) for r in r3] == [("a", "SKUPA")],
+          "3: povratak + cela OK nije SKUPA (placebo bi usao u poredjenje)")
+
+    # --- 4. _g1_presuda ----------------------------------------------------
+    def red(ime, suite=SUITE_ALL, sloj="slucajni", izb=IZ_OK, cela=(True, "OK")):
+        k, pt = _g1_klasa(izb, cela)
+        return {"ime": ime, "suite": suite, "test": "T_" + ime, "sloj": sloj,
+                "klasa": k, "podtip": pt, "izbor": izb, "cela": cela}
+
+    POV = (False, "u izboru: NE OBARA NISTA", "povratak")
+
+    def slucajni(n_rat, n_bfp, **kw):
+        return ([red("r%d" % i, **kw) for i in range(n_rat)]
+                + [red("b%d" % i, SUITE_BFP, **kw) for i in range(n_bfp)])
+
+    ciljani_skupa = [red("c%d" % i, sloj="ciljani", izb=POV) for i in range(5)]
+
+    def presuda(redovi, stop="", celovit=True):
+        return _g1_presuda(redovi, stop, celovit, G1_MIN, G1_MIN_SUITE)
+
+    rc, r = presuda(slucajni(36, 24) + ciljani_skupa)
+    tvrdi(rc == 0 and r.startswith("G1 PRIJEM: PROSAO"),
+          "4: 36 RAT + 24 BFP presudjenih ISTO ne daje PROSAO (%s)" % r)
+    rc, r = presuda(slucajni(30, 20))
+    tvrdi(rc == 0 and "5,8%" in r and "nad 50 presudjenih" in r,
+          "4: granica za M=50 nije 5,8%% (%s)" % r)
+    rc, r = presuda(slucajni(36, 24) + [red("cilj-opasna", sloj="ciljani",
+                                            cela=(False, "NE OBARA NISTA"))])
+    tvrdi(rc == 1 and "cilj-opasna" in r and "PAO" in r,
+          "4: ciljana OPASNA ne obara prijem po imenu (%s)" % r)
+    rc, r = presuda(slucajni(36, 24) + [red("stroza", izb=(False, "APPLY-FAIL", "konacno"))])
+    tvrdi(rc == 1 and "stroza" in r, "4: STROZA ne obara prijem (%s)" % r)
+    rc, r = presuda(slucajni(27, 18) + [red("p%d" % i, izb=POV) for i in range(5)])
+    tvrdi(rc == 2, "4: SKUPA se broji u imenilac (45 presudjenih + 5 SKUPA "
+                   "daje %d: %s)" % (rc, r))
+    rc, r = presuda(slucajni(55, 10))
+    tvrdi(rc == 2 and "BFP" in r, "4: 55 RAT + 10 BFP prolazi bez minimuma po suiti (%s)" % r)
+    # stop i celovit su odvojene ose (main uz stop daje i celovit=False).
+    rc, r = presuda(slucajni(36, 24), stop="REVERT-FAIL: x", celovit=True)
+    tvrdi(rc == 2, "4: PROSAO uz STOP")
+    rc, r = presuda(slucajni(36, 24), celovit=False)
+    tvrdi(rc == 2, "4: PROSAO uz snimak koji se menjao (celovit=False)")
+    rc, r = presuda(slucajni(36, 24) + [red("nej", cela=(False, "TIMEOUT suite"))])
+    tvrdi(rc == 2 and "nej" in r, "4: NEJASNO stavka ne blokira PROSAO (%s)" % r)
+    rc, r = presuda(slucajni(36, 24) + [red("neup", sloj="ciljani", cela=None)])
+    tvrdi(rc == 2 and "neup" in r, "4: ciljana NEUPOREDIVO ne blokira PROSAO (%s)" % r)
+    rc, r = presuda([red("f%d" % i, sloj="filter") for i in range(60)])
+    tvrdi(rc == 2, "4: poziv sa filterom daje PROSAO")
+    rc, r = presuda([red("f%d" % i, sloj="filter") for i in range(3)]
+                    + [red("fo", sloj="filter", cela=(False, "NE OBARA NISTA"))])
+    tvrdi(rc == 1, "4: OPASNA uz filter ne obara prijem")
+    rc, r = presuda(slucajni(36, 24) + [red("s%d" % i, izb=POV) for i in range(40)])
+    tvrdi(rc == 0 and "SKUPA slucajni 40/100" in r,
+          "4: mnogo SKUPA uz dovoljno presudjenih obara prijem (%s)" % r)
+    rc, r = presuda(slucajni(36, 24) + ciljani_skupa)
+    tvrdi("SKUPA slucajni 0/60, ciljani 5/5" in r,
+          "4: udeo SKUPA mesa slojeve -- ciljani je pristrasan (%s)" % r)
+    nemereni = [red("t%d" % i, SUITE_BFP, izb=(False, "TIMEOUT suite", "konacno"),
+                    cela=(False, "TIMEOUT suite")) for i in range(10)]
+    rc, r = presuda(slucajni(25, 15) + nemereni)
+    tvrdi(rc == 2 and "nad 40 presudjenih" in r,
+          "4: par bez merenja na obe strane ulazi u imenilac (%d: %s)" % (rc, r))
+    s4a = G1_S4A_TESTOVI[0]
+    ispis = _g1_ispis([dict(red("i"), test=s4a, klasa="SKUPA",
+                            podtip="baza izbora infra")], [], {})
+    tvrdi(not any("S-4a REGRESIJA" in x for x in ispis),
+          "4: pad Excel-a u bazi izbora se javlja kao S-4a REGRESIJA")
+    ispis = _g1_ispis([dict(red("c"), test=s4a, klasa="SKUPA",
+                            podtip="baza izbora crvena")], [], {})
+    tvrdi(("G1 S-4a REGRESIJA: %s" % s4a) in ispis,
+          "4: crvena baza izbora S-4a testa nije prijavljena kao REGRESIJA")
+
+    # --- 5. _g1_uzorak nad sintetickim katalogom ---------------------------
+    def st(ime, suite, fajl, test):
+        return {"ime": ime, "suite": suite, "fajl": fajl, "test": test}
+
+    kat = []
+    for suite, pref, n_f in ((SUITE_ALL, "r", 5), (SUITE_BFP, "b", 4),
+                             (SUITE_BANKA, "k", 2)):
+        for f in range(n_f):
+            for t in range(3):
+                for j in range(2):
+                    kat.append(st("%s%d-%d-%d" % (pref, f, t, j), suite,
+                                  "mod%s%d.bas" % (pref, f), "T_%s%d_%d" % (pref, f, t)))
+    kat += [st("x", SUITE_ALL, "modX.bas", "T_x"),
+            st("x-dva", SUITE_ALL, "modX.bas", "T_x_dva"),
+            st("st-r", SUITE_ALL, "modST.bas", "T_st_r"),
+            st("st-b", SUITE_BFP, "modST.bas", "T_st_b")]
+    S4A, POSLE, PDOK, PSTAT = ("T_r0_0",), ("T_b1_1",), {"x": "NE"}, {"st-r", "st-b", "x"}
+    IZBS = {SUITE_ALL, SUITE_BFP}
+
+    def uz(stavke=kat, n=12, s4a=S4A, posle=POSLE, pdok=PDOK, seme="G1"):
+        return _g1_uzorak(stavke, n, IZBS, s4a, posle, pdok, PSTAT, seme)
+
+    def sl(sloj, vrsta="slucajni"):
+        return {i for i, v in sloj.items() if v == vrsta}
+
+    sloj, problem = uz()
+    tvrdi(not problem and sloj, "5: uzorak nad ispravnim katalogom daje problem (%s)" % problem)
+    tvrdi(uz(list(reversed(kat[7:])) + kat[:7])[0] == sloj,
+          "5: izmesan ulaz daje drugi uzorak (bira se po katalogu, ne po hash-u)")
+    po_suiti = {su: [s for s in kat if s["ime"] in sl(sloj) and s["suite"] == su]
+                for su in (SUITE_ALL, SUITE_BFP, SUITE_BANKA)}
+    okvir = [s for s in kat if s["suite"] in IZBS]
+    k_rat = int(round(12 * sum(1 for s in okvir if s["suite"] == SUITE_ALL)
+                      / float(len(okvir))))
+    tvrdi(len(po_suiti[SUITE_ALL]) == k_rat and len(po_suiti[SUITE_BFP]) == 12 - k_rat,
+          "5: kvote po suiti nisu %d/%d (%d/%d)" % (
+              k_rat, 12 - k_rat, len(po_suiti[SUITE_ALL]), len(po_suiti[SUITE_BFP])))
+    izabrani = [s for s in kat if s["ime"] in sl(sloj)]
+    tvrdi(len({s["test"] for s in izabrani}) == len(izabrani),
+          "5: slucajni sloj ima dve stavke istog testa")
+    # Fajlovi bazena RAT: bez ciljanih i statickih (r0..r4 i modX -- 6), kvota 7.
+    fajlovi_rat = {s["fajl"] for s in okvir if s["suite"] == SUITE_ALL
+                   and sloj.get(s["ime"]) != "ciljani" and s["ime"] not in PSTAT}
+    tvrdi(len({s["fajl"] for s in po_suiti[SUITE_ALL]})
+          == min(k_rat, len(fajlovi_rat)) == 6,
+          "5: round-robin ne pokriva fajlove pre drugog kruga")
+    tvrdi(sl(sloj, "ciljani") == {s["ime"] for s in kat if s["test"] in S4A + POSLE}
+          | {"x"},
+          "5: ciljani sloj nije tacno testovi sa spiska + kljucevi POZNATI_NALAZI_DOKAZ")
+    tvrdi(sloj.get("x-dva") != "ciljani",
+          "5: 'x' povlaci 'x-dva' (izbor po prefiksu, ne po imenu)")
+    nedozvoljeni = set()
+    for i in range(20):
+        s_i, _p = uz(seme="s%d" % i)
+        nedozvoljeni |= {ime for ime in s_i if ime in ("st-r", "st-b")
+                         or ime.startswith("k")}
+    tvrdi(not nedozvoljeni, "5: banka ili staticki POZNATI u uzorku: %s"
+          % sorted(nedozvoljeni))
+    tvrdi("T_nema" in uz(s4a=("T_nema",))[1] and "nema" in uz(pdok={"nema": "NE"})[1],
+          "5: nepostojece ciljano ime se tiho preskace")
+    tvrdi(sl(uz(n=2)[0]) <= sl(uz(n=3)[0]) and sl(uz(n=12)[0]) <= sl(uz(n=16)[0]),
+          "5: uzorak za manji N nije podskup uzorka za veci N")
+    tvrdi(sl(uz(seme="drugo")[0]) != sl(sloj),
+          "5: drugo seme daje isti slucajni deo")
+
+    # --- 6. main: odbijanje pre citanja, i ozicenje ------------------------
+    citano = []
+    pravi_mod = _modul_sabotaza
+
+    def ne_citaj():
+        # Odbijanje mora doci PRE kataloga; mutant koji ga propusti staje ovde,
+        # ne pusta katalog (27 s) ni Excel.
+        citano.append(1)
+        raise RuntimeError("katalog citan pre odbijanja")
+    globals()["_modul_sabotaza"] = ne_citaj
+    try:
+        with contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(io.StringIO()):
+            rcs = [main(["--prijem", "--grupe", "6"]), main(["--prijem", "--izolacija"]),
+                   main(["--prijem", "10"]), main(["--prijem", "0"])]
+    except BaseException as e:              # noqa: BLE001 -- pad je nalaz
+        rcs = [repr(e)]
+    finally:
+        globals()["_modul_sabotaza"] = pravi_mod
+    tvrdi(rcs == [2, 2, 2, 2] and not citano,
+          "6: --prijem uz --grupe 6 / --izolacija / N < G1_MIN / izricito 0 nije "
+          "odbijen PRE citanja kataloga (%r, citano %d)" % (rcs, len(citano)))
+    izvor_main = inspect.getsource(main)
+    najavi_telo = izvor_main[izvor_main.find("    def najavi("):
+                             izvor_main.find("kandidati =")]
+    upisi_telo = izvor_main[izvor_main.find("    def upisi("):
+                            izvor_main.find("    def posao(")]
+    tvrdi(izvor_main.count("_prijem_ishod(") == 1 and "_prijem_ishod(" in najavi_telo,
+          "6: najavi ne transformise ishod pre kandidata, ili se transformise i "
+          "posao faze 3")
+    tvrdi(izvor_main.count('prijem_izbor.extend(ishod.get("prijem"') == 2
+          and 'verdikt[s["ime"]]' in upisi_telo and "return rc_g1" in izvor_main
+          and 0 <= izvor_main.find("_faza3_ocena(") < izvor_main.find("_g1_poredi("),
+          "6: main ne knjizi verdikt izbora iz obe faze, upisi ne pamti verdikt, "
+          "ili G1 ne poredi posle faze 3")
+    tvrdi(izvor_main.count("unapred.trazi(") == 1 and izvor_main.count("upisi(ishod[") == 2
+          and izvor_main.count("_faza3_ocena(") == 1
+          and izvor_main.count("izborom_priznatih += ") == 2,
+          "6: postojece igle R-4 / faze 3 / VERDIKT su promenjene")
+    return nalazi
+
+
 def _self_test(tiho: bool = False) -> int:
     nalazi = []
     _STOP.clear()
     nalazi.extend(_self_test_r4())
     nalazi.extend(_self_test_faza3())
+    nalazi.extend(_self_test_g1())
 
     def tvrdi(uslov, opis):
         if not uslov:

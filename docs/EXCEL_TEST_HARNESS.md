@@ -995,6 +995,114 @@ BFP-a je jedinica **korak** (test ili seed), jer verdikt tamo nosi tvrdnja.
 prolaz na Windows-u je zato `--izolacija` nad rezom, pa tek onda `--izbor`.
 Sabotaže `izbor-*` / `bfp-izbor-*` obaraju dva nova VBA testa.
 
+### Prijem izbora (G1) — `--prijem`
+
+Izbor tvrdi manje od pune suite. Pre nego što postane podrazumevan put dokaza u
+rezu (D-2), meri se **koliko manje**: nad istim snimkom svaka stavka uzorka ide
+izborom, pa i celom suite-om, i dva verdikta se porede po stavci.
+
+```bash
+python tools/dokaz.py --prijem --plan | tail -n 4                 # uzorak i otisak, bez Excela
+python tools/dokaz.py --prijem izbor-podniz bfp-izbor-podniz --radnika 2   # proba puta (procena ~25 min)
+python tools/dokaz.py --prijem --radnika 4 > ~/g1_prijem.log 2>&1; echo "rc=$?"
+grep -E "^(G1 |=== )" ~/g1_prijem.log
+```
+
+**Jedan poziv, jedan snimak.** Faza 1 je izbor, kao i inače. U `najavi`, pre
+bilo kakvog knjiženja, `_prijem_ishod` zapamti verdikt izbora i pošalje stavku
+na celu suite. Faza 3 je nepromenjena: svaka stavka se meri pojedinačno, uz
+zelenu bazu cele suite. Verdikt izbora se hvata **pre** povratka, jer bi posle
+toga stavka koju je izbor vratio bila poređena sama sa sobom. Bez `--prijem` se
+ništa u izlazu ne menja.
+
+**Uzorak** (`_g1_uzorak`) je determinističan i ne zavisi od redosleda kataloga.
+Okvir su suite sa izborom (`RunAllTests`, BFP). Banka je izuzeta, jer izbor
+nema, pa bi oba merenja bila ista.
+
+- **Ciljani sloj** ulazi ceo:
+  - sve sabotaže 13 testova iz S-4a;
+  - sabotaže testova mehanizma izbora i one dodate posle #479;
+  - ključevi `POZNATI_NALAZI_DOKAZ`, kao negativne kontrole.
+
+  Za katalog od 17.11.2026 to su 43 stavke (RAT 34, BFP 9). Ime sa spiska bez
+  ijedne stavke zaustavlja poziv (rc 2) po imenu, nikad se tiho ne preskače.
+- **Slučajni sloj** ima N stavki (podrazumevano 60, `--prijem N`). Iz okvira se
+  izuzimaju ciljane stavke i statički `POZNATI_NALAZI`, čiji se ključ ne
+  poklapa ni u jednom režimu. Kvota po suiti je srazmerna okviru (60 → RAT 36,
+  BFP 24).
+  - Fajlovi se ređaju po `sha256(seme|fajl)`, a stavke u fajlu po
+    `sha256(seme|ime)`.
+  - Bira se round-robin po fajlu, jedna stavka po testu.
+  - Uzorak za veći N je nadskup uzorka za manji.
+- Izbor stavke je **članstvo po imenu**, ne prefiks.
+- Otisak uzorka (16 hex) ispisuju i `--plan` i pravi prolaz. Dva poziva sa
+  istim otiskom mere isti skup.
+
+**Klase po stavci:**
+
+| Klasa | Izbor | Cela suite | Značenje |
+|---|---|---|---|
+| `ISTO` | priznaje | priznaje | i „OK (uz još N)" je priznanje; poredi se priznanje, ne tekst |
+| `OPASNA/MASKA` | priznaje | NE OBARA NIŠTA | raniji test u redosledu zaklanja mutaciju |
+| `OPASNA/DRUGI PAD` | priznaje | druga tvrdnja / tuđ test | mutacija obori raniji test, cilj pada drugde |
+| `STROZA` | konačno NE (APPLY-FAIL) | priznaje | izbor bi prijavio lažan nalaz |
+| `SKUPA` | povratak na celu suite | bilo šta | izbor nije presudio sam; podtip `cela OK`, `cela NE`, `baza izbora crvena` ili `baza izbora infra` (timeout, pad Excel-a — nije S-4a regresija) |
+| `NEJASNO` | — | TIMEOUT / EXCEL UBIJEN / PREKID na jednoj strani | prolaz nije stigao do kraja; meri se ponovo |
+| `NEUPOREDIVO/nijedna strana ne meri` | konačno (APPLY-FAIL, TIMEOUT, EXCEL UBIJEN) | isto tako nije stigla do tvrdnje | jednakost bez merenja nije poređenje — van imenioca, isto kao `SKUPA` |
+| `NEUPOREDIVO` | nije izmeren | ili nije izmerena | npr. crvena baza cele suite, STOP |
+
+**Imenilac** su samo **slučajne** stavke koje je izbor presudio sam (`ISTO`,
+`OPASNA`, `STROZA`). `SKUPA` ne ulazi, jer je tamo konačni verdikt po
+konstrukciji jednak celoj suiti, pa bi brojanje bilo placebo. Ciljani sloj ne
+ulazi ni u imenilac ni u granicu, ali obara presudu.
+
+**Presuda** je poslednji red, `G1 PRIJEM:`, a exit kod nosi isto:
+
+- **rc 1, PAO:** bar jedna `OPASNA` ili `STROZA`, u bilo kom sloju.
+- **rc 2, NEJASNO** u ovim slučajevima:
+  - STOP;
+  - snimak pre/posle se razlikuje;
+  - bilo koja `NEJASNO` stavka;
+  - ciljana `NEUPOREDIVO`;
+  - manje od 50 presuđenih slučajnih, ili manje od 15 u RAT ili u BFP;
+  - svaki poziv sa filterom.
+- **rc 0, PROSAO:** sve ostalo. Red tada nosi gornju granicu razlike van
+  ciljanih: `1 - 0,05^(1/M)`, uz 95%. Za M = 50 to je 5,8%, za M = 60 4,9%.
+
+Udeo `SKUPA` se ispisuje **po sloju** (`SKUPA slucajni x/60, ciljani y/43`) i ne
+obara presudu. Trošak podrazumevanog izbora (`[?]` iz D-2) procenjuje samo
+slučajni sloj; ciljani je namerno pristrasan, jer su POZNATI negativne kontrole.
+
+Ispod svake stavke koja nije `ISTO` ni `SKUPA` stoji komanda za trijažu
+(`--prijem <ime> --radnika 1`). Kod tri imena koja su prefiks drugog
+(`bruto-prijemnica`, `clear-datum`, `s6k6-f4-pauza-vracena`) filter povlači
+višak, i red to pokazuje. `G1 S-4a REGRESIJA: <test>` znači da test iz S-4a opet
+ne prolazi sam. Baza izbora koja nije odrađena (timeout, pad Excel-a) to nije i
+ide pod `baza izbora infra`.
+
+**Odbija se pre čitanja kataloga (rc 2):** `--grupe > 1`, `--izolacija`,
+`--prijem N` sa N < 50 bez filtera, i izričito `--prijem 0` (inače bi tiho pustio
+pun običan dokaz celog kataloga). Za release (O-1, V2, najmanje 100
+presuđenih) poziv je `--prijem 115`, a red ispisuje stvarno M.
+
+**Trajanje** (procena, Windows, 103 stavke, `--radnika 4`):
+- faza 3 serijski oko 9,8 h;
+- uz skaliranje od oko 2× to je oko 5 h, u rasponu 4–6,5 h;
+- skaliranje četiri paralelne pune suite **nije mereno**.
+
+BFP pod opterećenjem ide blizu `run_vba` granice od 1800 s po fazi. Timeout
+zato vodi u `NEJASNO`, ne u `PAO`. Ne ići na 5 radnika.
+
+**Šta je izmereno, a šta nije.** Python strana je izmerena: `_self_test_g1`
+(lanac kroz pravi `_prolaz`, klase, presuda, uzorak, odbijanje u `main`) i
+dvosmerni dokaz nad 28 G1 mutanata i 26 ranijih. Ishod prijema postoji tek posle Windows
+prolaza, do tada je G1 **neverifikovan**. G1 namerno ne radi sledeće:
+- ne prima grupni izbor;
+- ne pokriva banku;
+- ne ponavlja nestabilne razlike sam;
+- ne menja podrazumevani put dokaza. To ide posle `PROSAO`, zasebnim process
+  PR-om.
+
 ## Trijaža masovnih padova
 
 ```bash
