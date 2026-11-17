@@ -1040,6 +1040,25 @@ def _posao_faze3(s: dict, baza, prolaz):
     return fn
 
 
+def _baza_poznata(cele_baze: dict, unapred, suite: str):
+    """(ok, opis) baze koja je VEC poznata -- izmerena, ili gotova unapred --
+    ili None, BEZ cekanja. unapred se cita JEDNOM: glavna nit ga posle prenosa
+    postavlja na None, a njegov rez ostaje pun."""
+    u = unapred
+    b = cele_baze.get(suite)
+    if b is None and u is not None:
+        b = u.rezultat(suite)
+    return b
+
+
+def _baze_faze3_ovde(potrebne: set, unapred, cele_baze: dict) -> list:
+    """Baze faze 3 koje se mere OVDE, serijski: potrebne, a niti vec izmerene
+    niti u bazama unapred. Baza unapred se ne meri drugi put -- dve pune suite
+    uporedo bi obe pisale marker zelenog."""
+    bez = set(unapred.suite) if unapred is not None else set()
+    return sorted(set(potrebne) - bez - set(cele_baze))
+
+
 def _uzmi_baze_unapred(unapred, potrebne: set, cele_baze: dict, nacin: str) -> bool:
     """Prenesi baze unapred u cele_baze, ako smeju (v. _faza3_ocena). True kad
     su prenete -- unapred je tada zavrsen (sacekaj otkazuje nepotrebne).
@@ -1057,7 +1076,7 @@ def _uzmi_baze_unapred(unapred, potrebne: set, cele_baze: dict, nacin: str) -> b
     return True
 
 
-def _faza3_ocena(sve: list, tok, baze, upisi, lose: list, koren) -> str:
+def _faza3_ocena(sve: list, tok, baze, upisi, lose: list, koren, baza) -> str:
     """Ocena mutacija cele suite (faza 3) -- ISTA za serijski put i za radnike.
 
     sve    stavke redom kataloga; tok daje njihove ishode ISTIM redom
@@ -1066,6 +1085,7 @@ def _faza3_ocena(sve: list, tok, baze, upisi, lose: list, koren) -> str:
            poznate. nacin: "proba" (bez cekanja), "cekaj" (ceka potrebne),
            "stop" (samo vec gotove -- STOP ne ceka punu suite).
     upisi  zajednicko knjizenje ishoda; lose spisak problema; koren(ishod).
+    baza   baza(suite) -> (ok, opis) baze koja je VEC poznata, ili None.
 
     Pravila, isto za oba puta:
     1. Stavke CRVENE baze javljaju se cim je baza poznata, SVE ODJEDNOM i
@@ -1074,11 +1094,12 @@ def _faza3_ocena(sve: list, tok, baze, upisi, lose: list, koren) -> str:
     2. Mutacija se priznaje SAMO uz zelenu bazu svoje suite; baza koje nema
        nije zelena.
     3. STOP ne ceka bazu koja jos traje: stavka je tada NIJE IZMERENA (dokaz je
-       ionako NIJE DOKAZANO). Baza koja je VEC gotova se uzima i uz STOP.
+       ionako NIJE DOKAZANO). Baza koja je VEC gotova se uzima i uz STOP -- i
+       sopstvena baza stavke kad druga potrebna jos traje.
 
     Vraca razlog zaustavljanja ili ""."""
-    def javi_crvene(b):
-        for s2 in sve:
+    def javi_crvene(b, koje=None):
+        for s2 in (sve if koje is None else koje):
             ok2, opis2 = b.get(s2["suite"], (False, "baza cele suite nije izmerena"))
             if not ok2:
                 lose.append((s2["ime"], "NIJE IZMERENA: ni izbor ni cela suite "
@@ -1097,14 +1118,19 @@ def _faza3_ocena(sve: list, tok, baze, upisi, lose: list, koren) -> str:
             poznate = baze("stop" if ishod["stop"] else "cekaj")
             if poznate is not None:
                 javi_crvene(poznate)
-        if poznate is None:
+        b = poznate.get(s["suite"], (False, "")) if poznate is not None else (
+            baza(s["suite"]) if ishod["stop"] else None)
+        if b is None:
             lose.append((s["ime"], "NIJE IZMERENA: ni izbor ni cela suite nisu "
                                    "zeleni -- baza cele suite nije izmerena "
                                    "(dokaz je stao pre nje)"))
             print("%-46s NIJE IZMERENA: dokaz je stao pre baze cele suite"
                   % s["ime"], flush=True)
-        elif poznate.get(s["suite"], (False, ""))[0]:
+        elif b[0]:
             upisi(ishod["ishodi"])
+        elif poznate is None:
+            # Sopstvena baza je crvena, a ostale nisu javljene: javi ovu sada.
+            javi_crvene({s["suite"]: b}, [s])
         if ishod["stop"]:
             return ishod["stop"]
     return ""
@@ -1456,8 +1482,7 @@ def main(argv: list) -> int:
             print("  %-46s <- %s" % (s["ime"], razlog), flush=True)
         potrebne_3 = {s["suite"] for s, _r in cela_suite}
         # Baze koje niko ne meri unapred mere se ovde, serijski (pisu marker).
-        bez_unapred = set(unapred.suite) if unapred is not None else set()
-        for suite in sorted(potrebne_3 - bez_unapred - set(cele_baze)):
+        for suite in _baze_faze3_ovde(potrebne_3, unapred, cele_baze):
             ok_opis = _baza_zelena(suite, src=ctx["kopija"], izlaz=ctx["izlaz"])
             cele_baze[suite] = ok_opis
             print("BAZNO: %s" % cele_baze[suite][1], flush=True)
@@ -1474,10 +1499,7 @@ def main(argv: list) -> int:
             return cele_baze
 
         def baza_poznata(suite):
-            b = cele_baze.get(suite)
-            if b is None and unapred is not None:
-                b = unapred.rezultat(suite)
-            return b
+            return _baza_poznata(cele_baze, unapred, suite)
 
         sve = [s for s, _r in cela_suite]
         # RANA MUTACIJA (R-4): uz baze unapred mutacije cele suite krecu ODMAH,
@@ -1493,7 +1515,8 @@ def main(argv: list) -> int:
                 bazen_faze())) as tok:
             stop = _faza3_ocena(
                 sve, tok, baze, upisi, lose,
-                lambda ishod: koren_tokom.add(ishod.get("koren") or koren_pre))
+                lambda ishod: koren_tokom.add(ishod.get("koren") or koren_pre),
+                baza_poznata)
         if stop and stop != "PREKID":
             _STOP.set()
 
@@ -2255,6 +2278,10 @@ def _self_test_r4() -> list:
     tvrdi(izvor_main.count("_faza3_ocena(") == 1
           and izvor_main.count("upisi(ishod[") == 2
           and "_posao_faze3(s, baza_poznata,\n" in izvor_main
+          and "            return _baza_poznata(cele_baze, unapred, suite)\n" in izvor_main
+          and "        for suite in _baze_faze3_ovde(potrebne_3, unapred, cele_baze):\n" in izvor_main
+          and ("                lambda ishod: koren_tokom.add(ishod.get(\"koren\") or koren_pre),\n"
+               "                baza_poznata)\n") in izvor_main
           and ("                if not _uzmi_baze_unapred(unapred, potrebne_3, "
                "cele_baze, nacin):\n                    return None\n"
                "                unapred = None\n") in izvor_main
@@ -2300,15 +2327,15 @@ def _self_test_faza3() -> list:
     def st(ime, suite):
         return {"ime": ime, "suite": suite}
 
-    a1, b1, a2 = st("a1", "A"), st("b1", "B"), st("a2", "A")
+    a1, b1, a2, b2 = st("a1", "A"), st("b1", "B"), st("a2", "A"), st("b2", "B")
     zelena_a = {"A": (True, "ok A"), "B": (False, "crvena B")}
 
     def ish(s, stop="", priznato=True):
-        return {"stop": stop, "koren": None,
+        return {"stop": stop, "koren": "k-" + s["ime"],
                 "ishodi": [(s, priznato, stop or "OK", priznato)]}
 
-    def pusti(sve, ishodi, baze_fn):
-        upisano, lose, pozivi = [], [], []
+    def pusti(sve, ishodi, baze_fn, baza_fn=lambda suite: None):
+        upisano, lose, pozivi, koreni = [], [], [], []
 
         def upisi(isx):
             for s, _p, stanje, _c in isx:
@@ -2322,30 +2349,49 @@ def _self_test_faza3() -> list:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             stop = _faza3_ocena(sve, iter(ishodi), baze, upisi, lose,
-                                lambda _i: None)
-        return stop, buf.getvalue().splitlines(), upisano, lose, pozivi
+                                lambda i: koreni.append(i.get("koren")), baza_fn)
+        return stop, buf.getvalue().splitlines(), upisano, lose, pozivi, koreni
 
     # N=1: baze poznate unapred; crvena stavka se ne pusta (_PRESKOCENA).
-    s1 = pusti([a1, b1, a2], [ish(a1), dict(_PRESKOCENA), ish(a2)],
+    s1 = pusti([a1, b1, a2, b2],
+               [ish(a1), dict(_PRESKOCENA), ish(a2), dict(_PRESKOCENA)],
                lambda nacin: zelena_a)
-    # N>1: baza stize tek pri prvom ishodu; crvena mutacija je VEC pustena i
-    # "priznata" -- ne sme da se upise.
-    s4 = pusti([a1, b1, a2], [ish(a1), ish(b1), ish(a2)],
+    # N>1: baza stize tek pri prvom ishodu; crvene mutacije su VEC pustene i
+    # "priznate" -- ne smeju da se upisu.
+    s4 = pusti([a1, b1, a2, b2], [ish(a1), ish(b1), ish(a2), ish(b2)],
                lambda nacin: None if nacin == "proba" else zelena_a)
-    tvrdi(s1[0] == "" and s1[2] == ["a1", "a2"] and [x[0] for x in s1[3]] == ["b1"]
-          and s1[1] and s1[1][0].startswith("b1") and "NIJE IZMERENA" in s1[1][0]
-          and s1[4] == ["proba"],
-          "serijski: crvena stavka se ne javlja PRVA, ili se upisuje (%r)" % (s1[1:],))
+    tvrdi(s1[0] == "" and s1[2] == ["a1", "a2"]
+          and [x[0] for x in s1[3]] == ["b1", "b2"]
+          and [x.split()[0] for x in s1[1][:2]] == ["b1", "b2"]
+          and all("NIJE IZMERENA" in x for x in s1[1][:2])
+          and s1[4] == ["proba"] and s1[5] == ["k-a1", None, "k-a2", None],
+          "serijski: crvene stavke se ne javljaju PRVE i redom kataloga, se "
+          "upisuju, ili se koren ne belezi (%r)" % (s1[1:],))
     tvrdi(s4[1] == s1[1] and s4[2] == s1[2] and s4[3] == s1[3]
-          and s4[4] == ["proba", "cekaj"],
-          "N>1 i N=1 ne daju isti izlaz faze 3 (%r / %r)" % (s4[1], s1[1]))
+          and s4[4] == ["proba", "cekaj"]
+          and s4[5] == ["k-a1", "k-b1", "k-a2", "k-b2"],
+          "N>1 i N=1 ne daju isti izlaz faze 3, ili se koren ne belezi "
+          "(%r / %r)" % (s4[1], s1[1]))
 
     # STOP pre baze: ne ceka, stavka NIJE IZMERENA.
     s = pusti([a1, a2], [ish(a1, stop="REVERT-FAIL x", priznato=False)],
               lambda nacin: None if nacin in ("proba", "stop") else zelena_a)
     tvrdi(s[0] == "REVERT-FAIL x" and "cekaj" not in s[4] and s[2] == []
-          and s[3] and "dokaz je stao pre nje" in s[3][0][1],
+          and s[3] and "dokaz je stao pre nje" in s[3][0][1] and s[5] == ["k-a1"],
           "STOP ceka bazu koja jos traje, ili se stavka ocenjuje bez baze (%r)" % (s,))
+    # STOP dok DRUGA potrebna baza traje, a sopstvena je gotova: ocena njom.
+    s = pusti([a1, b1], [ish(a1, stop="REVERT-FAIL x", priznato=False)],
+              lambda nacin: None if nacin in ("proba", "stop") else zelena_a,
+              lambda suite: zelena_a.get(suite) if suite == "A" else None)
+    tvrdi(s[0] == "REVERT-FAIL x" and s[2] == ["a1"] and "cekaj" not in s[4]
+          and not any("dokaz je stao" in x[1] for x in s[3]),
+          "STOP ne uzima sopstvenu gotovu bazu stavke dok druga traje (%r)" % (s,))
+    s = pusti([b1, a1], [ish(b1, stop="REVERT-FAIL x", priznato=True)],
+              lambda nacin: None if nacin in ("proba", "stop") else zelena_a,
+              lambda suite: zelena_a.get(suite) if suite == "B" else None)
+    tvrdi(s[2] == [] and [x[0] for x in s[3]] == ["b1"]
+          and bool(s[1]) and "nije zelena" in s[1][0],
+          "STOP uz sopstvenu CRVENU bazu priznaje mutaciju (%r)" % (s,))
     # STOP uz potrebnu bazu koja je VEC gotova: uzima se, stavka nosi svoj ishod.
     s = pusti([a1, a2], [ish(a1, stop="REVERT-FAIL x", priznato=False)],
               lambda nacin: None if nacin == "proba" else zelena_a)
@@ -2358,6 +2404,25 @@ def _self_test_faza3() -> list:
     s = pusti([a1], [ish(a1)], lambda nacin: {})
     tvrdi(s[2] == [] and [x[0] for x in s[3]] == ["a1"],
           "mutacija bez baze svoje suite se priznaje (%r)" % (s,))
+
+    # Baza poznata bez cekanja: izmerena ima prednost, gotova unapred se vidi,
+    # nepoznata je None.
+    class LU:
+        suite = ["B", "C"]
+
+        def rezultat(self, suite):
+            return {"B": (False, "crvena B")}.get(suite)
+
+    tvrdi(_baza_poznata({}, LU(), "B") == (False, "crvena B")
+          and _baza_poznata({}, LU(), "A") is None
+          and _baza_poznata({"B": (True, "ok B")}, LU(), "B") == (True, "ok B")
+          and _baza_poznata({}, None, "B") is None,
+          "posao faze 3 ne vidi bazu koja je gotova unapred (pusta mutaciju uz "
+          "poznatu crvenu bazu)")
+    tvrdi(_baze_faze3_ovde({"A", "B", "D"}, LU(), {"A": (True, "")}) == ["D"]
+          and _baze_faze3_ovde({"A", "B"}, None, {}) == ["A", "B"],
+          "faza 3 serijski meri i bazu koju vec meri baza unapred (dve pune "
+          "suite uporedo, obe pisu marker)")
 
     # Posao faze 3: uz poznatu crvenu bazu se ne pusta.
     pusteno = []

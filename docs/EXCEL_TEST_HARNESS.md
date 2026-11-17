@@ -827,9 +827,10 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
   Stavke crvene baze javljaju se sve odjednom, redom kataloga, čim je baza
   poznata. Mutacija čija je baza već poznata kao crvena se ne pušta. Ostaju
   dve razlike, obe samo uz STOP, kad je verdikt ionako `NIJE DOKAZANO`:
-  - STOP ne čeka **potrebnu** bazu koja još traje, pa je stavka `NIJE
-    IZMERENA (dokaz je stao pre baze cele suite)`. Baza koja je već gotova se
-    uzima i uz STOP.
+  - STOP ne čeka **potrebnu** bazu koja još traje. Stavka koja je stala
+    ocenjuje se svojom bazom ako je ta već gotova; inače je `NIJE IZMERENA
+    (dokaz je stao pre baze cele suite)`. Stavke koje zavise od baze koja još
+    traje tada se ne ispisuju, a serijski put ih (crvene) javlja unapred.
   - STOP iz mutacije koja je krenula pre nego što je baza bila poznata važi i
     kad se baza pokaže crvenom. To je bezbednosni signal (kopija nije vraćena,
     izvor se menjao), ne ocena, i ne odbacuje se.
