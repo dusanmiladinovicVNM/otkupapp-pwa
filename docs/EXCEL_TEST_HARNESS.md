@@ -98,6 +98,17 @@ Za to ostaje `Alt+F11 → Debug → Compile VBAProject`.
 
 ## Kako se compile stvarno meri (i zašto ne preko menija)
 
+> **Od 16.11.2026 proba ide samo uz `--compile-only`.** Uz suite je bila
+> ritual: verdikt je skoro uvek `NEJASNO`, ne obara run i ne ide u marker, a
+> jedinu zabeleženu pravu grešku u kompajliranju (06.10.2026, „Syntax error")
+> nije uhvatila — prolaz je visio 585 s. Koštala je 5,9 s fiksnog čekanja po
+> pozivu (izmereno: ide i COM i SendKeys put), otvarala VBE i otimala fokus, a
+> posle nje nekvalifikovan `Application.Run` prestaje da radi. Projekat koji se
+> ne kompajlira sada hvata **koban dijalog** tokom suite (v. „Ako zapne"). Uz
+> suite izveštaj nosi red `COMPILE PRESKOCEN`. `--compile-only` je ostao kakav
+> je: tu je proba jedini signal i on priprema svesku za ručni Compile. Ostatak
+> ovog odeljka opisuje tu probu.
+
 Prva verzija je zaključivala iz `Enabled` stanja stavke **Debug → Compile
 VBAProject** („posle uspešnog compile-a postaje siva"). To **ne radi** u
 nevidljivom Excelu: VBE osvežava enabled-stanje kontrola tek kad se meni iscrta,
@@ -364,12 +375,27 @@ traži), ovde dva procesa i dve mašine.
 - Skripta ima **tvrdi prekid** (`--timeout`, default 1800 s): ako Excel prestane da
   odgovara, proces se ubija i run pada sa `FATAL`. Bez toga COM poziv ne puca —
   samo stoji zauvek.
-- **Prekid meri CEO prolaz, ne jednu suite** (`KI-096`). Pun prolaz od novembra
-  2026 traje oko 16 min, a BFP pušten sam oko 10 min; dok je podrazumevano bilo
-  600 s, prekid ih je ubijao usred BFP-a (`RPC call failed`, ostale suite `RPC
-  server is unavailable`). Od 16.11.2026 je podrazumevano 1800 s, a `dokaz.py`
-  čeka 2400 s. Ako `FATAL` ipak stigne bez dijaloga greške, uzrok je trajanje
-  prolaza, ne break mode.
+- **Prekid se meri po fazi** (`KI-096`): priprema (otvaranje, uvoz, šema), pa
+  svaka suite sa svojim budžetom, pa zatvaranje. Dok je jedan tajmer merio ceo
+  poziv, ubijao je zdrav pun prolaz usred BFP-a (BFP 688 s posle `RunAllTests`-a
+  od 228 s, granica 600 s). `FATAL` sada imenuje fazu u kojoj je stao.
+- **Koban dijalog skraćuje čekanje.** Kad watchdog vidi „Compile error",
+  „Syntax error" ili „Run-time error", Excel ima još 15 s da se vrati (watchdog je
+  kliknuo `End`/`OK`). Ako se ne vrati, VBE je u break mode-u: proces se ubija, a
+  `FATAL` nosi fazu i tekst dijaloga. Pre toga je takav prolaz visio do kraja
+  budžeta (06.10.2026: 585 s, „Syntax error" bez mesta). `dokaz.py` takav prolaz
+  prijavljuje kao `EXCEL UBIJEN`, ne kao „NE OBARA NISTA". Izmereno 16.11.2026,
+  ista greška u telu suite: sa starom compile probom 1785,6 s i `FATAL` bez
+  razloga, sa ovim putem 20,4 s i `FATAL` sa fazom i dijalogom.
+- **Greška u proceduri koju suite ne zove ne vidi se u prolazu.** VBA kompajlira
+  proceduru tek kad je pozove, pa je takav prolaz uredno zelen (izmereno
+  16.11.2026). Hvata je samo ručni `Debug → Compile VBAProject`, i zato on ostaje
+  kapija pred release.
+- **Red `FAZE`** u izveštaju daje režiju poziva po fazi (start Excela, otvaranje,
+  uvoz, šema, zatvaranje), a svaki poziv dopisuje jedan red u
+  `tests/run_vba_istorija.jsonl` (gitignored): trajanje po fazi i po suiti, izvor,
+  izlazni kod. `tests/last_run.*` prepisuje svaki poziv, pa se trajanja do sada
+  nisu nigde čuvala.
 - **Break mode** (`[break]` u naslovu VBE prozora) znači da je VBA stao usred
   izvršavanja. Najčešći uzrok je bio pokvaren import (header u kodu → naredba
   `End`), a drugi klik na **Debug** u dijalogu greške. Watchdog sada nikad ne
