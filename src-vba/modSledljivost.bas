@@ -10,7 +10,7 @@ Option Explicit
 ' kolone bez pisca (Otkup.BrojZbirne, Otkup.OtpremnicaID, Otpremnica.BrojZbirne,
 ' GeneracijaID) su osobine ili ostaci, nikad ivica -- jezgro ih ne cita.
 '
-' IVICE OVOG REZA (E7 i E8 dodaje S9-7, E9 i E10 v. plan 14.65):
+' IVICE OVOG REZA (E7 i E8 dodaje S9-7, pa GP lanac do tada stoji za sebe):
 '   E1 otkup -> stavke otkupa        modOtkup.StavkeOtkupaRedovi
 '   E2 otkup <-> otpremnica          modDokumenta.AktivnoClanstvoOtpremnica
 '   E3 otpremnica <-> zbirna         modDokumenta.AktivnoClanstvoZbirni
@@ -19,6 +19,10 @@ Option Explicit
 '                                    (unazad) -- ista kolona, isto pravilo
 '   E5 prijemnica -> stavke          modDokumenta.StavkePrijemniceRedovi
 '   E6 stavka prijemnice -> faktura  modFaktura.FakturaLinijePoStavci
+'   E9 prerada <-> utovar (po kg)    modUtovar.UtovarenoPoPreradi
+'   E10 utovar -> GP faktura         marker Utovar.FakturaID, potvrdjen kroz
+'                                    modUtovar.AktivnihFstZaUtovar (koje fakture
+'                                    tvrde utovar) i modSEFMapper.GpFakturaRazlog
 '
 ' VEZE DAJU KANONSKI STROGI CITACI, jedan prolaz po tabeli (N13). Jezgro nema
 ' svoju kopiju pravila clanstva: sta je "aktivno clanstvo" i sta je kvar zna
@@ -50,7 +54,9 @@ Public Const SLG_OTP As String = "OTP"      ' otpremnica
 Public Const SLG_ZBR As String = "ZBR"      ' zbirna
 Public Const SLG_PRJ As String = "PRJ"      ' prijemnica
 Public Const SLG_PRS As String = "PRS"      ' stavka prijemnice (PrijemnicaStavkaID)
-Public Const SLG_FAK As String = "FAK"      ' faktura, dosegnuta kroz svoju liniju (E6)
+Public Const SLG_FAK As String = "FAK"      ' faktura, dosegnuta kroz svoju liniju (E6) ili utovar (E10)
+Public Const SLG_PRE As String = "PRE"      ' prerada
+Public Const SLG_UTV As String = "UTV"      ' utovar
 
 ' --- kolone rezultata (2D niz, 1..n, 1..SLG_KOLONA) ---
 Public Const SLG_C_NIVO As Long = 1         ' rastojanje od polaznog cvora (0 = polazni)
@@ -80,17 +86,19 @@ Private Const SL_OTP As Long = 2
 Private Const SL_ZBR As Long = 3
 Private Const SL_PRJ As Long = 4
 Private Const SL_FAK As Long = 5
+Private Const SL_PRE As Long = 6
+Private Const SL_UTV As Long = 7
 
 ' --- stanje jednog hoda; puni ga Ucitaj, prazni Oslobodi. Nije kes: svaki
 ' javni poziv cita tabele ispocetka, pa odgovor ne moze da zastari. ---
-Private m_Data(1 To 5) As Variant           ' zaglavlja (GetTableData)
-Private m_Idx(1 To 5) As Object             ' UCase(ID) -> red (prvi)
-Private m_Dupli(1 To 5) As Object           ' UCase(ID) koji postoji vise puta
-Private m_cID(1 To 5) As Long
-Private m_cBroj(1 To 5) As Long
-Private m_cDatum(1 To 5) As Long
-Private m_cSto(1 To 5) As Long
-Private m_cStatus(1 To 5) As Long
+Private m_Data(1 To 7) As Variant           ' zaglavlja (GetTableData)
+Private m_Idx(1 To 7) As Object             ' UCase(ID) -> red (prvi)
+Private m_Dupli(1 To 7) As Object           ' UCase(ID) koji postoji vise puta
+Private m_cID(1 To 7) As Long
+Private m_cBroj(1 To 7) As Long
+Private m_cDatum(1 To 7) As Long
+Private m_cSto(1 To 7) As Long
+Private m_cStatus(1 To 7) As Long
 Private m_cOtkKoop As Long
 Private m_cOtkParcela As Long
 Private m_cPrjRod As Long
@@ -114,6 +122,13 @@ Private m_E5Kvar As String
 Private m_E6 As Object                      ' UCase(PrijemnicaStavkaID) -> Array(FakturaID, ...)
 Private m_E6PoFakturi As Object             ' UCase(FakturaID) -> Collection(kljuc stavke)
 Private m_E6Kvar As String
+Private m_E9Zbir As Object                  ' PreradaID -> ukupno aktivno utovareno (kg)
+Private m_E9PoPreradi As Object             ' UCase(PreradaID) -> Collection(Array(kljuc utovara, kg))
+Private m_E9PoUtovaru As Object             ' UCase(UtovarID) -> Collection(Array(kljuc prerade, kg))
+Private m_E9KvarPoPreradi As Object         ' UCase(PreradaID) -> razlog
+Private m_E9Kvar As String
+Private m_E10PoFakturi As Object            ' UCase(Utovar.FakturaID) -> Collection(kljuc utovara)
+Private m_cUtFaktura As Long
 
 Private m_Redovi As Collection              ' redovi odgovora, redom hoda
 Private m_Vidjen As Object                  ' cvorovi vec u odgovoru
@@ -167,6 +182,8 @@ Private Function Hodaj(ByVal vrsta As String, ByVal id As String, _
                 Case SLG_OTP: UzOtpremnicu kljuc, 0, "", False, False
                 Case SLG_OTK: UzOtkup kljuc, 0, "", False, False
                 Case SLG_OKS: StavkaOtkupa kljuc, 0
+                Case SLG_UTV: UzUtovar kljuc, 0, ""
+                Case SLG_PRE: DodajDok 0, SL_PRE, kljuc, False, KvarPrerade(kljuc), ""
             End Select
         Else
             Select Case vrsta
@@ -177,6 +194,8 @@ Private Function Hodaj(ByVal vrsta As String, ByVal id As String, _
                 Case SLG_PRJ: NizPrijemnicu kljuc, 0, "", False, False
                 Case SLG_PRS: NizStavkuPrijemnicePoKljucu kljuc
                 Case SLG_FAK: DodajDok 0, SL_FAK, kljuc, False, "", ""
+                Case SLG_PRE: NizPreradu kljuc
+                Case SLG_UTV: NizUtovar kljuc, 0, "", Empty
             End Select
         End If
         Hodaj = Rezultat()
@@ -195,7 +214,7 @@ End Function
 
 Private Function VrstaPoznata(ByVal vrsta As String) As Boolean
     Select Case vrsta
-        Case SLG_OTK, SLG_OKS, SLG_OTP, SLG_ZBR, SLG_PRJ, SLG_PRS, SLG_FAK
+        Case SLG_OTK, SLG_OKS, SLG_OTP, SLG_ZBR, SLG_PRJ, SLG_PRS, SLG_FAK, SLG_PRE, SLG_UTV
             VrstaPoznata = True
     End Select
 End Function
@@ -227,13 +246,48 @@ End Function
 ' ------------------------------------------------------------
 
 Private Sub UzFakturu(ByVal kljuc As String, ByVal nivo As Long)
-    Dim lista As Collection, v As Variant
-    If Not DodajDok(nivo, SL_FAK, kljuc, False, m_E6Kvar, "") Then Exit Sub
-    If Len(m_E6Kvar) > 0 Then Exit Sub
-    If Not m_E6PoFakturi.Exists(kljuc) Then Exit Sub      ' faktura bez linija prijemnice (GP)
-    Set lista = m_E6PoFakturi(kljuc)
+    Dim lista As Collection, v As Variant, fakID As String, fak As String, kvar As String
+    If Not DodajDok(nivo, SL_FAK, kljuc, False, SpojiKvar(m_E6Kvar, m_E9Kvar), "") Then Exit Sub
+    fakID = IdCvora(SL_FAK, kljuc)
+
+    ' Faktura prijemnice: njene linije po stavci (E6).
+    If Len(m_E6Kvar) = 0 Then
+        If m_E6PoFakturi.Exists(kljuc) Then
+            Set lista = m_E6PoFakturi(kljuc)
+            For Each v In lista
+                UzStavkuPrijemnice CStr(v), nivo + 1, fakID
+            Next v
+        End If
+    End If
+
+    ' GP faktura: utovar ciji marker pokazuje na nju, potvrdjen pravilom E10.
+    If Len(m_E9Kvar) > 0 Then Exit Sub
+    If Not m_E10PoFakturi.Exists(kljuc) Then Exit Sub
+    Set lista = m_E10PoFakturi(kljuc)
     For Each v In lista
-        UzStavkuPrijemnice CStr(v), nivo + 1, IdCvora(SL_FAK, kljuc)
+        fak = FakturaUtovara(CStr(v), kvar)
+        If Len(kvar) > 0 Then
+            DodajDok nivo + 1, SL_UTV, CStr(v), False, kvar, fakID
+        ElseIf StrComp(fak, fakID, vbTextCompare) = 0 Then
+            UzUtovar CStr(v), nivo + 1, fakID
+        End If
+    Next v
+End Sub
+
+' E9 unazad: prerade utovara, svaka sa kilogramima koje je taj utovar poneo.
+Private Sub UzUtovar(ByVal kljuc As String, ByVal nivo As Long, ByVal preko As String)
+    Dim lista As Collection, v As Variant, utvID As String
+
+    If Len(m_E9Kvar) > 0 Then
+        DodajDok nivo, SL_UTV, kljuc, False, m_E9Kvar, preko
+        Exit Sub
+    End If
+    If Not DodajDok(nivo, SL_UTV, kljuc, False, "", preko) Then Exit Sub
+    If Not m_E9PoUtovaru.Exists(kljuc) Then Exit Sub
+    utvID = IdCvora(SL_UTV, kljuc)
+    Set lista = m_E9PoUtovaru(kljuc)
+    For Each v In lista
+        DodajDok nivo + 1, SL_PRE, CStr(v(0)), False, KvarPrerade(CStr(v(0))), utvID, "", kljuc, v(1)
     Next v
 End Sub
 
@@ -498,6 +552,92 @@ Private Sub NizStavkuPrijemnice(ByVal r As Long, ByVal nivo As Long, ByVal preko
     DodajDok nivo + 1, SL_FAK, UCase$(Trim$(CStr(linija(0)))), nadskup, "", stavkaID, "", kljuc
 End Sub
 
+' ------------------------------------------------------------
+' GP LANAC UNAPRED: prerada -> utovar (po kg) -> GP faktura
+' ------------------------------------------------------------
+
+Private Sub NizPreradu(ByVal kljuc As String)
+    Dim lista As Collection, v As Variant, kvar As String, ukupno As Variant, preID As String
+
+    kvar = m_E9Kvar
+    If Len(kvar) = 0 Then kvar = KvarPrerade(kljuc)
+    preID = IdCvora(SL_PRE, kljuc)
+    ukupno = Empty
+    If Not m_E9Zbir Is Nothing Then
+        If m_E9Zbir.Exists(preID) Then ukupno = m_E9Zbir(preID)
+    End If
+    ' Prerada nosi UKUPNO utovareno; svaki utovar ispod nje svoje kilograme.
+    If Not DodajDok(0, SL_PRE, kljuc, False, kvar, "", "", "", ukupno) Then Exit Sub
+    If Len(kvar) > 0 Then Exit Sub
+    If Not m_E9PoPreradi.Exists(kljuc) Then Exit Sub      ' prerada bez utovara: kraj, nije kvar
+    Set lista = m_E9PoPreradi(kljuc)
+    For Each v In lista
+        NizUtovar CStr(v(0)), 1, preID, v(1)
+    Next v
+End Sub
+
+Private Sub NizUtovar(ByVal kljuc As String, ByVal nivo As Long, ByVal preko As String, _
+                      ByVal kg As Variant)
+    Dim fak As String, kvar As String
+
+    fak = FakturaUtovara(kljuc, kvar)
+    If Not DodajDok(nivo, SL_UTV, kljuc, False, kvar, preko, "", "", kg) Then Exit Sub
+    If Len(fak) = 0 Then Exit Sub                         ' nefakturisan ili oznacen utovar
+    DodajDok nivo + 1, SL_FAK, UCase$(fak), False, "", IdCvora(SL_UTV, kljuc)
+End Sub
+
+' E10: GP faktura utovara, ili "" kad je nema. Vezu potvrdjuju ZAJEDNO marker
+' na utovaru, aktivne linije fakture koje utovar tvrde (kanonski brojac, isti
+' koji drzi pisac i storno) i GP pravilo fakture (isto koje drzi SEF kapija).
+' Kad se ne slazu, veze nema, a outKvar nosi razlog (SLED-INV-01).
+Private Function FakturaUtovara(ByVal utvKljuc As String, ByRef outKvar As String) As String
+    Dim r As Long, utvID As String, marker As String, n As Long
+    Dim fakture As Object, razlog As String
+
+    outKvar = ""
+    r = RedCvora(SL_UTV, utvKljuc)
+    If r = 0 Then Exit Function
+    utvID = IdCvora(SL_UTV, utvKljuc)
+    marker = Trim$(NzToText(m_Data(SL_UTV)(r, m_cUtFaktura)))
+
+    On Error GoTo EH
+    n = modUtovar.AktivnihFstZaUtovar(utvID, fakture)
+    If n = 0 And Len(marker) = 0 Then Exit Function       ' nefakturisan utovar: kraj, nije kvar
+    If n = 0 Then
+        outKvar = "Utovar " & utvID & " nosi FakturaID " & marker & _
+                  ", a nijedna aktivna linija fakture ga ne tvrdi."
+        Exit Function
+    End If
+    If Len(marker) = 0 Then
+        outKvar = "Aktivne linije fakture tvrde utovar " & utvID & ", a utovar ne nosi FakturaID."
+        Exit Function
+    End If
+    If fakture.count <> 1 Or Not fakture.Exists(marker) Then
+        outKvar = "Utovar " & utvID & " nosi FakturaID " & marker & _
+                  ", a tvrde ga linije faktura: " & Join(fakture.Keys, ", ") & "."
+        Exit Function
+    End If
+    If Not CvorAktivanJednom(SL_FAK, UCase$(marker)) Then
+        outKvar = "Faktura " & marker & " utovara " & utvID & " nije aktivna tacno jednom."
+        Exit Function
+    End If
+    razlog = modSEFMapper.GpFakturaRazlog(marker)
+    If Len(razlog) > 0 Then
+        outKvar = razlog
+        Exit Function
+    End If
+    FakturaUtovara = marker
+    Exit Function
+EH:
+    outKvar = "GP faktura utovara " & utvID & " nije citljiva (E10): " & Err.description
+    Err.Clear
+End Function
+
+Private Function KvarPrerade(ByVal kljuc As String) As String
+    If m_E9KvarPoPreradi Is Nothing Then Exit Function
+    If m_E9KvarPoPreradi.Exists(kljuc) Then KvarPrerade = CStr(m_E9KvarPoPreradi(kljuc))
+End Function
+
 ' ============================================================
 ' PRAVILA
 ' ============================================================
@@ -629,6 +769,8 @@ Private Function SlotVrste(ByVal vrsta As String) As Long
         Case SLG_ZBR: SlotVrste = SL_ZBR
         Case SLG_PRJ: SlotVrste = SL_PRJ
         Case SLG_FAK: SlotVrste = SL_FAK
+        Case SLG_PRE: SlotVrste = SL_PRE
+        Case SLG_UTV: SlotVrste = SL_UTV
     End Select
 End Function
 
@@ -639,6 +781,8 @@ Private Function VrstaSlota(ByVal slot As Long) As String
         Case SL_ZBR: VrstaSlota = SLG_ZBR
         Case SL_PRJ: VrstaSlota = SLG_PRJ
         Case SL_FAK: VrstaSlota = SLG_FAK
+        Case SL_PRE: VrstaSlota = SLG_PRE
+        Case SL_UTV: VrstaSlota = SLG_UTV
     End Select
 End Function
 
@@ -649,6 +793,8 @@ Private Function NazivSlota(ByVal slot As Long) As String
         Case SL_ZBR: NazivSlota = "Zbirna"
         Case SL_PRJ: NazivSlota = "Prijemnica"
         Case SL_FAK: NazivSlota = "Faktura"
+        Case SL_PRE: NazivSlota = "Prerada"
+        Case SL_UTV: NazivSlota = "Utovar"
     End Select
 End Function
 
@@ -707,13 +853,17 @@ End Function
 ' aktivan je, tj. kad se od njega sme hodati dalje. Cvor koji to ne ispunjava,
 ' i cvor kome je pozivalac dao razlog, upisuje se sa razlogom u koloni kvara.
 ' zaVidjenje: dodatak kljucu "vec u odgovoru" (faktura se upisuje po liniji).
+' kg: kilogrami koje cvor nosi u ovom odgovoru (GP lanac); izostavljeno = nema ih.
 Private Function DodajDok(ByVal nivo As Long, ByVal slot As Long, ByVal kljuc As String, _
                           ByVal nadskup As Boolean, ByVal kvar As String, _
                           ByVal preko As String, Optional ByVal oznaka As String = "", _
-                          Optional ByVal zaVidjenje As String = "") As Boolean
+                          Optional ByVal zaVidjenje As String = "", _
+                          Optional ByVal kg As Variant) As Boolean
     Dim r As Long, vr As String, status As String, dupli As Object
-    Dim koop As String, parcela As String, oznakaVidjenja As String
+    Dim koop As String, parcela As String, oznakaVidjenja As String, kgCvora As Variant
 
+    kgCvora = Empty
+    If Not IsMissing(kg) Then kgCvora = kg
     vr = VrstaSlota(slot)
     oznakaVidjenja = vr & "|" & kljuc & "|" & zaVidjenje
     If m_Vidjen.Exists(oznakaVidjenja) Then Exit Function
@@ -745,7 +895,7 @@ Private Function DodajDok(ByVal nivo As Long, ByVal slot As Long, ByVal kljuc As
 
     Dodaj nivo, vr, Trim$(NzToText(m_Data(slot)(r, m_cID(slot)))), _
           Trim$(NzToText(m_Data(slot)(r, m_cBroj(slot)))), m_Data(slot)(r, m_cDatum(slot)), _
-          status, "", Empty, oznaka, nadskup, kvar, koop, parcela, preko
+          status, "", kgCvora, oznaka, nadskup, kvar, koop, parcela, preko
 
     DodajDok = (status <> SLG_STATUS_STORNIRANO And Not dupli.Exists(kljuc))
 End Function
@@ -843,6 +993,7 @@ Private Sub Ucitaj()
     UcitajE4
     UcitajE5
     UcitajE6
+    UcitajGp
 End Sub
 
 Private Sub UcitajZaglavlja(ByVal slot As Long, ByVal tbl As String, ByVal colID As String, _
@@ -1006,9 +1157,80 @@ EH:
     Err.Clear
 End Sub
 
+' GP lanac: zaglavlja prerade i utovara, ivica E9 (prerada <-> utovar, po kg) i
+' marker ivice E10 (Utovar.FakturaID). Kvar ovde gasi samo GP deo grafa.
+Private Sub UcitajGp()
+    Const SRC As String = "modSledljivost.UcitajGp"
+    Dim poUtovaru As Object, kvarCitaca As Object, poPreradi As Object, unutra As Object
+    Dim k As Variant, v As Variant, lista As Collection, d As Variant
+    Dim i As Long, marker As String, pre As String, utv As String
+
+    m_E9Kvar = ""
+    m_cUtFaktura = 0
+    Set m_E9Zbir = Nothing
+    Set m_E9PoPreradi = CreateObject("Scripting.Dictionary")
+    Set m_E9PoUtovaru = CreateObject("Scripting.Dictionary")
+    Set m_E9KvarPoPreradi = CreateObject("Scripting.Dictionary")
+    Set m_E10PoFakturi = CreateObject("Scripting.Dictionary")
+
+    On Error GoTo EH
+    UcitajZaglavlja SL_PRE, TBL_PRERADA, COL_PRE_ID, COL_PRE_BROJ, COL_PRE_DATUM, ""
+    UcitajZaglavlja SL_UTV, TBL_UTOVAR, COL_UT_ID, COL_UT_BROJ, COL_UT_DATUM, ""
+    m_cUtFaktura = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+
+    d = m_Data(SL_UTV)
+    If IsArray(d) Then
+        For i = 1 To UBound(d, 1)
+            marker = UCase$(Trim$(NzToText(d(i, m_cUtFaktura))))
+            If Len(marker) > 0 Then
+                If Not RedStorniran(SL_UTV, i) Then
+                    DodajUListu m_E10PoFakturi, marker, UCase$(Trim$(NzToText(d(i, m_cID(SL_UTV)))))
+                End If
+            End If
+        Next i
+    End If
+
+    Set m_E9Zbir = modUtovar.UtovarenoPoPreradi(poUtovaru, kvarCitaca)
+
+    ' Ista prerada moze biti na istom utovaru u vise stavki: kg se sabira po paru.
+    Set poPreradi = CreateObject("Scripting.Dictionary")
+    For Each k In poUtovaru.Keys
+        pre = UCase$(Trim$(CStr(k)))
+        If poPreradi.Exists(pre) Then
+            Set unutra = poPreradi(pre)
+        Else
+            Set unutra = CreateObject("Scripting.Dictionary")
+            poPreradi.Add pre, unutra
+        End If
+        Set lista = poUtovaru(k)
+        For Each v In lista
+            utv = UCase$(Trim$(CStr(v(0))))
+            If unutra.Exists(utv) Then
+                unutra(utv) = CDbl(unutra(utv)) + CDbl(v(1))
+            Else
+                unutra.Add utv, CDbl(v(1))
+            End If
+        Next v
+    Next k
+    For Each k In poPreradi.Keys
+        Set unutra = poPreradi(k)
+        For Each v In unutra.Keys
+            DodajUListu m_E9PoPreradi, CStr(k), Array(CStr(v), CDbl(unutra(v)))
+            DodajUListu m_E9PoUtovaru, CStr(v), Array(CStr(k), CDbl(unutra(v)))
+        Next v
+    Next k
+    For Each k In kvarCitaca.Keys
+        m_E9KvarPoPreradi(UCase$(Trim$(CStr(k)))) = CStr(kvarCitaca(k))
+    Next k
+    Exit Sub
+EH:
+    m_E9Kvar = "GP lanac nije citljiv (E9): " & Err.description
+    Err.Clear
+End Sub
+
 Private Sub Oslobodi()
     Dim i As Long
-    For i = 1 To 5
+    For i = 1 To 7
         m_Data(i) = Empty
         Set m_Idx(i) = Nothing
         Set m_Dupli(i) = Nothing
@@ -1026,6 +1248,11 @@ Private Sub Oslobodi()
     Set m_E5PoStavci = Nothing
     Set m_E6 = Nothing
     Set m_E6PoFakturi = Nothing
+    Set m_E9Zbir = Nothing
+    Set m_E9PoPreradi = Nothing
+    Set m_E9PoUtovaru = Nothing
+    Set m_E9KvarPoPreradi = Nothing
+    Set m_E10PoFakturi = Nothing
     Set m_Redovi = Nothing
     Set m_Vidjen = Nothing
     Set m_Ctx = Nothing

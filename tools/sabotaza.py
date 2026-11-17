@@ -13578,6 +13578,35 @@ SABOTAZE = {
         "T_Sled_HladnjackiLanacPoKlasi",
         "358 hladnjacki lanac: unazad od stavke II nema stavke otkupa klase I",
     ),
+    # E9: ivica prerada -> utovar nosi zbir cele prerade umesto kilograma tog utovara.
+    "sled-e9-kg-zbir-prerade": (
+        "modSledljivost.bas",
+        "        NizUtovar CStr(v(0)), 1, preID, v(1)\n",
+        "        NizUtovar CStr(v(0)), 1, preID, ukupno   "
+        "' SABOTAZA: utovar nosi zbir prerade, ne svoje kilograme\n",
+        "T_Sled_GpLanac",
+        "360 GP: svaki utovar nosi svoje kilograme, ne zbir prerade",
+    ),
+    # E10: vezu utovar -> faktura odlucuje samo marker na utovaru. Utovar bez
+    # markera, koga aktivne linije fakture i dalje tvrde, prolazi kao nefakturisan.
+    "sled-e10-veruje-markeru": (
+        "modSledljivost.bas",
+        "    If n = 0 And Len(marker) = 0 Then Exit Function       "
+        "' nefakturisan utovar: kraj, nije kvar\n",
+        "    If Len(marker) = 0 Then Exit Function   ' SABOTAZA: E10 veruje samo markeru na utovaru\n",
+        "T_Sled_GpLanac",
+        "360 fail-closed: utovar ciji marker i linije fakture ne govore isto je oznacen",
+    ),
+    # E3 bez strogog citaca: sirova tabela clanstva, prvi pogodak -- a prvi zapis
+    # otpremnice je clanstvo u STORNIRANOJ verziji zbirne (A13).
+    "sled-e3-bez-strogog-citaca": (
+        "modSledljivost.bas",
+        "    Set m_E3 = modDokumenta.AktivnoClanstvoZbirni()\n",
+        "    Set m_E3 = BuildLookupDict(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, "
+        "COL_ZBI_ZBIRNA_ID)   ' SABOTAZA: E3 bez strogog citaca (prvi pogodak)\n",
+        "T_Sled_StaraVerzijaNijeUGrafu",
+        "361 verzije: unapred od otkupa ide samo aktivna verzija zbirne, do njene prijemnice",
+    ),
 }
 
 

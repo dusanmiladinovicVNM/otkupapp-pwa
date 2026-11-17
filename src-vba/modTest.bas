@@ -710,6 +710,8 @@ Public Sub RunAllTests()
     RunOne 357
     RunOne 358
     RunOne 359
+    RunOne 360
+    RunOne 361
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1304,6 +1306,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 357: TestName = "T_Sled_KlasaSeOznacavaNeOdseca"
         Case 358: TestName = "T_Sled_HladnjackiLanacPoKlasi"
         Case 359: TestName = "T_Sled_NerazresenaIvicaSeOznacava"
+        Case 360: TestName = "T_Sled_GpLanac"
+        Case 361: TestName = "T_Sled_StaraVerzijaNijeUGrafu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1671,6 +1675,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 357: T_Sled_KlasaSeOznacavaNeOdseca
         Case 358: T_Sled_HladnjackiLanacPoKlasi
         Case 359: T_Sled_NerazresenaIvicaSeOznacava
+        Case 360: T_Sled_GpLanac
+        Case 361: T_Sled_StaraVerzijaNijeUGrafu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -31840,7 +31846,8 @@ Private Function SledBrojRedova() As String
                          TBL_AMBALAZA_DOKUMENT, TBL_OTPREMNICA, TBL_OTPREMNICA_STAVKE, _
                          TBL_OTPREMNICA_IZVORI, TBL_ZBIRNA, TBL_ZBIRNA_STAVKE, _
                          TBL_ZBIRNA_IZVORI, TBL_PRIJEMNICA, TBL_PRIJEMNICA_STAVKE, _
-                         TBL_FAKTURE, TBL_FAKTURA_STAVKE)
+                         TBL_FAKTURE, TBL_FAKTURA_STAVKE, TBL_UTOVAR, TBL_UTOVAR_STAVKE, _
+                         TBL_STORNO_VEZE, TBL_STORNO_ZURNAL)
         If Len(s) > 0 Then s = s & "|"
         s = s & CStr(tb) & "=" & BrojRedovaTabele(CStr(tb))
     Next tb
@@ -32396,4 +32403,140 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_NerazresenaIvicaSeOznacava", _
              "359: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 360 -- GP LANAC (E9, E10): prerada -> utovar (po kg) -> GP faktura.
+'
+' Ista prerada ide na DVA utovara, deo po deo, i svaki utovar dobija svoju
+' fakturu (pisac: 1 utovar = 1 faktura). Graf za svaku ivicu nosi kilograme TOG
+' utovara, ne zbir prerade, a faktura unazad vodi samo do svog utovara.
+'
+' Fail-closed: utovar kome je marker fakture obrisan, a linije fakture ga i
+' dalje tvrde, nosi razlog i ne vodi do fakture.
+'
+' Prerada je iz fixture-a (ista koju koristi 162); utovari i fakture nastaju
+' kroz pisca, unutar transakcije koja se vraca.
+' SABOTAZE: sled-e9-kg-zbir-prerade, sled-e10-veruje-markeru.
+Private Sub T_Sled_GpLanac()
+    Const PRERADA As String = "PRE-GP-W1"
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim s As Collection, fak1 As String, fak2 As String, ut1 As String, ut2 As String
+    Dim niz As Variant, uz As Variant, nizU As Variant, padU As String
+    Dim r1 As Long, r2 As Long, rPre As Long, rU As Long
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_UTOVAR
+    tx.AddTableSnapshot TBL_UTOVAR_STAVKE
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
+    tx.AddTableSnapshot TBL_NOVAC
+
+    Set s = New Collection
+    s.Add Array(PRERADA, 2#, 100#)
+    fak1 = modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s)
+    Set s = New Collection
+    s.Add Array(PRERADA, 3#, 100#)
+    fak2 = modUtovar.CreateUtovarSaFakturom_TX(FX_KUPAC2, s)
+    AssertEq (Len(fak1) > 0 And Len(fak2) > 0), True, _
+             "360 preduslov: dva utovara iste prerade su upisana sa fakturama"
+    ut1 = NzToText(LookupValue(TBL_UTOVAR, COL_UT_FAKTURA_ID, fak1, COL_UT_ID))
+    ut2 = NzToText(LookupValue(TBL_UTOVAR, COL_UT_FAKTURA_ID, fak2, COL_UT_ID))
+    AssertEq (Len(ut1) > 0 And Len(ut2) > 0 And ut1 <> ut2), True, _
+             "360 preduslov: svaka faktura ima svoj utovar"
+
+    niz = modSledljivost.SledPotomci(SLG_PRE, PRERADA)
+    uz = modSledljivost.SledPreci(SLG_FAK, fak1)
+
+    r1 = SledRed(niz, SLG_UTV, ut1)
+    r2 = SledRed(niz, SLG_UTV, ut2)
+    AssertEq (r1 > 0 And r2 > 0), True, "360 GP: unapred od prerade dolaze oba utovara"
+    AssertEq Format$(CDbl(niz(r1, SLG_C_KG)), "0.00") & "|" & Format$(CDbl(niz(r2, SLG_C_KG)), "0.00"), _
+             Format$(2#, "0.00") & "|" & Format$(3#, "0.00"), _
+             "360 GP: svaki utovar nosi svoje kilograme, ne zbir prerade"
+    AssertEq (SledRed(niz, SLG_FAK, fak1) > 0 And SledRed(niz, SLG_FAK, fak2) > 0), True, _
+             "360 GP: unapred od prerade dolazi GP faktura svakog utovara"
+    AssertEq (SledRed(uz, SLG_UTV, ut1) > 0) & "|" & SledRed(uz, SLG_UTV, ut2), CStr(True) & "|0", _
+             "360 GP: unazad od fakture dolazi samo njen utovar"
+    rPre = SledRed(uz, SLG_PRE, PRERADA)
+    AssertEq (rPre > 0), True, "360 GP: unazad od fakture dolazi prerada"
+    AssertEq Format$(CDbl(uz(rPre, SLG_C_KG)), "0.00"), Format$(2#, "0.00"), _
+             "360 GP: prerada unazad nosi kilograme tog utovara"
+
+    ' Fail-closed: marker na utovaru nestaje, a aktivne linije fakture ga i dalje tvrde.
+    PostaviPoljePoPK TBL_UTOVAR, COL_UT_ID, ut1, COL_UT_FAKTURA_ID, ""
+    On Error Resume Next
+    nizU = modSledljivost.SledPotomci(SLG_UTV, ut1)
+    padU = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+
+    AssertEq padU, "", "360 fail-closed: graf ne pada kad utovar izgubi FakturaID"
+    rU = SledRed(nizU, SLG_UTV, ut1)
+    AssertEq (rU > 0 And Len(SledTekst(nizU, rU, SLG_C_KVAR)) > 0), True, _
+             "360 fail-closed: utovar ciji marker i linije fakture ne govore isto je oznacen"
+    AssertEq SledBroj(nizU, SLG_FAK), 0, "360 fail-closed: oznacen utovar ne vodi do fakture"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_GpLanac", _
+             "360: rollback je vratio redove tabela GP lanca"
+End Sub
+
+' 361 -- VERZIJE (SLED-ODL-03, A13): graf crta samo aktivnu vezu.
+'
+' Zbirna se stornira, a ista otpremnica ulazi u novu zbirnu. Otpremnica tada ima
+' DVA zapisa clanstva, po jedan za svaku verziju; u grafu je samo aktivna.
+' Stornirana zbirna kao polazni cvor nosi svoj status i ne vodi dalje.
+' SABOTAZA: sled-e3-bez-strogog-citaca.
+Private Sub T_Sled_StaraVerzijaNijeUGrafu()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, c As Collection
+    Dim blok As String, otp As String, zbrV1 As String, zbrV2 As String, prj As String
+    Dim unazad As Variant, unapred As Variant, odStare As Variant
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    SledLanacDoZbirne "V", "ZB-SLEDV1-" & t, FX_VOZAC, FX_KUPAC, 60, blok, otp, zbrV1
+    AssertEq modStorno.StornoZbirna_TX(zbrV1), True, _
+             "361 preduslov: prva verzija zbirne je stornirana"
+    Set c = New Collection
+    c.Add otp
+    zbrV2 = SledZbirna("ZB-SLEDV2-" & t, c, FX_VOZAC, FX_KUPAC, 60, 0)
+    prj = SledPrijemnica("PR-SLEDV-" & t, "ZB-SLEDV2-" & t, FX_VOZAC, FX_KUPAC, 60, 0)
+
+    unazad = modSledljivost.SledPreci(SLG_PRJ, prj)
+    unapred = modSledljivost.SledPotomci(SLG_OTK, blok)
+    odStare = modSledljivost.SledPotomci(SLG_ZBR, zbrV1)
+
+    AssertEq SledRed(unapred, SLG_ZBR, zbrV1) & "|" & _
+             (SledRed(unapred, SLG_ZBR, zbrV2) > 0 And SledRed(unapred, SLG_PRJ, prj) > 0), _
+             "0|" & CStr(True), _
+             "361 verzije: unapred od otkupa ide samo aktivna verzija zbirne, do njene prijemnice"
+    AssertEq SledRed(unazad, SLG_ZBR, zbrV1) & "|" & _
+             (SledRed(unazad, SLG_ZBR, zbrV2) > 0 And SledRed(unazad, SLG_OTK, blok) > 0), _
+             "0|" & CStr(True), _
+             "361 verzije: unazad od prijemnice nema stornirane verzije zbirne"
+    AssertEq SledBroj(odStare, SLG_ZBR) & "|" & SledBroj(odStare, SLG_PRJ) & "|" & _
+             SledTekst(odStare, SledRed(odStare, SLG_ZBR, zbrV1), SLG_C_STATUS), _
+             "1|0|" & SLG_STATUS_STORNIRANO, _
+             "361 verzije: stornirana zbirna kao polazni cvor nosi status i ne vodi dalje"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_StaraVerzijaNijeUGrafu", _
+             "361: rollback je vratio redove svih tabela lanca"
 End Sub
