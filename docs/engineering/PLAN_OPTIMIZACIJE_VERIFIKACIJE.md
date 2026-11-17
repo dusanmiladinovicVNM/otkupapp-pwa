@@ -8,9 +8,11 @@
 > brojevi, činjenice u kodu, semantika i redosled; 46 nalaza, od toga 4 teška).
 > Šta je provera promenila stoji u Prilogu C.
 >
-> Nijedna stavka odavde nije sprovedena, osim koraka 0 i 1 (izbor testova i vreme
-> po testu) na grani `claude/dazzling-sagan-3o531f`, commit `9d6e780`, čija VBA
-> strana još **nije izvršena u Excelu**.
+> **Stanje 17.11.2026:** prvi talasi su spojeni u `main` kroz #482 (merge
+> `638bf299`): F-1–F-3, M-1, M-2 i L-1 (delom), S-1, prvi rez S-5, D-6 i R-4,
+> uz usputnu ispravku AMB-INV-04. Šta je izmereno i šta sledi stoji u
+> **Prilogu D**. Tekst ispod je plan kakav je bio pre sprovođenja; brojevi u
+> njemu su polazni.
 
 **Oznake uz brojeve.** `[M]` izmereno u ovoj analizi (Linux sesija, bez Excela).
 `[D]` broj iz dokumentacije ili dnevnika repoa, sa datumom. `[I]` izvedeno
@@ -756,3 +758,73 @@ najvažnije ispravke:
 | KI-036 nastaje „posle svakog dokaza" | Samo kad mutirani prolaz ostane zelen |
 | D-4 štedi 2–9 min po pozivu | Uz izbor približno ništa; sada uslovna opcija |
 | Šest stavki bez talasa; sedam predloga iz analiza bez reči | Raspoređene u §8.1; predlozi uneti u §7 ili §11 |
+
+---
+
+## Prilog D — Stanje posle #482 (17.11.2026)
+
+Spojeno u `main` kroz #482 (merge `638bf299`, CI `static` zelen). Pre spajanja,
+nad integracionom granom: FULL zelen (12 suita), ručni Compile bez poruke,
+dokaz novih sabotaža 14/14 „DOKAZANO (izbor)". Oznake kao gore: `[M]` znači
+izmereno, ovde na Windows-u operatera, osim gde piše Linux.
+
+### D.1 Šta je sprovedeno
+
+| Stavka | Šta | Izmereno |
+|---|---|---|
+| F-1–F-3 (#478) | Egzaktni rezovi u `vba_check`/`sabotaza.py`, izlaz bajt-identičan; čuvari i self-test bez ponavljanja kapija | hook 6 → 1,9 s; pun prolaz 22 → 9,3 s; self-test 12 → 2 s `[M, Linux]` |
+| M-1 (#479) | `run_vba --test`, vreme po testu; `dokaz --izbor` sa oznakom „(izbor)" i povratkom na celu suite; `--izolacija` | mutacija pušta ciljani test, ne celu suite |
+| M-2, L-1, delom (#480) | Faze poziva (`FAZE`), prekid po fazi, koban dijalog; compile proba samo uz `--compile-only` (KI-096) | režija poziva 12,4 → 5,4–6,5 s `[M]` |
+| S-1 (#481) | `RunAllTests` i BFP u tihom režimu dnevnika i zakazivanja; test 355, BFP provera, sabotaže `s1-*` | obe suite −6,5% `[M]` |
+| S-5, prvi rez | AutoKvar test meri samo svoje grupe | 69,5 → < 6,4 s; dokaz 4/4 `[M]` |
+| D-6 | Dokaz mutira kopiju snimka (`--src`); `src-vba` se nikad ne piše; straža radnog stabla | isti verdikti starim i novim putem `[M]` |
+| R-4 | `dokaz --radnika N`: zajednički bazen Excel radnika (poslovi po redu), `run_vba --izlaz`, brave, handle procesa; baza cele suite na zahtev (samo uz stavku koja ide na celu suite) i rana mutacija; jedna ocena faze 3 za N=1 i N>1; provera kopije pre svakog prolaza; #184 | v. D.2 |
+| usput | AMB-INV-04: provera identiteta bila nedostižna iza AMB-INV-08; sabotaža `amb-pisac-red-bez-dokumenta` sada obara svoju tvrdnju | crveno po imenu pre, zeleno posle `[M]` |
+
+R-4 je prošao pet krugova protivničkog review-a. Poslednja tri su svaki put
+našla novu klasu greške, pa su ispravke išle strukturno, ne zakrpama:
+- jedna ocena faze 3 za oba puta;
+- ožičenje izdvojeno u funkcije koje self-test meri ponašanjem;
+- poslovi po redu i provera kopije pre prolaza.
+
+Self-test `dokaz.py` traje 0,65 s, a dokaz u oba smera nad njim obuhvata 26
+mutanata. Bez Excela, 1384 stavke daju isto za N=1 i N=4. Dokumentovane razlike
+između N=1 i N>1 postoje samo uz STOP, kad je verdikt ionako NIJE DOKAZANO
+(`docs/EXCEL_TEST_HARNESS.md`, „Radnici").
+
+### D.2 Brojevi posle
+
+| Mera | Polazno (§2) | Sada |
+|---|---|---|
+| `RunAllTests` u FULL-u | 230,9 s | 222,9 s `[M]` |
+| BFP u FULL-u, posle `RunAllTests` | 703,7 s | 581,1 s `[M]` (S-1 + S-5, jedno merenje) |
+| Režija `run_vba` poziva | 12,4 s (sa compile probom) | 5,4–6,5 s `[M]` |
+| Dokaz `amb-pisac` (19 sabotaža, jedna u fazi 3) | 21:22 (N=1) | 11:15 (N=5) `[M]`; posle AMB-INV-04 bez faze 3 |
+| Dokaz `dop-spec` (20 sabotaža, bez faze 3) | po starom pravilu ~3,5 min po stavci | 3:09 (N=1), 1:32 (N=5) `[M]` |
+| Dokaz 14 novih sabotaža lanca | — | 1:13 (N=4) `[M]` |
+
+Skaliranje radnika na mašini operatera je oko 2× za N=5, ne 5×. Jedan Excel
+koristi oko 1,4 logička jezgra, pa 5 Excel-a traži oko 7 od 6 jezgara.
+`dop-spec` je meren dok je baza još kretala spekulativno i dok je druga sesija
+puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
+(D.3).
+
+### D.3 Šta sledi
+
+1. **Merenje broja radnika:** `dop-spec` sa N=4 i N=5, dok druge sesije
+   miruju. Bira podrazumevani broj radnika.
+2. **S-4a:** noćni `dokaz.py --izolacija` nad celim katalogom, sa radnicima,
+   daje spisak ciljanih testova koji sami ne prolaze. Svaka takva sabotaža
+   danas košta punu suite (~4 ili ~10 min), pa je to glavni preostali trošak.
+   Posle spiska se testovi popravljaju jedan po jedan.
+3. **G1:** prijem izbora kao podrazumevanog puta u rezu. Uslov je nula razlika
+   prema celoj suiti nad bar 50 sabotaža.
+4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
+   fiksnog čekanja pri gašenju), **F-8** (keš hook-a).
+5. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi
+   rasta koju meri M-6.
+6. **Van plana, otvoreno:**
+   - `On Error Resume Next` u aktivnom obrađivaču ne guta grešku (sonda
+     17.11.2026). Pogođeno je 383 procedure, od toga 125 produkcionih.
+   - Scenario B u `Test_Amb_ZaglavljeDokumentaPisac` tvrdi samo `errNum <> 0`,
+     ista slabost kao scenario A pre AMB-INV-04.
