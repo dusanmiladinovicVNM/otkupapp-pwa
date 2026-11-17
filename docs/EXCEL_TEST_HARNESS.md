@@ -418,6 +418,16 @@ traži), ovde dva procesa i dve mašine.
   iz `EH`, a `Err` se čita **pre** njega (`OtkupUI_Release` je pod
   `On Error Resume Next`, što briše `Err`). Test koji padne inače ostavlja `mFrm`,
   keš i aktivnu otpremnicu sledećem testu — i onda jedan uzrok daje dva pada.
+- **`On Error Resume Next` u `EH` grani ne štiti ništa dok obrađivač ne ugasiš.**
+  Obrađivač je aktivan od greške do `Resume` / `Exit` / `On Error GoTo -1`, i dok
+  je aktivan nova greška **izlazi iz procedure** — i pored `Resume Next`. Test
+  tada pada golim tuđim izuzetkom umesto svojom tvrdnjom, a ostatak čišćenja se
+  preskače. Izmereno 17.11.2026: `Kill` u čišćenju testa 184 je dao „File not
+  found" umesto tvrdnje „BackupFileOnStart NE SME da podigne grešku". Zato:
+  `Err` u `errNum`/`errDesc`, pa `On Error GoTo -1`, pa tek onda `Resume Next`
+  (ili čišćenje iza `Resume <labela>`, kao u 184). Statički to drži
+  `vba_check` pravilo `GARD_U_OBRADJIVACU`; ponašanje mere testovi 354–356 i
+  sabotaže `eh-obradjivac-*`.
 - **Polja se postavljaju kroz `ApplyPrefill`**, ne pisanjem u kontrolu: direktan
   upis u `fgDatum` okine `OnDatumChanged`, a on traži stanica-lock i predlog broja
   **sa pitanjem Google-u** — mreža u testu.

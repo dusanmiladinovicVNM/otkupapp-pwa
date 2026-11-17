@@ -42,6 +42,10 @@ Provere:
  13. DUPLI_LOKAL -- isto ime deklarisano dvaput u ISTOJ proceduri (parametar +
                      `Dim`, ili `Dim src` uz `Const SRC`). VBA je case-insensitive,
                      pa je to "Duplicate declaration" i modul se NE kompajlira.
+ 14. GARD_U_OBRADJIVACU -- `On Error Resume Next` u AKTIVNOM obradjivacu (posle
+                     greske, pre Resume/Exit/On Error GoTo -1) koji stiti bar jednu
+                     naredbu. NE guta novu gresku: ona izlazi iz procedure, a
+                     originalna se gubi. Ispravka: `On Error GoTo -1` ispred.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -1727,18 +1731,46 @@ HANDLER_LABELA = re.compile(r"^(EH|ErrHandler|Fin|VRATI)\w*:\s*$",
                             re.IGNORECASE)
 KRAJ_PROC = re.compile(r"^(Exit (Sub|Function|Property)|End (Sub|Function|Property))\b",
                        re.IGNORECASE)
-ON_ERROR_BRISE = ("on error resume next", "on error goto 0")
+# `On Error GoTo -1` (ispravka GARD_U_OBRADJIVACU) takodje prazni Err -- LogErr
+# posle njega je isto toliko nem.
+ON_ERROR_BRISE = ("on error resume next", "on error goto 0", "on error goto -1")
+
+
+def _ciljevi_on_error(lines: list[str]) -> list[set[str]]:
+    """Za svaki red: imena labela koje u NJEGOVOJ proceduri cilja On Error GoTo."""
+    po_redu: list[set[str]] = [set() for _ in lines]
+    od = None
+    for i, raw_line in enumerate(lines):
+        t = _strip_comment(raw_line).strip()
+        if od is None:
+            if PROC_START.match(t):
+                od = i
+            continue
+        if not re.match(r"^End\s+(?:Sub|Function|Property)\b", t, re.IGNORECASE):
+            continue
+        ciljevi = {m.group(1).lower() for red in lines[od:i + 1]
+                   for m in [re.search(r"\bOn\s+Error\s+GoTo\s+([A-Za-z_]\w*)",
+                                       _strip_comment(red), re.IGNORECASE)] if m}
+        for k in range(od, i + 1):
+            po_redu[k] = ciljevi
+        od = None
+    return po_redu
 
 
 def check_dead_log(path: str, lines: list[str]) -> list[Finding]:
     out = []
     u_handleru = False
     brisac = None
+    # Obradjivac je i labela koju cilja On Error GoTo, ne samo ona koju ime
+    # odaje (EH/ErrHandler/Fin/VRATI). Bez ovoga je `BLOKADA:` u
+    # modPrint.ReprintOtkupniListByOtkupID nosio nem LogErr neprimeceno.
+    ciljevi = _ciljevi_on_error(lines)
     for i, raw_line in enumerate(lines):
         t = _strip_comment(raw_line).strip()
         if not t:
             continue
-        if HANDLER_LABELA.match(t):
+        m = re.match(r"^([A-Za-z_]\w*):\s*$", t)
+        if HANDLER_LABELA.match(t) or (m and m.group(1).lower() in ciljevi[i]):
             u_handleru, brisac = True, None
             continue
         if KRAJ_PROC.match(t):
@@ -1755,6 +1787,238 @@ def check_dead_log(path: str, lines: list[str]) -> list[Finding]:
                 "Pozovi LogErr PRE nje, ili posalji opis izricito: "
                 "LogError SRC, errDesc, errNum." % brisac))
             brisac = None
+    return out
+
+
+# --- GARD_U_OBRADJIVACU: On Error Resume Next u AKTIVNOM obradjivacu ----------
+#
+# Obradjivac je AKTIVAN od trenutka kad ga greska aktivira do `Resume`,
+# `Exit Sub/Function/Property`, `End Sub/...` ili `On Error GoTo -1`. Dok je
+# aktivan, procedura NE MOZE da obradi novu gresku -- ni kroz `On Error Resume
+# Next`. Nova greska izlazi iz procedure, originalna se gubi, a ostatak
+# obradjivaca se preskace:
+#
+#     EH:
+#         errNum = Err.Number
+#         On Error Resume Next        <- NE stiti nista
+#         Kill tmp & "\*.*"           <- "File not found" izlazi iz procedure
+#         On Error GoTo 0
+#         Err.Raise errNum            <- nikad se ne izvrsi
+#
+# Mereno na Windows-u 17.11.2026, isti test i ista sabotaza, razlika samo u
+# mestu ciscenja: ciscenje u obradjivacu (grana claude/sonda-eh-obradjivac) je
+# T_Backup_NeObaraStartINeRasteBezGranice oborilo golim "File not found";
+# ciscenje iza `Resume CistiPosleGreske` ga je oborilo svojom tvrdnjom.
+#
+# Ispravka: `On Error GoTo -1` PRE garda (a posle citanja Err u errNum/errDesc/
+# errSrc -- i GoTo -1 i Resume Next prazne Err), ili ciscenje iza
+# `Resume <labela>`. `Err.Clear` NIJE ispravka: prazni Err, a obradjivac ostaje
+# aktivan.
+#
+# Obradjivac je labela koju cilja `On Error GoTo <labela>` u istoj proceduri --
+# ne ime labele. MRTAV_LOG ime pogadja (EH/ErrHandler/Fin/VRATI), pa mu je
+# `blokada:` u modPrint nevidljiva. Hod prati put od labele: bezuslovan `GoTo`
+# (i u deljenu labelu ciscenja, koju normalan tok dostize propadanjem), uslovan
+# `GoTo` kao granu. `Resume`/izlaz unutar `If`/`Select`/petlje ne prekida hod --
+# put pored njega ostaje aktivan.
+#
+# NE prijavljuje se gard koji nista ne stiti: posle njega odmah ide `On Error
+# GoTo ...`, `Resume`, izlaz ili kraj procedure (zateceno: ~45 mesta u
+# produkciji, `On Error Resume Next` + `On Error GoTo 0` + `Err.Raise`). Bez
+# naredbe u prozoru nema greske koja bi izasla, a lazan nalaz uci da se checker
+# ignorise. Cim neko u taj prozor doda naredbu, nalaz stize.
+#
+# Pozvana procedura koja SAMA ima `On Error` gutace svoju gresku i iz aktivnog
+# obradjivaca (LogError, Monitor_*, clsTransaction.RollbackTx). Provera to
+# namerno NE uzima u obzir: ugovor pozivaoca ne sme da visi o tudjem internom
+# rukovanju greskom (v. modJournaling.BackupFileOnStart). Ispravka je jedan red
+# i ne menja ponasanje kad pozvani ne puca.
+#
+# GRANICA: hod je linearan nad izjavama; `Resume` unutar `With` se racuna kao
+# uslovan (konzervativno -- hod ide dalje), a `Else` u jednolinijskom `If` se
+# ne razlaze.
+_GU_OE_GOTO = re.compile(r"^On\s+Error\s+GoTo\s+(\S+)$", re.IGNORECASE)
+_GU_OE_RN = re.compile(r"^On\s+Error\s+Resume\s+Next$", re.IGNORECASE)
+_GU_RESUME = re.compile(r"^Resume(?:\s+\S+)?$", re.IGNORECASE)
+_GU_IZLAZ = re.compile(
+    r"^(?:Exit\s+(?:Sub|Function|Property)|End\s+(?:Sub|Function|Property)|End)$",
+    re.IGNORECASE)
+_GU_GOTO = re.compile(r"^GoTo\s+(\w+)$", re.IGNORECASE)
+_GU_ERR_RAISE = re.compile(r"^Err\.Raise\b", re.IGNORECASE)
+_GU_IF_JEDNOLINIJSKI = re.compile(r"^If\b.*?\bThen\s+(\S.*)$", re.IGNORECASE)
+_GU_BLOK_OTVARA = re.compile(
+    r"^(?:If\b.*\bThen|Select\s+Case\b.*|For\b.*|Do\b.*|While\b.*|With\b.*)$",
+    re.IGNORECASE)
+_GU_BLOK_ZATVARA = re.compile(
+    r"^(?:End\s+If|End\s+Select|Next\b.*|Loop\b.*|Wend|End\s+With)$", re.IGNORECASE)
+# Naredbe koje ne mogu da puknu i ne cine prozor garda "nepraznim".
+_GU_STRUKTURA = re.compile(
+    r"^(?:Else|ElseIf\b.*|Case\b.*|End\s+If|End\s+Select|Next\b.*|Loop\b.*|Wend"
+    r"|End\s+With|Dim\b.*|Static\b.*|Const\b.*|#.*|On\s+Error\s+Resume\s+Next)$",
+    re.IGNORECASE)
+_GU_LABELA = re.compile(r"^(?:[A-Za-z_]\w*|\d+)$")
+_GU_GRANA = re.compile(r"^(?:Else|ElseIf\b.*|Case\b.*)$", re.IGNORECASE)
+
+
+def _gu_izjave(lines: list[str], od: int, do: int) -> list[dict]:
+    """Izjave procedure [od, do]: tekst, red, labela, uslovno (rep jednolinijskog If)."""
+    out = []
+    for tekst, ln in _logical_lines(lines[od:do + 1]):
+        t = _strip_comment(tekst).strip()
+        if not t:
+            continue
+        uslovno = False
+        for k, (deo, dvotacka) in enumerate(_split_statements(t)):
+            if k == 0 and dvotacka and _GU_LABELA.match(deo):
+                out.append({"t": deo, "red": od + ln, "labela": True, "uslovno": False})
+                continue
+            m = _GU_IF_JEDNOLINIJSKI.match(deo)
+            if m and not uslovno:
+                # `If x Then naredba`: uslov je naredba, rep je uslovan -- i sve
+                # sto dvotacka posle njega doda u isti red.
+                out.append({"t": deo, "red": od + ln, "labela": False,
+                            "uslovno": False, "rep": m.group(1).strip()})
+                uslovno = True
+                continue
+            out.append({"t": deo, "red": od + ln, "labela": False, "uslovno": uslovno})
+    return out
+
+
+def _gu_prozor_neprazan(izj: list[dict], labele: dict, g: int) -> bool:
+    """Ima li posle garda na izj[g] ijedna naredba koja moze da pukne."""
+    i, videno = g + 1, set()
+    while i < len(izj) and i not in videno:
+        videno.add(i)
+        z = izj[i]
+        t = z["t"]
+        if z["labela"] or _GU_STRUKTURA.match(t):
+            i += 1
+            continue
+        if _GU_OE_GOTO.match(t) or _GU_RESUME.match(t) or _GU_IZLAZ.match(t):
+            return False
+        m = _GU_GOTO.match(t)
+        if m and not z["uslovno"] and m.group(1).lower() in labele:
+            i = labele[m.group(1).lower()] + 1
+            continue
+        return True
+    return False
+
+
+def _gu_hod(izj: list[dict], labele: dict, start: int) -> list[int]:
+    """Indeksi `On Error Resume Next` do kojih se od labele obradjivaca stize
+    dok je obradjivac jos aktivan.
+
+    Naredba koja gasi obradjivac ili prekida put (`On Error GoTo -1`, `Resume`,
+    izlaz, `Err.Raise`, bezuslovan `GoTo`) na dubini 0 zavrsava put. Unutar
+    bloka gasi samo OSTATAK SVOJE GRANE: put koji tu granu preskoci (druga
+    grana `If`/`Select`, ili posle kraja bloka) ostaje aktivan."""
+    nadjeno: list[int] = []
+    videno: set[int] = set()
+    stek = [start]
+    while stek:
+        i, dubina, ugasen_do = stek.pop(), 0, None
+        while i < len(izj) and i not in videno:
+            videno.add(i)
+            z = izj[i]
+            t = z["t"]
+            if z["labela"]:
+                i += 1
+                continue
+            if "rep" not in z and not z["uslovno"]:
+                if _GU_BLOK_OTVARA.match(t):
+                    dubina += 1
+                    i += 1
+                    continue
+                if _GU_BLOK_ZATVARA.match(t):
+                    dubina = max(0, dubina - 1)
+                    if ugasen_do is not None and dubina < ugasen_do:
+                        ugasen_do = None
+                    i += 1
+                    continue
+                if _GU_GRANA.match(t):
+                    if ugasen_do is not None and dubina == ugasen_do:
+                        ugasen_do = None
+                    i += 1
+                    continue
+            if ugasen_do is not None:
+                i += 1
+                continue
+            # Uslovna naredba (rep jednolinijskog If): ne prekida put, ali gard
+            # u njoj vazi samo na tom putu, a GoTo otvara granu.
+            for uslovna in ([z["rep"]] if "rep" in z else [t] if z["uslovno"] else []):
+                if _GU_OE_RN.match(uslovna):
+                    nadjeno.append(i)
+                m = _GU_GOTO.match(uslovna)
+                if m and m.group(1).lower() in labele:
+                    stek.append(labele[m.group(1).lower()] + 1)
+            if "rep" in z or z["uslovno"]:
+                i += 1
+                continue
+            if _GU_OE_RN.match(t):
+                nadjeno.append(i)
+                # Ispravka ovog garda (GoTo -1 ispred) gasi obradjivac i za sve
+                # posle njega, pa je jedan nalaz po putu (grani) dovoljan. Gard
+                # koji nista ne stiti ne gasi nista -- sledeci na putu je nalaz.
+                if _gu_prozor_neprazan(izj, labele, i):
+                    if dubina == 0:
+                        break
+                    ugasen_do = dubina
+                i += 1
+                continue
+            m = _GU_GOTO.match(t)
+            if m and m.group(1).lower() in labele:
+                if dubina == 0:
+                    i = labele[m.group(1).lower()] + 1
+                    continue
+                stek.append(labele[m.group(1).lower()] + 1)
+                ugasen_do = dubina
+            elif (re.match(r"^On\s+Error\s+GoTo\s+-1$", t, re.IGNORECASE)
+                  or _GU_RESUME.match(t) or _GU_IZLAZ.match(t)
+                  or _GU_ERR_RAISE.match(t)):
+                if dubina == 0:
+                    break
+                ugasen_do = dubina
+            i += 1
+    return nadjeno
+
+
+def check_gard_u_obradjivacu(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    od = None
+    for i, raw_line in enumerate(lines):
+        t = _strip_comment(raw_line).strip()
+        if od is None:
+            # Jednolinijska procedura (`Function F(): F = 1: End Function`) nema
+            # obradjivac -- i ne sme da progura pocetak u sledecu.
+            if PROC_START.match(t) and not re.search(
+                    r":\s*End\s+(?:Sub|Function|Property)$", t, re.IGNORECASE):
+                od = i
+            continue
+        if not re.match(r"^End\s+(?:Sub|Function|Property)\b", t, re.IGNORECASE):
+            continue
+        izj = _gu_izjave(lines, od, i)
+        od = None
+        labele = {z["t"].lower(): k for k, z in enumerate(izj) if z["labela"]}
+        ciljevi = []
+        for z in izj:
+            for kandidat in (z["t"], z.get("rep", "")):
+                m = _GU_OE_GOTO.match(kandidat)
+                if m and m.group(1) not in ("0", "-1") and m.group(1).lower() in labele:
+                    ciljevi.append(m.group(1).lower())
+        prijavljeno = set()
+        for cilj in dict.fromkeys(ciljevi):
+            for g in _gu_hod(izj, labele, labele[cilj] + 1):
+                if g in prijavljeno or not _gu_prozor_neprazan(izj, labele, g):
+                    continue
+                prijavljeno.add(g)
+                out.append(Finding(
+                    path, izj[g]["red"], "GARD_U_OBRADJIVACU",
+                    "On Error Resume Next u AKTIVNOM obradjivacu '%s:' -- NE guta "
+                    "novu gresku: ona izlazi iz procedure, originalna se gubi, a "
+                    "ostatak obradjivaca se preskace. Stavi 'On Error GoTo -1' "
+                    "pre ovog reda (posle citanja Err u errNum/errDesc/errSrc), "
+                    "ili premesti ciscenje iza 'Resume <labela>'."
+                    % izj[labele[cilj]]["t"]))
     return out
 
 # --- ODSECEN: izvor bez zaglavlja koje VBA export UVEK pise -------------------
@@ -2400,6 +2664,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_dupli_lokal(path, lines)
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
+    out += check_gard_u_obradjivacu(path, lines)
     out += check_truncated(path, raw, lines)
     out += check_array_copy(path, lines)
     out += check_test_registry(path, lines)
@@ -3397,6 +3662,224 @@ Public Sub Radi()
 End Sub
 """),
 ]
+# Ispravka GARD_U_OBRADJIVACU unosi `On Error GoTo -1` u obradjivac -- LogErr
+# koji posle njega ostane je nem isto kao posle Resume Next.
+MRTAV_LOG_CASES.insert(4, ("LogErr posle Resume Next, labela BLOKADA (cilj On Error GoTo)", 1,
+                           """Option Explicit
+Public Sub Radi()
+    On Error GoTo BLOKADA
+    Exit Sub
+BLOKADA:
+    On Error Resume Next
+    LogErr "Radi"
+End Sub
+"""))
+MRTAV_LOG_CASES.insert(5, ("labela koju On Error GoTo cilja u DRUGOJ proceduri", 0,
+                           """Option Explicit
+Public Sub Prva()
+    On Error GoTo Dalje
+    Exit Sub
+Dalje:
+    LogErr "Prva"
+End Sub
+Public Sub Druga()
+    On Error Resume Next
+    MozdaPukne
+Dalje:
+    LogErr "Druga"
+End Sub
+"""))
+MRTAV_LOG_CASES.insert(3, ("LogErr posle On Error GoTo -1 u handleru", 1, """Option Explicit
+Public Sub Radi()
+    On Error GoTo EH
+    Exit Sub
+EH:
+    On Error GoTo -1
+    LogErr "Radi"
+End Sub
+"""))
+
+
+# --- GARD_U_OBRADJIVACU: dokaz u oba smera ------------------------------------
+#
+# Prvi slucaj je REKONSTRUKCIJA merenog incidenta (test 184 na sondi
+# claude/sonda-eh-obradjivac, 17.11.2026). Polovina sa 0 nalaza drzi tri granice
+# koje su lazni nalazi: ispravljen obradjivac (GoTo -1, Resume iza labele),
+# gard koji nista ne stiti, i Resume Next van obradjivaca.
+_GU_KOSTUR = """Option Explicit
+Public Sub Radi()
+    Dim errNum As Long, tmp As String
+    On Error GoTo %s
+    Kill tmp
+    Exit Sub
+%s
+End Sub
+"""
+GARD_U_OBRADJIVACU_CASES = [
+    # --- mora da zapisti ---
+    ("ciscenje u obradjivacu (test 184 na sondi)", 1, _GU_KOSTUR % ("EH", """EH:
+    errNum = Err.Number
+    On Error Resume Next
+    Kill tmp & "\\*.*"
+    RmDir tmp
+    On Error GoTo 0
+    AssertEq errNum, 0, "nema greske"
+""")),
+    ("labela malim slovima", 1, _GU_KOSTUR % ("eh", """eh:
+    On Error Resume Next
+    tx.RollbackTx""")),
+    ("labela bez imena EH (modPrint 'blokada:')", 1, _GU_KOSTUR % ("blokada", """blokada:
+    On Error Resume Next
+    tx.RollbackTx
+    On Error GoTo 0""")),
+    ("Err.Clear NE gasi obradjivac", 1, _GU_KOSTUR % ("EH", """EH:
+    Err.Clear
+    On Error Resume Next
+    tx.RollbackTx""")),
+    ("posle On Error GoTo 0 obradjivac je i dalje aktivan", 1, _GU_KOSTUR % ("EH", """EH:
+    On Error GoTo 0
+    On Error Resume Next
+    tx.RollbackTx""")),
+    ("gard u If bloku obradjivaca (PostaviSekciju)", 1, _GU_KOSTUR % ("EH", """EH:
+    If Len(tmp) > 0 Then
+        On Error Resume Next
+        VratiSekciju tmp
+        Err.Clear
+    End If
+    ShowToast tmp""")),
+    ("Resume samo u uslovu -- put pored njega je aktivan", 1, _GU_KOSTUR % ("EH", """EH:
+    If Err.Number = 9 Then
+        Resume Next
+    End If
+    If Err.Number = 5 Then Resume Next
+    On Error Resume Next
+    tx.RollbackTx""")),
+    ("GoTo iz obradjivaca u deljenu labelu ciscenja", 1, _GU_KOSTUR % ("EH", """Cisti:
+    On Error Resume Next
+    Kill tmp
+    Exit Sub
+EH:
+    errNum = Err.Number
+    GoTo Cisti""")),
+    ("obradjivac je i labela ciscenja (normalan tok propada u nju)", 1,
+     """Option Explicit
+Public Sub Radi()
+    Dim tmp As String
+    On Error GoTo Fin
+    Kill tmp
+Fin:
+    On Error Resume Next
+    Application.Calculation = 0
+End Sub
+"""),
+    ("uslovni GoTo iz obradjivaca otvara granu", 1, _GU_KOSTUR % ("EH", """EH:
+    If Len(tmp) > 0 Then GoTo Cisti
+    Exit Sub
+Cisti:
+    On Error Resume Next
+    Kill tmp""")),
+    ("dvotacka u istom redu", 1, _GU_KOSTUR % ("EH", """EH:
+    errNum = Err.Number: On Error Resume Next: tx.RollbackTx""")),
+    ("jedini sadrzaj prozora je jednolinijski If", 1, _GU_KOSTUR % ("EH", """EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0""")),
+    ("drugi gard posle praznog prvog", 1, _GU_KOSTUR % ("EH", """EH:
+    On Error Resume Next
+    On Error GoTo 0
+    On Error Resume Next
+    Kill tmp""")),
+    # --- NE sme da zapisti ---
+    ("ispravljeno: On Error GoTo -1 pre garda", 0, _GU_KOSTUR % ("EH", """EH:
+    errNum = Err.Number
+    On Error GoTo -1
+    On Error Resume Next
+    Kill tmp
+    On Error GoTo 0
+    Err.Raise errNum""")),
+    ("ispravljeno: ciscenje iza Resume labele (5516f374)", 0, _GU_KOSTUR % ("EH", """EH:
+    errNum = Err.Number
+    Resume CistiPosleGreske
+CistiPosleGreske:
+    On Error Resume Next
+    Kill tmp
+    On Error GoTo 0""")),
+    ("prazan prozor: GoTo 0 odmah posle garda", 0, _GU_KOSTUR % ("EH", """EH:
+    errNum = Err.Number
+    LogErr "Radi"
+    On Error Resume Next
+    On Error GoTo 0
+    Err.Raise errNum""")),
+    ("prazan prozor: samo kraj procedure i Dim", 0, _GU_KOSTUR % ("EH", """EH:
+    On Error Resume Next
+    Dim x As Long""")),
+    ("Resume Next van obradjivaca", 0, """Option Explicit
+Public Sub Radi()
+    Dim tmp As String
+    On Error GoTo EH
+    On Error Resume Next
+    Kill tmp
+    On Error GoTo EH
+    Exit Sub
+EH:
+    LogErr "Radi"
+End Sub
+"""),
+    ("labela ciscenja do koje obradjivac stize SAMO kroz Resume", 0, _GU_KOSTUR % ("EH", """Cisti:
+    On Error Resume Next
+    Kill tmp
+    Exit Sub
+EH:
+    Resume Cisti""")),
+    ("obradjivac izlazi pre labele sa gardom", 0, _GU_KOSTUR % ("EH", """EH:
+    LogErr "Radi"
+    Exit Sub
+Kasnije:
+    On Error Resume Next
+    Kill tmp""")),
+    ("gard samo u komentaru i stringu", 0, _GU_KOSTUR % ("EH", """EH:
+    ' On Error Resume Next
+    LogError "Radi", "On Error Resume Next"
+    Err.Raise 5""")),
+    ("obradjivac u jednoj, gard u drugoj proceduri", 0, """Option Explicit
+Public Sub Prva()
+    On Error GoTo EH
+    Exit Sub
+EH:
+    LogErr "Prva"
+End Sub
+Public Sub Druga()
+    Dim tmp As String
+    On Error Resume Next
+    Kill tmp
+End Sub
+"""),
+    ("GoTo -1 u If bloku pre garda (PostaviSekciju, ispravljen)", 0,
+     _GU_KOSTUR % ("EH", """EH:
+    If Len(tmp) > 0 Then
+        On Error GoTo -1
+        On Error Resume Next
+        VratiSekciju tmp
+    End If""")),
+    ("GoTo -1 u If grani ne gasi Else granu", 1, _GU_KOSTUR % ("EH", """EH:
+    If Len(tmp) > 0 Then
+        On Error GoTo -1
+    Else
+        On Error Resume Next
+        Kill tmp
+    End If""")),
+    ("GoTo -1 u If bloku ne gasi put posle End If", 1, _GU_KOSTUR % ("EH", """EH:
+    If Len(tmp) > 0 Then
+        On Error GoTo -1
+    End If
+    On Error Resume Next
+    Kill tmp""")),
+    ("labela koju ne cilja On Error GoTo", 0, _GU_KOSTUR % ("EH", """EH:
+    Resume Kraj
+Kraj:
+    On Error Resume Next
+    Kill tmp""")),
+]
 
 
 # --- CLAN_FORME: dokaz u oba smera ------------------------------------------
@@ -3721,6 +4204,15 @@ def self_test() -> int:
             palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in GARD_U_OBRADJIVACU_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "GARD_U_OBRADJIVACU")
+        if dobijeno != ocekivano:
+            palo.append(f"  GARD_U_OBRADJIVACU/{naziv}: ocekivano {ocekivano} "
+                        f"nalaza, dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in NEDEKLARISAN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -3910,6 +4402,7 @@ def self_test() -> int:
 
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
+              + len(GARD_U_OBRADJIVACU_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)

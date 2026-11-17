@@ -7518,3 +7518,35 @@ prepiše. Dokument ostaje kod zbirne kojoj je pripadao.
 
 Prebacivanje na drugu zbirnu i dalje postoji — kroz ispravku i prevezivanje, gde
 je to svesna radnja operatera, a ne nusproizvod sinhronizacije.
+
+### Greška pri čišćenju posle greške više ne obara proceduru
+
+Kad procedura uhvati grešku, njen obrađivač čisti za sobom: vraća izmene, piše u
+log, vraća podešavanja Excela. Ta mesta su do sada stajala pod
+`On Error Resume Next` u uverenju da ih on štiti — **ne štiti**. Dok je obrađivač
+aktivan, VBA novu grešku ne može da obradi ni tako: ona izlazi iz procedure,
+prvobitna greška se gubi, a ostatak čišćenja se preskače. Izmereno na Windows-u
+17.11.2026.
+
+- **Ispravljeno na 87 mesta u produkciji i 259 u testovima:** ispred tog reda ide
+  `On Error GoTo -1`, koji obrađivač gasi. Gde čišćenje ne može da pukne
+  (zove samo `LogError`, `Monitor_*`, `RollbackTx`, koji sami gutaju greške),
+  ponašanje se ne menja — ispravka samo prestaje da zavisi od tuđeg koda.
+- **Gde se razlika vidi:** pokretanje (`BackupFileOnStart`, `Workbook_Open`),
+  automatsko snimanje (greška u obrađivaču je ostavljala prekidač zaglavljen, pa
+  bi snimanje tiho prestalo do kraja sesije), povratak sekcije u ljusci kad
+  prelazak padne, lista otvorenih blokova i faktura, uvoz izvoda (greška
+  pomeranja PDF-a više ne zamenjuje pravu grešku uvoza) i migracija iz starog
+  fajla (vraćanje podešavanja Excela).
+- **Blokirana štampa otkupnog lista sada ostavlja trag u logu.** `LogErr` je stajao
+  posle naredbe koja briše grešku i nije upisivao ništa.
+- **Nova provera `GARD_U_OBRADJIVACU`** u `vba_check` hvata `On Error Resume Next`
+  u aktivnom obrađivaču. `MRTAV_LOG` sada prepoznaje obrađivač po
+  `On Error GoTo`, ne samo po imenu labele, i zna da i `On Error GoTo -1` briše
+  grešku.
+
+**NEVERIFIKOVANO u Excelu.** Testovi 354–356 i sabotaže `eh-obradjivac-*` čekaju
+Windows prolaz: `python tools/run_vba.py --suite RunAllTests`, pa
+`python tools/dokaz.py eh-obradjivac` i `python tools/dokaz.py backup-`.
+Uz to ručni `Alt+F11 → Debug → Compile VBAProject`: `On Error GoTo -1` se u ovom
+kodu do sada nije koristio nigde.
