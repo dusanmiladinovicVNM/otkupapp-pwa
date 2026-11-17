@@ -363,6 +363,10 @@ def _pusti_suite(*a, izlaz_dir: str = None):
     samo ako se PID i vreme nastanka iz excel.pid poklope."""
     for pokusaj in (1, 2):
         _kapija_starta()
+        if _STOP.is_set():
+            # Posao je primljen pre STOP-a, ali run jos nije krenuo: ne krece.
+            return subprocess.CompletedProcess(a, 1, "", "PREKID: run_vba nije "
+                                               "pokrenut (STOP ili Ctrl+C)\n")
         try:
             r = _pusti(*a)
         except subprocess.TimeoutExpired:
@@ -446,39 +450,65 @@ def _izvrsi(poslovi: list, bazen: list):
     rezultati stizu U REDOSLEDU POSLOVA, cim je sledeci po redu gotov.
 
     Radnik (ctx) je u jednom trenutku kod najvise jednog posla. Kad je _STOP
-    postavljen, posao koji jos nije krenuo vraca None i ne dira nista."""
+    postavljen, posao koji jos nije krenuo vraca None i ne dira nista. Posao
+    koji vrati STOP (npr. REVERT-FAIL) postavlja GRANICU pre nego sto vrati
+    svog radnika: nijedan kasniji posao ne krece -- ni nad tom, nevracenom
+    kopijom, ni nad drugima -- a raniji se zavrsavaju, jer ih potrosac jos cita.
+    Potrosac mora da zatvori generator (contextlib.closing): tek tada se ceka
+    kraj poslova u toku i izvrsilac se gasi."""
     slobodni = queue.Queue()
     for c in bazen:
         slobodni.put(c)
+    granica = [len(poslovi)]
+    brava = threading.Lock()
 
-    def omot(fn):
-        if _STOP.is_set():
+    def omot(i, fn):
+        if _STOP.is_set() or i > granica[0]:
             return None
         c = slobodni.get()
+        rez = None
         try:
-            if _STOP.is_set():
+            if _STOP.is_set() or i > granica[0]:
                 return None
-            return fn(c)
+            rez = fn(c)
+            return rez
         finally:
+            # PRE vracanja radnika: posao koji ga sledeci uzme vec vidi granicu.
+            if isinstance(rez, dict) and rez.get("stop"):
+                with brava:
+                    granica[0] = min(granica[0], i)
             slobodni.put(c)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(bazen)) as ex:
-        buduci = [ex.submit(omot, fn) for fn in poslovi]
-        try:
-            for f in buduci:
-                yield f.result()
-        except GeneratorExit:
-            # Zatvaranje generatora (zip iscrpi poslove, ili potrosac stane)
-            # NIJE prekid -- prekid je samo ako je neki posao jos u toku; to
-            # resava finally ispod.
-            raise
-        except BaseException:
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=len(bazen))
+    _AKTIVNI.append(ex)
+    buduci = [ex.submit(omot, i, fn) for i, fn in enumerate(poslovi)]
+    try:
+        for f in buduci:
+            # Ceka se u kratkim koracima: na Windows-u Ctrl+C ne prekida
+            # beskonacno cekanje na bravu, pa bi glavna nit ostala gluva dok
+            # radnici pale nove suite.
+            while True:
+                try:
+                    r = f.result(timeout=0.5)
+                    break
+                except concurrent.futures.TimeoutError:
+                    continue
+            yield r
+    except GeneratorExit:
+        # Zatvaranje generatora (zip iscrpi poslove, ili potrosac stane) NIJE
+        # prekid -- prekid je samo ako je neki posao jos u toku (finally).
+        raise
+    except BaseException:
+        _STOP.set()
+        raise
+    finally:
+        # Prekinut potrosac ne sme da ostavi poslove koji jos krecu.
+        if any(not f.done() for f in buduci):
             _STOP.set()
-            raise
-        finally:
-            # Prekinut potrosac (STOP) ne sme da ostavi poslove koji jos krecu.
-            if any(not f.done() for f in buduci):
-                _STOP.set()
+        ex.shutdown(wait=True)
+        # Uklanja se tek posle shutdown-a: prekinut join (drugi Ctrl+C) ostavlja
+        # izvrsilac prijavljenim, pa ga rukovalac prekida i dalje vidi.
+        _AKTIVNI.remove(ex)
 
 
 def _suite_za(test: str, sab=None) -> str:
@@ -894,6 +924,7 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
 
 
 _BAZEN = []        # radnici tekuceg dokaza -- za ciscenje pri prekidu
+_AKTIVNI = []      # izvrsioci u toku -- prekid ceka njih PRE ciscenja
 
 
 def _serijska_traka(stavke: list, radnika: int) -> str:
@@ -937,15 +968,42 @@ def _spoji_istoriju(bazen: list, radnika: int, cilj: str = None) -> str:
     except Exception:                       # noqa: BLE001
         brava = None
     if brava is None:
-        return "istorija nije spojena: tests/ je zauzet (rucni run_vba?)"
+        # tests/ drzi rucni run_vba: redovi idu u RESERVNI fajl pored, ne nestaju.
+        rezerva = os.path.join(os.path.dirname(cilj),
+                               "run_vba_istorija.dokaz_%d.jsonl" % os.getpid())
+        try:
+            with open(rezerva, "a", encoding="utf-8") as fh:
+                fh.write("\n".join(redovi) + "\n")
+        except OSError as exc:
+            return "ISTORIJA NIJE SACUVANA: %s" % exc
+        _obrisi_istoriju_radnika(bazen)
+        return "istorija je u %s (tests/ je bio zauzet -- rucni run_vba?)" % rezerva
     try:
         with open(cilj, "a", encoding="utf-8") as fh:
             fh.write("\n".join(redovi) + "\n")
-        return ""
     except OSError as exc:
-        return "istorija nije spojena: %s" % exc
+        return "ISTORIJA NIJE SACUVANA: %s" % exc
     finally:
         _run_vba_modul()._pusti_bravu(brava)
+    _obrisi_istoriju_radnika(bazen)
+    return ""
+
+
+def _obrisi_istoriju_radnika(bazen: list) -> None:
+    """Spojeni redovi se brisu iz izlaza radnika, pa drugi poziv ne udvaja."""
+    for c in bazen:
+        try:
+            os.remove(os.path.join(c.get("izlaz") or "", "run_vba_istorija.jsonl"))
+        except OSError:
+            pass
+
+
+def _zavrsi_istoriju(bazen: list, radnika: int) -> bool:
+    """Spoji istoriju i javi ishod. False = redovi NISU sacuvani (radni ostaje)."""
+    razlog = _spoji_istoriju(bazen, radnika)
+    if razlog:
+        print(razlog, file=sys.stderr)
+    return not razlog.startswith("ISTORIJA NIJE SACUVANA")
 
 
 def _izolacija(stavke: list, izbor: set, src: str = None, bazen=None) -> list:
@@ -965,18 +1023,17 @@ def _izolacija(stavke: list, izbor: set, src: str = None, bazen=None) -> list:
         vidjeni.add(kljuc)
         jedinstveni.append(s)
     bazen = bazen or [{"kopija": src, "izlaz": None}]
-    tok = _izvrsi([(lambda c, s=s: _baza_zelena(s["suite"], [s["test"]],
-                                                src=c["kopija"], izlaz=c["izlaz"]))
-                   for s in jedinstveni], bazen)
-    for s, rez in zip(jedinstveni, tok):
-        if rez is None:
-            break
-        ok, opis = rez
-        print("%-6s %-28s %-50s %s" % ("OK" if ok else "CRVEN", s["suite"],
-                                       s["test"], "" if ok else opis), flush=True)
-        if not ok:
-            crveni.append((s["suite"], s["test"], opis))
-    tok.close()
+    with contextlib.closing(_izvrsi([(lambda c, s=s: _baza_zelena(s["suite"], [s["test"]],
+                                                    src=c["kopija"], izlaz=c["izlaz"]))
+                       for s in jedinstveni], bazen)) as tok:
+        for s, rez in zip(jedinstveni, tok):
+            if rez is None:
+                break
+            ok, opis = rez
+            print("%-6s %-28s %-50s %s" % ("OK" if ok else "CRVEN", s["suite"],
+                                           s["test"], "" if ok else opis), flush=True)
+            if not ok:
+                crveni.append((s["suite"], s["test"], opis))
     print("\nizolacija: %d testova, %d ne prolazi samo" % (len(vidjeni), len(crveni)))
     return crveni
 
@@ -1079,8 +1136,8 @@ def main(argv: list) -> int:
         try:
             return 1 if _izolacija(stavke, izbor, ctx["kopija"], bazen) else 0
         finally:
-            _spoji_istoriju(bazen, args.radnika)
-            shutil.rmtree(ctx["radni"], ignore_errors=True)
+            if _zavrsi_istoriju(bazen, args.radnika):
+                shutil.rmtree(ctx["radni"], ignore_errors=True)
 
     print("sabotaza: %d%s" % (len(stavke), " (izbor: samo ciljani testovi)"
                               if izbor else ""), flush=True)
@@ -1101,6 +1158,7 @@ def main(argv: list) -> int:
             print("STOP: baza nije zelena. Dokaz bi merio crveno koje sabotaza "
                   "nije izazvala. Kopija ostaje u %s" % ctx["radni"],
                   file=sys.stderr)
+            _zavrsi_istoriju(bazen, args.radnika)
             return 2
 
     pre = _otisak(ctx["snimak"])
@@ -1139,55 +1197,53 @@ def main(argv: list) -> int:
     def posao(clanovi, grupno, izb=frozenset(), baz=None):
         return lambda c: _prolaz(clanovi, pre, grupno, izb, baz, c)
 
-    tok = _izvrsi([posao(g, len(g) > 1, izbor, baze_izbora) for g in grupe], bazen)
-    for i, (g, ishod) in enumerate(zip(grupe, tok), 1):
-        if ishod is None:
-            stop = stop or "PREKID"
-            break
-        if len(g) > 1:
-            print("GRUPA %d/%d  %s  clanova %d"
-                  % (i, len(grupe), g[0]["suite"], len(g)), flush=True)
-        koren_tokom.add(ishod.get("koren") or koren_pre)
-        cela_suite.extend(ishod["cela_suite"])
-        if len(g) > 1:
-            grupno_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
-        if ishod.get("izbor"):
-            izborom_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
-        upisi(ishod["ishodi"], "  " if len(g) > 1 else "")
-        for s, razlog in ishod["ostatak"]:
-            print("  %-46s -> ponavlja se sam (%s)" % (s["ime"], razlog),
-                  flush=True)
-            ponavljaju.append(s)
-        if ishod["stop"]:
-            stop = ishod["stop"]
-            _STOP.set()
-            break
-    tok.close()
-
-    if ponavljaju and not stop:
-        print("PONAVLJA SE SAM: %d" % len(ponavljaju), flush=True)
-        tok = _izvrsi([posao([s], False, izbor, baze_izbora) for s in ponavljaju],
-                      bazen)
-        for s, ishod in zip(ponavljaju, tok):
+    with contextlib.closing(_izvrsi([posao(g, len(g) > 1, izbor, baze_izbora) for g in grupe], bazen)) as tok:
+        for i, (g, ishod) in enumerate(zip(grupe, tok), 1):
             if ishod is None:
                 stop = stop or "PREKID"
                 break
+            if len(g) > 1:
+                print("GRUPA %d/%d  %s  clanova %d"
+                      % (i, len(grupe), g[0]["suite"], len(g)), flush=True)
             koren_tokom.add(ishod.get("koren") or koren_pre)
             cela_suite.extend(ishod["cela_suite"])
+            if len(g) > 1:
+                grupno_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
             if ishod.get("izbor"):
                 izborom_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
-            upisi(ishod["ishodi"])
-            for s2, razlog in ishod["ostatak"]:
-                # Pojedinacno merenje nema partnere, pa nema ni sta da vrati u
-                # red -- ali ako ga ikad vrati, sabotaza bi tiho ispala iz
-                # imenioca. Zato je to nalaz, a ne tiho preskakanje.
-                lose.append((s2["ime"], "NIJE IZMERENA: %s" % razlog))
-                print("%-46s NIJE IZMERENA: %s" % (s2["ime"], razlog), flush=True)
+            upisi(ishod["ishodi"], "  " if len(g) > 1 else "")
+            for s, razlog in ishod["ostatak"]:
+                print("  %-46s -> ponavlja se sam (%s)" % (s["ime"], razlog),
+                      flush=True)
+                ponavljaju.append(s)
             if ishod["stop"]:
                 stop = ishod["stop"]
                 _STOP.set()
                 break
-        tok.close()
+
+    if ponavljaju and not stop:
+        print("PONAVLJA SE SAM: %d" % len(ponavljaju), flush=True)
+        with contextlib.closing(_izvrsi([posao([s], False, izbor, baze_izbora) for s in ponavljaju],
+                          bazen)) as tok:
+            for s, ishod in zip(ponavljaju, tok):
+                if ishod is None:
+                    stop = stop or "PREKID"
+                    break
+                koren_tokom.add(ishod.get("koren") or koren_pre)
+                cela_suite.extend(ishod["cela_suite"])
+                if ishod.get("izbor"):
+                    izborom_priznatih += sum(1 for _s, p, _st, _c in ishod["ishodi"] if p)
+                upisi(ishod["ishodi"])
+                for s2, razlog in ishod["ostatak"]:
+                    # Pojedinacno merenje nema partnere, pa nema ni sta da vrati u
+                    # red -- ali ako ga ikad vrati, sabotaza bi tiho ispala iz
+                    # imenioca. Zato je to nalaz, a ne tiho preskakanje.
+                    lose.append((s2["ime"], "NIJE IZMERENA: %s" % razlog))
+                    print("%-46s NIJE IZMERENA: %s" % (s2["ime"], razlog), flush=True)
+                if ishod["stop"]:
+                    stop = ishod["stop"]
+                    _STOP.set()
+                    break
 
     # Test koji SAM ne prolazi meri se celom suite-om -- uz bazu CELE suite,
     # koja se tvrdi jednom po suite-u. Baze idu SERIJSKI, pre radnika: pisu
@@ -1211,18 +1267,17 @@ def main(argv: list) -> int:
                       % s["ime"], flush=True)
                 continue
             merljive.append(s)
-        tok = _izvrsi([posao([s], False) for s in merljive], bazen)
-        for s, ishod in zip(merljive, tok):
-            if ishod is None:
-                stop = stop or "PREKID"
-                break
-            koren_tokom.add(ishod.get("koren") or koren_pre)
-            upisi(ishod["ishodi"])
-            if ishod["stop"]:
-                stop = ishod["stop"]
-                _STOP.set()
-                break
-        tok.close()
+        with contextlib.closing(_izvrsi([posao([s], False) for s in merljive], bazen)) as tok:
+            for s, ishod in zip(merljive, tok):
+                if ishod is None:
+                    stop = stop or "PREKID"
+                    break
+                koren_tokom.add(ishod.get("koren") or koren_pre)
+                upisi(ishod["ishodi"])
+                if ishod["stop"]:
+                    stop = ishod["stop"]
+                    _STOP.set()
+                    break
 
     if stop:
         if stop.startswith("REVERT-FAIL"):
@@ -1269,8 +1324,9 @@ def main(argv: list) -> int:
           % ("PROMENJENO -- dokaz je merio snimak %s, ne sadasnji src-vba" % pre
              if koren_menjan else "IDENTICNO (dokaz ga nije pisao)"))
     if args.radnika > 1 or _START["ponovljeno"]:
-        print("radnika: %d; ponovljen start Excela: %d (Excel nije ni krenuo, "
-              "pa nista nije mereno)" % (args.radnika, _START["ponovljeno"]))
+        print("radnika: %d; ponovljenih poziva: %d (FATAL pre ijedne suite -- "
+              "Excel ili uvoz nisu prosli; meri se drugi pokusaj)"
+              % (args.radnika, _START["ponovljeno"]))
     if izbor:
         print("izbor: baza i mutacija nad istim spiskom testova; celom suite-om "
               "mereno %d (test sam ne prolazi, ili izbor nije oborio tvrdnju)"
@@ -1291,8 +1347,8 @@ def main(argv: list) -> int:
           and crvenih >= len(stavke) - len(pokriveni))
     print("=== %s ===" % _verdikt(ok, grupno_priznatih, izborom_priznatih,
                                  pre if koren_menjan else ""))
-    _spoji_istoriju(bazen, args.radnika)
-    if stop:
+    sacuvana = _zavrsi_istoriju(bazen, args.radnika)
+    if stop or not sacuvana:
         print("radni folder ostaje: %s" % ctx["radni"], file=sys.stderr)
     else:
         shutil.rmtree(ctx["radni"], ignore_errors=True)
@@ -1625,6 +1681,70 @@ def _self_test_r4() -> list:
     tvrdi(rez == [None, None, None] and not pozvani,
           "posao krece posle STOP-a")
 
+    # GRANICA: posao koji vrati STOP zaustavlja sve KASNIJE, pre nego sto
+    # njegov radnik (sa nevracenom kopijom) ode sledecem poslu. Jedan radnik =
+    # najgori slucaj: bez granice bi posao 2 krenuo odmah, pre potrosaca.
+    pozvani[:] = []
+
+    def sa_stopom(k):
+        def fn(c):
+            pozvani.append(k)
+            return {"stop": "REVERT-FAIL"} if k == 1 else k
+        return fn
+
+    with contextlib.closing(_izvrsi([sa_stopom(k) for k in range(4)],
+                                    [{"id": 1}])) as tok:
+        rez = list(tok)
+    _STOP.clear()
+    tvrdi(pozvani == [0, 1] and rez[2:] == [None, None],
+          "posao posle STOP rezultata krece nad nevracenom kopijom (%r)" % pozvani)
+
+    # Dva radnika: radnik B vrati STOP odmah, a A zavrsi malo kasnije i uzme
+    # SLEDECI posao -- iz reda moze da dobije bas B (nevracenu kopiju). Granica
+    # mora da bude postavljena PRE nego sto B ode nazad u red.
+    pokrenuti = []
+
+    def na_radniku(k):
+        def fn(c):
+            pokrenuti.append((k, c["id"]))
+            if k == 0:
+                time.sleep(0.03)
+            return {"stop": "REVERT-FAIL"} if k == 1 else k
+        return fn
+
+    with contextlib.closing(_izvrsi([na_radniku(k) for k in range(4)],
+                                    [{"id": "A"}, {"id": "B"}])) as tok:
+        list(tok)
+    _STOP.clear()
+    tvrdi(not [x for x in pokrenuti if x[0] > 1],
+          "posao posle STOP-a krenuo na radniku sa nevracenom kopijom (%r)" % pokrenuti)
+
+    # Izuzetak u petlji potrosaca: closing zatvara tok, STOP se postavlja, a
+    # poslovi koji nisu krenuli ne krecu (ranije: svi, satima, bez izlaza).
+    pozvani[:] = []
+    kreni = threading.Event()
+
+    def spori(k):
+        def fn(c):
+            pozvani.append(k)
+            if k == 1:
+                kreni.wait(2.0)
+            return k
+        return fn
+
+    try:
+        with contextlib.closing(_izvrsi([spori(k) for k in range(4)],
+                                        [{"id": 1}])) as tok:
+            for r in tok:
+                kreni.set()
+                raise RuntimeError("potrosac pukao")
+    except RuntimeError:
+        pass
+    stop_postavljen = _STOP.is_set()
+    _STOP.clear()
+    tvrdi(stop_postavljen and 2 not in pozvani and 3 not in pozvani,
+          "izuzetak potrosaca ostavlja bazen da pali poslove (%r)" % pozvani)
+
     # --- kapija starta -------------------------------------------------------
     sat, spavanja = [100.0], []
 
@@ -1651,7 +1771,7 @@ def _self_test_r4() -> list:
             ("FATAL pre suite-a se ponavlja jednom", [PRE_SUITE, OK], 2, False),
             ("FATAL posle starta suite-a se ne ponavlja", [U_SUITE, OK], 1, False),
             ("dvaput FATAL pre suite-a: drugi se prijavljuje", [PRE_SUITE, PRE_SUITE], 2, False),
-            ("posle STOP-a se ne ponavlja nista", [PRE_SUITE, OK], 1, True)):
+            ("posle STOP-a run uopste ne krece", [PRE_SUITE, OK], 0, True)):
         red_odg = list(odgovori)
         broj = [0]
 
@@ -1760,16 +1880,64 @@ def _self_test_r4() -> list:
                              _LAZNI_CTX) == "",
           "bazen sa deljenom kopijom ili izlazom se prihvata (ili ispravan odbija)")
 
+    # --- istorija radnika: spaja se jednom, a zauzet tests/ je ne gubi --------
+    rv = _run_vba_modul()
+    koren = tempfile.mkdtemp(prefix="dokaz_ist_")
+    try:
+        cilj = os.path.join(koren, "tests", "run_vba_istorija.jsonl")
+        os.makedirs(os.path.dirname(cilj))
+        bz = []
+        for k in (1, 2):
+            izl = os.path.join(koren, "r%d" % k)
+            os.makedirs(izl)
+            with open(os.path.join(izl, "run_vba_istorija.jsonl"), "w") as fh:
+                fh.write(json.dumps({"rc": 0, "k": k}) + "\n")
+            bz.append({"izlaz": izl})
+        prvi = _spoji_istoriju(bz, 2, cilj)
+        drugi = _spoji_istoriju(bz, 2, cilj)
+        with open(cilj) as fh:
+            redovi = [json.loads(r) for r in fh if r.strip()]
+        tvrdi(prvi == "" and drugi == "" and len(redovi) == 2
+              and all(r.get("dokaz_radnika") == 2 for r in redovi),
+              "istorija radnika se ne spaja tacno jednom (%d redova)" % len(redovi))
+        with open(os.path.join(bz[0]["izlaz"], "run_vba_istorija.jsonl"), "w") as fh:
+            fh.write(json.dumps({"rc": 0, "k": 3}) + "\n")
+        drzi = rv._zakljucaj(os.path.join(os.path.dirname(cilj), ".run_vba.lock"))
+        pravi_zak = rv._zakljucaj
+        rv._zakljucaj = lambda put, cekaj=0.0: pravi_zak(put, 0.0)
+        try:
+            zauzet = _spoji_istoriju(bz, 2, cilj)
+        finally:
+            rv._zakljucaj = pravi_zak
+            rv._pusti_bravu(drzi)
+        rezerve = [f for f in os.listdir(os.path.dirname(cilj))
+                                  if f.startswith("run_vba_istorija.dokaz_")]
+        tvrdi(zauzet.startswith("istorija je u ") and len(rezerve) == 1,
+              "zauzet tests/ gubi istoriju radnika (%r)" % zauzet)
+    finally:
+        shutil.rmtree(koren, ignore_errors=True)
+
     # --- ozicenje main-a i _prolaz-a (tekst; main trazi Excel) -----------------
     izvor_main = inspect.getsource(main)
     izvor_prolaz = inspect.getsource(_prolaz)
     tvrdi(izvor_main.count("_izvrsi(") >= 3
           and "_serijska_traka(stavke, args.radnika)" in izvor_main
-          and "_spoji_istoriju(bazen, args.radnika)" in izvor_main,
+          and "_zavrsi_istoriju(bazen, args.radnika)" in izvor_main,
           "main ne pusta sve tri faze kroz radnike, ili preskace serijsku traku/istoriju")
     tvrdi(all('izlaz=ctx["izlaz"]' in r for r in izvor_main.splitlines()
               if "_baza_zelena(" in r),
           "baza cele suite ne ide u izlaz radnika (pisala bi u tests/)")
+    tvrdi(izvor_main.count("contextlib.closing(_izvrsi(") >= 3
+          and "tok.close()" not in izvor_main,
+          "faze ne zatvaraju tok kroz contextlib.closing (izuzetak bi ostavio bazen)")
+    tvrdi("f.result(timeout=" in inspect.getsource(_izvrsi),
+          "glavna nit ceka rezultat bez koraka (Ctrl+C na Windows-u ne stize)")
+    with open(os.path.abspath(__file__), encoding="utf-8") as fh:
+        ceo = fh.read()
+    glavni = ceo[ceo.rfind('if __name__ == "__main__":'):]
+    tvrdi(0 <= glavni.find("ex.shutdown(wait=True, cancel_futures=True)")
+          < glavni.find("shutil.rmtree(_RADNI"),
+          "Ctrl+C brise radni folder pre nego sto radnici stanu")
     tvrdi("_baza_izbora(baze, kljuc, suite, testovi, ctx)" in izvor_prolaz
           and izvor_prolaz.count("_pusti_suite(") == 1
           and 'izlaz=ctx.get("izlaz")' in izvor_prolaz,
@@ -2126,11 +2294,22 @@ if __name__ == "__main__":
         # R-4: Excel radnika koji je preziveo svoj run_vba ubija se po excel.pid
         # (samo uz isto vreme nastanka), a radni folder se brise.
         _STOP.set()
+        # PRVO sacekaj radnike: brisanje radnog foldera dok run_vba jos pise u
+        # njega ostavilo bi polu-obrisan folder (i lazno "obrisan").
+        try:
+            for ex in list(_AKTIVNI):
+                ex.shutdown(wait=True, cancel_futures=True)
+        except KeyboardInterrupt:
+            print("\nprekinuto dvaput -- radnici se jos gase; src-vba nije diran; "
+                  "radni folder ostaje: %s" % _RADNI, file=sys.stderr)
+            sys.exit(130)
         ubijeno = sum(1 for c in _BAZEN if _ubij_zaostali(c.get("izlaz")))
-        if _RADNI:
+        sacuvana = _zavrsi_istoriju(_BAZEN, len(_BAZEN)) if _BAZEN else True
+        if _RADNI and sacuvana:
             shutil.rmtree(_RADNI, ignore_errors=True)
         print("\nprekinuto -- src-vba nije diran (dokaz radi nad kopijom); "
-              "radni folder obrisan%s"
-              % (", zaostalih Excel-a ubijeno: %d" % ubijeno if ubijeno else ""),
+              "radni folder %s%s"
+              % ("obrisan" if sacuvana else "ostaje: %s" % _RADNI,
+                 ", zaostalih Excel-a ubijeno: %d" % ubijeno if ubijeno else ""),
               file=sys.stderr)
         sys.exit(130)
