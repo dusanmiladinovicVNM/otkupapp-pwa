@@ -32004,11 +32004,13 @@ Private Sub Test_Amb_ZaglavljeDokumentaPisac()
     modAmbalaza.PrenesiAmbalazu tx, Date, tipT, 5#, _
         AMB_NALOG_SPOLJNI, "", AMB_NALOG_STANICA, TEST_ST_ID, _
         AMB_VK_NABAVKA, "", ""
-    errNum = Err.Number
+    errNum = Err.Number: errDesc = Err.description
     Err.Clear
     On Error GoTo EH
     AssertTrue errNum <> 0, _
                "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)"
+    ' SONDA (ne spajati): koja kapija STVARNO odbija kretanje bez identiteta?
+    AssertTrue False, "SONDA amb-inv04: errNum=" & CStr(errNum) & " desc=" & errDesc
 
     ' --- B) NEPOSTOJEC DOKUMENT ------------------------------------------
     On Error Resume Next
