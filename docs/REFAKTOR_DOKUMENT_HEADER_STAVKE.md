@@ -11730,6 +11730,40 @@ promenio ga je `ObuhvatKooperantID`). **`popis_citalaca --check` pada** (N17).
   starog oblika po broju ostaje, zajedno sa dva poređenja iste kapije koja popis danas ne vidi (N17).
 - **Redosled merge-a:** ovaj PR, pa `#474` (CI korak), pa S9-1.
 
+#### Preslaganje na `main` = `4591f3d3` (17.11.2026, `docs/STANJE_REFAKTORA.md` stavka 330)
+
+U `main` su posle `6b601ee1` ušli `#482` (optimizacija verifikacije: `#478`–`#481`, S-5, D-6, R-4,
+`AMB-INV-04`) i `#483` (plan optimizacije verifikacije i analize), ukupno 43 commita. Rebase je
+prošao bez konflikta, a svih šest commita ove grane je sadržajem isto. Excel nije korišćen.
+
+**Ponovo izmereno:**
+
+1. **Popis:** bez promene. `popis_citalaca.py --uporedi 6b601ee1` daje 348 mesta, 0 novih i 0
+   nestalih. `--check` je zelen (`prj_brojzbirne` 35 = prag 35).
+2. **Pisci, čitači ivica, integritet, šema:** bez promene. Od produkcionog koda su dirani samo
+   `modAmbalaza` (provera identiteta dokumenta stoji ispred `AMB-INV-08`) i `modJournaling`
+   (posmatrač `AutoSaveZakazan`). Moduli čitača E1–E6, E9 i E10, `modIntegritet`, `schema/` i
+   `WHO_WRITES.md` nisu dirani, pa linije čitača iz preslaganja na `6b601ee1` važe i dalje. Otisak
+   šeme je `A2A085EB`.
+3. **Brojevi:** `#482` je zauzeo testove 354 i 355, pa `main` nosi testove do **355**. Poslednji KI
+   je `KI-096`.
+
+**Kapije nad ovom granom:** čisti su `vba_check` (193 fajla) i njegov self-test,
+`sabotaza.py --self-test` (nov CI korak iz `#482`), `who_writes --check`, `--check-ownership`,
+`gen_schema_module --check`, `vba_gate --popis` i `popis_citalaca --check`.
+
+**Novih nalaza nema.** GO / HOLD je bez promene: S9-1 kreće kad su `#469` i `#474` u `main`-u.
+
+**Landing:**
+- `main` sam i dalje pada na `popis_citalaca --check` (35 preko praga 31), a CI to ne vidi dok
+  `#474` ne uđe. To je nalaz 11 u `docs/engineering/PLAN_OPTIMIZACIJE_VERIFIKACIJE.md` (izmeren
+  pre `#476`, kao „33 preko praga 31"). Mera `F-5` (`CI-4`) za taj korak traži odluku o pragu i
+  merge `#469` pre `#474`. Odluke su N15 i N17 odavde;
+- `#474`: probni spoj je bez konflikta, i sa `main`-om i sa ovom granom. Nad spojem sa ovom granom
+  `popis_citalaca --check` je zelen. Njegov CI je crven dok ovaj PR ne uđe, jer meri prag 31;
+- `#477` i `#457` su u konfliktu sa `main`-om (`#477` u `docs/KNOWN_ISSUES.md`);
+- brojevi testova za kod S9 kreću od **356**.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
