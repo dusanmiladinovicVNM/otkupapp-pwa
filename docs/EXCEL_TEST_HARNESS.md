@@ -807,8 +807,16 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
   umesto fiksne sekunde.
 - **Excel koji preživi svoj run_vba** (timeout dokaza, Ctrl+C) dokaz ubija po
   `excel.pid`, samo ako se PID **i vreme nastanka** poklope.
-- **Baze cele suite idu serijski, pre radnika**, jer pišu marker zelenog. Baza
-  izbora se meri jednom po izboru, i kad je traže dva radnika odjednom.
+- **Baze cele suite idu jedna po jedna**, jer pišu marker zelenog. Baza izbora
+  se meri jednom po izboru, i kad je traže dva radnika odjednom.
+- **Baze unapred** (uz `--izbor` i `--radnika > 1`). Puna baza je potrebna samo
+  sabotažama koje izbor ne obori, a one dolaze na red tek na kraju („MERI SE
+  CELOM SUITE-OM"). Ranije je zato kraj dokaza bio puna suite za bazu pa puna
+  suite za mutaciju, jedna za drugom, dok ostali radnici stoje. Sada baza kreće
+  na početku, na rezervisanom radniku, koga faze za to vreme ne koriste, pa
+  Excel-a i dalje ima N. Ako faza 3 ne zatreba, baza se otkazuje: njen Excel se
+  ubija po `excel.pid` i ne pokreće se ponovo. Ispis to kaže redovima
+  `BAZE UNAPRED`.
 - **Kad Excel ni ne krene** (FATAL bez ijednog reda `SUITE`), poziv se ponavlja
   jednom. Pad posle starta suite-a je ishod, ne infrastruktura, pa se ne
   ponavlja. Broj ponovljenih startova stoji na kraju izlaza.
