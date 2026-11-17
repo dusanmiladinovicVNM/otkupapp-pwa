@@ -12059,8 +12059,11 @@ zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragov
   „tri provere manje" u StornoCentar nije izmereno brojem.
 - **Statičke kapije:** Python koraci CI-ja 21 / 21; `vba_check` čist (194 fajla, 1404 sabotaže u katalogu);
   `WHO_WRITES.md` regenerisan; `WRITE_OWNERSHIP.json` ručno (bez `modStornoFlow` za `tblOtkup`).
-- **Nije izvršeno:** ručni Compile (automatska proba „NEJASNO"); dokaz u redosledu cele suite (isti poziv bez
-  `--izbor`); ručna provera u Excelu (status i čip u F1/F2, detalj izveštaja, naslov na papiru otpremnice).
+- **Ručni Compile: prošao** (operater, 18.11.2026, `Debug → Compile VBAProject`) nad izvorom commita `973c08af`
+  (otisak `src-vba` `be3b057f2c1c`, isti kao pune suite). Potvrda upisana kroz `vba_gate --mark-compile`;
+  `vba_gate --require-green --require-compile` prolazi za svih šest suita. PR `#486`.
+- **Nije izvršeno:** dokaz u redosledu cele suite (isti poziv bez `--izbor`); ručna provera u Excelu (status i
+  čip u F1/F2, detalj izveštaja, naslov na papiru otpremnice).
 - **Pre-existing nalaz, van reza:** sabotaža `prefill-broj` (sidro u prijemničkom repu `PrefillIzStorniranog`)
   ne može da obori test 20, jer test prefill prijemnice ne zove; postoji i na `57ab47ed`. Nije KI dok se ne
   dokaže `dokaz.py`-om.
