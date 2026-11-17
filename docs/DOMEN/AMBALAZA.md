@@ -1263,6 +1263,12 @@ pokriće deficita i ostatak podele — a ne na ulazu u `PrenesiAmbalazu`. Kopija
 ulazu bila bi placebo: jezgro bi odbilo isti upis i bez nje, pa je nijedna sabotaža
 ne bi mogla oboriti. Isti razlog je tamo već zapisan za identitet dokumenta.
 
+Ista zamka važi **unutar** jezgra, pa provera identiteta stoji **ispred** ove
+kapije. Prazan identitet odbija i AMB-INV-08 (`BindSourceDocument` ne prima
+prazno), ali pod tuđim razlogom i istim brojem greške. Zato je provera iza nje bila
+nedostižna, a njena sabotaža nije obarala ništa. Test zato meri **razlog**
+odbijanja, ne sam pad.
+
 Zaglavlje traži **svoju** tabelu, ne knjigu: pozivalac koji kreira dokument **i**
 redove mora da snapshotuje **obe**, inače rollback vraća pola dokumenta — zaglavlje
 bez redova ili redove bez zaglavlja.

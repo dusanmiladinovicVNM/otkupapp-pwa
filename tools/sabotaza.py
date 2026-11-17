@@ -72,9 +72,13 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 """
 
 import argparse
+import contextlib
+import io
 import os
 import re
+import shutil
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ESCN = "\n"
@@ -5325,6 +5329,10 @@ SABOTAZE = {
     ),
     # Kretanje bez identiteta dokumenta ne postoji (AMB-INV-04 i -08). Provera je u
     # JEZGRU, kroz koje prolazi svaki red -- i pokrice i ostatak podele.
+    # Meri se RAZLOG, ne pad: isti broj greske dize i AMB-INV-08, koje prazan
+    # identitet odbija kao nevezan dokument. Dok je provera stajala iza -08 bila je
+    # nedostizna i ova sabotaza nije obarala nista; tvrdnja nad errNum ostaje
+    # zelena i pod njom (-08 je druga brana).
     "amb-pisac-red-bez-dokumenta": (
         "modAmbalaza.bas",
         "    If Len(Trim$(dokTip)) = 0 Or Len(Trim$(dokID)) = 0 Then\n"
@@ -5332,7 +5340,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: red knjige sme bez identiteta dokumenta\n"
         "        Err.Raise AMB_ERR_KNJIGA_ULAZ, sourceName, _\n",
         "Test_Amb_ZaglavljeDokumentaPisac",
-        "Amb zaglavlje: kretanje bez identiteta dokumenta se odbija (AMB-INV-04)",
+        "Amb zaglavlje: kretanje bez identiteta odbija provera identiteta, ne AMB-INV-08",
     ),
     # Veza dokument <-> kretanje: NABAVKA okacena na revers izgleda kao uredan
     # zapis, pa je kapija jedini nacin da se vidi.
@@ -6507,6 +6515,42 @@ SABOTAZE = {
         "            ' SABOTAZA: grupa bez otpremnice prolazi u tisini\n",
         "Test_OTP_AutoKvarGrupeNeObaraOstale",
         "AUTO kvar: razlog IMENUJE stanicu",
+    ),
+    # S-5. Pala grupa se broji kao NAPRAVLJENA. Dok je test zatecao tudje
+    # blokove, "n > 0" je to propustao (zdrava grupa sama daje n > 0); tacan
+    # broj je moguc tek uz kontrolisanu populaciju.
+    "auto-otpremnica-broji-pale": (
+        "modMasterSync.bas",
+        "        If Len(otpID) > 0 Then\n"
+        "            n = n + 1\n"
+        "        Else\n",
+        "        n = n + 1   ' SABOTAZA: i pala grupa se broji kao napravljena\n"
+        "        If Len(otpID) > 0 Then\n"
+        "        Else\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: tacno jedna zdrava grupa je obradjena",
+    ),
+    # S-5. Nacrt otkupa ulazi u batch. Pisac ga odbije (1330, poslovno), pa
+    # nijedan dokument ne nastane -- ali operater dobije razlog za blok koji nije
+    # ni trebalo da bude ponudjen. Meri se nad SOPSTVENIM nacrtom testa.
+    "auto-otpremnica-izdatost-ne-filtrira": (
+        "modMasterSync.bas",
+        "                If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Then\n",
+        "                If modDokumenta.IzdatoStatusJeIzdato(otk(i, cIzd)) Or True Then"
+        "   ' SABOTAZA: izdatost ne filtrira prolaz\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: imenovana je SAMO pokvarena grupa",
+    ),
+    # S-5. Vezan blok ulazi u batch. Pisac ga odbije (1291), pa druga otpremnica
+    # ne nastaje i stara tvrdnja ostaje zelena -- izbor i pisac izgledaju isto.
+    # Razlikuje ih tek prazan razlog ponovljenog prolaza.
+    "auto-otpremnica-ne-gleda-vezanost": (
+        "modMasterSync.bas",
+        "            If slobodni.Exists(UCase$(oid)) Then\n",
+        "            If slobodni.Exists(UCase$(oid)) Or True Then"
+        "   ' SABOTAZA: vezan blok ulazi u prolaz\n",
+        "Test_OTP_AutoKvarGrupeNeObaraOstale",
+        "AUTO kvar: ponovljen prolaz ne bira vezan blok",
     ),
     # Pravilo "sta je izdato" ima JEDNO telo. Sabotaza vraca kopiju u pisca --
     # stroza za PROSLEDJENO, pa dokument koji su citaoci i stampa vec brojali
@@ -13368,6 +13412,95 @@ SABOTAZE = {
         "T_KUL1_KulturaListaPoSorti",
         "KUL2: nova verzija sa drugim tekstom sorte od prethodne je nalaz",
     ),
+    # Izbor testova (run_vba --test, dokaz.py --izbor) trazi PODNIZ umesto
+    # celog imena, pa izbor "T_AB" pusta i "T_A": dokaz bi merio tudji test.
+    # Prva tvrdnja koju to obori je T_AB -> T_A.
+    "izbor-podniz": (
+        "modTest.bas",
+        "    IzborSadrzi = (InStr(1, izbor, \",\" & ime & \",\", vbTextCompare) > 0)\n",
+        "    IzborSadrzi = (InStr(1, izbor, \",\" & ime, vbTextCompare) > 0)   ' SABOTAZA: podniz umesto celog imena\n",
+        "T_TestIzbor_TacnoImeIJednokratno",
+        "izbor T_AB ne pusta T_A",
+    ),
+    # Izbor PREZIVI prolaz: sledeci goli RunAllTests bi tiho pustio samo
+    # prethodni izbor -- zelen, sa manje testova.
+    "izbor-ne-trosi": (
+        "modTest.bas",
+        "    zahtev = \"\"\n",
+        "    zahtev = zahtev   ' SABOTAZA: izbor prezivi prolaz\n",
+        "T_TestIzbor_TacnoImeIJednokratno",
+        "izbor traje jedan prolaz -- sledeci RunAllTests je pun",
+    ),
+    # Isto, nad kopijom pravila u BFP modulu (ne sme da zavisi od modTest).
+    "bfp-izbor-podniz": (
+        "modBusinessFlowProTests.bas",
+        "    BfpIzborSadrzi = (InStr(1, izbor, \",\" & ime & \",\", vbTextCompare) > 0)\n",
+        "    BfpIzborSadrzi = (InStr(1, izbor, \",\" & ime, vbTextCompare) > 0)   ' SABOTAZA: podniz umesto celog imena\n",
+        "Test_BFP_IzborBiraCeloIme",
+        "BFP izbor Test_AB ne pusta Test_A",
+    ),
+    "bfp-izbor-ne-trosi": (
+        "modBusinessFlowProTests.bas",
+        "    zahtev = \"\"\n",
+        "    zahtev = zahtev   ' SABOTAZA: izbor prezivi prolaz\n",
+        "Test_BFP_IzborBiraCeloIme",
+        "BFP izbor traje jedan prolaz -- sledeci prolaz je pun",
+    ),
+    # S-1. Tihi rezim dnevnika vise ne gasi zakazivanje AutoSave-a: svaki commit
+    # u suite-u opet zakazuje OnTime. Nijedan drugi test to ne vidi -- suite
+    # ostaje zelena, samo sporija. Pada POSLEDNJA tvrdnja kapije; prve tri
+    # (rezim upaljen, preduslov, smer "bez tihog") moraju da prodju.
+    "s1-tihi-rezim-zakazuje": (
+        "modJournaling.bas",
+        "    If m_TestModeQuiet Then Exit Sub            ' test-mode: ne zakazuj AutoSave\n",
+        "    ' SABOTAZA: tihi rezim ne gasi zakazivanje AutoSave-a\n",
+        "T_Journal_TihiRezimGasiZakazivanje",
+        "tihi rezim ne zakazuje AutoSave",
+    ),
+    # S-1. RunAllTests ne pali tihi rezim -- suite opet pise CSV journal i
+    # zakazuje AutoSave po commit-u. Zelena bi ostala, samo sporija.
+    "s1-runalltests-nije-tih": (
+        "modTest.bas",
+        "    prevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    modJournaling.SetTestModeQuiet True\n",
+        "    prevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    ' SABOTAZA: RunAllTests ne pali tihi rezim\n",
+        "T_Journal_TihiRezimGasiZakazivanje",
+        "RunAllTests radi u tihom rezimu dnevnika",
+    ),
+    # S-1. Isto za BFP (BeginRun).
+    "s1-bfp-nije-tih": (
+        "modBusinessFlowProTests.bas",
+        "    m_BfpPrevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    modJournaling.SetTestModeQuiet True\n",
+        "    m_BfpPrevQuiet = modJournaling.IsTestModeQuiet()\n"
+        "    ' SABOTAZA: BFP ne pali tihi rezim\n",
+        "Test_BFP_TihiRezimDnevnika",
+        "BFP radi u tihom rezimu dnevnika do kraja suite",
+    ),
+    # #184. Backup se ne napravi -- a funkcija ne sme da tvrdi uspeh. Do sada
+    # nijedna sabotaza nije gadjala ovaj test; uz to meri i da test vise ne
+    # pada golim "File not found" (prazan folder pri ciscenju).
+    "backup-kopija-se-ne-pravi": (
+        "modJournaling.bas",
+        "    ThisWorkbook.SaveCopyAs destPath\n",
+        "    ' SABOTAZA: kopija se ne pravi\n",
+        "T_Backup_NeObaraStartINeRasteBezGranice",
+        "uspesan backup vraca True (ne lazno upozorenje na startu)",
+    ),
+    # #184. Ugovor "NIKAD NE PODIZE GRESKU" prekrsen: greska izlazi iz
+    # BackupFileOnStart. Test mora da padne SVOJOM tvrdnjom iz EH grane -- pre
+    # ispravke je ciscenje u aktivnom obradjivacu puklo i dalo "File not found".
+    "backup-podize-gresku": (
+        "modJournaling.bas",
+        "    ' Namerno BEZ Err.Raise -- v. zaglavlje procedure.\n"
+        "    BackupFileOnStart = False\n",
+        "    ' SABOTAZA: greska izlazi iz procedure\n"
+        "    BackupFileOnStart = False\n"
+        "    Err.Raise errNo, \"BackupFileOnStart\", errDesc\n",
+        "T_Backup_NeObaraStartINeRasteBezGranice",
+        "BackupFileOnStart NE SME da podigne gresku -- start bi pao",
+    ),
 }
 
 
@@ -13407,40 +13540,97 @@ def _zameni(path: str, staro: str, novo: str) -> tuple[bool, int]:
     return True, 1
 
 
-def primeni(ime: str) -> int:
+# CILJ PRIMENE (D-6). Bez `src` se kvari radni `src-vba`, kao do sada -- to je
+# rucni dvosmerni dokaz iz CLAUDE.md. `dokaz.py` uvek daje `--src` sa SVOJOM
+# kopijom izvora, pa radno stablo tokom dokaza niko ne pise: operater sme da
+# radi, hook ostaje cist, a prekinut dokaz ne ostavlja pokvaren izvor.
+# SRC_VBA se cita tek pri pozivu, ne pri uvozu -- na tome stoji self-test.
+def primeni(ime: str, src: str = None) -> int:
+    src = src or SRC_VBA
     fajl, staro, novo, test, tvrdnja = SABOTAZE[ime]
-    path = os.path.join(SRC_VBA, fajl)
+    path = os.path.join(src, fajl)
 
     ok, pogodaka = _zameni(path, staro, novo)
     if not ok:
         razlog = ("sabotaza je vec primenjena" if pogodaka == 0
                   else "sidro nije jednoznacno")
         print(f"sabotaza '{ime}': sidro nadjeno {pogodaka} puta u {fajl}, a mora "
-              f"tacno jednom ({razlog}) -- proveri src-vba/{fajl} i sidro u "
+              f"tacno jednom ({razlog}) -- proveri {path} i sidro u "
               f"tools/sabotaza.py", file=sys.stderr)
         return 2
 
-    print(f"sabotaza '{ime}' primenjena u src-vba/{fajl}")
+    # Ispis POSLE upisa ne sme da pukne: putanja kopije je pod %TEMP%, a izlaz
+    # prema dokaz.py je cev u kodnoj strani konzole -- "Đ" u imenu profila bi
+    # dao UnicodeEncodeError i rc != 0 uz vec upisanu mutaciju. Zato ASCII.
+    cilj = "src-vba" if src == SRC_VBA else _ascii(src)
+    print(f"sabotaza '{ime}' primenjena u {cilj}/{fajl}")
     print(f"  ocekuj:  FAIL {test}")
     print(f"  tvrdnja: {tvrdnja}")
     print(f"  pokreni: python tools/run_vba.py --suite {_suita_testa(test)}")
-    print("  vrati:   python tools/sabotaza.py --vrati")
+    print("  vrati:   python tools/sabotaza.py --vrati"
+          + ("" if src == SRC_VBA else " --src " + cilj))
     return 0
 
 
-def vrati() -> int:
+def _ascii(tekst: str) -> str:
+    """Tekst koji se sigurno ispisuje u bilo kojoj kodnoj strani."""
+    return tekst.encode("ascii", "backslashreplace").decode("ascii")
+
+
+def vrati(src: str = None) -> int:
     """Obrnuta zamena, ne git checkout (v. zamka 3)."""
+    src = src or SRC_VBA
     vraceno = []
     for ime, (fajl, staro, novo, _, _) in SABOTAZE.items():
-        ok, _ = _zameni(os.path.join(SRC_VBA, fajl), novo, staro)
+        path = os.path.join(src, fajl)
+        if not os.path.exists(path):
+            continue
+        ok, _ = _zameni(path, novo, staro)
         if ok:
             vraceno.append(ime)
 
     if not vraceno:
-        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u src-vba/")
+        print("nema sta da se vrati -- nijedna sabotaza nije zatecena u %s"
+              % _ascii(src))
         return 0
     print("vraceno: " + ", ".join(vraceno))
     return 0
+
+
+def zatecene(src: str = None) -> list:
+    """Imena sabotaza koje su PRIMENJENE u `src` -- izvor je zatecen sabotiran.
+
+    `dokaz.py` ga pita nad svojim snimkom: sabotaza zaostala iz ranijeg prekida
+    inace bi usla u snimak i svaka mutacija bi se merila nad njom.
+
+    Primenjena je samo ako bi je `--vrati` vratio u stanje koje `primeni`
+    prihvata: zamena stoji TACNO jednom, a posle obrnute zamene sidro stoji
+    TACNO jednom. "Zamena se negde pojavljuje" nije dovoljno -- oko 120 zamena
+    je obican kod, pa bi legitimna kopija tog reda u zdravom izvoru bila
+    prijavljena, a savet `--vrati` bi je prepisao u sidro i pokvario izvor.
+    Sudar zamene sa zdravim kodom je nalaz kataloga (`--proveri-sidra`), ne ovaj.
+
+    Fajl koga u `src` nema se preskace (kopija moze da nosi samo deo izvora).
+    Cita se uz `errors="replace"`: sabotaze su ASCII, pa ne-ASCII bajt u tudjem
+    fajlu ne menja odgovor -- a strogo citanje bi ga pretvorilo u traceback.
+    """
+    src = src or SRC_VBA
+    tekstovi, nadjene = {}, []
+    for ime, (fajl, staro, novo, _, _) in SABOTAZE.items():
+        if fajl not in tekstovi:
+            path = os.path.join(src, fajl)
+            tekst = None
+            if os.path.exists(path):
+                with open(path, "r", encoding="ascii", errors="replace",
+                          newline="") as fh:
+                    tekst = fh.read().replace("\r\n", "\n")
+            tekstovi[fajl] = tekst
+        t = tekstovi[fajl]
+        if t is None or _pogodaka(t, novo) != 1:
+            continue
+        if _pogodaka(t.replace("\n" + novo, "\n" + staro), staro) == 1:
+            nadjene.append(ime)
+    return nadjene
 
 
 # --- staticka provera kataloga --------------------------------------------
@@ -13808,6 +13998,9 @@ def _telo_podaci(telo: str):
     return literali, sabloni
 
 
+_KRAJ_TELA = re.compile(r"^End (?:Sub|Function)\b", re.M)
+
+
 def _tela_testova() -> dict:
     """ime testa -> (string-literali u malim slovima, sabloni tvrdnji).
 
@@ -13825,8 +14018,11 @@ def _tela_testova() -> dict:
         tekst = _procitaj(put)[0].replace("\r\n", "\n")
         for m in re.finditer(r"^(?:Public |Private )?(?:Sub|Function) (\w+)",
                              tekst, re.M):
-            k = re.search(r"^End (?:Sub|Function)\b", tekst[m.start():], re.M)
-            telo = tekst[m.start(): m.start() + (k.end() if k else len(tekst))]
+            # Pretraga od m.start(), ne nad isecakom tekst[m.start():]: isecak
+            # kopira ostatak fajla za svaku proceduru. `^` u re.M hvata i na
+            # pocetnoj poziciji, jer je m.start() pocetak reda.
+            k = _KRAJ_TELA.search(tekst, m.start())
+            telo = tekst[m.start(): k.end() if k else len(tekst)]
             tela[m.group(1)] = _telo_podaci(telo)
     return tela
 
@@ -13933,8 +14129,20 @@ _PROC_OTVARA = re.compile(
 _PROC_ZATVARA = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
 
 
+# BROJAC RADA provere sidara: koliko je bajtova teksta razlozeno u procedure.
+#
+# Cena provere se ne meri stopericom nego ovim brojem, jer on ne zavisi od
+# masine. Self-test ("rad provere sidara") tvrdi da je srazmeran SADRZAJU
+# kataloga -- svaki sabotiran fajl se razlaze jednom -- a ne broju unosa. Bez
+# toga je povratak na "razlozi ceo mutirani fajl po sabotazi" vidljiv samo kao
+# sporiji hook, a tako je cena vec jednom tiho narasla: 214 MB teksta po
+# prolazu nad 5,7 MB jedinstvenog (1265 unosa, 11.2026).
+_RAD = {"bajtova": 0}
+
+
 def _procedure_po_redu(tekst: str) -> list:
     """[(ime, vrsta, prvi_red, poslednji_red)] -- vrsta je sub/function/property."""
+    _RAD["bajtova"] += len(tekst)
     out, ime, vrsta, poc = [], None, None, 0
     for i, red in enumerate(tekst.split("\n")):
         t = red.strip()
@@ -14043,6 +14251,56 @@ def _lokalna_imena(redovi: list, a: int, b: int) -> set:
     return imena
 
 
+def _dogadjaj_reda(red: str):
+    """Da li red otvara ili zatvara proceduru -- isto pravilo kao _procedure_po_redu.
+
+    None, (True, vrsta, ime) za red koji otvara, (False, None, None) za red koji
+    zatvara.
+    """
+    t = red.strip()
+    m = _PROC_OTVARA.match(t)
+    if m:
+        return (True, m.group(1).lower(), m.group(2))
+    if _PROC_ZATVARA.match(t):
+        return (False, None, None)
+    return None
+
+
+_DOGADJAJI_KES: dict = {}
+
+
+def _dogadjaji_fajla(tekst: str) -> tuple:
+    """(redovi, dogadjaji) zdravog teksta -- jednom po SADRZAJU, ne po sabotazi.
+
+    Dogadjaj je (red, otvara, vrsta, ime) za svaki red koji otvara ili zatvara
+    proceduru. Kljuc kesa je sam tekst, pa kes ne moze da zastari: drugi sadrzaj
+    je drugi kljuc.
+    """
+    kes = _DOGADJAJI_KES.get(tekst)
+    if kes is None:
+        _RAD["bajtova"] += len(tekst)
+        redovi = tuple(tekst.split("\n"))
+        dogadjaji = []
+        for i, r in enumerate(redovi):
+            d = _dogadjaj_reda(r)
+            if d is not None:
+                dogadjaji.append((i,) + d)
+        kes = _DOGADJAJI_KES[tekst] = (redovi, tuple(dogadjaji))
+    return kes
+
+
+def _procedure_iz_dogadjaja(dogadjaji) -> list:
+    """Isti automat kao _procedure_po_redu, nad dogadjajima umesto nad redovima."""
+    out, ime, vrsta, poc = [], None, None, 0
+    for i, otvara, v, n in dogadjaji:
+        if otvara:
+            vrsta, ime, poc = v, n, i
+        elif ime:
+            out.append((ime, vrsta, poc, i))
+            ime, vrsta = None, None
+    return out
+
+
 def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
 
@@ -14063,6 +14321,13 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     idx = tekst.find("\n" + staro)
     if idx < 0:
         return None
+
+    # Nalaz daje samo linija ZAMENE koja dodeljuje imenu (petlja na kraju). Bez
+    # ijedne takve linije ishod je None sta god fajl sadrzao, pa se i ne razlaze
+    # -- to je vecina kataloga (856 od 1265 unosa, 11.2026).
+    dodele = [m for m in (_ZAMENA_DODELA.match(lin) for lin in novo.split("\n")) if m]
+    if not dodele:
+        return None
     red = tekst[:idx + 1].count("\n")
 
     # SIMBOLI SE CITAJU IZ MUTIRANOG KODA, ne iz zdravog.
@@ -14074,11 +14339,29 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     #   - zamena koja UVEDE `Dim Foo` daje legalan VBA, a checker bi ga prijavio
     #     (lazna uzbuna nad ispravnim kodom).
     #
-    # Kes nad originalnim tekstom je time otpao. 251 unos je premalo da bi
-    # ustedu vredelo platiti netacnoscu.
-    mutirani = tekst.replace("\n" + staro, "\n" + novo, 1)
-    procs = _procedure_po_redu(mutirani)
-    redovi = mutirani.split("\n")
+    # Zato se razlaze MUTIRANI tekst -- ali ne ceo, po sabotazi. Zdrav fajl se
+    # razlozi jednom (_dogadjaji_fajla, po sadrzaju); ponovo se klasifikuju samo
+    # redovi koje zamena dodiruje, a dogadjaji iza nje se pomere za razliku u
+    # broju redova. Redovi i procedure su isti kao da je razlozen ceo mutirani
+    # tekst; to tvrde _DODELA_CASES (sidro bez preloma, zamena koja dodaje i
+    # zamena koja brise redove).
+    redovi0, dog0 = _dogadjaji_fajla(tekst)
+    n_staro = staro.count("\n") + 1      # redovi zdravog teksta koje sidro dodiruje
+    kraj0 = red + n_staro                # prvi red zdravog teksta iza dodira
+    rep_poc = idx + 1 + len(staro)       # ostatak poslednjeg dodirnutog reda
+    rep_kraj = tekst.find("\n", rep_poc)
+    rep = tekst[rep_poc:] if rep_kraj < 0 else tekst[rep_poc:rep_kraj]
+    region = (novo + rep).split("\n")    # ti redovi, kakvi su u mutiranom tekstu
+    _RAD["bajtova"] += len(novo) + len(rep)
+    pomak = len(region) - n_staro
+    redovi = [*redovi0[:red], *region, *redovi0[kraj0:]]
+    dog = [d for d in dog0 if d[0] < red]
+    for k, r in enumerate(region):
+        d = _dogadjaj_reda(r)
+        if d is not None:
+            dog.append((red + k,) + d)
+    dog += [(d[0] + pomak,) + d[1:] for d in dog0 if d[0] >= kraj0]
+    procs = _procedure_iz_dogadjaja(dog)
     unutar, lokalna = None, set()
     for pime, _v, a, b in procs:
         if a <= red <= b:
@@ -14091,10 +14374,7 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     subovi = {p.lower() for p, v, _a, _b in procs if v == "sub"}
     funkcije = {p.lower() for p, v, _a, _b in procs if v == "function"}
 
-    for linija in novo.split("\n"):
-        m = _ZAMENA_DODELA.match(linija)
-        if not m:
-            continue
+    for m in dodele:
         n = m.group(1).lower()
         if n in lokalna:
             continue                       # lokalno ime ZAKLANJA proceduru
@@ -14459,6 +14739,29 @@ _DODELA_CASES = [
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P()\n    SIDRO\nEnd Sub\n",
      "    SIDRO\n", "    Dim Foo As Boolean\n    Foo = True\n"),
+    # Procedure mutiranog teksta se ne razlazu iz celog fajla, nego iz dogadjaja
+    # zdravog teksta pomerenih za razliku u broju redova (_dogadjaji_fajla).
+    # Sledeca tri slucaja mere bas taj racun:
+    #   - sidro BEZ preloma reda: ostatak reda pripada zameni;
+    #   - zamena koja BRISE redove: kraj procedure se pomera nazad, pa bi pogresan
+    #     pomak produzio P u Q i pokupio tudji `Dim Foo`;
+    #   - zamena koja DODAJE redove: kraj se pomera napred, pa bi pogresan pomak
+    #     skratio P i izgubio `Dim Foo` sa njenog kraja. (Da li VBA dozvoljava
+    #     Dim posle upotrebe ovde nije pitanje -- pravilo skuplja lokalna imena
+    #     iz cele procedure, i meri se da li je opseg tacan.)
+    ("sidro bez preloma reda", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO", "    Foo = 1"),
+    ("zamena brise redove", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    SIDRO\n    a = 1\n    b = 2\nEnd Sub\n"
+     "Sub Q()\n    Dim Foo As Long\n    Foo = 3\nEnd Sub\n",
+     "    SIDRO\n    a = 1\n    b = 2\n", "    Foo = 1\n"),
+    ("zamena dodaje redove", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\n    Dim Foo As Boolean\nEnd Sub\n",
+     "    SIDRO\n", "    a = 1\n    b = 2\n    Foo = True\n"),
 ]
 
 def _self_test() -> int:
@@ -14576,16 +14879,41 @@ def _self_test() -> int:
                   % (naziv, ocekivano, dobijeno), file=sys.stderr)
             lose += 1
 
+    # RAD PROVERE SIDARA je srazmeran SADRZAJU kataloga, ne broju unosa: svaki
+    # sabotiran fajl se razlaze najvise jednom (v. _RAD). Meri se brojacem, ne
+    # stopericom, pa ishod ne zavisi od masine. Ide nad PRAVIM katalogom jer je
+    # to tvrdnja o njemu; kes se prazni da se ne racuna rad iz ranijih slucajeva.
+    n += 1
+    _DOGADJAJI_KES.clear()
+    _RAD["bajtova"] = 0
+    _nalazi(SABOTAZE, _imena_testova())
+    rad = _RAD["bajtova"]
+    jedinstveno = sum(
+        len(_procitaj(os.path.join(SRC_VBA, f))[0])
+        for f in sorted({unos[0] for unos in SABOTAZE.values()})
+        if os.path.exists(os.path.join(SRC_VBA, f)))
+    if jedinstveno and rad > 2 * jedinstveno:
+        print("SELF-TEST: rad provere sidara: razlozeno %d bajtova, a katalog "
+              "pokriva %d jedinstvenih (%.1fx; dozvoljeno najvise 2x) -- fajl se "
+              "razlaze po sabotazi umesto jednom"
+              % (rad, jedinstveno, rad / jedinstveno), file=sys.stderr)
+        lose += 1
+
     # ISTO STANJE MORA DA ODBIJE I `--vrati`, ne samo provera.
     #
     # Bez ovoga se dva pravila mogu opet razici: provera bi cutala o stanju
     # koje `--vrati` ne ume da vrati. Zove se BAS _zameni, ista funkcija koju
     # zove --vrati, i to nad KOPIJOM pravog fajla -- da self-test ni u jednom
     # ishodu ne moze da upise u src-vba.
+    #
+    # Kopija ide u PRIVREMENI folder, ne pored pravog fajla: dok postoji, fajl u
+    # src-vba bi menjao potpis izvora (dokaz.py, vba_gate), pa bi istovremen
+    # dokaz video "izvor se promenio" bez ijedne izmene koda.
     n += 1
     izvor = os.path.join(SRC_VBA, "modOtkupUI.bas")
     tekst_kopije, nl_kopije = _procitaj(izvor)
-    kopija = izvor + ".selftest.tmp"
+    privremeni = tempfile.mkdtemp(prefix="sabotaza_st_")
+    kopija = os.path.join(privremeni, "modOtkupUI.bas")
     _upisi(kopija, tekst_kopije, nl_kopije)
     try:
         ok_vise, k_vise = _zameni(kopija, _ST_PRAVI, "    Nesto = 2" + ESCN)
@@ -14594,7 +14922,7 @@ def _self_test() -> int:
                                   "    Nesto = 2" + ESCN)
         dirnuto = _procitaj(kopija)[0] != tekst_kopije
     finally:
-        os.remove(kopija)
+        shutil.rmtree(privremeni, ignore_errors=True)
     if ok_vise or k_vise < 2 or ok_nema or k_nema != 0 or dirnuto:
         print("SELF-TEST: _zameni prihvata stanje koje provera ne priznaje "
               "(visestruko=%r, nema=%r, upisano=%r)"
@@ -14648,11 +14976,85 @@ def _self_test() -> int:
         print("SELF-TEST: zamena kao podniz sidra nije prijavljena", file=sys.stderr)
         lose += 1
 
+    # --src (D-6): primena pise u ZADATI folder, nikad u SRC_VBA, i `zatecene`
+    # i `vrati` vide bas taj folder. Ide kroz main(), isti put kojim ga zove
+    # dokaz.py -- otkacen --src u main-u bi inace ostavio i ovaj slucaj zelen.
+    # SRC_VBA za to vreme pokazuje na MAMAC, pa ni crveni smer ne dira src-vba.
+    n += 1
+    problem = _self_test_src()
+    if problem:
+        print("SELF-TEST: SRC -- %s" % problem, file=sys.stderr)
+        lose += 1
+
     if lose:
         print("self-test: %d od %d slucajeva NE MERI" % (lose, n), file=sys.stderr)
         return 1
     print("self-test: cisto (%d slucajeva)" % n)
     return 0
+
+
+def _self_test_src() -> str:
+    """'' ili opis kvara: primena, zatecene i vrati nad --src, uz mamac SRC_VBA."""
+    global SRC_VBA
+    ime = fajl = None
+    for kandidat, (f, staro, _novo, _t, _tv) in SABOTAZE.items():
+        path = os.path.join(SRC_VBA, f)
+        if os.path.exists(path) and _pogodaka(_procitaj(path)[0], staro) == 1:
+            ime, fajl = kandidat, f
+            break
+    if ime is None:
+        return "nijedno sidro iz kataloga se ne primenjuje -- nema nad cim da se meri"
+
+    pravi = SRC_VBA
+    _f, staro, novo, _t, _tv = SABOTAZE[ime]
+    privremeni = tempfile.mkdtemp(prefix="sabotaza_src_")
+    izlaz = io.StringIO()
+    try:
+        mamac = os.path.join(privremeni, "mamac")
+        # Ne-ASCII u imenu cilja (kao "Đorđe" u putanji profila): ispis posle
+        # upisa mora ostati ASCII, inace bi dokaz.py video rc != 0 uz upisanu
+        # mutaciju.
+        cilj = os.path.join(privremeni, "cilj_\u0111")
+        for d in (mamac, cilj):
+            os.makedirs(d)
+            shutil.copy2(os.path.join(pravi, fajl), d)
+        original = _procitaj(os.path.join(cilj, fajl))[0]
+        SRC_VBA = mamac
+        with contextlib.redirect_stdout(izlaz), \
+                contextlib.redirect_stderr(io.StringIO()):
+            pre = zatecene(cilj)
+            rc = main([ime, "--src", cilj])
+            posle = zatecene(cilj)
+            mamac_dirnut = _procitaj(os.path.join(mamac, fajl))[0] != original
+            cilj_dirnut = _procitaj(os.path.join(cilj, fajl))[0] != original
+            rc_vrati = main(["--vrati", "--src", cilj])
+        vracen = _procitaj(os.path.join(cilj, fajl))[0] == original
+        # Legitimna kopija ZAMENE u zdravom izvoru (sidro i dalje stoji) nije
+        # primenjena sabotaza: --vrati bi je prepisao u sidro.
+        put = os.path.join(cilj, fajl)
+        tekst, nl = _procitaj(put)
+        _upisi(put, tekst + novo, nl)
+        lazna = zatecene(cilj)
+    finally:
+        SRC_VBA = pravi
+        shutil.rmtree(privremeni, ignore_errors=True)
+
+    try:
+        izlaz.getvalue().encode("ascii")
+    except UnicodeEncodeError:
+        return "ispis primene nije ASCII -- pukao bi u kodnoj strani konzole"
+    if ime in lazna:
+        return "legitimna kopija zamene uz zivo sidro se prijavljuje kao zatecena"
+
+    if mamac_dirnut:
+        return "primena pise van --src (u SRC_VBA)"
+    if rc != 0 or not cilj_dirnut:
+        return "primena nije upisala u --src (rc=%r)" % rc
+    if pre or posle != [ime]:
+        return "zatecene ne vidi bas primenjenu sabotazu (pre=%r, posle=%r)" % (pre, posle)
+    if rc_vrati != 0 or not vracen:
+        return "vrati --src ne vraca zadati folder"
+    return ""
 
 
 def lista() -> int:
@@ -14673,7 +15075,13 @@ def main(argv: list[str]) -> int:
                     help="staticka provera kataloga (sidra, imena testova, zamke)")
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da svako pravilo provere stvarno meri")
+    ap.add_argument("--src", metavar="DIR",
+                    help="primeni/vrati u ovaj folder umesto u src-vba "
+                         "(dokaz.py daje svoju kopiju izvora)")
     args = ap.parse_args(argv)
+    if args.src is not None and not os.path.isdir(args.src):
+        print(f"--src {args.src}: folder ne postoji", file=sys.stderr)
+        return 2
 
     if args.self_test:
         return _self_test()
@@ -14682,7 +15090,7 @@ def main(argv: list[str]) -> int:
     if args.lista:
         return lista()
     if args.vrati:
-        return vrati()
+        return vrati(args.src)
     if not args.ime:
         ap.print_help()
         return 2
@@ -14690,7 +15098,7 @@ def main(argv: list[str]) -> int:
         print(f"nepoznata sabotaza '{args.ime}'. Poznate: {', '.join(SABOTAZE)}",
               file=sys.stderr)
         return 2
-    return primeni(args.ime)
+    return primeni(args.ime, args.src)
 
 
 if __name__ == "__main__":

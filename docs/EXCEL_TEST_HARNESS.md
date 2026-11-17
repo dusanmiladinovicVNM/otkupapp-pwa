@@ -98,6 +98,17 @@ Za to ostaje `Alt+F11 → Debug → Compile VBAProject`.
 
 ## Kako se compile stvarno meri (i zašto ne preko menija)
 
+> **Od 16.11.2026 proba ide samo uz `--compile-only`.** Uz suite je bila
+> ritual: verdikt je skoro uvek `NEJASNO`, ne obara run i ne ide u marker, a
+> jedinu zabeleženu pravu grešku u kompajliranju (06.10.2026, „Syntax error")
+> nije uhvatila — prolaz je visio 585 s. Koštala je 5,9 s fiksnog čekanja po
+> pozivu (izmereno: ide i COM i SendKeys put), otvarala VBE i otimala fokus, a
+> posle nje nekvalifikovan `Application.Run` prestaje da radi. Projekat koji se
+> ne kompajlira sada hvata **koban dijalog** tokom suite (v. „Ako zapne"). Uz
+> suite izveštaj nosi red `COMPILE PRESKOCEN`. `--compile-only` je ostao kakav
+> je: tu je proba jedini signal i on priprema svesku za ručni Compile. Ostatak
+> ovog odeljka opisuje tu probu.
+
 Prva verzija je zaključivala iz `Enabled` stanja stavke **Debug → Compile
 VBAProject** („posle uspešnog compile-a postaje siva"). To **ne radi** u
 nevidljivom Excelu: VBE osvežava enabled-stanje kontrola tek kad se meni iscrta,
@@ -364,12 +375,27 @@ traži), ovde dva procesa i dve mašine.
 - Skripta ima **tvrdi prekid** (`--timeout`, default 1800 s): ako Excel prestane da
   odgovara, proces se ubija i run pada sa `FATAL`. Bez toga COM poziv ne puca —
   samo stoji zauvek.
-- **Prekid meri CEO prolaz, ne jednu suite** (`KI-096`). Pun prolaz od novembra
-  2026 traje oko 16 min, a BFP pušten sam oko 10 min; dok je podrazumevano bilo
-  600 s, prekid ih je ubijao usred BFP-a (`RPC call failed`, ostale suite `RPC
-  server is unavailable`). Od 16.11.2026 je podrazumevano 1800 s, a `dokaz.py`
-  čeka 2400 s. Ako `FATAL` ipak stigne bez dijaloga greške, uzrok je trajanje
-  prolaza, ne break mode.
+- **Prekid se meri po fazi** (`KI-096`): priprema (otvaranje, uvoz, šema), pa
+  svaka suite sa svojim budžetom, pa zatvaranje. Dok je jedan tajmer merio ceo
+  poziv, ubijao je zdrav pun prolaz usred BFP-a (BFP 688 s posle `RunAllTests`-a
+  od 228 s, granica 600 s). `FATAL` sada imenuje fazu u kojoj je stao.
+- **Koban dijalog skraćuje čekanje.** Kad watchdog vidi „Compile error",
+  „Syntax error" ili „Run-time error", Excel ima još 15 s da se vrati (watchdog je
+  kliknuo `End`/`OK`). Ako se ne vrati, VBE je u break mode-u: proces se ubija, a
+  `FATAL` nosi fazu i tekst dijaloga. Pre toga je takav prolaz visio do kraja
+  budžeta (06.10.2026: 585 s, „Syntax error" bez mesta). `dokaz.py` takav prolaz
+  prijavljuje kao `EXCEL UBIJEN`, ne kao „NE OBARA NISTA". Izmereno 16.11.2026,
+  ista greška u telu suite: sa starom compile probom 1785,6 s i `FATAL` bez
+  razloga, sa ovim putem 20,4 s i `FATAL` sa fazom i dijalogom.
+- **Greška u proceduri koju suite ne zove ne vidi se u prolazu.** VBA kompajlira
+  proceduru tek kad je pozove, pa je takav prolaz uredno zelen (izmereno
+  16.11.2026). Hvata je samo ručni `Debug → Compile VBAProject`, i zato on ostaje
+  kapija pred release.
+- **Red `FAZE`** u izveštaju daje režiju poziva po fazi (start Excela, otvaranje,
+  uvoz, šema, zatvaranje), a svaki poziv dopisuje jedan red u
+  `tests/run_vba_istorija.jsonl` (gitignored): trajanje po fazi i po suiti, izvor,
+  izlazni kod. `tests/last_run.*` prepisuje svaki poziv, pa se trajanja do sada
+  nisu nigde čuvala.
 - **Break mode** (`[break]` u naslovu VBE prozora) znači da je VBA stao usred
   izvršavanja. Najčešći uzrok je bio pokvaren import (header u kodu → naredba
   `End`), a drugi klik na **Debug** u dijalogu greške. Watchdog sada nikad ne
@@ -414,6 +440,16 @@ traži), ovde dva procesa i dve mašine.
   toga se `Initialize` ne okine). Bez `.Show`. `modTestMode.SetTestMode True` gasi
   sve što čeka operatera; kad naiđeš na `MsgBox`/`InputBox` na testiranoj putanji,
   gard ide istim oblikom.
+- **`RunAllTests` i BFP rade u tihom režimu dnevnika** (`modJournaling.SetTestModeQuiet`).
+  `AppendRow` tada ne dopisuje CSV journal, a commit ne zakazuje AutoSave i ne
+  piše red loga o tome — posao koji nijedna tvrdnja ne meri, a plaćao se u svakom
+  prolazu i dokazu. Na kraju se vraća zatečen režim (BFP u `EndRun`, i na putu
+  greške) i otkazuju se tajmeri koje je suite zakazala (AutoSave, warm keš
+  storna): `OnTime` inače opali čim Excel predahne između dve suite. **Test koji
+  meri sam dnevnik ili zakazivanje gasi tihi režim lokalno** i vraća ga i na putu
+  greške — obrazac je `T_Journal_TihiRezimGasiZakazivanje`. Režim mere taj test i
+  `Test_BFP_TihiRezimDnevnika`; sabotaže `s1-*`. Da se režim na kraju **vraća**
+  ne meri nijedna tvrdnja — to se vidi tek posle suite.
 - **Čišćenje ide u `EH` granu, ne na zelenu putanju.** `CleanupPosleTesta` se zove
   iz `EH`, a `Err` se čita **pre** njega (`OtkupUI_Release` je pod
   `On Error Resume Next`, što briše `Err`). Test koji padne inače ostavlja `mFrm`,
@@ -727,10 +763,117 @@ Tri zamke koje skripta rešava, i koje važe za svaki sličan zahvat nad izvorom
 3. **Vraćanje** — `git checkout --` briše i nesnimljene izmene koje sa sabotažom
    nemaju veze (jednom je pojelo test seam-ove). `--vrati` radi obrnutu zamenu.
 
+**`dokaz.py` ne piše `src-vba` (D-6).** Ručni dokaz iznad kvari radno stablo i
+vraća ga sa `--vrati`. `dokaz.py` radi drugačije:
+- Na početku preslika `src-vba/` u **snimak** u privremenom folderu.
+- Mutacije primenjuje u **kopiju** snimka, zamrznutim katalogom:
+  `sabotaza.py <ime> --src <kopija>`.
+- Excel uvozi baš tu kopiju (`run_vba.py --src <kopija>`).
+- Posle svakog prolaza kopiju vraća **iz snimka**, ne obrnutom zamenom.
+
+Posledice:
+- **Dok dokaz traje, možeš da radiš u repou**, a hook ostaje čist.
+- **Prekinut dokaz (Ctrl+C, pad) ne ostavlja pokvaren izvor.** `src-vba` nije ni
+  dirao, pa `--vrati` posle prekida više ne treba.
+- **Ostatak ručnog dokaza se odbija pre prve baze.** Ako u `src-vba` zatekne
+  primenjenu sabotažu, dokaz staje sa „ZATECEN SABOTIRAN": inače bi je snimak
+  poneo i svaka mutacija bi se merila nad njom. Prvo `--vrati`, pa dokaz.
+- **Dokaz meri snimak.** Ako se `src-vba` menjao tokom dokaza, red „radno stablo"
+  to kaže, a verdikt imenuje snimak: `DOKAZANO (…, snimak <potpis>)`.
+- **Marker zelenog** bazne suite nosi otisak *sadržaja* uvezene kopije. Zato važi
+  za `src-vba` tačno kad je sadržaj isti.
+
+Na `STOP` privremeni folder ostaje radi uvida (putanja je u izlazu), a inače se
+briše. `run_vba.py --src` menja ugovor alata (N6): posle uvoza ove izmene jedan
+pun prolaz vraća markere.
+
 `parse-cdate` pada na tvrdnji „godina van poslovnog opsega" (`11.08.1899`) —
 jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
 mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
 pokriveno.
+
+### Radnici — `--radnika N` (R-4)
+
+```bash
+python tools/dokaz.py amb- --izbor --grupe --radnika 5
+```
+
+Svaki od N radnika je svoj Excel proces, sa **svojom kopijom izvora** (D-6) i
+**svojim izlazom** run_vba-a (`--izlaz`: izveštaj, istorija, `excel.pid`).
+
+**Ispis i ishodi se ne menjaju.** Rezultati se ispisuju i knjiže **u redosledu
+kataloga**, kao serijski. Zato je `--radnika 1` isto što i dokaz bez radnika, a
+izlaz sa N radnika se sa njim poredi `diff`-om.
+
+**Šta čuva nezavisnost radnika:**
+- **`run_vba --izlaz DIR` zaključava DIR** dok poziv traje. Drugi poziv sa istim
+  izlazom se odbija pre Excel-a (`IZLAZ ZAUZET`). Bez `--izlaz` je to `tests/`,
+  pa ni dva ručna poziva više ne mešaju `last_run.*`.
+- **Start Excel-a ide jedan po jedan na celoj mašini**, od `DispatchEx` do
+  otvaranja sveske (start brava). Uz to dokaz drži `--razmak` sekundi između
+  dva poziva (podrazumevano 1).
+- **Excel se gasi i ubija preko handle-a uzetog na startu**, ne po PID-u: posle
+  izlaska isti PID može da dobije Excel drugog radnika. Gašenje čeka sam proces
+  umesto fiksne sekunde.
+- **Excel koji preživi svoj run_vba** (timeout dokaza, Ctrl+C) dokaz ubija po
+  `excel.pid`, samo ako se PID **i vreme nastanka** poklope.
+- **Baze cele suite idu jedna po jedna**, jer pišu marker zelenog. Baza izbora
+  se meri jednom po izboru, i kad je traže dva radnika odjednom.
+- **Baze unapred** (uz `--izbor` i `--radnika > 1`), **na zahtev**. Puna baza
+  je potrebna samo sabotažama koje izbor ne obori, a one dolaze na red tek na
+  kraju („MERI SE CELOM SUITE-OM"). Baza zato kreće ranije, ali tek uz **prvu
+  stavku koja sigurno ide u fazu 3** (traži celu suite). Stavka koja se
+  „ponavlja sama" ne pokreće bazu: često prođe u fazi 2, a njena baza bi stala
+  u red ispred baze koja fazi 3 stvarno treba. Rez bez faze 3 ne plaća ništa.
+  Kod `dop-spec` je spekulativna baza zauzimala radnika i jezgro ceo prolaz,
+  pa je bila otkazana. Radnici su zajednički za sve faze i bazu. Baza
+  pozajmljuje prvog slobodnog radnika, pre poslova koji čekaju, i vraća ga
+  posle svake suite, pa Excel-a i dalje ima N. Meri samo nad kopijom u stanju
+  snimka, a otkaz ubija njen Excel samo dok je radnik kod nje. Ispis to kaže
+  redovima `BAZE UNAPRED`.
+- **Poslovi dobijaju radnika po redu** (indeks posla), i kad baza drži jednog.
+  Granica STOP-a štiti samo kasnije poslove, pa bi raniji posao koji krene
+  posle REVERT-FAIL-a kasnijeg dobio njegovu nevraćenu kopiju. Uz to svaki
+  prolaz pre rada proverava da je kopija u stanju snimka (inače `STRAZA`).
+- **Rana mutacija cele suite** (uz baze unapred). Mutacije faze 3 ne čekaju
+  bazu: kreću odmah, na ostalim radnicima, a ocenjuju se kad je baza gotova.
+  Kraj dokaza je tako max(baza, mutacija), ne zbir. Rano se kreće samo kad sve
+  stavke faze 3 staju na radnike koje baza ne drži; inače se baza čeka pre
+  mutacija, kao ranije, jer bi N−1 radnika bilo sporije.
+- **Faza 3 ima jednu ocenu za N=1 i N>1** (`_faza3_ocena`), pa je izlaz isti po
+  konstrukciji, ne po disciplini. Mutacija se priznaje samo uz zelenu bazu.
+  Stavke crvene baze javljaju se sve odjednom, redom kataloga, čim je baza
+  poznata. Mutacija čija je baza već poznata kao crvena se ne pušta. Ostaju
+  dve razlike, obe samo uz STOP, kad je verdikt ionako `NIJE DOKAZANO`:
+  - STOP ne čeka **potrebnu** bazu koja još traje. Stavka koja je stala
+    ocenjuje se svojom bazom ako je ta već gotova; inače je `NIJE IZMERENA
+    (dokaz je stao pre baze cele suite)`. Stavke koje zavise od baze koja još
+    traje tada se ne ispisuju, a serijski put ih (crvene) javlja unapred.
+  - STOP iz mutacije koja je krenula pre nego što je baza bila poznata važi i
+    kad se baza pokaže crvenom. To je bezbednosni signal (kopija nije vraćena,
+    izvor se menjao), ne ocena, i ne odbacuje se.
+- **Kad Excel ni ne krene** (FATAL bez ijednog reda `SUITE`), poziv se ponavlja
+  jednom. Pad posle starta suite-a je ishod, ne infrastruktura, pa se ne
+  ponavlja. Broj ponovljenih startova stoji na kraju izlaza.
+- **Paralelno smeju samo `RunAllTests`, banka-suite i BFP** (`PARALELNE_SUITE`).
+  Suite koje idu na mrežu ili dele stanje van sveske odbijaju `--radnika > 1`.
+- **Ctrl+C** zaustavlja nove poslove. Poslovi u toku dobijaju `PREKID`, a radni
+  folder se briše.
+
+**Koliko radnika:** VBA radi na jednom jezgru po Excel procesu, pa je granica
+broj **fizičkih jezgara**, ne RAM (jedan Excel sa test sveskom ~200 MB).
+Preporuka je jezgra − 1. Skaliranje za svoju mašinu izmeri jednom, istim skupom
+sa 1, 2, 3 i 5 radnika.
+
+**Test koji piše van svoje sveske ne sme u radnike.** Primer je #184
+(`T_Backup_NeObaraStartINeRasteBezGranice`). Pisao je u fiksni
+`%TEMP%\agrix_backup_test`, pa bi se dva radnika tu sudarila. Reprodukovano je
+17.11.2026: fajl tog imena podmetnut u `%TEMP%` obarao je test. Test sada piše
+pod `ThisWorkbook.path`, a to je privatni temp folder svakog run_vba poziva.
+Nov test koji piše fajlove ide istim putem, nikad u `%TEMP%` ni na fiksnu putanju.
+
+`run_vba.py` ovim dobija novi ugovor (N6): posle uvoza jedan pun prolaz vraća
+markere.
 
 ### Grupni dokaz — `--grupe`
 
@@ -773,6 +916,80 @@ grupisanja) **ispred** izlaza `if not files: return 0`. Hook se zove i sa
 putanjom koja nije VBA fajl — na primer baš `tools/sabotaza.py`, gde se greška u
 katalogu i pravi — i tada je `files` prazno, pa se izlazilo sa `0` pre ijedne od
 tih provera.
+
+### Izbor testova i vreme po testu — `--test`, `--izbor`, `--izolacija`
+
+Svaka sabotaža u katalogu već imenuje **svoj** test, a prolaz je do sada puštao
+**celu** suite (RunAllTests 215,8 s pri 336 testova, 05.11.2026; BFP preko
+300 s po zapisima iz novembra). Izbor pušta samo imenovane
+testove, **u redosledu suite-a**:
+
+```bash
+python tools/run_vba.py --suite RunAllTests --test T_ParseDatum_Ugovor
+python tools/dokaz.py amb-pisac --izbor            # samo ciljani testovi
+python tools/dokaz.py amb-pisac --izbor --grupe    # i grupisano
+python tools/dokaz.py --izolacija                  # koji ciljani testovi ne prolaze SAMI
+```
+
+- **Ulazne tačke:** `modTest.RunAllTestsIzbor` i
+  `modBusinessFlowProTests.RunBusinessFlowProIzbor`, upisane kao `izbor` u
+  `SUITES` (`run_vba.py`). Suite bez tog ključa (banka) `--test` odbija, a
+  `dokaz.py --izbor` je meri celu. `vba_gate --popis` (nalaz `IZBOR`) obara CI
+  kad ulazna tačka iz kataloga ne postoji ili ne prima tačno jedan argument.
+- **Izbor traje jedan prolaz.** Ulazna tačka postavi zahtev, a suite ga
+  **potroši kao prvu naredbu** (`PreuzmiIzbor` / `BfpPreuzmiIzbor`). Izbor koji
+  bi preživeo pretvorio bi sledeći goli `RunAllTests` u tih deo suite-a, i to
+  zelen. Pravilo meri `T_TestIzbor_TacnoImeIJednokratno` (i BFP blizanac
+  `Test_BFP_IzborBiraCeloIme`). Da ga ulazna tačka zaista zove meri
+  `run_vba --self-test` nad izvorom, jer test to ne može da izmeri iznutra.
+- **Traži se celo ime** (`",T_A,"`), pa izbor `T_A` ne pušta `T_AB`. Tražen a
+  nepušten test je **FAIL** (`IZBOR: ...`), ne tišina: pogrešno ime bi inače dalo
+  zelen prolaz sa nula testova.
+- **BFP poziv ide kroz `BfpIzabran`.** Nov test u `RunBusinessFlowProSuite` se
+  piše `If BfpIzabran("Test_X") Then Test_X`. Goli `Test_X` obara
+  `run_vba --self-test`: izbor ga ne bi preskočio, a vreme bi pripisao tuđem
+  koraku. Seed se pušta uvek.
+- **Telo BFP suite je podeljeno.** Sa omotačem je telo od 414 poziva prešlo
+  prag `PROCEDURA_VELIKA` (40 KB izvora, VBA „Procedure too large"), pa je
+  prvih 300 poziva posle seed-a u `BfpDeo1`–`BfpDeo3`, istim redom. Nov test se
+  i dalje dopisuje na kraj `RunBusinessFlowProSuite`; kad ona opet pređe prag,
+  sledećih 100 poziva ide u nov `BfpDeoN`. `run_vba --self-test` tvrdi da je
+  svaki deo pozvan tačno jednom i redom (nepozvan deo bi tiho izbacio svoje
+  testove), da deo nosi samo pozive kroz `BfpIzabran`, i da je ime u izboru
+  isto kao pozvan test.
+- **Izbor nije dokaz cele suite.** `vba_gate` za takav prolaz ne upisuje marker
+  zelenog, a izveštaj ga nosi kao red `IZBOR`.
+
+**Baza se tvrdi nad istim izborom.** Pre mutacije `dokaz.py --izbor` pusti isti
+spisak testova nad čistim izvorom, i on mora biti zelen. Test koji **sam** pada
+(zavisi od stanja koje mu ostavlja raniji test, jer je redosled u `RunAllTests`
+nosiv) bi inače „dokazao" svaku sabotažu nad sobom. Takav član se ne gubi:
+
+- grupa sa crvenom bazom se rasturi na pojedinačna merenja;
+- test koji ni sam ne prolazi meri se **celom suite-om**, uz bazu cele suite;
+- sabotaža koju izbor **ne obori** takođe ide na celu suite: test pušten sam
+  može da prođe mimo ciljane tvrdnje, pa „NIJE DOKAZANO" daje tek cela suite;
+- baza se pamti po izboru, pa više sabotaža nad istim testom plaća jednu.
+
+**Izbor tvrdi manje od pune suite, i tako se zove.** Dokazuje da je test
+osetljiv na mutaciju kad ide sam, ne i u kanonskom redosledu, gde raniji test
+može da ostavi stanje koje mutaciju zaklanja. Verdikt je zato
+`DOKAZANO (izbor)`, uz grupe `DOKAZANO (grupno, izbor)`. Golo `DOKAZANO` znači
+samo pojedinačan dokaz u celoj suiti.
+
+`--izolacija` pušta svaki ciljani test sam, bez mutacija, i nabraja one koji ne
+prolaze. Taj spisak je ujedno i mera koliko testova zavisi od redosleda.
+
+**Vreme po testu** ide u `last_run_vreme.txt` / `last_run_bfp_vreme.txt` pored
+sveske (`sekunde<TAB>status<TAB>ime`), a `run_vba` ispisuje najsporijih 10 kao
+blok `VREME`. To je dijagnostika, ne verdikt: neuspeh upisa ne obara prolaz. Kod
+BFP-a je jedinica **korak** (test ili seed), jer verdikt tamo nosi tvrdnja.
+
+**Šta je izmereno, a šta nije.** Pravila izbora u Python-u (`dokaz.py`,
+`run_vba.py`, `vba_gate.py`) imaju `--self-test` i dvosmerni dokaz. VBA strana
+(ulazne tačke, `BfpIzabran`, upis vremena) se u Linux sesiji ne izvršava. Prvi
+prolaz na Windows-u je zato `--izolacija` nad rezom, pa tek onda `--izbor`.
+Sabotaže `izbor-*` / `bfp-izbor-*` obaraju dva nova VBA testa.
 
 ## Trijaža masovnih padova
 

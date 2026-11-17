@@ -16,6 +16,8 @@ tests/last_run.json
 # marker zelenog (tools/vba_gate.py): otisak izvora koji je PROSAO, po masini
 tests/last_green.json
 tests/last_run.txt
+# run_vba dopisuje red po pozivu (trajanje po fazi i suiti) -- masinsko stanje.
+tests/run_vba_istorija.jsonl
 
 # Claude Code lokalni worktree-jevi
 .claude/worktrees/
@@ -29,3 +31,5 @@ docs/Market Intelligence/01_Market_Data/APR/Clean Data/apr_companies_financials_
 
 # JS harness: zavisnost se instalira u CI-ju (node/npm ne postoje na autorskoj masini).
 node_modules/
+tests/.run_vba.lock
+tests/excel.pid
