@@ -11861,6 +11861,11 @@ Sidro postojeće sabotaže `s6k7-citac-prijemnica-prvi-pogodak` je pomereno za j
 **Nije izvršeno:** cela `RunAllTests`, BFP, Storno i Palete; dokaz u redosledu cele suite (isti poziv
 bez `--izbor`); ručni Compile. Automatska compile proba je dala „NEJASNO".
 
+**Preslagano na `main` = `b7c376cb`** (17.11.2026, posle `#484`, izolacija testova): rebase bez
+konflikta, oba commita sadržajem ista. `#484` nije dodao testove (`main` staje na 355), pa brojevi
+356–359 stoje. Ponovljeno nad novom bazom: Python koraci CI-ja 21 / 21, `vba_check` čist (1389
+sabotaža u katalogu), 356–359 uz `T_S6K7_*` i 309 8 / 0, dokaz 8 / 8 (potpis `c2cd934f1b52b814`).
+
 #### Novi nalazi
 
 | # | Nalaz | Dokaz | Ishod |
