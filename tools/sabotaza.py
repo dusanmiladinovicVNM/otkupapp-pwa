@@ -148,6 +148,7 @@ SABOTAZE = {
     # su svi redovi stornirani -- IKAD kapija ga ne zaustavlja jer je vlasnik
     # jedan. Ovo je ono sto je zatecena provera prvog reda pokusavala da radi,
     # samo je gledala red koji je SLUCAJNO prvi.
+    # (v. POZNATI_NALAZI_DOKAZ -- od PRJ-ZBR-02 ne obara nista.)
     "cilj-zbirna-bez-provere-postojanja": (
         "modDokumenta.bas",
         "        If aktivniVlasnici = 0 Then Exit Function\n",
@@ -160,6 +161,7 @@ SABOTAZE = {
     # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
     # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
     # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
+    # (v. POZNATI_NALAZI_DOKAZ -- od ZBR-NORM-02 ekvivalentna, ne obara nista.)
     "cilj-zbirna-case-mesano": (
         "modDokumenta.bas",
         "        Dim aktivniVlasnici As Long\n"
@@ -13760,6 +13762,31 @@ POZNATI_NALAZI_DOKAZ = {
     # T_F8_IzabranRedOstajeIzabran.
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
+
+    # Dve sabotaze nad T_CiljZbirna_NePoPrvomRedu ne obaraju NISTA, ni u izboru
+    # ni celom suite-om (mereno 17.11.2026, S-4a). Obe su zatecene, ne posledica
+    # S-4a -- izbor ih je samo prvi put pustio. Razlozi su razliciti:
+    #
+    # MASKIRANA (PRJ-ZBR-02, 60a7957d): bez provere nula aktivnih vlasnika OLDU
+    # prodje IKAD kapiju (vlasnik je jedan), ciljID ostane prazan
+    # (ZbirnaIDZaBroj je fail-closed, LookupActiveID nema aktivnog), pa
+    # PrijemnicaRobaRazlog("") digne DOKUNOS_ERR_PRJ_ZBIRNA_BEZ_ROBE i EH vrati
+    # False. Isti Boolean kao tihi Exit -- razlika je samo ERROR u logu.
+    "cilj-zbirna-bez-provere-postojanja": "NE OBARA NISTA",
+    #
+    # EKVIVALENTNA (ZBR-NORM-02, be9464ff): ZbirnaPostoji i VlasniciPoBroju
+    # danas porede ISTO (Trim + vbTextCompare kroz BrojJednak), pa zamena
+    # jednog drugim ne menja nijedan ishod. Mala slova KASK sada vide oba
+    # vlasnika i staje ih IKAD kapija, kao i tacan case. Komentari koji kazu
+    # da VlasniciPoBroju poredi TACNO (modDokumenta, test, ova sabotaza) su
+    # zastareli od tog commita.
+    "cilj-zbirna-case-mesano": "NE OBARA NISTA",
+    #
+    # Vlasnik: zaseban rez posle S-4a (pre-flight -- dira razresavanje broja
+    # zbirne). Prvo sonda koja pokaze koja kapija odbija, pa odluka: tvrdnja
+    # po RAZLOGU (prva), a druga sabotaza ili nov oblik ili brisanje uz
+    # ispravku zastarelih komentara. Ovi upisi se tada brisu -- dokaz sam
+    # prijavi upis koji vise nista ne pokriva.
 
 }
 
