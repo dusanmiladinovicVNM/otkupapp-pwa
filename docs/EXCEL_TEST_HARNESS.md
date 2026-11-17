@@ -819,11 +819,20 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
   `BAZE UNAPRED`.
 - **Rana mutacija cele suite** (uz baze unapred). Mutacije faze 3 ne čekaju
   bazu: kreću odmah, na ostalim radnicima, a ocenjuju se kad je baza gotova.
-  Priznaju se samo uz zelenu bazu, pa crvena baza i dalje daje `NIJE
-  IZMERENA`, isto kao serijski. Kraj dokaza je tako max(baza, mutacija), ne
-  zbir. Jedina razlika je STOP u fazi 3: on ne čeka bazu koja još traje, pa je
-  stavka `NIJE IZMERENA (dokaz je stao pre baze cele suite)`. Verdikt je
-  ionako `NIJE DOKAZANO`.
+  Kraj dokaza je tako max(baza, mutacija), ne zbir. Rano se kreće samo kad sve
+  stavke faze 3 staju na radnike bez rezervisanog; inače se baza čeka pre
+  mutacija, kao ranije, jer bi N−1 radnika bilo sporije.
+- **Faza 3 ima jednu ocenu za N=1 i N>1** (`_faza3_ocena`), pa je izlaz isti po
+  konstrukciji, ne po disciplini. Mutacija se priznaje samo uz zelenu bazu.
+  Stavke crvene baze javljaju se sve odjednom, redom kataloga, čim je baza
+  poznata. Mutacija čija je baza već poznata kao crvena se ne pušta. Ostaju
+  dve razlike, obe samo uz STOP, kad je verdikt ionako `NIJE DOKAZANO`:
+  - STOP ne čeka **potrebnu** bazu koja još traje, pa je stavka `NIJE
+    IZMERENA (dokaz je stao pre baze cele suite)`. Baza koja je već gotova se
+    uzima i uz STOP.
+  - STOP iz mutacije koja je krenula pre nego što je baza bila poznata važi i
+    kad se baza pokaže crvenom. To je bezbednosni signal (kopija nije vraćena,
+    izvor se menjao), ne ocena, i ne odbacuje se.
 - **Kad Excel ni ne krene** (FATAL bez ijednog reda `SUITE`), poziv se ponavlja
   jednom. Pad posle starta suite-a je ishod, ne infrastruktura, pa se ne
   ponavlja. Broj ponovljenih startova stoji na kraju izlaza.
