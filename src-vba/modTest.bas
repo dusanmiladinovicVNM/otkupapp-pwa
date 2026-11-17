@@ -704,6 +704,13 @@ Public Sub RunAllTests()
     RunOne 274
     RunOne 38
 
+    ' S9-1: jezgro grafa sledljivosti. Svaki seje svoj lanac kroz kanonske pisce
+    ' unutar svoje transakcije i vraca ga, pa redosled nije nosec.
+    RunOne 356
+    RunOne 357
+    RunOne 358
+    RunOne 359
+
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
@@ -1293,6 +1300,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 353: TestName = "T_Doplata_ObuhvatZastoj"
         Case 354: TestName = "T_TestIzbor_TacnoImeIJednokratno"
         Case 355: TestName = "T_Journal_TihiRezimGasiZakazivanje"
+        Case 356: TestName = "T_Sled_TraceBezPogadjanja"
+        Case 357: TestName = "T_Sled_KlasaSeOznacavaNeOdseca"
+        Case 358: TestName = "T_Sled_HladnjackiLanacPoKlasi"
+        Case 359: TestName = "T_Sled_NerazresenaIvicaSeOznacava"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1656,6 +1667,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 353: T_Doplata_ObuhvatZastoj
         Case 354: T_TestIzbor_TacnoImeIJednokratno
         Case 355: T_Journal_TihiRezimGasiZakazivanje
+        Case 356: T_Sled_TraceBezPogadjanja
+        Case 357: T_Sled_KlasaSeOznacavaNeOdseca
+        Case 358: T_Sled_HladnjackiLanacPoKlasi
+        Case 359: T_Sled_NerazresenaIvicaSeOznacava
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -31804,4 +31819,581 @@ CleanUp:
              "kartica: polje koje ne moze da pokaze kooperanta zaustavlja pregled i knjizenje"
     AssertEq obuhvatE & "|" & pregledE & "|" & CStr(redovaPlanaE), "||2", _
              "ekran: operater koji isprazni polje vraca obracun na sve"
+End Sub
+
+' ============================================================
+' S9-1: JEZGRO GRAFA SLEDLJIVOSTI (modSledljivost; plan 14.65,
+' docs/DOMEN/SLEDLJIVOST.md). Ugovor: plan 14.64, "ACCEPTANCE CONTRACT -- S9-1".
+'
+' Svaki test seje SVOJ lanac kroz kanonske pisce (otkup, otpremnica, zbirna,
+' prijemnica, faktura), POSLE pocetka spoljne transakcije, i na kraju proverava
+' da je rollback vratio redove (S8R1A-REV-01). Fixture se ne menja.
+'
+' Kvar (mamac, dva clanstva, prijemnica bez ID-a) se podmece SIROVO, posle
+' zasejavanja: pisci takvo stanje ne mogu da naprave, a graf mora da ga prezivi.
+' ============================================================
+
+' Broj redova tabela koje pisci lanca menjaju -- za proveru rollback-a.
+Private Function SledBrojRedova() As String
+    Dim tb As Variant, s As String
+    For Each tb In Array(TBL_OTKUP, TBL_OTKUP_STAVKE, TBL_NOVAC, TBL_AMBALAZA, _
+                         TBL_AMBALAZA_DOKUMENT, TBL_OTPREMNICA, TBL_OTPREMNICA_STAVKE, _
+                         TBL_OTPREMNICA_IZVORI, TBL_ZBIRNA, TBL_ZBIRNA_STAVKE, _
+                         TBL_ZBIRNA_IZVORI, TBL_PRIJEMNICA, TBL_PRIJEMNICA_STAVKE, _
+                         TBL_FAKTURE, TBL_FAKTURA_STAVKE)
+        If Len(s) > 0 Then s = s & "|"
+        s = s & CStr(tb) & "=" & BrojRedovaTabele(CStr(tb))
+    Next tb
+    SledBrojRedova = s
+End Function
+
+' Blok kroz kanonski pisac otkupa, bez gajbi: kilaza po klasi (0 = klase nema).
+Private Function SledBlok(ByVal oznaka As String, ByVal stanicaID As String, _
+                          ByVal kgI As Double, ByVal kgII As Double) As String
+    Dim h As Object, s As Object, stavke As Collection, detalj As String
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", Date
+    h.Add "KooperantID", FX_KOOPERANT
+    h.Add "StanicaID", stanicaID
+    h.Add "KulturaID", modOtkup.RazresiKulturuIzVrsteSorte(FX_VRSTA, FX_SORTA, detalj)
+    h.Add "VrstaVoca", FX_VRSTA
+    h.Add "SortaVoca", FX_SORTA
+    h.Add "TipAmbalaze", FX_TIP_AMB
+    h.Add "BrojDokumenta", "BL-SLED-" & oznaka & "-" & Format$(Now, "hhnnss") & "-" & _
+                           CStr(Int(Rnd() * 9999))
+    Set stavke = New Collection
+    If kgI > 0 Then
+        Set s = CreateObject("Scripting.Dictionary")
+        s.Add "Klasa", KLASA_I
+        s.Add "Kolicina", kgI
+        s.Add "Cena", 100#
+        s.Add "KolAmbalaze", 0#
+        stavke.Add s
+    End If
+    If kgII > 0 Then
+        Set s = CreateObject("Scripting.Dictionary")
+        s.Add "Klasa", KLASA_II
+        s.Add "Kolicina", kgII
+        s.Add "Cena", 60#
+        s.Add "KolAmbalaze", 0#
+        stavke.Add s
+    End If
+    SledBlok = modOtkup.CreateOtkup_TX(h, stavke)
+    If Len(SledBlok) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledBlok", _
+                                        "preduslov: blok " & oznaka & " nije upisan"
+End Function
+
+' Izdata otpremnica nad datim blokovima, na zadatog vozaca (kanonski pisac).
+Private Function SledOtpremnica(ByVal blokovi As Collection, ByVal vozacID As String) As String
+    Dim h As Object, g As String, datum As Date, prvi As String
+    prvi = CStr(blokovi(1))
+    datum = CDate(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_DATUM))
+    Set h = CreateObject("Scripting.Dictionary")
+    h("Datum") = datum
+    h("StanicaID") = FX_STANICA
+    h("VozacID") = vozacID
+    h("KulturaID") = NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, prvi, COL_OTK_KULTURA))
+    h("TipAmbalaze") = FX_TIP_AMB
+    h("BrojOtpremnice") = modBrojevi.GenerateBrojOtpremnice(FX_STANICA, datum)
+    SledOtpremnica = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, blokovi, g)
+    If Len(SledOtpremnica) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledOtpremnica", _
+                                              "preduslov: otpremnica nije izdata: " & g
+End Function
+
+' Izdata zbirna nad otpremnicama: zadat broj, vozac, kupac i kilaza po klasi.
+Private Function SledZbirna(ByVal broj As String, ByVal otpremnice As Collection, _
+                            ByVal vozacID As String, ByVal kupacID As String, _
+                            ByVal kgI As Double, ByVal kgII As Double) As String
+    Dim h As Object, st As Object, ocek As Collection, g As String
+    Set h = CreateObject("Scripting.Dictionary")
+    h.Add "Datum", CDate(FX_DATUM)
+    h.Add "VozacID", vozacID
+    h.Add "BrojZbirne", broj
+    h.Add "KupacID", kupacID
+    h.Add "Hladnjaca", ""
+    h.Add "Pogon", ""
+    Set ocek = New Collection
+    If kgI > 0 Then
+        Set st = CreateObject("Scripting.Dictionary")
+        st.Add "Klasa", KLASA_I
+        st.Add "Kolicina", kgI
+        st.Add "KolAmbalaze", 0#
+        ocek.Add st
+    End If
+    If kgII > 0 Then
+        Set st = CreateObject("Scripting.Dictionary")
+        st.Add "Klasa", KLASA_II
+        st.Add "Kolicina", kgII
+        st.Add "KolAmbalaze", 0#
+        ocek.Add st
+    End If
+    SledZbirna = modDokumenta.CreateZbirna_TX(h, otpremnice, ocek, g)
+    If Len(SledZbirna) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledZbirna", _
+                                          "preduslov: zbirna " & broj & " nije izdata: " & g
+End Function
+
+' Prijemnica kroz produkcioni ulaz F4, bez gajbi: kilaza po klasi (0 = klase nema).
+Private Function SledPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
+                                ByVal vozacID As String, ByVal kupacID As String, _
+                                ByVal kgI As Double, ByVal kgII As Double) As String
+    Dim p As Object, poruke As String
+    Set p = modDokUnos.NoviPrijemnicaUnos()
+    PopuniPrijemnicu p, broj, brojZbirne
+    p("kupacID") = kupacID
+    p("vozacID") = vozacID
+    p("kolicinaI") = kgI
+    p("kolAmb") = 0
+    If kgII > 0 Then
+        p("dveKlase") = True
+        p("kolicinaII") = kgII
+        p("cenaII") = 30
+    End If
+    SledPrijemnica = modDokUnos.PrijemnicaUpisi(p, poruke)
+    If Len(SledPrijemnica) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledPrijemnica", _
+                                              "preduslov: prijemnica " & broj & " nije upisana: " & poruke
+End Function
+
+' Ceo lanac jednog bloka klase I: blok -> izdata otpremnica -> izdata zbirna.
+Private Sub SledLanacDoZbirne(ByVal oznaka As String, ByVal brojZbirne As String, _
+                              ByVal vozacID As String, ByVal kupacID As String, _
+                              ByVal kg As Double, ByRef outBlok As String, _
+                              ByRef outOtp As String, ByRef outZbr As String)
+    Dim c As Collection
+    outBlok = SledBlok(oznaka, FX_STANICA, kg, 0)
+    Set c = New Collection
+    c.Add outBlok
+    outOtp = SledOtpremnica(c, vozacID)
+    Set c = New Collection
+    c.Add outOtp
+    outZbr = SledZbirna(brojZbirne, c, vozacID, kupacID, kg, 0)
+End Sub
+
+' PrijemnicaStavkaID stavke date klase na dokumentu (kanonski citac stavki).
+Private Function SledStavkaPrijemnice(ByVal prjID As String, ByVal klasa As String) As String
+    Dim r As Variant, i As Long
+    r = modDokumenta.StavkePrijemniceRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), prjID, vbTextCompare) = 0 Then
+            If StrComp(CStr(r(i, 3)), klasa, vbTextCompare) = 0 Then
+                SledStavkaPrijemnice = CStr(r(i, 7))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' ID cvora stavke otkupa date klase ("OtkupID#RedniBroj"), kanonskim citacem.
+Private Function SledStavkaOtkupaID(ByVal otkupID As String, ByVal klasa As String) As String
+    Dim r As Variant, i As Long
+    r = modOtkup.StavkeOtkupaRedovi()
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If StrComp(CStr(r(i, 1)), otkupID, vbTextCompare) = 0 Then
+            If StrComp(CStr(r(i, 3)), klasa, vbTextCompare) = 0 Then
+                SledStavkaOtkupaID = CStr(r(i, 1)) & "#" & CStr(r(i, 2))
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Faktura nad jednom stavkom prijemnice, kroz pravi ulaz.
+Private Function SledFaktura(ByVal kupacID As String, ByVal stavkaID As String) As String
+    Dim c As Collection
+    If Len(stavkaID) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledFaktura", _
+                                        "preduslov: stavka prijemnice nije nadjena"
+    Set c = New Collection
+    c.Add Array(stavkaID)
+    SledFaktura = modFaktura.CreateFaktura_TX(kupacID, c)
+    If Len(SledFaktura) = 0 Then Err.Raise ERR_ASSERT, "modTest.SledFaktura", _
+                                           "preduslov: faktura nije napravljena"
+End Function
+
+' Red cvora (vrsta, ID) u odgovoru grafa; 0 = nema ga.
+Private Function SledRed(ByRef rez As Variant, ByVal vrsta As String, ByVal id As String) As Long
+    Dim i As Long
+    If Not IsArray(rez) Then Exit Function
+    For i = 1 To UBound(rez, 1)
+        If CStr(rez(i, SLG_C_VRSTA)) = vrsta Then
+            If StrComp(CStr(rez(i, SLG_C_ID)), id, vbTextCompare) = 0 Then
+                SledRed = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+' Red stavke date klase ciji je roditelj dati dokument; 0 = nema ga.
+Private Function SledRedStavke(ByRef rez As Variant, ByVal vrsta As String, _
+                               ByVal roditeljID As String, ByVal klasa As String) As Long
+    Dim i As Long
+    If Not IsArray(rez) Then Exit Function
+    For i = 1 To UBound(rez, 1)
+        If CStr(rez(i, SLG_C_VRSTA)) = vrsta Then
+            If StrComp(CStr(rez(i, SLG_C_KLASA)), klasa, vbTextCompare) = 0 Then
+                If Len(roditeljID) = 0 _
+                   Or StrComp(CStr(rez(i, SLG_C_PREKO)), roditeljID, vbTextCompare) = 0 Then
+                    SledRedStavke = i
+                    Exit Function
+                End If
+            End If
+        End If
+    Next i
+End Function
+
+' Broj cvorova date vrste u odgovoru.
+Private Function SledBroj(ByRef rez As Variant, ByVal vrsta As String) As Long
+    Dim i As Long
+    If Not IsArray(rez) Then Exit Function
+    For i = 1 To UBound(rez, 1)
+        If CStr(rez(i, SLG_C_VRSTA)) = vrsta Then SledBroj = SledBroj + 1
+    Next i
+End Function
+
+' Polje reda kao tekst; red 0 daje "".
+Private Function SledTekst(ByRef rez As Variant, ByVal r As Long, ByVal kol As Long) As String
+    If r = 0 Then Exit Function
+    If Not IsArray(rez) Then Exit Function
+    SledTekst = NzToText(rez(r, kol))
+End Function
+
+' Vraca rollback i poredi broj redova; pad testa dobija i nalaz o rollback-u.
+Private Sub SledKraj(ByVal tx As clsTransaction, ByVal redoviPre As String, _
+                     ByVal errNum As Long, ByVal errDesc As String, _
+                     ByVal imeTesta As String, ByVal tvrdnja As String)
+    Dim redoviPosle As String
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    redoviPosle = SledBrojRedova()
+    On Error GoTo 0
+    If errNum <> 0 Then
+        If redoviPosle <> redoviPre Then errDesc = errDesc & " [rollback nije vratio redove: " & _
+                                                   redoviPre & " -> " & redoviPosle & "]"
+        Err.Raise errNum, "modTest." & imeTesta, errDesc
+    End If
+    AssertEq redoviPosle, redoviPre, tvrdnja
+End Sub
+
+' 356 -- G3 "TraceBezPogadjanja" (SLED-IDENT-01): graf hoda samo ID ivicama.
+'
+' Dva lanca dele BROJ ZBIRNE (dva vozaca) i BROJ PRIJEMNICE (dva kupca). Lanac B
+' nastaje PRVI, pa svaki spoj po broju (prvi pogodak u tabeli) iz lanca A zavrsi
+' u lancu B. Uz to MAMAC: kolone bez pisca na dokumentima lanca A pokazuju na
+' lanac B -- Otkup.BrojZbirne, Otkup.OtpremnicaID, Otpremnica.BrojZbirne i
+' GeneracijaID. Graf nijednu od njih ne sme da prati.
+'
+' ISTI BROJ ZBIRNE nastaje prepisom LABELE, posle zasejavanja: F4 odbija
+' prijemnicu dok dve aktivne zbirne dele broj (izmereno 17.11.2026), pa zbirna A
+' prvo dobija svoj broj, a broj zbirne B tek kad su obe prijemnice upisane. Veze
+' po ID-u (clanstvo, ZbirnaRoditeljID) time nisu dirnute.
+' SABOTAZE: sled-e4-po-broju-zbirne, sled-jezgro-prati-otkup-brojzbirne.
+Private Sub T_Sled_TraceBezPogadjanja()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brojZ As String, brojZA As String, brojP As String, gen As String
+    Dim blokA As String, otpA As String, zbrA As String, prjA As String, fakA As String
+    Dim blokB As String, otpB As String, zbrB As String, prjB As String, fakB As String
+    Dim unazad As Variant, unapred As Variant, rP As Long, rO As Long
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    brojZ = "ZB-SLED-" & t
+    brojZA = "ZB-SLEDA-" & t
+    brojP = "PR-SLED-" & t
+    gen = "GEN-SLED-" & t
+
+    SledLanacDoZbirne "B", brojZ, FX_VOZAC2, FX_KUPAC2, 70, blokB, otpB, zbrB
+    prjB = SledPrijemnica(brojP, brojZ, FX_VOZAC2, FX_KUPAC2, 70, 0)
+    SledLanacDoZbirne "A", brojZA, FX_VOZAC, FX_KUPAC, 60, blokA, otpA, zbrA
+    prjA = SledPrijemnica(brojP, brojZA, FX_VOZAC, FX_KUPAC, 60, 0)
+    AssertEq (StrComp(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_DETE_ZBIRNA_ROD)), _
+                      zbrA, vbTextCompare) = 0 And _
+              StrComp(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_DETE_ZBIRNA_ROD)), _
+                      zbrB, vbTextCompare) = 0), True, _
+             "356 preduslov: svaka prijemnica je vezana za SVOJU zbirnu (isti broj, dva vozaca)"
+    fakB = SledFaktura(FX_KUPAC2, SledStavkaPrijemnice(prjB, KLASA_I))
+    fakA = SledFaktura(FX_KUPAC, SledStavkaPrijemnice(prjA, KLASA_I))
+
+    ' ISTI BROJ ZBIRNE: labela zbirne A i njen otisak na prijemnici A.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ, brojZ
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_PRJ_BROJ_ZBIRNE, brojZ
+
+    ' MAMAC: kolone bez pisca na lancu A pokazuju na lanac B.
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, blokA, COL_OTK_BROJ_ZBIRNE, brojZ
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, blokA, COL_OTK_OTPREMNICA_ID, otpB
+    PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_BROJ_ZBIRNE, brojZ
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, zbrB, gen
+    StampGeneraciju TBL_OTKUP, COL_OTK_ID, blokA, gen
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, otpA, gen
+
+    unazad = modSledljivost.SledPreci(SLG_PRJ, prjA)
+    unapred = modSledljivost.SledPotomci(SLG_OTK, blokA)
+
+    AssertEq SledRed(unazad, SLG_OTK, blokB), 0, _
+             "356 G3: unazad od prijemnice A nema otkupa zbirne B (isti broj zbirne)"
+    AssertEq (SledRed(unazad, SLG_OTK, blokA) > 0 And SledRed(unazad, SLG_ZBR, zbrA) > 0 _
+              And SledRed(unazad, SLG_OTP, otpA) > 0), True, _
+             "356 G3: unazad od prijemnice A dolaze zbirna, otpremnica i otkup lanca A"
+    AssertEq SledRed(unapred, SLG_FAK, fakB) + SledRed(unapred, SLG_PRJ, prjB), 0, _
+             "356 G3: unapred od otkupa A nema prijemnice ni fakture lanca B (mamac, isti brojevi)"
+    AssertEq (SledRed(unapred, SLG_FAK, fakA) > 0 And SledRed(unapred, SLG_PRJ, prjA) > 0), True, _
+             "356 G3: unapred od otkupa A dolaze prijemnica i faktura lanca A"
+
+    rP = SledRed(unapred, SLG_PRJ, prjA)
+    AssertEq SledTekst(unapred, rP, SLG_C_LABELA) & "|" & SledTekst(unapred, rP, SLG_C_STATUS) & _
+             "|" & CStr(IsDate(unapred(rP, SLG_C_DATUM))), _
+             brojP & "|" & SLG_STATUS_AKTIVAN & "|" & CStr(True), _
+             "356: cvor prijemnice nosi svoj broj, status i datum"
+    rO = SledRed(unazad, SLG_OTK, blokA)
+    AssertEq SledTekst(unazad, rO, SLG_C_KOOPERANT), FX_KOOPERANT, _
+             "356: otkup u odgovoru nosi kooperanta"
+    AssertEq CStr(unazad(rO, SLG_C_NADSKUP)), CStr(False), _
+             "356: zbirna sa jednom prijemnicom nije nadskup"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_TraceBezPogadjanja", _
+             "356: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 357 -- SLED-KLASA-01 van hladnjackog lanca: klasa se OZNACAVA, ne odseca.
+'
+' Zbirna I 500 / II 300, prijemnica I 450 / II 300: klase se "slazu", a podaci ne
+' razlikuju kalo na I od preklasiranja uz kalo na II. Unazad od stavke II zato
+' dolaze I otkupi klase I, sa oznakom druge klase; ista klasa ide prva.
+' SABOTAZA: sled-klasa-odseca-van-lanca.
+Private Sub T_Sled_KlasaSeOznacavaNeOdseca()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brojZ As String, c As Collection
+    Dim blokI As String, blokII As String, otp As String, zbr As String, prj As String
+    Dim stII As String, unazad As Variant, unapred As Variant
+    Dim rI As Long, rII As Long, rOtkI As Long, rOtkII As Long, rPrsI As Long
+    Dim prj2 As String, izPrve As Variant, izDruge As Variant
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    brojZ = "ZB-SLEDK-" & t
+
+    blokI = SledBlok("KI", FX_STANICA, 500, 0)
+    blokII = SledBlok("KII", FX_STANICA, 0, 300)
+    Set c = New Collection
+    c.Add blokI
+    c.Add blokII
+    otp = SledOtpremnica(c, FX_VOZAC)
+    Set c = New Collection
+    c.Add otp
+    zbr = SledZbirna(brojZ, c, FX_VOZAC, FX_KUPAC, 500, 300)
+    prj = SledPrijemnica("PR-SLEDK-" & t, brojZ, FX_VOZAC, FX_KUPAC, 450, 300)
+    stII = SledStavkaPrijemnice(prj, KLASA_II)
+    AssertEq (Len(stII) > 0), True, "357 preduslov: prijemnica ima stavku klase II"
+
+    unazad = modSledljivost.SledPreci(SLG_PRS, stII)
+    unapred = modSledljivost.SledPotomci(SLG_OKS, SledStavkaOtkupaID(blokII, KLASA_II))
+
+    rI = SledRedStavke(unazad, SLG_OKS, blokI, KLASA_I)
+    rII = SledRedStavke(unazad, SLG_OKS, blokII, KLASA_II)
+    AssertEq (rI > 0), True, _
+             "357 klasa: unazad od stavke II dolazi i stavka otkupa klase I (nista se ne odseca)"
+    AssertEq SledTekst(unazad, rII, SLG_C_OZNAKA) & "|" & SledTekst(unazad, rI, SLG_C_OZNAKA), _
+             SLG_ISTA_KLASA & "|" & SLG_DRUGA_KLASA, _
+             "357 klasa: stavka klase II nosi oznaku iste, a stavka klase I oznaku druge klase"
+    AssertEq (rII > 0 And rII < rI), True, "357 klasa: ista klasa ide prva"
+
+    rOtkI = SledRed(unazad, SLG_OTK, blokI)
+    rOtkII = SledRed(unazad, SLG_OTK, blokII)
+    AssertEq SledTekst(unazad, rOtkII, SLG_C_OZNAKA) & "|" & SledTekst(unazad, rOtkI, SLG_C_OZNAKA) & _
+             "|" & CStr(rOtkII > 0 And rOtkII < rOtkI), _
+             SLG_ISTA_KLASA & "|" & SLG_DRUGA_KLASA & "|" & CStr(True), _
+             "357 klasa: otkup nosi oznaku prema stavci od koje se krenulo, ista klasa prva"
+
+    rPrsI = SledRedStavke(unapred, SLG_PRS, prj, KLASA_I)
+    AssertEq (rPrsI > 0) & "|" & SledTekst(unapred, rPrsI, SLG_C_OZNAKA), _
+             CStr(True) & "|" & SLG_DRUGA_KLASA, _
+             "357 klasa: unapred od stavke otkupa klase II dolazi i stavka prijemnice klase I, oznacena"
+
+    ' E4 1:N (SLED-ODL-01): druga prijemnica ISTE zbirne. Alokacije nema, pa obe
+    ' unazad daju isti skup otkupa, i on je oznacen kao nadskup.
+    AssertEq CStr(unazad(rOtkI, SLG_C_NADSKUP)), CStr(False), _
+             "357 nadskup: dok zbirna ima jednu prijemnicu, poreklo nije nadskup"
+    prj2 = SledPrijemnica("PR-SLEDK2-" & t, brojZ, FX_VOZAC, FX_KUPAC, 50, 0)
+    izPrve = modSledljivost.SledPreci(SLG_PRJ, prj)
+    izDruge = modSledljivost.SledPreci(SLG_PRJ, prj2)
+    AssertEq (SledRed(izPrve, SLG_OTK, blokI) > 0 And SledRed(izPrve, SLG_OTK, blokII) > 0 _
+              And SledRed(izDruge, SLG_OTK, blokI) > 0 And SledRed(izDruge, SLG_OTK, blokII) > 0), True, _
+             "357 nadskup: zbirna na dve prijemnice daje obema isti skup otkupa"
+    AssertEq CStr(izPrve(SledRed(izPrve, SLG_OTK, blokI), SLG_C_NADSKUP)) & "|" & _
+             CStr(izDruge(SledRed(izDruge, SLG_OTK, blokI), SLG_C_NADSKUP)), _
+             CStr(True) & "|" & CStr(True), _
+             "357 nadskup: poreklo zbirne na dve prijemnice je oznaceno kao nadskup"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_KlasaSeOznacavaNeOdseca", _
+             "357: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 358 -- SLED-KLASA-01 u hladnjackom lancu: 1:1 po klasi je dokazano piscem
+' (HLD-LANAC-01), pa se klasa tu ODSECA. Blok sa obe klase na hladnjackoj
+' stanici pravi ceo lanac; unazad od stavke prijemnice klase II dolazi samo
+' stavka otkupa klase II.
+' SABOTAZA: sled-hladnjacki-ne-filtrira.
+Private Sub T_Sled_HladnjackiLanacPoKlasi()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim prevHlad As String, prevKupac As String, izvestaj As String
+    Dim blok As String, otp As String, zbr As String, prj As String, stII As String
+    Dim unazad As Variant, unapred As Variant
+
+    redoviPre = SledBrojRedova()
+    prevHlad = NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA))
+    prevKupac = NzToText(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, "Da"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, FX_KUPAC
+
+    blok = SledBlok("H", FX_STANICA, 70, 30)
+    S6K7Lanac blok, otp, zbr, prj
+    If Len(prj) = 0 Then
+        modAutoHladnjaca.AutoLanacHladnjaca blok, izvestaj
+        S6K7Lanac blok, otp, zbr, prj
+    End If
+    AssertEq (Len(otp) > 0 And Len(zbr) > 0 And Len(prj) > 0), True, _
+             "358 preduslov: hladnjacki blok ima ceo lanac (" & izvestaj & ")"
+    stII = SledStavkaPrijemnice(prj, KLASA_II)
+    AssertEq (Len(stII) > 0), True, "358 preduslov: prijemnica lanca ima stavku klase II"
+
+    unazad = modSledljivost.SledPreci(SLG_PRS, stII)
+    unapred = modSledljivost.SledPotomci(SLG_OKS, SledStavkaOtkupaID(blok, KLASA_I))
+
+    AssertEq SledRedStavke(unazad, SLG_OKS, blok, KLASA_I), 0, _
+             "358 hladnjacki lanac: unazad od stavke II nema stavke otkupa klase I"
+    AssertEq (SledRedStavke(unazad, SLG_OKS, blok, KLASA_II) > 0 _
+              And SledRed(unazad, SLG_OTK, blok) > 0), True, _
+             "358 hladnjacki lanac: unazad od stavke II dolaze otkup i njegova stavka klase II"
+    AssertEq (SledRedStavke(unapred, SLG_PRS, prj, KLASA_I) > 0) & "|" & _
+             SledRedStavke(unapred, SLG_PRS, prj, KLASA_II), CStr(True) & "|0", _
+             "358 hladnjacki lanac: unapred od stavke otkupa klase I dolazi samo stavka prijemnice klase I"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, prevHlad
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_HladnjackiLanacPoKlasi", _
+             "358: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 359 -- SLED-INV-01, fail-closed: ivica koja ne razresava TACNO JEDNOM se ne
+' pogadja. Cvor dobija razlog, graf od njega ne nastavlja i ne pada.
+'
+' (i)  Otkup u DVE aktivne otpremnice (sirovo prepisan red clanstva): kanonski
+'      citac clanstva odbija tabelu. Otkup se ne vezuje ni za jednu otpremnicu.
+' (ii) Aktivna prijemnica bez PrijemnicaID-a: skup prijemnica zbirne se ne zna,
+'      pa zbirna nosi razlog i ne vodi ni do jedne prijemnice.
+' (iii) Otpremnica u DVE aktivne zbirne (sirovo prepisan red clanstva): isto
+'      kao (i), jednu ivicu nize -- otpremnica se ne vezuje ni za jednu zbirnu.
+' SABOTAZE: sled-e2-bez-strogog-citaca, sled-nerazresena-ivica-se-pogadja.
+Private Sub T_Sled_NerazresenaIvicaSeOznacava()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, c As Collection
+    Dim blokX As String, otpX As String, zbrX As String, prjX As String
+    Dim blokY As String, otpY As String, zbrY As String
+    Dim unazadI As Variant, unapredII As Variant, padI As String, padII As String
+    Dim unazadIII As Variant, padIII As String
+    Dim rOtp As Long, rZbr As Long
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    SledLanacDoZbirne "X", "ZB-SLEDX-" & t, FX_VOZAC, FX_KUPAC, 60, blokX, otpX, zbrX
+    prjX = SledPrijemnica("PR-SLEDX-" & t, "ZB-SLEDX-" & t, FX_VOZAC, FX_KUPAC, 60, 0)
+    blokY = SledBlok("Y", FX_STANICA, 50, 0)
+    Set c = New Collection
+    c.Add blokY
+    otpY = SledOtpremnica(c, FX_VOZAC)
+    Set c = New Collection
+    c.Add otpY
+    zbrY = SledZbirna("ZB-SLEDY-" & t, c, FX_VOZAC, FX_KUPAC, 50, 0)
+
+    ' (i) clanstvo otpremnice Y sada tvrdi otkup X: otkup X je u dve aktivne otpremnice.
+    PostaviPoljePoPK TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otpY, COL_OPI_OTKUP_ID, blokX
+    On Error Resume Next
+    unazadI = modSledljivost.SledPreci(SLG_PRJ, prjX)
+    padI = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+    PostaviPoljePoPK TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otpY, COL_OPI_OTKUP_ID, blokY
+
+    ' (iii) clanstvo zbirne Y sada tvrdi otpremnicu X: otpremnica X je u dve aktivne zbirne.
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpX
+    On Error Resume Next
+    unazadIII = modSledljivost.SledPreci(SLG_PRJ, prjX)
+    padIII = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpY
+
+    ' (ii) aktivna prijemnica zbirne X ostaje bez PrijemnicaID-a.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjX, COL_PRJ_ID, ""
+    On Error Resume Next
+    unapredII = modSledljivost.SledPotomci(SLG_OTK, blokX)
+    padII = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+
+    AssertEq padI, "", "359 fail-closed: graf ne pada kad otkup ima dva aktivna clanstva"
+    AssertEq SledRed(unazadI, SLG_OTK, blokX) + SledRed(unazadI, SLG_OTK, blokY), 0, _
+             "359 fail-closed: otkup sa dva aktivna clanstva nije vezan ni za jednu otpremnicu"
+    rOtp = SledRed(unazadI, SLG_OTP, otpX)
+    AssertEq (rOtp > 0 And InStr(1, SledTekst(unazadI, rOtp, SLG_C_KVAR), blokX, vbTextCompare) > 0), True, _
+             "359 fail-closed: otpremnica nosi razlog koji imenuje otkup sa dva clanstva"
+
+    AssertEq padIII, "", "359 fail-closed: graf ne pada kad otpremnica ima dva aktivna clanstva"
+    AssertEq SledBroj(unazadIII, SLG_OTP), 0, _
+             "359 fail-closed: otpremnica sa dva aktivna clanstva nije vezana ni za jednu zbirnu"
+    rZbr = SledRed(unazadIII, SLG_ZBR, zbrX)
+    AssertEq (rZbr > 0 And InStr(1, SledTekst(unazadIII, rZbr, SLG_C_KVAR), otpX, vbTextCompare) > 0), True, _
+             "359 fail-closed: zbirna nosi razlog koji imenuje otpremnicu sa dva clanstva"
+
+    AssertEq padII, "", "359 fail-closed: graf ne pada kad prijemnica nema ID"
+    rZbr = SledRed(unapredII, SLG_ZBR, zbrX)
+    AssertEq (rZbr > 0 And Len(SledTekst(unapredII, rZbr, SLG_C_KVAR)) > 0), True, _
+             "359 fail-closed: zbirna cija prijemnica nema ID je oznacena"
+    AssertEq SledBroj(unapredII, SLG_PRJ), 0, _
+             "359 fail-closed: oznacena zbirna ne vodi ni do jedne prijemnice"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_NerazresenaIvicaSeOznacava", _
+             "359: rollback je vratio redove svih tabela lanca"
 End Sub
