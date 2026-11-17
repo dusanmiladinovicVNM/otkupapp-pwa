@@ -7535,7 +7535,17 @@ Private Sub T_IstiBrojRazliciteGeneracije_NijeIstiDokument()
     ' Meri se DELTA, ne apsolutan zbir: na PRJ-TEST-A stoji ono sto su tamo
     ' ostavili raniji testovi, a testovi dele svesku. Tvrdnja je "sve sto je bilo
     ' na A preslo je na B", i ona ne zavisi od toga koliko je toga bilo.
+    '
+    ' PRIPREMA (S-4a): u punom prolazu robu na A ostavlja test 30 (C2 -> A, 25
+    ' gajbica; robu koju je test 27 doneo, test 30 stornira u koraku 1 writer-a).
+    ' Pusten SAM, A je prazan -- robu dovodi isti poziv kao test 27 (C1 -> A,
+    ' 40), i samo kad je A prazan.
     Dim preA As Long, preB As Long
+    If GajbicaZaDokument("PRJ-TEST-A") = 0 Then
+        ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                           gajbDiff, "PRJ-TEST-C1", "PRJ-TEST-A")
+        AssertEq ok, True, "priprema: izvorni dokument dobija robu po identitetu"
+    End If
     preA = GajbicaZaDokument("PRJ-TEST-A")
     preB = GajbicaZaDokument("PRJ-TEST-B")
     AssertEq (preA > 0), True, "preduslov: izvorni dokument uopste nosi robu"
@@ -11505,6 +11515,11 @@ End Function
 Private Sub T_S6K4_UvidKazeOdbijanje()
     Dim nap As String, dlg As String
 
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
+
     nap = S6K4NapomenaLanca("20/150326", "PRJ-FAK-1", "Faktura")
     AssertEq (InStr(1, nap, "ODBIJA", vbBinaryCompare) > 0 And _
               InStr(1, nap, Poruka("STEF_FAK_OSLOB"), vbBinaryCompare) = 0), True, _
@@ -13856,18 +13871,28 @@ End Sub
 ' Papir ambalaze ne zavisi od novca, pa test bira kooperanta bez avansa i to
 ' tvrdi kao preduslov.
 ' Fixture: normal production state (FX_KOOPERANT3 nema nedodeljen avans).
-' SABOTAZE: amb-posl-pdf-zavrsno-bez-prijema, amb-posl-stanje-posle-fizicki.
+'
+' KARTICA SE MERI KAO RAZLIKA pre i posle otkupa (S-4a). Broj otkupa (tblOtkup,
+' GenerateBrojDokumenta) i broj ambalaznog dokumenta (tblAmbalazaDokument,
+' GenerateBrojAmbDokumenta) su dva niza iste stanice, pa kartica pod istim
+' tekstom broja moze nositi i revers (modIzvestaj: brojevi razlicitih nizova se
+' ne porede). Pusten SAM, test je dobijao isti broj za otkup i za revers
+' izdavanja (+30) i merio 25; u punom prolazu prolazio je slucajno, jer su raniji
+' testovi razmakli nizove.
+' SABOTAZE: amb-posl-pdf-zavrsno-bez-prijema, amb-posl-stanje-posle-fizicki,
+' amb-posl-kartica-otkup-fizicki.
 Private Sub T_AmbPoslovno_OtkupniListKaoKartica()
     Dim tip As String, dI As String, dP As String, bP As String
     Dim otkID As String, otkBroj As String, ws As Worksheet
     Dim posle As Long, fizPosle As Long, pp As Boolean, r As Variant
-    Dim avans As Double
+    Dim avans As Double, rPre As Variant
 
     avans = modNovac.GetKooperantUnallocatedAvans(FX_KOOPERANT3)
     tip = KartNoviTipAmb("PDF")
     modAmbalaza.NabaviAmbalazu_TX Date, FX_STANICA, tip, 50, "NAB-" & tip, "preduslov paritet papira"
     dI = modAmbalaza.UpisiReversAmbalaze_TX(Date, "", FX_STANICA, tip, 30, REV_SMER_IZDAVANJE, FX_KOOPERANT3, "")
     dP = KartPovratSaPokricem(tip, 40, bP, 0, FX_KOOPERANT3)
+    rPre = modIzvestaj.ReportKarticaAmbalaze(FX_KOOPERANT3, Date, Date)
     otkID = KartOtkupSaPokricem(tip, 5, otkBroj, FX_KOOPERANT3)
 
     Set ws = modPrint.FillOtkupSablon(otkID)
@@ -13885,7 +13910,7 @@ Private Sub T_AmbPoslovno_OtkupniListKaoKartica()
              "otkupni list: zavrsno = pocetno + izdato - primljeno (-10 - 5 = -15)"
     AssertEq posle & "|" & fizPosle, "-15|0", _
              "knjiga posle otkupa: poslovno -15 kao na papiru, fizicki 0 sa pokricem"
-    AssertEq KartNetoBroja(r, otkBroj), -5, _
+    AssertEq KartNetoBroja(r, otkBroj) - KartNetoBroja(rPre, otkBroj), -5, _
              "kartica ambalaze: promet otkupa je -5, isti kao na papiru"
 End Sub
 
@@ -14206,6 +14231,11 @@ Private Sub T_AmbBilans_ListaIzvestaja()
     Dim ekran As String, citalac As String, prviOdeljak As String, prvaStavka As String
     Dim sortBil As String
 
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
+
     sortBil = KartSortListe("AMBBILANS", "OM", False)
     modScrIzvestaji.Scr_IzTestReset
     dostupna = modScrIzvestaji.IzListaDostupna("AMBBILANS", "OM", False) & "|" & _
@@ -14390,6 +14420,11 @@ Private Sub T_AmbPartneri_ListaIzvestaja()
     Dim sortPar As String, d As Variant, redovi As Variant, n As Long, slotovi As Variant
     Dim redK1 As String, sumD As Double, sumT As Double, rc As Variant
     Dim slotD As Double, slotT As Double, kljucD As String, kljucT As String
+
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
 
     sortPar = KartSortListe("AMBPARTNERI", "OM", False)
     modScrIzvestaji.Scr_IzTestReset
@@ -21897,12 +21932,25 @@ End Sub
 ' Merene vrednosti fixture-a na ovom mestu u nizu:
 '   ZB-TEST-KASK  ikad=2 akt=1  (prvi red storniran)
 '   ZB-TEST-OLDU  ikad=1 akt=0  (prvi red storniran, aktivnog nema)
+' To stanje u punom prolazu ostavljaju testovi 41 (ZBI-KASK-1) i 44
+' (ZBI-OLDU-1); pusten SAM (izbor), test ga pravi sam -- v. pripremu (S-4a).
 '
 ' Stoji POSLEDNJI u nizu: kad bi neka tvrdnja popustila, poziv bi stvarno
 ' prevezao i pomerio fixture.
 Private Sub T_CiljZbirna_NePoPrvomRedu()
     Dim ikad As Long, akt As Long
     Dim okDvosmislen As Boolean, okBezAktivnog As Boolean, okMala As Boolean
+
+    ' PRIPREMA (S-4a): isti produkcioni pisac kao testovi 41 i 44, i SAMO kad
+    ' stanja nema -- u punom prolazu su oba vec stornirana, pa se grana preskace.
+    If Not StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1") Then
+        AssertEq StornoZbirna_TX("ZBI-KASK-1"), True, _
+                 "priprema: prvi vlasnik broja KASK je storniran"
+    End If
+    If Not StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-OLDU-1") Then
+        AssertEq StornoZbirna_TX("ZBI-OLDU-1"), True, _
+                 "priprema: jedina zbirna broja OLDU je stornirana"
+    End If
 
     ikad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
                            "T_Cilj", True, _
@@ -21913,6 +21961,12 @@ Private Sub T_CiljZbirna_NePoPrvomRedu()
     AssertEq ikad, 2, "preduslov: broj je IKAD pripadao dvama vlasnicima"
     AssertEq akt, 1, _
              "preduslov: aktivan je jedan -- broj IZGLEDA jednoznacan"
+    ' Preduslov za OLDU je do sada cutao: tvrdnja "bez aktivnog cilja" ispod
+    ' meri samo ako pod tim brojem zaista nema aktivne zbirne.
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_OLDU, _
+                             "T_Cilj", False, _
+                             Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 0, _
+             "preduslov: broj OLDU nema nijednu aktivnu zbirnu"
 
     ' ISTORIJSKA DVOSMISLENOST. Kapija po AKTIVNIMA ovde vidi jedan vlasnik i
     ' pusta -- a storniran vlasnik i dalje ima aktivnu decu, pa bi prijemnica
@@ -22550,6 +22604,15 @@ End Sub
 Private Sub T_Prijemnica_PomeraSamoAktivan()
     Dim ikad As Long, akt As Long, ciljIkad As Long
     Dim ok As Boolean
+
+    ' PRIPREMA (S-4a): u punom prolazu dokument prvog kupca (PRJ-TEST-I1)
+    ' stornira test 35 kroz ISPRAVKU -- storno bez skidanja paleta. Pusten SAM,
+    ' test bi zatekao oba dokumenta aktivna. Isti poziv, i samo kad stanja nema.
+    ' Correction context se ne pravi: ReassignPrijemnicaToZbirna_TX ga ne cita.
+    If Not StorniranoNaID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I1") Then
+        AssertEq modStorno.StornoPrijemnica_TX("PRJ-TEST-I1", False), True, _
+                 "priprema: dokument prvog kupca je storniran"
+    End If
 
     ikad = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
                            "T_Prij", True, Array(COL_PRJ_KUPAC)).count
@@ -26713,6 +26776,11 @@ Private Sub T_Analiza_EkranUIzradi()
     Dim meta As String, kljuc As String, polje As Variant, par As Variant
     Dim bezNaziva As String, nepostoje As String
 
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
+
     ' --- 1) ekran postoji, stari red ga vise ne deli ---------------------
     AssertEq modUiScreens.ScrPostoji("ANALIZA"), True, _
              "ekran u izradi POSTOJI za ljusku (inace je stavka prigusena)"
@@ -28308,6 +28376,11 @@ Private Sub T_Doplata_PonavljanjeTraziPotvrdu()
     Dim g1 As String, g2 As String, g3 As String
     Dim en1 As Long, en2 As Long, en3 As Long, n1 As Long, broj1 As String
 
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
+
     b = DopJedinstven()
     vr = "DOPV-" & b
     kul = DopKultura(vr, "S1")
@@ -28807,6 +28880,11 @@ Private Sub T_Doplata_SaldoOMPoStanici()
     Dim s1 As Variant, s2 As Variant, sJuce As Variant, zb As Variant
     Dim nazivA As String, nazivB As String, uk As Long, i As Long, zbRed As Long
     Dim d As Variant, redovi As Variant, n As Long, gridDop As Double, kolone As Variant
+
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
 
     b = DopJedinstven()
     vr = "DOPV-" & b
@@ -31000,6 +31078,11 @@ End Sub
 Private Sub T_Gotovina_NajviseNaIzboru()
     Dim b As String, vr As String, kul As String, kA As String, oid As String
     Dim obr As String, g As String, en As Long, idD As String, spec As String
+
+    ' Katalog kao na startu aplikacije (InitApp -> EnsurePoruke), isto kao test 7:
+    ' fixture nosi tblPoruke iz donora, a pusten SAM (izbor) test ne bi imao ko
+    ' da ga osvezi -- tvrdnja bi merila fixture, ne kod (S-4a).
+    modSetup.EnsurePoruke
 
     b = DopJedinstven()
     vr = "DOPV-" & b

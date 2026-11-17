@@ -148,6 +148,7 @@ SABOTAZE = {
     # su svi redovi stornirani -- IKAD kapija ga ne zaustavlja jer je vlasnik
     # jedan. Ovo je ono sto je zatecena provera prvog reda pokusavala da radi,
     # samo je gledala red koji je SLUCAJNO prvi.
+    # (v. POZNATI_NALAZI_DOKAZ -- od PRJ-ZBR-02 ne obara nista.)
     "cilj-zbirna-bez-provere-postojanja": (
         "modDokumenta.bas",
         "        If aktivniVlasnici = 0 Then Exit Function\n",
@@ -160,6 +161,7 @@ SABOTAZE = {
     # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
     # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
     # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
+    # (v. POZNATI_NALAZI_DOKAZ -- od ZBR-NORM-02 ne obara nista nad fixture-om.)
     "cilj-zbirna-case-mesano": (
         "modDokumenta.bas",
         "        Dim aktivniVlasnici As Long\n"
@@ -11931,6 +11933,17 @@ SABOTAZE = {
         "T_AmbPoslovno_PokriceNijeZaduzenje",
         "primer A: povrat 23 uz pokrice 12 je poslovno -23, ne -11",
     ),
+    # Isto pokvarena kartica (fizicka knjiga), ali merena na OTKUPU: posle S-4a
+    # T_AmbPoslovno_OtkupniListKaoKartica meri promet otkupa kao RAZLIKU kartice
+    # pre i posle, pa izmenjena tvrdnja dobija svoju sabotazu. Papir i knjiga
+    # ne citaju karticu, pa ranije tvrdnje testa prolaze.
+    "amb-posl-kartica-otkup-fizicki": (
+        "modIzvestaj.bas",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), True)\n    If Not IsArray(ambData) Then\n",
+        "    ambData = modAmbalaza.AmbKretanjaNaloga(AMB_NALOG_KOOPERANT, Trim$(kooperantID), False)   ' SABOTAZA: kartica otkupa iz fizicke knjige\n    If Not IsArray(ambData) Then\n",
+        "T_AmbPoslovno_OtkupniListKaoKartica",
+        "kartica ambalaze: promet otkupa je -5, isti kao na papiru",
+    ),
     # Kontra-stav se ne sudi po vrsti ORIGINALA: svaki storno postaje
     # tehnicki, pa storno povrata ne gasi poslovni promet dokumenta.
     "amb-posl-pokrice-po-vrsti": (
@@ -13749,6 +13762,40 @@ POZNATI_NALAZI_DOKAZ = {
     # T_F8_IzabranRedOstajeIzabran.
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
+
+    # Dve sabotaze nad T_CiljZbirna_NePoPrvomRedu ne obaraju NISTA, ni u izboru
+    # ni celom suite-om (mereno 17.11.2026, S-4a). Obe su zatecene, ne posledica
+    # S-4a -- izbor ih je samo prvi put pustio. Razlozi su razliciti:
+    #
+    # MASKIRANA (PRJ-ZBR-02, 60a7957d), nad DANASNJIM fixture-om: bez provere
+    # nula aktivnih vlasnika OLDU prodje IKAD kapiju (vlasnik je jedan), ciljID
+    # ostane prazan (ZbirnaIDZaBroj je fail-closed, LookupActiveID nema
+    # aktivnog), pa PrijemnicaRobaRazlog("") ne nadje robu i Reassign digne
+    # gresku -- EH vrati False, isti Boolean kao tihi Exit. Maska stoji na
+    # LookupValue nad PRAZNIM kljucem, koji pogadja prvi red tblZbirna bez
+    # ZbirnaID-a (B9 anomalija, test je pravi i vraca). Kad takav red nosi
+    # robu prijemnice, mutant upise i vrati True -- tako se i obara.
+    "cilj-zbirna-bez-provere-postojanja": "NE OBARA NISTA",
+    #
+    # NE OBARA NISTA NAD FIXTURE-OM (ZBR-NORM-02, be9464ff), ali NIJE
+    # ekvivalentna: broj ZbirnaPostoji i VlasniciPoBroju danas porede isto
+    # (Trim + vbTextCompare), pa mala slova KASK staje IKAD kapija kao i tacan
+    # case. Razlikuju se u oznaci STORNA: ZbirnaPostoji (ExcludeStornirano)
+    # poredi binarno '<> "Da"' bez Trim-a, VlasniciPoBroju (IsStorniranoValue)
+    # UCase+Trim. Red sa Stornirano = "DA" je jednom aktivan, drugom nije --
+    # na takvom redu mutant upise. Pisci pisu "Da", pa fixture to ne vidi.
+    "cilj-zbirna-case-mesano": "NE OBARA NISTA",
+    #
+    # Vlasnik: zaseban rez posle S-4a (pre-flight -- dira razresavanje broja
+    # zbirne). Obe sabotaze su oborive drugim stanjem, pa se ne brisu nego se
+    # test dopunjava tim stanjem ili tvrdnjom po RAZLOGU. Zastareli komentari
+    # koje rez ispravlja: "VlasniciPoBroju poredi TACNO" (modDokumenta, test
+    # 125, ova sabotaza) i "recovery panel u frmDokumenta zove sa DVA
+    # argumenta" (modDokumenta, test 125, cilj-zbirna-kapija-samo-aktivni) --
+    # forme vise nema; grana bez generacije se danas dosize iz
+    # modScrOporavak.PreveziPrijemnicu, sa kanonskom labelom iz tabele i
+    # generacijom koju vise niko ne pise. Ovi upisi se tada brisu -- dokaz sam
+    # prijavi upis koji vise nista ne pokriva.
 
 }
 

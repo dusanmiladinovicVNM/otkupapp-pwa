@@ -863,7 +863,9 @@ izlaz sa N radnika se sa njim poredi `diff`-om.
 **Koliko radnika:** VBA radi na jednom jezgru po Excel procesu, pa je granica
 broj **fizičkih jezgara**, ne RAM (jedan Excel sa test sveskom ~200 MB).
 Preporuka je jezgra − 1. Skaliranje za svoju mašinu izmeri jednom, istim skupom
-sa 1, 2, 3 i 5 radnika.
+sa 1, 2, 3 i 5 radnika. Na mašini operatera (6 jezgara) `dop-spec` traje 3:09
+sa jednim radnikom, 1:15 sa četiri i 1:12 sa pet. Peti Excel skoro ništa ne
+donosi, pa je tamo preporuka **4**.
 
 **Test koji piše van svoje sveske ne sme u radnike.** Primer je #184
 (`T_Backup_NeObaraStartINeRasteBezGranice`). Pisao je u fiksni
@@ -951,7 +953,9 @@ python tools/dokaz.py --izolacija                  # koji ciljani testovi ne pro
   koraku. Seed se pušta uvek.
 - **Telo BFP suite je podeljeno.** Sa omotačem je telo od 414 poziva prešlo
   prag `PROCEDURA_VELIKA` (40 KB izvora, VBA „Procedure too large"), pa je
-  prvih 300 poziva posle seed-a u `BfpDeo1`–`BfpDeo3`, istim redom. Nov test se
+  prvih 301 poziv posle seed-a u `BfpDeo1`–`BfpDeo3`, istim redom. `BfpDeo1`
+  nosi 101, jer je S-4a iz tela omotača izvukao test kome izbor nije video
+  sabotažu (`Test_PrijemnicaMissingZbirnaDoesNotAppend`). Nov test se
   i dalje dopisuje na kraj `RunBusinessFlowProSuite`; kad ona opet pređe prag,
   sledećih 100 poziva ide u nov `BfpDeoN`. `run_vba --self-test` tvrdi da je
   svaki deo pozvan tačno jednom i redom (nepozvan deo bi tiho izbacio svoje
