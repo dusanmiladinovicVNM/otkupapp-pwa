@@ -1093,6 +1093,7 @@ Private Sub Test_OtkupReadHelpersExcludeStornirano()
 EH:
     Dim errDesc As String
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1528,6 +1529,7 @@ Private Sub Test_MalinaVozacMirror()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     On Error GoTo 0
@@ -1636,6 +1638,7 @@ Private Sub Test_ZBR_ImportDvaUredjajaNeStapaDokumente()
 EH:
     ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
     Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1682,6 +1685,7 @@ Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
 EH:
     ' Err se brise SVAKIM 'On Error' -- opis se hvata PRE rollback-a.
     Dim bfpErrDesc As String: bfpErrDesc = Err.Number & ": " & Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
@@ -1753,6 +1757,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -1845,6 +1850,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -1916,6 +1922,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -3660,6 +3667,7 @@ Private Sub Test_PR3_AmbalazaMoraBitiCeoBroj()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Pr3PostaviAmbalazu otp, 20
     On Error GoTo 0
@@ -4017,6 +4025,7 @@ Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Pr3UkloniClanstvo zbr, otp
     On Error GoTo 0
@@ -4090,6 +4099,7 @@ Private Sub Test_PR3_DvaAktivnaClanstvaSuGreska()
 
 EH:
     ' I na putu greske -- inace ostatak suite-a pada bez svoje krivice.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Pr3UkloniClanstvo druga, otp
     On Error GoTo 0
@@ -5115,6 +5125,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -6425,6 +6436,7 @@ Private Sub Test_S6_DveKlaseJedanDokument()
     Exit Sub
 EH:
     LogFatal "Test_S6_DveKlaseJedanDokument", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
@@ -6710,6 +6722,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_KaskadaSaSubjektomSnimaPrijemnicu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -6764,6 +6777,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_StornoSkidaPaleteUIstojTx", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
@@ -6820,6 +6834,7 @@ Private Sub Test_S6K4_FakturisanaSeOdbija()
     Exit Sub
 EH:
     LogFatal "Test_S6K4_FakturisanaSeOdbija", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not txSeme Is Nothing Then txSeme.RollbackTx
 End Sub
@@ -6904,6 +6919,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_PreradjenaPaletaObaraStorno", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(prvaPal) > 0 Then S6K4Postavi TBL_PALETA, COL_PAL_ID, prvaPal, COL_PAL_PRERADJENO, prevPre
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -7006,6 +7022,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_KaskadaSubjekatJeDokument", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
 End Sub
@@ -7085,6 +7102,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_PadPosleSvihUpisaVracaSve", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modStorno.StornoPrijemnicePadniTest False
     SetTestMode prevMode
@@ -7153,6 +7171,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_JezgroTraziSnimak", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -7215,6 +7234,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_KontraStavPadneDokumentOstaje", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -7301,6 +7321,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K4_PaletnaStavkaBezPaleteObaraStorno", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     If Len(stavka) > 0 And Len(pravaPal) > 0 Then _
@@ -7663,6 +7684,7 @@ Private Sub Test_S6K5_OkvirOdbijaFakturisanuPreZapisa()
     Exit Sub
 EH:
     LogFatal "Test_S6K5_OkvirOdbijaFakturisanuPreZapisa", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -7760,6 +7782,7 @@ Private Sub Test_S6K5_PadPosleUpisaVracaFakturu()
     Exit Sub
 EH:
     LogFatal "Test_S6K5_PadPosleUpisaVracaFakturu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modFaktura.CreateFakturaPadniTest False
     SetTestMode prevMode
@@ -7883,6 +7906,7 @@ Private Sub Test_S6K5_LinijaBezFaktureJeKvar()
     Exit Sub
 EH:
     LogFatal "Test_S6K5_LinijaBezFaktureJeKvar", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -7996,6 +8020,7 @@ Private Sub Test_S6K6_F4DokumentProlaziLanac()
     Exit Sub
 EH:
     LogFatal "Test_S6K6_F4DokumentProlaziLanac", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     S6K6StatusIspravki parkirane, SV_STATUS_PENDING
 End Sub
@@ -8081,6 +8106,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S6K7_OsirocenePaleteDatumPoDokumentu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If rezimPostavljen Then SetTestMode prevMode
     S6K7SkiniPalete prjA
@@ -8546,6 +8572,7 @@ Private Sub Test_S7R2_AktivnostLinijeIzZaglavlja()
     Exit Sub
 EH:
     LogFatal SRC, Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -8608,6 +8635,7 @@ Private Sub Test_S7R2_UgovorLinijaFakture()
     Exit Sub
 EH:
     LogFatal "Test_S7R2_UgovorLinijaFakture", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -8720,6 +8748,7 @@ Private Sub Test_S7R2_FakturaStareKoloneSelfHeal()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     FakObrisiStareKoloneTest
     On Error GoTo 0
@@ -8778,6 +8807,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If iUt > 0 Then
         If GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID) = 0 Then lo.ListColumns(iUt).name = COL_FS_UTOVAR_ID
@@ -8993,6 +9023,7 @@ Private Sub Test_S7R3_SefLinijaNosiStavkuIKlasu()
     Exit Sub
 EH:
     LogFatal "Test_S7R3_SefLinijaNosiStavkuIKlasu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -9051,6 +9082,7 @@ Private Sub Test_S7R3_SefOdbijaNejasnuLiniju()
     Exit Sub
 EH:
     LogFatal "Test_S7R3_SefOdbijaNejasnuLiniju", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -9124,6 +9156,7 @@ Ciscenje:
     Exit Sub
 EH:
     LogFatal SRC, Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -9225,6 +9258,7 @@ Private Sub Test_S7R3_GpPraviloJedno()
     Exit Sub
 EH:
     LogFatal SRC, Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -9263,6 +9297,7 @@ Private Sub Test_S7R3_UgovorGpIzvor()
     Exit Sub
 EH:
     LogFatal SRC, Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -9347,6 +9382,7 @@ Private Sub Test_S7R3_HealthIznosNalazi()
     Exit Sub
 EH:
     LogFatal SRC, Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Sub
@@ -10003,6 +10039,7 @@ Private Sub Test_S6_PaleteCitajuStavke()
     Exit Sub
 EH:
     LogFatal "Test_S6_PaleteCitajuStavke", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
@@ -10119,6 +10156,7 @@ Private Sub Test_S8R1a_KorekcijaPoIdentitetu()
     Exit Sub
 EH:
     LogFatal "Test_S8R1a_KorekcijaPoIdentitetu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_PALETIRANJE, prevPal
 End Sub
@@ -10321,6 +10359,7 @@ Private Sub Test_S8R1b_PraznaPaletaStrogBrojac()
     Exit Sub
 EH:
     LogFatal "Test_S8R1b_PraznaPaletaStrogBrojac", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modPaletniList.PaletaPraznoTestSet ""
     SetTestMode prevMode
@@ -10486,6 +10525,7 @@ Private Sub Test_S8R1c_StornoPaleteAktivnaRoba()
     Exit Sub
 EH:
     LogFatal "Test_S8R1c_StornoPaleteAktivnaRoba", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not txA Is Nothing Then txA.RollbackTx
     modPaletniList.PaletaPraznoTestSet ""
@@ -10696,6 +10736,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     If Not cfgVracen Then
@@ -10843,6 +10884,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S8R2a2_LabeleIIntegritetPoStavci", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -10933,6 +10975,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_KI086_KorekcijaCekaPosleOtkaza", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
     modPaletniListUI.PaletaAdjustPitanjeTestReset
@@ -11019,6 +11062,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_KI086_PalaKorekcijaNosiRazlog", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modPaletniList.PaletaPraznoTestSet ""
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
@@ -11105,6 +11149,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_KI087_IzborPaleteStrogoCitaPreradu", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modPaletniList.PaletaPraznoTestSet ""
     SetTestMode prevMode
@@ -11259,6 +11304,7 @@ Kraj:
     Exit Sub
 EH:
     LogFatal "Test_S8R2b1_PisacPaleteTraziLiniju", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -11347,6 +11393,7 @@ Private Sub Test_S8R2b2_PaletnaStavkaStareKoloneSelfHeal()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     PalsObrisiStareKoloneTest
     On Error GoTo 0
@@ -11485,6 +11532,7 @@ Private Function S8R1bSkini(ByVal prj As String) As String
     Exit Function
 EH:
     S8R1bSkini = "[" & Err.Number & "] " & Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
 End Function
@@ -11661,6 +11709,7 @@ Private Sub Test_S6_CitalacStavkiPrijemniceDrziUgovor()
 EH:
     Dim eNo As Long, eOpis As String
     eNo = Err.Number: eOpis = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -11952,6 +12001,7 @@ Private Function Odl24Pozajmi(ByVal d As Date, ByVal broj As String, _
     Exit Function
 EH:
     outRazlog = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -11997,6 +12047,7 @@ Private Function Odl24MesovitDokument(ByVal d As Date, ByVal broj As String, _
     Exit Function
 EH:
     outRazlog = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -12454,6 +12505,7 @@ Private Function OtpisKrozJezgro(ByVal d As Date, ByVal broj As String, _
     Exit Function
 EH:
     outRazlog = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -12494,6 +12546,7 @@ Private Function OtpisDvaNaloga(ByVal d As Date, ByVal broj As String, _
     Exit Function
 EH:
     outRazlog = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -12994,6 +13047,7 @@ EH:
     eN = Err.Number
     eD = Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -13083,6 +13137,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -13422,6 +13477,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
@@ -13489,6 +13545,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
@@ -13581,6 +13638,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
@@ -13658,6 +13716,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
@@ -13735,6 +13794,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
@@ -13843,6 +13903,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modDokumenta.TestSimPadPiscaOtpremnice False
     tx.RollbackTx
@@ -13983,6 +14044,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     If Not kupacVracen Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -14114,6 +14176,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     If Not kupacVracen Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -14206,6 +14269,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14282,6 +14346,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14410,6 +14475,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14480,6 +14546,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14549,6 +14616,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14692,6 +14760,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14765,6 +14834,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14840,6 +14910,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -14975,6 +15046,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15032,6 +15104,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15106,6 +15179,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15170,6 +15244,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15259,6 +15334,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15360,6 +15436,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15446,6 +15523,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15533,6 +15611,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15633,6 +15712,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15695,6 +15775,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15759,6 +15840,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15813,6 +15895,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -15893,6 +15976,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -16006,6 +16090,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -16127,6 +16212,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -16239,6 +16325,7 @@ EH:
     eNum2 = Err.Number
     eDesc2 = Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -16334,6 +16421,7 @@ Private Sub Test_OTP_NacrtNijeZavrsetakIspravke()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(cid) > 0 Then Call modStornoContext.CancelCorrectionContext(cid, "S3a test cleanup")
     On Error GoTo 0
@@ -16447,6 +16535,7 @@ Private Sub Test_OTP_ZaglavljeBezStavkiObaraCitaoce()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -17149,6 +17238,7 @@ Private Sub Test_OTP_IzdavanjeCitaStrogo()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -17247,6 +17337,7 @@ Private Sub Test_OTP_IzdavanjeCitaIzvorStrogo()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -18103,6 +18194,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     RadniStoPocetno
     modOtkupUI.ActiveMode = prevAkt
@@ -18429,6 +18521,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -18483,6 +18576,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -18562,6 +18656,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -18638,6 +18733,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -18695,6 +18791,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -18774,6 +18871,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -18869,6 +18967,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -19005,6 +19104,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -19107,6 +19207,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -19201,6 +19302,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -19284,6 +19386,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -19420,6 +19523,7 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     ' Ciscenje i posle pada -- stara kolona ne sme da ostane iza testa.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     PrjObrisiStareKoloneTest
     On Error GoTo 0
@@ -19512,6 +19616,7 @@ EH:
     Dim eN As Long, eD As String
     eN = Err.Number
     eD = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -22036,6 +22141,7 @@ Private Sub Test_ZBR_CitalacStavkiDrziUgovor()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -22134,6 +22240,7 @@ Private Sub Test_OTP_DveStavkeIsteKlaseObaraCitaoce()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -22205,6 +22312,7 @@ Private Sub Test_OTP_InvarijantaSabiraStavke()
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -22952,6 +23060,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -24093,6 +24202,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -25547,6 +25657,7 @@ Private Sub Test_Amb_NalogDvosmislenPada()
 
 EH:
     ' Visak u master tabeli ne sme da ostane iza testa.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     Dim ostatak As Collection
     Set ostatak = FindRows(TBL_VOZACI, "VozacID", TEST_VOZ_ID)
@@ -25914,6 +26025,7 @@ Private Sub Test_Amb_StornoPosleVracanjaOdbijen()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -26020,6 +26132,7 @@ Private Sub Test_Amb_StornoNePraviMinus()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -26077,6 +26190,7 @@ Private Function Odl40Scenario(ByVal scenario As String, ByRef tipT As String) A
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -26157,6 +26271,7 @@ Private Sub Test_AMB_ODL40_MeriPosleZamene()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then
         modAmbalaza.AmbOdloziInvarijanteOtkazi tx
@@ -26214,6 +26329,7 @@ Private Sub Test_AMB_ODL40_BezPokricaPadaNaKraju()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then
         modAmbalaza.AmbOdloziInvarijanteOtkazi tx
@@ -26271,6 +26387,7 @@ Private Sub Test_AMB_ODL40_CommitBezZavrsetkaOdbijen()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then
         modAmbalaza.AmbOdloziInvarijanteOtkazi tx
@@ -26335,6 +26452,7 @@ Private Sub Test_AMB_ODL40_UgovorPocetka()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then
         modAmbalaza.AmbOdloziInvarijanteOtkazi tx
@@ -26379,6 +26497,7 @@ Private Function LncTipAmb(ByVal scenario As String, ByVal gajbi As Double) As S
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -26573,6 +26692,7 @@ Private Sub Test_LNC_StornoListaUIzdatojZbirnoj()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If kupacMenjan Then SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
     On Error GoTo 0
@@ -26964,6 +27084,7 @@ Private Sub Test_LNC_BrojVerzijeBezPrekidaca()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
     On Error GoTo 0
@@ -27064,6 +27185,7 @@ Private Sub Test_LNC_F8StornoListaULancu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetTestMode prevMode
     On Error GoTo 0
@@ -27111,6 +27233,7 @@ Private Sub Test_LNC_F1IspravkaULancu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modScrDokumenti.Scr_IspravkaOtkazi
     modScrDokumenti.Scr_PotvrdaLancaTestReset
@@ -27397,6 +27520,7 @@ Private Sub Test_LNC_StaraOtpremnicaBezKulture()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If vratiOtp Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
     If vratiOtp2 Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp2, COL_OTP_KULTURA, TEST_KULTURA_ID
@@ -27544,6 +27668,7 @@ Private Sub Test_LNC_OtpremnicaNeuskladjenaSaListovima()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If v1 Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOLICINA, 300#
     If v2k Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp2, COL_OPS_KOLICINA, 300#
@@ -27651,6 +27776,7 @@ Private Sub Test_OTK_KI089_PotvrdaIspravkeKaoPisac()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modOtkupUnos.PitanjeManjkaTestReset
     SetTestMode prevMode
@@ -27744,6 +27870,7 @@ Private Sub Test_LNC_KI089_PotvrdaIspravkeULancu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modOtkupUnos.PitanjeManjkaTestReset
     SetTestMode prevMode
@@ -27938,6 +28065,7 @@ Private Sub Test_LNC_NedovrsenKontekstOdbija()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modStorno.StornoPrijemnicePadniTest False
     If modMenjan Then SetTestMode prevMode
@@ -28109,6 +28237,7 @@ Private Sub Test_LNC_NedovrsenKontekstGranice()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LncOdbaciKontekste cidC, cidD, cidE1, cidE2
     LncOdbaciKontekste cidF, cidE2m, cidE3, cidG
@@ -28189,6 +28318,7 @@ Private Sub Test_LNC_UpozorenjeUTragu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If vA Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpA, COL_OPS_KOLICINA, 300#
     If vC Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otpC, COL_OPS_KOLICINA, 300#
@@ -28372,6 +28502,7 @@ Private Sub Test_LNC_UpozorenjePrijemniceSviPotezi()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If ispravkaOtvorena Then modScrDokumenti.Scr_IspravkaOtkazi
     modScrDokumenti.Scr_PotvrdaLancaTestReset
@@ -28541,6 +28672,7 @@ Private Sub Test_LNC_Blok_IzvadiIzdataBezZbirne()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If malMenjan Then SetConfigValue CFG_KEY_MALINA_MODE, prevMal
     On Error GoTo 0
@@ -28605,6 +28737,7 @@ Private Sub Test_LNC_Blok_IzvadiUZbirni()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(cidR) > 0 Then modScrOporavak.OdbaciIspravkuCore cidR
     On Error GoTo 0
@@ -28639,6 +28772,7 @@ Private Sub Test_LNC_Blok_IzvadiNeuskladjena()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If v Then S6K4Postavi TBL_OTPREMNICA_STAVKE, COL_OPS_OTPREMNICA_ID, otp, COL_OPS_KOLICINA, 300#
     On Error GoTo 0
@@ -28920,6 +29054,7 @@ Private Sub Test_LNC_Blok_IzvadiOdbijen()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -29287,6 +29422,7 @@ Private Sub Test_LNC_Blok_IzvadiDvePrijemnice()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If rodMenjan Then S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj1, COL_DETE_ZBIRNA_ROD, zbrNova
     If labelaMenjana Then S6K4Postavi TBL_PRIJEMNICA, COL_PRJ_ID, prj3, COL_PRJ_BROJ_ZBIRNE, LncZbrPolje(zbrC, COL_ZBR_BROJ)
@@ -29446,6 +29582,7 @@ Private Sub Test_LNC_Blok_DodajOdbijen()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -29542,6 +29679,7 @@ Private Sub Test_LNC_Blok_DodajAmbalaza()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -29680,6 +29818,7 @@ Private Sub Test_LNC_Blok_DodajStaraBezKulture()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If menjana Then S6K4Postavi TBL_OTPREMNICA, COL_OTP_ID, otp, COL_OTP_KULTURA, TEST_KULTURA_ID
     On Error GoTo 0
@@ -29926,6 +30065,7 @@ Private Sub Test_LNC_Blok_EkranPotvrdaIRuta()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modScrDokumenti.Scr_OtpTestReset
     modScrDokumenti.Scr_PotvrdaLancaTestReset
@@ -29986,6 +30126,7 @@ Private Sub Test_LNC_Blok_EkranPromenaStanice()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modScrDokumenti.Scr_OtpTestReset
     SetTestMode prevTest
@@ -30054,6 +30195,7 @@ Private Sub Test_LNC_Blok_GranicaRadnji()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modScrDokumenti.Scr_OtpTestReset
     modScrDokumenti.Scr_ZbrOtkazi
@@ -30252,6 +30394,7 @@ Private Sub Test_KI095_F8ZbirnaUzNedovrsenuIspravku()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     LncOdbaciKontekste cidA, cidB, cidP, cidD
     LncOdbaciKontekste cidF, cidDupli, cidPon, cidC
@@ -30568,6 +30711,7 @@ Private Sub Test_Amb_NabavkaOtvaraIzdavanje()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -30798,6 +30942,7 @@ Private Sub Test_Amb_Inv08TxVlasnistvo()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not txA Is Nothing Then txA.RollbackTx
     If Not txB Is Nothing Then txB.RollbackTx
@@ -31071,6 +31216,7 @@ Private Sub Test_Amb_PisacKnjige()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31175,6 +31321,7 @@ Private Sub Test_Amb_KanonskiRedPoImenu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31308,6 +31455,7 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     ' Ciscenje i posle pada -- kolona starog modela ne sme da ostane iza testa.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     AmbObrisiStareKoloneTest
     On Error GoTo 0
@@ -31571,6 +31719,7 @@ Private Sub Test_Amb_JedanProtivpartnerPoDokumentu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31761,6 +31910,7 @@ Private Sub Test_Amb_DeficitIObaveza()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31880,6 +32030,7 @@ Private Sub Test_Amb_ZaglavljeDokumentaPisac()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -32007,6 +32158,7 @@ Private Sub Test_Schema_ZalutalaKolonaSeVracaNaMesto()
 EH:
     ' Ciscenje i posle pada: kanonska kolona mora da se vrati, inace ostatak
     ' suite-a pada na drift-u i pravi uzrok se gubi.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modSetup.ObrisiKolonuAko TBL_OTKUP, COL_DETE_ZBIRNA_ROD & "_MIG"
     If GetColumnIndex(TBL_OTKUP, "ZbirnaGeneracijaID") > 0 Then
@@ -32708,6 +32860,7 @@ Private Sub Test_OTK_CitaociStavkiFailClosed()
 
 EH:
     LogFatal "Test_OTK_CitaociStavkiFailClosed", Err.Number, Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not rows Is Nothing Then
         RequireUpdateCell TBL_OTKUP_STAVKE, rows(1), COL_OKS_CENA, 50#, _
@@ -32848,6 +33001,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -32932,6 +33086,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -33027,6 +33182,7 @@ EH:
     Dim errNum2 As Long, errDesc2 As String
     errNum2 = Err.Number
     errDesc2 = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -33136,6 +33292,7 @@ EH:
     Dim errNum3 As Long, errDesc3 As String
     errNum3 = Err.Number
     errDesc3 = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -34038,6 +34195,7 @@ Private Sub Test_OTK_SelfHealMigracijeKolona()
 
 EH:
     ' Ciscenje i posle pada -- visak kolone ne sme da ostane iza testa.
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA
     modSetup.ObrisiKolonuAko TBL_OTKUP, PROBA2
@@ -34276,6 +34434,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

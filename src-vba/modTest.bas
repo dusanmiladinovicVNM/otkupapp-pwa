@@ -2071,6 +2071,7 @@ EH:
     modOtkupUI.ActiveMode = prev
     modScrDokumenti.Scr_OtpOtkazi
     modScrDokumenti.Scr_ZbrOtkazi
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -2231,6 +2232,7 @@ EH:
     If Not f Is Nothing Then Unload f
     modOtkupUI.ActiveMode = prev
     modScrDokumenti.Scr_ZbrOtkazi
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -2357,6 +2359,7 @@ EH:
     If Not f Is Nothing Then Unload f
     modOtkupUI.ActiveMode = prev
     modScrDokumenti.Scr_IzmenaOtkazi
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -3535,6 +3538,7 @@ Private Sub T_IspravkaPrijemnice_SkipIRelink()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -3868,6 +3872,7 @@ Private Sub T_S8R1a_IspravkaKorigujeSvojDokument()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -4067,6 +4072,7 @@ Private Sub T_S8R1b_SkiniPaleteJezgro()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -4157,6 +4163,7 @@ Private Sub T_S8R1b_NedovrsenoPoIdentitetu()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -4235,6 +4242,7 @@ Private Sub T_S8R1b_PreveziPaleteJezgro()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     SetConfigValue CFG_PALETIRANJE, prevPal
@@ -5132,6 +5140,7 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
                                              "", "PRJ-TEST-Z2", True)
     validPodDriftom = CBool(m("valid"))
 VRATI:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     lo.ListColumns(COL_PALS_PRIJEMNICA_ID & "_DRIFT").name = COL_PALS_PRIJEMNICA_ID
     On Error GoTo 0
@@ -5154,6 +5163,7 @@ VRATI:
                                              "", "PRJ-TEST-Z2", True)
     validPodPalDriftom = CBool(m("valid"))
 VRATI_PAL:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     lo.ListColumns(COL_PALS_PALETA_ID & "_DRIFT").name = COL_PALS_PALETA_ID
     On Error GoTo 0
@@ -5286,6 +5296,7 @@ Private Sub T_KapijaZbirne_FailClosedNaSvojuGresku()
     lo.ListColumns(COL_ZBR_VOZAC).Name = COL_ZBR_VOZAC & "_DRIFT"
     podDriftom = modStornoFlow.ZbirnaDvosmislenaIkad_Test(FX_ZBIRNA_MIRNA)
 VRATI:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     lo.ListColumns(COL_ZBR_VOZAC & "_DRIFT").Name = COL_ZBR_VOZAC
     On Error GoTo 0
@@ -7848,6 +7859,7 @@ Private Sub T_AmbStampa_StornoOdbijaPapir()
 CleanUp212:
     errNumT212 = Err.Number
     errDescT212 = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     On Error GoTo 0
@@ -7914,6 +7926,7 @@ Private Sub T_AmbStampa_NabavkaNeDobijaReversSablon()
 CleanUp:
     errNumT213 = Err.Number
     errDescT213 = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     On Error GoTo 0
@@ -8225,6 +8238,7 @@ Private Sub T_AmbIspravkaReversa_EkranNudiIOtvara()
 CleanUp:
     errNumT = Err.Number
     errDescT = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     modScrDokumenti.Scr_IspravkaOtkazi
@@ -8317,6 +8331,7 @@ Private Sub T_AmbIspravkaReversa_DvaPoslovnaRedaOdbijena()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -8645,6 +8660,7 @@ Private Sub T_KI011_UspesanUpisJeUspeh()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
@@ -8743,6 +8759,7 @@ Private Sub T_KI011_ZaostalaGreskaNijeNeuspeh()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modPrint.StampaTestSet ""
     If Not f Is Nothing Then ReleaseOtkupUIForm f
@@ -8843,6 +8860,7 @@ Private Sub T_KI011_PadStampeJeUpozorenjeUzUspeh()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modPrint.StampaTestSet ""
     If Not f Is Nothing Then ReleaseOtkupUIForm f
@@ -9096,6 +9114,7 @@ Private Sub T_KI013_VisetipniDokumentPapirPoTipu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -9171,6 +9190,7 @@ Private Sub T_SaldoPapir_ReversKakoJeBio()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     On Error GoTo 0
@@ -9243,6 +9263,7 @@ Private Sub T_SaldoPapir_KupcevReversF7BezPapira()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     On Error GoTo 0
@@ -9361,6 +9382,7 @@ Private Sub T_SaldoPapir_TipBezObziraNaVelikaSlova()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     Set tx = Nothing
@@ -9416,6 +9438,7 @@ Private Sub T_KI014_ZaostatakListeNijePad()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrCuriTestSet ""
     modOtkupUI.GridTestLoad ""
@@ -9488,6 +9511,7 @@ Private Sub T_KI014_ZaostatakRadnjeNijePad()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrCuriTestSet ""
     If Not f Is Nothing Then ReleaseOtkupUIForm f
@@ -9542,6 +9566,7 @@ Private Sub T_KI014_ZaostatakNesacuvanogNijeOdbacivanje()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrCuriTestSet ""
     modUiPanel.PanelZatvori False
@@ -9667,6 +9692,7 @@ Private Sub T_KI016_ClanHvataSvojPad()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -9728,6 +9754,7 @@ Private Sub T_KI016_PadListeJeJavljen()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -9803,6 +9830,7 @@ Private Sub T_KI016_PadRadnjeJeJavljen()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -9898,6 +9926,7 @@ Private Sub T_KI016_PadGradnjeJeJavljen()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -9983,6 +10012,7 @@ Private Sub T_KI016_PadUsredGradnje()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -10054,6 +10084,7 @@ Private Sub T_KI016_PorukaMrezeNeGasiTudju()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modUiScreens.ScrPadTestSet ""
     modUiScreens.ScrPadPreuzmi
@@ -10110,6 +10141,7 @@ Private Sub T_KI015_OdbijenReversImenujeRevers()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     On Error GoTo 0
@@ -10386,6 +10418,7 @@ Private Sub T_PDF_TestProlazNeOtvaraPdf()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modDocStyle.DocPdfTestReset
     SetConfigValue CFG_PDF_OTVORI_POSLE, kljucPre
@@ -10449,6 +10482,7 @@ Private Sub T_PDF_IzvestajHouseNeOtvara()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modDocStyle.DocPdfTestReset
     SetConfigValue CFG_PDF_OTVORI_POSLE, kljucPre
@@ -10498,6 +10532,7 @@ Private Sub T_PDF_IzvestajGenerickiNeOtvara()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modDocStyle.DocPdfTestReset
     SetConfigValue CFG_PDF_OTVORI_POSLE, kljucPre
@@ -10555,6 +10590,7 @@ Private Sub T_KI023_KatalogCuvaVodeciApostrof()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If errNum <> 0 Then
         modSetup.EnsurePoruke
@@ -10649,6 +10685,7 @@ Private Sub T_ODL24_F7PozajmicaKupca()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modOtkupUnos.PitanjeManjkaTestReset
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
@@ -10753,6 +10790,7 @@ Private Sub T_KI025_F7NabavkaOtvaraIzdavanje()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     SetConfigValue CFG_AUTO_BROJ_DOK, autoPre
@@ -10894,6 +10932,7 @@ Private Sub T_KI026_F7OtpisSaNaloga()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OM_IZDAVANJE_PRINT_MODE, modePre
     SetConfigValue CFG_AUTO_BROJ_DOK, autoPre
@@ -11207,6 +11246,7 @@ Private Sub T_S6K4_StornoCitaStavkeIIdentitet()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -11578,6 +11618,7 @@ Private Sub T_BrutoNeto_PoRezimu()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
     S6K6Skloni zid
@@ -11670,6 +11711,7 @@ Private Sub T_Prijemnica_VezujeSeSamoNaJednoznacnu()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, pD1
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, pD2
@@ -11763,6 +11805,7 @@ Private Sub T_S6K6_F4UpisKrozPotez()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
@@ -11848,6 +11891,7 @@ Private Sub T_S6K6_UlazNeMenjaPodatak()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     S6K6Skloni zid
     On Error GoTo 0
@@ -11934,6 +11978,7 @@ Private Sub T_S6K6_BrojJedinstvenPoKupcu()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     S6K6Skloni z1
     S6K6Skloni z2
@@ -11991,6 +12036,7 @@ Private Sub T_S6K6_RazlogPiscaStizeDoEkrana()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     S6K6Skloni zid
     On Error GoTo 0
@@ -12104,6 +12150,7 @@ Private Sub T_S6K6_TragIspravkePoID()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(res) > 0 Then modStorno.StornoPrijemnica_TX res, True, det, razlog
     If Len(prjB) > 0 Then modStorno.StornoPrijemnica_TX prjB, True, det, razlog
@@ -12182,6 +12229,7 @@ Private Sub T_S6K6_FokusPosleGreske()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     S6K6Skloni zid
@@ -12266,6 +12314,7 @@ Private Sub T_S6K7_F1PraviCeoLanac()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     S6K7SkloniLanac blok, otp, zbr, prj
@@ -12325,6 +12374,7 @@ Private Sub T_S6K7_LanacBezPrekidaca()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     PostaviPoljePoPK TBL_STANICE, "StanicaID", FX_STANICA, COL_STA_JE_HLADNJACA, prevHlad
     SetConfigValue STARI_KLJUC, prevKljuc
@@ -12413,6 +12463,7 @@ Private Sub T_S6K7_OporavakNedovrsenLanac()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modOtkupUI.GridTestLoad ""
     S6K7SkloniLanac blok, otp, zbr, prj
@@ -12493,6 +12544,7 @@ Private Sub T_S6K8_BrojHladnjacePosleStorna()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevHlad
     S6K6Skloni z1
@@ -12566,6 +12618,7 @@ Private Sub T_S6K8_F4RobaKaoZbirna()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     ' Bez kapije (crveno) bi i odbijeni slucajevi napravili dokument -- ne sme da
@@ -12899,6 +12952,7 @@ Private Sub T_S6_CitaociStavkiPrijemnice()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -13301,6 +13355,7 @@ Private Sub T_KartHron_MrezaNePreuredjuje()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     modScrIzvestaji.Scr_IzTestReset
@@ -13944,6 +13999,7 @@ Private Sub T_AmbBilans_SignalIKvar()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -14383,6 +14439,7 @@ Private Sub T_KI024_PonavljanjeIStorno()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -14909,6 +14966,7 @@ Private Sub T_Prazne_VozacVracaSamoPrazne()
 CleanUp:
     errNumTx = Err.Number
     errDescTx = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     Set tx = Nothing
@@ -14997,6 +15055,7 @@ Private Sub T_Prazne_StornoKazeRazlog()
 CleanUp:
     errNumTx = Err.Number
     errDescTx = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     Set tx = Nothing
@@ -15199,6 +15258,7 @@ Private Sub T_ODL39_VracanjeKupcu()
 CleanUp:
     errNumTx = Err.Number
     errDescTx = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     Set tx = Nothing
@@ -15344,6 +15404,7 @@ Private Sub T_ODL39_PapirVracanjaKupcu()
 CleanUp:
     errNumTx = Err.Number
     errDescTx = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     Set tx = Nothing
@@ -15681,6 +15742,7 @@ Private Function KartPovratSaPokricem(ByVal tip As String, ByVal kol As Double, 
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     tx.RollbackTx
     On Error GoTo 0
@@ -16289,6 +16351,7 @@ Private Sub T_KI021_ComboTipaJeSifarnik()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -17277,6 +17340,7 @@ Private Sub T_Sema_FormatCelijeCuvaVrednost()
 EH:
     errNum = Err.Number: errDesc = Err.description
     If txZapoceta Then tx.RollbackTx
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modSchema.PrimeniFormateKanona
     On Error GoTo 0
@@ -17382,6 +17446,7 @@ Private Sub T_Sema_ZurnalCuvaVrednostKrozJournalCell()
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If zasticen Then ws.Unprotect
     modStornoZurnal.AbortStornoOp
@@ -17468,6 +17533,7 @@ Private Sub T_Sema_MagacinOdbijaUpisBezUgovora()
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If zasticen Then ws.Unprotect
     On Error GoTo 0
@@ -17682,6 +17748,7 @@ Private Sub T_AutoSave_PadNeZaglavljujePrekidac()
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modJournaling.AutoSaveTestKvar False
     modJournaling.ResetAutoSaveStateForTests
@@ -18359,6 +18426,7 @@ Private Sub T_Sema_SamoLeci()
 EH:
     ' Fixture ne sme da ostane bez tabele ni kad test pukne.
     Application.DisplayAlerts = prevAlerts
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modSchema.EnsureAllTables
     On Error GoTo 0
@@ -18422,6 +18490,7 @@ Private Sub T_Sema_PrefiksNijeString()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     lo.ListColumns(zadnja).name = staroIme
     On Error GoTo 0
@@ -18611,6 +18680,7 @@ EH:
     Dim errDesc As String
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If preimenovana Then ws.ListObjects("TST_RB_B_SAKRIVENA").name = "TST_RB_B"
     TxRbObrisiList SHEET_IME
@@ -29242,6 +29312,7 @@ Private Sub T_Doplata_IzvodPoBrojuKO()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -29299,6 +29370,7 @@ Private Sub T_Doplata_StornoOdvezujeIsplatu()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -29614,6 +29686,7 @@ Private Sub T_Doplata_IzvodRucnoNaKO()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -30350,6 +30423,7 @@ Private Sub T_Gotovina_NadoknadaNikadGotovinom()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -30485,6 +30559,7 @@ Private Sub T_Doplata_SpecNalogIIzvod()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modBankaMapiranje.gBankaSilentBatch = False
     If Not tx Is Nothing Then tx.RollbackTx
@@ -30571,6 +30646,7 @@ Private Sub T_Doplata_SpecAvansIPoziv()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -30633,6 +30709,7 @@ Private Sub T_Doplata_UkljuciFiltrirane()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modOtkupUI.GridTestLoad ""
     modScrDoplata.Scr_DopTestReset
@@ -30746,6 +30823,7 @@ Private Sub T_Doplata_SpecGotovinaNaStanici()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -30861,6 +30939,7 @@ Private Sub T_Doplata_SpecRucnoMapiranje()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     modBankaMapiranje.gBankaSilentBatch = False
     If Not tx Is Nothing Then tx.RollbackTx
@@ -31029,6 +31108,7 @@ Private Sub T_Doplata_BrojeviBezSlova()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31118,6 +31198,7 @@ Private Sub T_KUL1_KulturaListaPoSorti()
 EH:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -31453,6 +31534,7 @@ Private Sub T_Doplata_ObuhvatNaEkranu()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     modScrIzvestaji.Scr_IzTestReset
@@ -31576,6 +31658,7 @@ Private Sub T_Doplata_ObuhvatZastoj()
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not f Is Nothing Then ReleaseOtkupUIForm f
     modScrIzvestaji.Scr_IzTestReset

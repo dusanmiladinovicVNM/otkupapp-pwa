@@ -118,6 +118,7 @@ EH:
     Dim errNum As Long, errDesc As String, errSrc As String
     errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

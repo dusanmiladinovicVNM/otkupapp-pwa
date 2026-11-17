@@ -56,6 +56,7 @@ Public Sub RunGoogleSyncSmokeSuite()
 
 EH:
     LogGoogleSmokeFail "RunGoogleSyncSmokeSuite fatal", Err.description
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     CleanupGoogleSmokeSpreadsheet
     EndGoogleSmokeRun
@@ -423,6 +424,7 @@ Public Sub RunMasterSyncSmokeSuite()
 EH:
     LogGoogleSmokeFail "RunMasterSyncSmokeSuite fatal", Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
@@ -592,6 +594,7 @@ Private Sub Test_MasterSyncVozacUpdateFailureIsFatal()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     TestHook_ArmFailSeam ""
     On Error GoTo 0
@@ -637,6 +640,7 @@ Private Sub Test_MasterSyncPoisonSheetIsTrashed()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     TestHook_ArmFailSeam ""
     On Error GoTo 0
@@ -774,6 +778,7 @@ Private Sub Test_MasterSyncEmptySheetIsNotAnError()
 EH:
     LogGoogleSmokeFail "MASTER SYNC: empty sheet not an error", Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(Trim$(emptySpreadsheetID)) > 0 Then Call TrashGoogleDriveFile(emptySpreadsheetID)
 End Sub
@@ -849,6 +854,7 @@ Private Sub Test_BrojeviRemoteScanFailsClosed()
 EH:
     LogGoogleSmokeFail "BROJEVI: remote scan fail-closed", Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(Trim$(noHeaderID)) > 0 Then Call TrashGoogleDriveFile(noHeaderID)
 End Sub
@@ -894,6 +900,7 @@ Private Sub Test_GetOrCreateSpreadsheetIDNoDuplicate()
 EH:
     LogGoogleSmokeFail "GET-OR-CREATE: no duplicate", Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(Trim$(firstID)) > 0 Then Call TrashGoogleDriveFile(firstID)
 End Sub
@@ -983,6 +990,7 @@ Private Sub Test_MasterSyncCrossSheetFailureKeepsEarlierRows()
 EH:
     LogGoogleSmokeFail "MASTER SYNC: cross-sheet failure", Err.description
 
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Len(Trim$(okID)) > 0 Then Call TrashGoogleDriveFile(okID)
     If Len(Trim$(badID)) > 0 Then Call TrashGoogleDriveFile(badID)

@@ -1088,6 +1088,7 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     RestoreSEFTestQuiet quietSet, wasQuiet
@@ -1219,6 +1220,7 @@ Private Sub Test_SEFStornoMovesLocalWorkflow()
     Exit Sub
 
 EH:
+    On Error GoTo -1   ' gasi obradjivac; v. vba_check GARD_U_OBRADJIVACU
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     RestoreSEFTestQuiet quietSet, wasQuiet
