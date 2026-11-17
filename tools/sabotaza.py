@@ -161,7 +161,7 @@ SABOTAZE = {
     # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
     # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
     # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
-    # (v. POZNATI_NALAZI_DOKAZ -- od ZBR-NORM-02 ekvivalentna, ne obara nista.)
+    # (v. POZNATI_NALAZI_DOKAZ -- od ZBR-NORM-02 ne obara nista nad fixture-om.)
     "cilj-zbirna-case-mesano": (
         "modDokumenta.bas",
         "        Dim aktivniVlasnici As Long\n"
@@ -13767,25 +13767,34 @@ POZNATI_NALAZI_DOKAZ = {
     # ni celom suite-om (mereno 17.11.2026, S-4a). Obe su zatecene, ne posledica
     # S-4a -- izbor ih je samo prvi put pustio. Razlozi su razliciti:
     #
-    # MASKIRANA (PRJ-ZBR-02, 60a7957d): bez provere nula aktivnih vlasnika OLDU
-    # prodje IKAD kapiju (vlasnik je jedan), ciljID ostane prazan
-    # (ZbirnaIDZaBroj je fail-closed, LookupActiveID nema aktivnog), pa
-    # PrijemnicaRobaRazlog("") digne DOKUNOS_ERR_PRJ_ZBIRNA_BEZ_ROBE i EH vrati
-    # False. Isti Boolean kao tihi Exit -- razlika je samo ERROR u logu.
+    # MASKIRANA (PRJ-ZBR-02, 60a7957d), nad DANASNJIM fixture-om: bez provere
+    # nula aktivnih vlasnika OLDU prodje IKAD kapiju (vlasnik je jedan), ciljID
+    # ostane prazan (ZbirnaIDZaBroj je fail-closed, LookupActiveID nema
+    # aktivnog), pa PrijemnicaRobaRazlog("") ne nadje robu i Reassign digne
+    # gresku -- EH vrati False, isti Boolean kao tihi Exit. Maska stoji na
+    # LookupValue nad PRAZNIM kljucem, koji pogadja prvi red tblZbirna bez
+    # ZbirnaID-a (B9 anomalija, test je pravi i vraca). Kad takav red nosi
+    # robu prijemnice, mutant upise i vrati True -- tako se i obara.
     "cilj-zbirna-bez-provere-postojanja": "NE OBARA NISTA",
     #
-    # EKVIVALENTNA (ZBR-NORM-02, be9464ff): ZbirnaPostoji i VlasniciPoBroju
-    # danas porede ISTO (Trim + vbTextCompare kroz BrojJednak), pa zamena
-    # jednog drugim ne menja nijedan ishod. Mala slova KASK sada vide oba
-    # vlasnika i staje ih IKAD kapija, kao i tacan case. Komentari koji kazu
-    # da VlasniciPoBroju poredi TACNO (modDokumenta, test, ova sabotaza) su
-    # zastareli od tog commita.
+    # NE OBARA NISTA NAD FIXTURE-OM (ZBR-NORM-02, be9464ff), ali NIJE
+    # ekvivalentna: broj ZbirnaPostoji i VlasniciPoBroju danas porede isto
+    # (Trim + vbTextCompare), pa mala slova KASK staje IKAD kapija kao i tacan
+    # case. Razlikuju se u oznaci STORNA: ZbirnaPostoji (ExcludeStornirano)
+    # poredi binarno '<> "Da"' bez Trim-a, VlasniciPoBroju (IsStorniranoValue)
+    # UCase+Trim. Red sa Stornirano = "DA" je jednom aktivan, drugom nije --
+    # na takvom redu mutant upise. Pisci pisu "Da", pa fixture to ne vidi.
     "cilj-zbirna-case-mesano": "NE OBARA NISTA",
     #
     # Vlasnik: zaseban rez posle S-4a (pre-flight -- dira razresavanje broja
-    # zbirne). Prvo sonda koja pokaze koja kapija odbija, pa odluka: tvrdnja
-    # po RAZLOGU (prva), a druga sabotaza ili nov oblik ili brisanje uz
-    # ispravku zastarelih komentara. Ovi upisi se tada brisu -- dokaz sam
+    # zbirne). Obe sabotaze su oborive drugim stanjem, pa se ne brisu nego se
+    # test dopunjava tim stanjem ili tvrdnjom po RAZLOGU. Zastareli komentari
+    # koje rez ispravlja: "VlasniciPoBroju poredi TACNO" (modDokumenta, test
+    # 125, ova sabotaza) i "recovery panel u frmDokumenta zove sa DVA
+    # argumenta" (modDokumenta, test 125, cilj-zbirna-kapija-samo-aktivni) --
+    # forme vise nema; grana bez generacije se danas dosize iz
+    # modScrOporavak.PreveziPrijemnicu, sa kanonskom labelom iz tabele i
+    # generacijom koju vise niko ne pise. Ovi upisi se tada brisu -- dokaz sam
     # prijavi upis koji vise nista ne pokriva.
 
 }

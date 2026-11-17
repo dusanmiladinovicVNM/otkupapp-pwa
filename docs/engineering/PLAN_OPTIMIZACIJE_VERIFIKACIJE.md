@@ -811,12 +811,14 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
 
 ### D.3 Šta sledi
 
-1. **Merenje broja radnika:** `dop-spec` sa N=4 i N=5, dok druge sesije
-   miruju. Bira podrazumevani broj radnika.
-2. **S-4a:** noćni `dokaz.py --izolacija` nad celim katalogom, sa radnicima,
-   daje spisak ciljanih testova koji sami ne prolaze. Svaka takva sabotaža
-   danas košta punu suite (~4 ili ~10 min), pa je to glavni preostali trošak.
-   Posle spiska se testovi popravljaju jedan po jedan.
+1. ~~**Merenje broja radnika**~~ — urađeno: `dop-spec` 3:09 (N=1), 1:15 (N=4),
+   1:12 (N=5) `[M]`. Preporuka je **4**, jer peti Excel skoro ništa ne donosi.
+2. ~~**S-4a**~~ — urađeno. `--izolacija` nad celim katalogom (574 ciljana
+   testa, 4 radnika, 22:48 `[M]`) našla je 13 testova koji sami ne prolaze.
+   Svaki sada sam priprema svoje stanje ili meri relativno. Posle ispravke
+   svih 13 prolazi sam, `RunAllTests` 355/355, BFP 3491/3491, a dokaz nad
+   njihovih 28 sabotaža daje 26 OK `[M]`. Preostale dve su zatečene i ne
+   obaraju ništa nad fixture-om (`POZNATI_NALAZI_DOKAZ`, zaseban rez).
 3. **G1:** prijem izbora kao podrazumevanog puta u rezu. Uslov je nula razlika
    prema celoj suiti nad bar 50 sabotaža.
 4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
