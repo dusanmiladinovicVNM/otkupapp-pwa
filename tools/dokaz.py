@@ -1672,6 +1672,15 @@ def _g1_presuda(redovi: list, stop: str, celovit: bool, n_min: int,
              if r["sloj"] == "ciljani" and r["klasa"] == "NEUPOREDIVO"]
     if imena:
         nejasno.append("ciljani NEUPOREDIVO: %s" % ", ".join(imena))
+    # G1-REV-01 (review 18.11.2026): ciljani test koji SAM ne prolazi (crvena
+    # baza izbora, ne infra) je regresija S-4a ili mehanizma izbora. Ispis je
+    # to javljao, a presuda je ipak mogla biti PROSAO. Negativne kontrole
+    # (POZNATI) tu ne upadaju: one daju 'cela NE', izbor ih jeste izmerio.
+    imena = [r["ime"] for r in redovi if r["sloj"] == "ciljani"
+             and r["klasa"] == "SKUPA" and r["podtip"] == "baza izbora crvena"]
+    if imena:
+        nejasno.append("ciljani test sam ne prolazi (S-4a regresija): %s"
+                       % ", ".join(imena))
     if any(r["sloj"] == "filter" for r in redovi):
         nejasno.append("poziv sa filterom nije uzorak")
     else:
@@ -1692,7 +1701,10 @@ def _g1_presuda(redovi: list, stop: str, celovit: bool, n_min: int,
     else:
         rc, ishod, razlog = 0, "PROSAO", "nijedna razlika"
     if m and not razlika_slucajnih:
-        granica = "van ciljanih najvise %s%% uz 95%%" % (
+        # Orijentaciono: binomna granica za 0 razlika pretpostavlja da je uzorak
+        # reprezentativan, a ovaj je stratifikovan (po fajlu, jedan po testu,
+        # bez poznatih). Nije garancija za ceo katalog (review 18.11.2026).
+        granica = "van ciljanih orijentaciono najvise %s%% uz 95%%" % (
             ("%.1f" % (100.0 * (1.0 - 0.05 ** (1.0 / m)))).replace(".", ","))
     else:
         granica = "granica ne vazi"
@@ -3545,6 +3557,17 @@ def _self_test_g1() -> list:
     rc, r = presuda(slucajni(36, 24) + ciljani_skupa)
     tvrdi("SKUPA slucajni 0/60, ciljani 5/5" in r,
           "4: udeo SKUPA mesa slojeve -- ciljani je pristrasan (%s)" % r)
+    # G1-REV-01: ciljani test koji sam ne prolazi obara prijem (rc 2), cak i uz
+    # dovoljno presudjenih slucajnih; pad Excel-a u bazi (infra) to ne radi.
+    crvena = (False, "RunAllTests: TESTS RunAllTests: 3 ukupno, 1 palo", "povratak")
+    rc, r = presuda(slucajni(36, 23) + [red("s4a-reg", sloj="ciljani", izb=crvena)])
+    tvrdi(rc == 2 and "s4a-reg" in r,
+          "4: ciljani test koji sam ne prolazi ne obara prijem (G1-REV-01: %d, %s)"
+          % (rc, r))
+    rc, r = presuda(slucajni(36, 23) + [red("s4a-infra", sloj="ciljani", izb=(
+        False, "RunAllTests: timeout", "povratak"))])
+    tvrdi(rc == 0, "4: pad Excel-a u bazi izbora ciljanog testa obara prijem (%d, %s)"
+          % (rc, r))
     nemereni = [red("t%d" % i, SUITE_BFP, izb=(False, "TIMEOUT suite", "konacno"),
                     cela=(False, "TIMEOUT suite")) for i in range(10)]
     rc, r = presuda(slucajni(25, 15) + nemereni)
