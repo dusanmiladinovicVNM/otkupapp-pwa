@@ -384,7 +384,7 @@ celog kataloga do commit-a, a F-2 i F-8 daju isto ubrzanje bez tog slabljenja.
 | **D-2** | Izbor testa kao podrazumevani put dokaza u rezu, posle diferencijalnog prijema (`D4`, `P2`) | prolaz 100–400 s → 20–26 s; rast postaje linearan `[I]` | testovi koji sami ne prolaze i stavke vraćene na celu suitu koštaju po 100–400 s (udeo `[?]`) | M | L + W | isti rez u oba režima, verdikt identičan po stavci, nad najmanje 50 sabotaža iz obe velike suite (0 razlika u 50 dopušta do 5,8% uz 95%); spisak iz S-4a postoji. **Alat (G1):** `python tools/dokaz.py --prijem --radnika 4` — jedan poziv nad jednim snimkom, izbor pa cela suite po stavci; imenilac su samo slučajne stavke koje je izbor presudio sam (43 ciljane i povratci na celu suitu ne ulaze), najmanje 50, od toga najmanje 15 u RAT i u BFP |
 | **D-3** | Kontrolne sabotaže u svakom pozivu: placebo mutacija koja menja samo komentar ne sme biti priznata (`D12`) | dvosmerni dokaz samog dokaza u Excelu | jedan prolaz više | S | L + W | lažan izlaz u kome placebo „obara" tvrdnju → NIJE DOKAZANO |
 | **D-4** | Opcija `--baza-iz-markera`, samo za suite koje se mere celom suitom (`D3`, `RV-12`) — **uslovno, posle G1** | 4–11 min po pozivu bez izbora `[I]`; uz izbor približno ništa | sužava (§5.3); marker ne hvata nedeterminizam između dva puštanja | S | L | važeći marker → nula baznih poziva cele suite; drugi otisak → baza se pušta; uz `--izbor` se baza izbora uvek pušta |
-| **D-5** | Obim reza bira alat: `dokaz.py --od <ref>` (izmenjeni unosi, sabotaže čiji je fajl, procedura ili test diran) (`D8`, `P4`) | nema propuštenih i odloženih „dirnutih" stavki (2 od 11 odloženih je istrunulo) | pravilo o pomoćnom kodu može izabrati previše | M | L | sintetički diff: svaka vrsta pogotka bira svoju stavku; nad diff-om stavke 288 bira svih 11 |
+| **D-5** | Obim reza bira alat: `dokaz.py --od <ref>` (izmenjeni unosi, sabotaže čiji je fajl, procedura ili test diran) (`D8`, `P4`) **Urađeno lokalno (18.11.2026), bez Excela:** pet razloga (`KATALOG` uz `POZNATI_NALAZI_DOKAZ`, `PROCEDURA`, `TEST`, `FAJL`, `FIXTURE`); prihvat 11/11 nad stavkom 288 **nije ispunjen** — fale pozivaoci, otvorena odluka D-5b (Prilog D.3, tačka 4) | nema propuštenih i odloženih „dirnutih" stavki (2 od 11 odloženih je istrunulo) | pravilo o pomoćnom kodu može izabrati previše | M | L | sintetički diff: svaka vrsta pogotka bira svoju stavku; nad diff-om stavke 288 bira svih 11 |
 | **D-6** | Mutacija van radnog stabla: `run_vba --src <kopija>`, `dokaz.py` nikad ne piše u `src-vba` (`D5`, `RV-05`) **Urađeno (17.11.2026):** snimak + kopija + zamrznut katalog, obnova iz snimka, straža; Windows: isti verdikti starim i novim putem (4/4), `src-vba` čist posle dokaza | radno stablo nije zaključano; nestaje klasa REVERT-FAIL; otvara paralelne instance | `sabotaza.py` primena traži ciljni direktorijum; menja ugovor (N6) | M | L + W | otisak `src-vba` isti pre, tokom i posle; ista sabotaža starim i novim putem daje isti verdikt |
 | **D-7** | Nastavak prekinutog dokaza po konzervativnom ključu (ceo izvor, unos, sveska, alati, režim) (`D7`) | prekid posle 20 od 40 h ne košta 20 h | nizak | S | L | promena bilo kog sastojka ključa → stavka se ponovo meri |
 | **D-8** | Statička predprovera novih i izmenjenih sabotaža: mutirani tekst kroz provere `vba_check` po fajlu (`P7c`) | sabotaža koja obara compile se hvata bez Excela | nizak | S | L | sabotaža sa duplom deklaracijom → statički nalaz |
@@ -858,11 +858,98 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    izmereno `baza izbora crvena 0`. **Otvoreno pre V2 (O-1):** alat danas
    programski traži najmanje 50 presuđenih; za V2 prag od 100 mora postati
    izvršna kapija (rc), ne samo broj koji se čita iz reda.
-4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
-   fiksnog čekanja pri gašenju), **F-8** (keš hook-a).
-5. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi
+4. **D-5** (`--od <ref>`) — urađeno lokalno, bez Excela. Komanda u rezu:
+   `python tools/dokaz.py --od origin/main --izbor --radnika 4` (šta rez dira,
+   bez Excela: `--od origin/main --plan`). Pravila, razlozi i odbijanja:
+   `docs/EXCEL_TEST_HARNESS.md`, „Obim reza iz diff-a (D-5)". Izmereno
+   (Linux, 18.11.2026):
+   - self-test `dokaz.py` sa `_self_test_od` 0,79–0,87 s (šest merenja; pre
+     D-5 0,59–0,62 s). Novo je ponašanje `main --od --plan` uz lažan git sloj
+     i git sloj nad privremenim repoom (oko 0,1 s, oko 25 poziva git-a). Na
+     Windows-u, gde je poziv git-a sporiji, vreme nije mereno;
+   - dvosmerni dokaz (`d5_dvosmerno3.py`): 42 od 43 D-5 mutanta padaju po
+     imenu (`D5: ...`). Zelen ostaje D14 („red između procedura je
+     deklaracija"), koji je posle review-a ekvivalentan: oba slučaja idu istom
+     granom („kod van procedura" je `FAJL`). Raniji mutanti nad istim fajlom:
+     G1 30/30, R-4/D-6 26/26;
+   - bez `--od` je izlaz bajt-isti: `--grupe 8 --plan` pre i posle
+     (187 785 bajtova), takođe `--plan` i `relink --grupe 6 --plan`;
+   - skup dirnutih procedura iz `difflib`-a je isti kao iz `git diff -U0` u
+     417 od 417 fajl-diffova (poslednjih 120 commit-a nad `src-vba`, bez
+     pravila o komentaru; sa njim 404, a 13 razlika su samo komentar u
+     deklaracijama); bez pomeranja umetka 378 od 417;
+   - `60a7957d^` → `60a7957d` (PRJ-ZBR-02): izabrano 30 od 1001; svih 8
+     sabotaža sa sidrom u `ReassignPrijemnicaToZbirna_TX` su tu, među njima
+     `cilj-zbirna-bez-provere-postojanja` (`PROCEDURA`). Prefiks porodice tog
+     reza (`s6k8-`) hvata samo 2 od tih 8, i nju ne;
+   - diff koji dira samo dokumente (`3c216acf`, `5655661e`): izbor prazan. U
+     radnom stablu je to rc 2 („nema šta da meri"), izmereno sa
+     `--od origin/main --plan` posle ove izmene.
+
+   **Review 18.11.2026** (tri ugla: propušten izbor, git na Windows-u,
+   integracija; skeptik po nalazu): 11 nalaza, nijedan oboren, svi ispravljeni,
+   svaki sa mutantom koji pada po imenu:
+   - izmena `POZNATI_NALAZI_DOKAZ` nije birala svoju sabotažu, a menja joj
+     verdikt. `1559def1` (S-4a, upis dva priznanja) je davao 0, sada 2
+     (`cilj-zbirna-*`, `KATALOG`);
+   - rez koji dira samo fixture nije birao ništa. Sada je `FIXTURE` peti
+     razlog i bira ceo katalog: `9ca82b61` 1158 od 1158, `7da9dad6` 613 od 613
+     (oba samo `tools/make_fixture.py`). Od 1.10.2026 je 315 commit-a nad
+     `src-vba` i 27 nad fixture-om ili kanonom (bez merge-a);
+   - kod deklaracija test-modula (`FX_*`) sada bira sve testove tog modula;
+     sidro sa više od jednog pogotka sada bira `FAJL`; kod između procedura
+     (`#If VBA7` grana `modOtkupUI.FormHwnd`) sada bira `FAJL`;
+   - git: samo plumbing (porcelain `git diff` je prepisivao `.git/index` i
+     mogao da obori `git add` paralelne sesije u istom klonu); git koji nije
+     dostupan i folder van repoa se više ne javljaju kao loša referenca; bez
+     zajedničkog pretka poruka to kaže (u plitkom klonu uz savet
+     `git fetch --unshallow`);
+   - `main --od` se meri ponašanjem, ne iglom u izvoru: poređenje sa radnim
+     stablom, učitan katalog kao nova strana, prosleđen `POZNATI_NALAZI_DOKAZ`
+     i fixture, prazan izbor rc 2;
+   - drugi prolaz `difflib`-a ima prag (blok 1000×1000): prepis celog BFP-a
+     (razmak na kraju svakog reda) bez praga nije završio ni za 5 minuta, sa
+     pragom 0,08–0,39 s. Posle praga je skup procedura i dalje isti kao iz
+     `git diff -U0` u 417 od 417.
+
+   Istorijski brojevi gore su ponovo izmereni posle ispravki i nisu se
+   promenili (30, 12, 35, 0).
+
+   **Prihvat „nad diff-om stavke 288 bira svih 11" NIJE ispunjen.** Stavke 288,
+   289 i 322 ne imenuju šest `s6k4` sabotaža. Uzete su one čije sidro živi u
+   pozivaocu `IsPaletaPreradjena`, direktnom ili preko `PreradjenaPaletaRazlog`,
+   i tačno ih je šest. Ostalih pet su tri `relink-*`, `cotenant-po-broju` i
+   `writer-isti-broj-odbija`.
+
+   | Diff | Izabrano | Od 11 | Fale |
+   |---|---|---|---|
+   | `5c3d72a8^` → `5c3d72a8` (review REV-04/05) | 12 od 1134 | 5 (`PROCEDURA`, `ReassignPaleteToPrijemnica_TX`) | svih 6 `s6k4` |
+   | `d19c2dae` → `a1d98e76` (ceo rez 1b, prvi roditelj merge-a) | 35 od 1134 | 8 | 3 `s6k4-okvir-*` u `modStornoFlow.RunPrijemnicaCorrection` |
+
+   Razlog koji fali je **pozivalac**, koji D-5 namerno ne bira.
+   `SkiniPaleteZaStornoPrijemnice`, gde žive tri od njih, direktno zove
+   `IsPaletaPreradjena` (dubina 1). `RunPrijemnicaCorrection`, gde žive ostale
+   tri, zove je preko `PreradjenaPaletaRazlog` (dubina 2). Nad celim rezom su
+   prve tri izabrane samo kao `FAJL` (nov `Private mPaletaPraznoTest` u
+   deklaracijama), dakle slučajno.
+
+   Proba proširenja, van alata: graf poziva po imenu procedure, bez stringova i
+   komentara, pa je približan (`Application.Run` mu je nevidljiv).
+
+   | Diff | Bez pozivalaca | Dubina 1 | Dubina 2 |
+   |---|---|---|---|
+   | `5c3d72a8` | 12, 5/11 | 21, 8/11 | 39, 11/11 |
+   | rez 1b | 35 (proba 37), 8/11 | 53, 8/11 | 80, 11/11 |
+   | `60a7957d` | 30 | 34 | 39 |
+
+   Odluka za vlasnika: `POZIVALAC` do dubine 2 kao šesti razlog (D-5b) ili
+   ostaje ručno dodavanje. Uz oko 5 s po stavci izborom (CLAUDE.md §5) 80
+   stavki je oko 7 min serijski, ali to nije mereno.
+5. **D-3** (placebo u svakom pozivu), **R-1** (2 s fiksnog čekanja pri
+   gašenju), **F-8** (keš hook-a).
+6. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi
    rasta koju meri M-6.
-6. **Van plana, otvoreno:**
+7. **Van plana, otvoreno:**
    - `On Error Resume Next` u aktivnom obrađivaču ne guta grešku (sonda
      17.11.2026). Pogođeno je 383 procedure, od toga 125 produkcionih.
    - Scenario B u `Test_Amb_ZaglavljeDokumentaPisac` tvrdi samo `errNum <> 0`,
