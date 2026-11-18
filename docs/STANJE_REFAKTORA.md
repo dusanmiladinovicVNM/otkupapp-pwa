@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 18.11.2026 (stavka 333: S9-2 — čitaoci kolona bez pisca na kanonu, testovi 362–365, 12 sabotaža dokazano, pune suite zelene, REV-01 zatvoren posle završnog review-a, ručni Compile se ponavlja nad novim izvorom, PR `#486`; stavka 332: S9-1 drugi deo — GP lanac E9/E10, verzije zbirne, testovi 360–361, pune suite zelene, ručni Compile prošao; stavka 331: S9-1 prvi deo — jezgro grafa `modSledljivost`, ivice E1–E6, testovi 356–359; stavka 330: pre-flight S9 preslagan na `4591f3d3`, bez novih nalaza, sledeći test 356; stavka 329: N17 — prag `prj_brojzbirne` 35 uz dokaz u oba smera; stavka 328: pre-flight S9 preslagan na `6b601ee1`; stavka 327: `SLED-ODL-09` „tok dokumenta" doneta, N15 prag 33; stavka 326: preslaganje na `1fa4937a`).
+**Ažurirano:** 18.11.2026 (stavka 333: S9-2 — čitaoci kolona bez pisca na kanonu, testovi 362–365, 12 sabotaža dokazano, pune suite zelene, REV-01 zatvoren posle završnog review-a, ručni Compile prošao nad `b022f3b1`, PR `#486`; stavka 332: S9-1 drugi deo — GP lanac E9/E10, verzije zbirne, testovi 360–361, pune suite zelene, ručni Compile prošao; stavka 331: S9-1 prvi deo — jezgro grafa `modSledljivost`, ivice E1–E6, testovi 356–359; stavka 330: pre-flight S9 preslagan na `4591f3d3`, bez novih nalaza, sledeći test 356; stavka 329: N17 — prag `prj_brojzbirne` 35 uz dokaz u oba smera; stavka 328: pre-flight S9 preslagan na `6b601ee1`; stavka 327: `SLED-ODL-09` „tok dokumenta" doneta, N15 prag 33; stavka 326: preslaganje na `1fa4937a`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -11186,8 +11186,13 @@
        zbirnu; test 363 crven pa zelen, sabotaže 14 (`s92-*`) dokazane, pune suite ponovo zelene nad
        `5a866d00c2eb` (365 / 3491 / 111 / Palete / Izveštaji / StornoCentar). `S92-REV-02` (P3) ide u S9-3;
        P1 u `ReassignPrijemnicaToZbirna_TX` ide sa S9-4.
-     - **Ručni Compile treba ponoviti** nad izvorom sa REV-01 (prethodni prolaz je bio nad `973c08af`).
-     - **Nije izvršeno:** dokaz u redosledu cele suite; ručna provera u Excelu.
+     - **Ručni Compile: prošao** nad `b022f3b1` (operater, 18.11.2026; otisak `5a866d00c2eb`, isti kao pune suite);
+       `vba_gate --require-green --require-compile` prolazi za svih šest suita.
+     - **Drugi završni review: CODE GO, 9,3 / 10.** Novi P2 (nedostajuća tabela članstva izgleda kao prazna)
+       upisan uz `KI-081`, vlasnik S9-5.
+     - **Ručna provera:** operater je proverio deo, sve provereno je u redu; ostatak ide uz S9-3 (odluka
+       operatera 18.11.2026: merge pre pune ručne provere).
+     - **Nije izvršeno:** dokaz u redosledu cele suite; ostatak ručne provere (S9-3).
      - **Prelazi dalje:** `N16` (KUL2) u S9-5; zatečeni mrtvi unosi `WRITE_OWNERSHIP.json` (`modMasterSync`,
        `modStorno`) u backlog §15; sabotaža `prefill-broj` ne može da obori test 20 (zatečeno, van reza).
      - **Sledeći brojevi:** test 366 · stavka 334 · KI-097 · plan §14.67.

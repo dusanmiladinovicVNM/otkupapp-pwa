@@ -12081,8 +12081,14 @@ zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragov
   - **Izvršeno nad izvorom sa REV-01** (otisak `5a866d00c2eb`): ciljano 5 / 0; `dokaz.py s92- --izbor` 13 / 13
     (potpis `ea2193533981b8b0`) i `s92-detalj-zbirna-koje-nema-cuti` 1 / 1; pune suite `RunAllTests` 365 / 0,
     BFP 3491 / 0, Storno 111 / 0, Palete 115 provera, `RunIzvestajTests` i StornoCentar zeleni; marker upisan.
-    Adversarijalna provera ispravke (dva čitača): bez P1/P2. **Ručni Compile od `973c08af` ne važi za ovaj
-    izvor** — ponavlja ga operater.
+    Adversarijalna provera ispravke (dva čitača): bez P1/P2.
+  - **Ručni Compile: prošao** nad `b022f3b1` (operater, 18.11.2026; otisak `5a866d00c2eb`, isti kao pune suite);
+    `vba_gate --require-green --require-compile` prolazi za svih šest suita.
+  - **Drugi završni review (18.11.2026): CODE GO, 9,3 / 10.** REV-01 potvrđen kao zatvoren. Novi P2 (granica
+    fail-closed-a): kad tabela članstva fizički ne postoji, čitač vraća praznu mapu, pa lista kaže „bez zbirne"
+    umesto kvara šeme — upisano uz `KI-081`, vlasnik S9-5.
+  - **Ručna provera u Excelu:** operater je proverio deo, sve provereno je u redu; ostatak ide uz S9-3. Merge je
+    odluka operatera (18.11.2026) pre pune ručne provere.
 - **Pre-existing nalaz, van reza:** sabotaža `prefill-broj` (sidro u prijemničkom repu `PrefillIzStorniranog`)
   ne može da obori test 20, jer test prefill prijemnice ne zove; postoji i na `57ab47ed`. Nije KI dok se ne
   dokaže `dokaz.py`-om.
