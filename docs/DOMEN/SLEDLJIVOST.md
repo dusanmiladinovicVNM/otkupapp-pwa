@@ -16,6 +16,12 @@
 > zbirne i naslov ispravke idu kroz članstvo (E2, E3) ili zaglavlje zbirne. Kad strogi čitač članstva
 > odbije tabelu (`KI-081`), ekran ne pogađa: status je „Veza nepoznata" (`S92-ODL-01`).
 >
+> **Od S9-3 (plan §14.67, stavka 334)** nijedan čitalac van integriteta ne bira prijemnicu po broju zbirne:
+> izveštaji, linija manjka, detalj, izvoz `OtkupiAll`, storno zbirne i prijemnice, poruka posle storna, F4
+> „dupla prijemnica" i Oporavak idu ivicom E4 (`ZbirnaRoditeljID`) kroz `AktivnePrijemniceZbirnih` i obrnuti
+> `ZbirneAktivnihPrijemnica`. `Prijemnica.BrojZbirne` je labela (`SLED-ODL-08`); kapija je grupa popisa
+> `prj_broj_spoj` (prag 0). Spoj po broju je ostao samo u integritetu (S9-5).
+>
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
 > trajao) je ovde ponovo izmeren i zamenjen. Odluke iz njega važe.
 >

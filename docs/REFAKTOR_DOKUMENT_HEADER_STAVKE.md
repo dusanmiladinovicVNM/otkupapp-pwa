@@ -12149,7 +12149,8 @@ Uz to:
   grešku sa razlogom. Detalj otkupa ga pokazuje kao „Veza nepoznata", OTK red se ne šalje (`S92-ODL-01`), a izvoz
   `OtkupiAll` pada sa razlogom umesto da red izveze bez zbirne. Seam vraća i `ZbirnaID` (opcioni izlaz).
 - **Brišu se** (bez pozivaoca posle reza): `ActiveBlocksForFlow`, `SvaAktivnaDecaNoseZbirnaID`,
-  `BuildZbirnaVrstaCache`, `GetVrstaFromCache`.
+  `BuildZbirnaVrstaCache`, `GetVrstaFromCache`, `SuziDecuNaZbirnu` i parametar `gen` u `CountActive` i
+  `DistinctActiveValues` (posle reza ga niko ne prosleđuje), `OtpCountZbirnePoBroju`.
 
 #### Popis — podela grupe (`NEMA_BROJA_KAO_FK`)
 
@@ -12163,6 +12164,10 @@ Uz to:
 - Detektori starog oblika (N15, N17) **ostaju**: samo odbijaju potez, a red bez `ZbirnaRoditeljID` postoji (C002: 6,
   N14). Isto važi za dva poređenja iste kapije koja popis ne vidi (`ParentBroj`, `LncKontekstPogadja`).
 - Dokaz u oba smera: vraćen spoj → `PAO` po imenu procedure; zastareo unos spiska → `PAO`; čisto → `ok`.
+  **Izmereno:** novi alat nad `aa6c03f1` → `prj_broj_spoj 13 > prag 0 PAO`, sa imenima procedura (13, ne 15:
+  `GetActiveDocumentsForStorno` i `GetOsirocenePrijemnice` i posle reza nose labelu, pa su na spisku; njihov
+  spoj mere testovi 367 i 368); unos `ReportZbirniVozac` dodat na spisak → `ZASTAREO UNOS … PAO`; nad granom
+  → `prj_broj_spoj 0 = prag 0 ok`.
 
 #### ACCEPTANCE CONTRACT — S9-3
 
@@ -12182,7 +12187,17 @@ Uz to:
 - **Sabotaže** (`s93-*`): po jedna za svaku tvrdnju koja meri prevedeno mesto; svaka obara svoju tvrdnju po imenu
   (`dokaz.py s93- --izbor`).
 - **Ne dira:** integritet (S9-5: šest mesta iz tabele gore), generaciju i `ReassignPrijemnicaToZbirna_TX` (S9-4),
-  kanon i fixture (S9-6), pisce, ugovor kolona GAS/PWA.
+  kanon (S9-6), pisce, ugovor kolona GAS/PWA.
+- **Odluka u rezu `S93-ODL-01` — fixture nosi roditelja prijemnice:** merenje pri kodu je našlo da nijedna
+  fixture prijemnica (29) nema `ZbirnaRoditeljID`, a nema ni runtime backfill-a. Posle reza bi svaka bila
+  siroče (Oporavak), van kaskade storna i van izveštaja — test bi merio fixture, ne kod. `make_fixture` zato
+  izvodi `ZbirnaRoditeljID` iz jedine zbirne tog broja; dvosmislen broj (`ZB-TEST-KASK`) je izričit
+  (`PRJ-KASK-1` → `ZBI-KASK-1`), a `PRJ-STL-T` namerno ostaje starog oblika (tuđa prijemnica dvosmislenog broja
+  koju mere prevezivanje po broju, S9-4, i detektori N15/N17). Kolone se ne brišu (S9-6). Isto važi za sirove
+  seed-ove koji sabiraju ili storniraju po roditelju (`modTestStorno.SeedPrijemnica`, tri u
+  `modTestStornoCentar`, četiri u `modIzvestajTests`): pišu `ZbirnaRoditeljID` kao kanonski pisac.
+  Ostali sirovi seed-ovi (`modTestPalete`, `modFakturaTests`, golden) ne dodiruju prevedene čitaoce po
+  čitanju koda; potvrđuje ih tek pun prolaz.
 - **Imenovano, ne urađeno:** `SLED-ODL-07` traži i **broj prijemnica** uz najraniju; ugovor kolona `OtkupiAll` ga ne
   nosi (`Napomena` je broj dokumenta), a promena ugovora je van reza — broj se ne izvozi. Zbirna strana po broju
   (`CalculateProsekGajbeByZbirna`) nije `prj_brojzbirne` i ostaje.
@@ -12192,6 +12207,20 @@ Uz to:
 - **Ručna provera** (uz ostatak iz S9-2): status i čip „Bez zbirne" u F1/F2, detalj izveštaja (otkup i otpremnica,
   prijemnica sa kupcem), ROBA (OM), naslov ispravke na papiru otpremnice; iz S9-3 F4 „dupla prijemnica" i
   linija manjka nad zbirnom sa prijemnicom.
+
+#### Izvršeno (18.11.2026, `docs/STANJE_REFAKTORA.md` stavka 334)
+
+- **Commiti:** `ca89a1fa` ugovor · `75af3deb` testovi 366–369 prvi, uz skelu bez promene ponašanja (seam pitanja
+  „dupla prijemnica", opcioni vozač i kupac linije manjka, javni ulaz indeksa izvoza) · `d70267eb` 15 spojeva na
+  E4, brisanja, popis, sabotaže · `f7832ed8` fixture i sirovi seed-ovi (`S93-ODL-01`).
+- **Jeftine kapije zelene nad `f7832ed8`:** `vba_check` (194 fajla, 1424 sabotaže) i `--self-test`,
+  `sabotaza.py --self-test`, `who_writes --check` i `--check-ownership`, `gen_schema_module --check`,
+  `vba_gate --popis`, `popis_citalaca --check`.
+- **Sabotaže:** 9 zatečenih sidara preslagano na nov kod (`zbirna-kaskada-bez-kapije`,
+  `pregled-broji-svu-decu-broja`, tri `s6k3-*`, dve `s8r2a1-*`, dve `s92-*`); 18 novih `s93-*`.
+- **NIJE izvršeno (Excel je bio zauzet drugom sesijom):** `make_fixture` u worktree-ju, crveno nad starim kodom
+  (`run_vba --src` sa izvorom `75af3deb`, testovi 366–369), zeleno, pune suite, `dokaz.py s93-` i preslagana
+  sidra, ručni Compile, ručna provera. Do tada je ponašanje **neverifikovano**.
 
 ## 15) Backlog — namerno van opsega
 
