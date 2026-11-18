@@ -1095,8 +1095,11 @@ zato vodi u `NEJASNO`, ne u `PAO`. Ne ići na 5 radnika.
 
 **Šta je izmereno, a šta nije.** Python strana je izmerena: `_self_test_g1`
 (lanac kroz pravi `_prolaz`, klase, presuda, uzorak, odbijanje u `main`) i
-dvosmerni dokaz nad 28 G1 mutanata i 26 ranijih. Ishod prijema postoji tek posle Windows
-prolaza, do tada je G1 **neverifikovan**. G1 namerno ne radi sledeće:
+dvosmerni dokaz nad 28 G1 mutanata i 26 ranijih. **Prvi prijem (18.11.2026,
+otisak `3ff4e52a91839e23`) je PROŠAO:** 59 presuđenih slučajnih, 0 razlika,
+najviše 5,0% uz 95%; povrataka na celu suitu u slučajnom sloju 0/60. Brojevi i
+jedan pronađen pokvaren unos kataloga: plan, Prilog D.3, tačka 3. G1 namerno
+ne radi sledeće:
 - ne prima grupni izbor;
 - ne pokriva banku;
 - ne ponavlja nestabilne razlike sam;

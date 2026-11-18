@@ -829,6 +829,25 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    konstrukciji jednak celoj suiti. Traži se najmanje 50 takvih, od toga
    najmanje 15 u RAT i u BFP. Za V2 (O-1) poziv je `--prijem 115`, uz najmanje
    100 presuđenih; alat i tada traži 50, pa se M čita iz reda `G1 UZORAK`. Pravila i klase: `docs/EXCEL_TEST_HARNESS.md`, „Prijem izbora (G1)".
+
+   **Ishod (18.11.2026, Windows operatera, `--radnika 4`, nad `main`
+   `aa6c03f1`, otisak uzorka `3ff4e52a91839e23`) — G1 PROŠAO, rc 0 `[M]`:**
+   - presuđeno izborom **59** slučajnih (RAT 35, BFP 24), **0 razlika**; van
+     ciljanih najviše **5,0%** uz 95%;
+   - OPASNA 0, STROZA 0, NEJASNO 0; ISTO 98 (59 slučajnih + 39 ciljanih, među
+     njima svih 28 sabotaža S-4a, bez ijedne S-4a regresije);
+   - **SKUPA slučajni 0/60:** nijedna slučajna stavka nije morala na celu
+     suitu, pa je udeo povrataka iz D-2 (`[?]`) u uzorku nula; 0/60 nije
+     dokaz da ih nema. SKUPA ciljani 4/43: tačno četiri `POZNATI_NALAZI_DOKAZ`
+     (negativne kontrole), u oba režima isti verdikt;
+   - **NEUPOREDIVO 1:** `panel-kljuc-se-razisao-sa-sidebarom`. Zamena je
+     nosila Python komentar (`# SABOTAZA`), pa mutacija od nastanka (03.09.)
+     ne kompajlira — EXCEL UBIJEN, Compile error, na obe strane. Ispravljeno u
+     katalogu; jedini takav slučaj u 1406.
+   - Trajanje nije zabeleženo.
+
+   Sledi zaseban process PR: izbor (`--izbor --radnika 4`) kao podrazumevan
+   put dokaza u rezu, u `CLAUDE.md` §5 i `.claude/rules/testovi.md`.
 4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
    fiksnog čekanja pri gašenju), **F-8** (keš hook-a).
 5. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi
