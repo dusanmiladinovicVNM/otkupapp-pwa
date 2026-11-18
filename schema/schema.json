@@ -130,7 +130,13 @@
         "Stornirano",
         "CreatedBy",
         "ModifiedAt",
-        "ModifiedBy"
+        "ModifiedBy",
+        "StanicaID",
+        "StorniranoAt",
+        "StorniranoBy",
+        "StornoRazlog",
+        "IspravkaOdID",
+        "ZamenjenSaID"
       ]
     },
     {

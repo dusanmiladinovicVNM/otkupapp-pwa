@@ -82,6 +82,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblZbirna`: `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow`
 - `tblAmbalaza`: `modAmbalaza`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`
 - `tblAmbalazaDokument`: `modAmbalaza`
+- `tblCenovnik`: `modCenovnik`
 - `tblDoplata`: `modDoplata`, `modStorno`
 - `tblDoplataStavke`: `modDoplata`
 - `tblKooperanti`: `modKooperant`

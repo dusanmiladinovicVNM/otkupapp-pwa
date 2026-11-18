@@ -420,7 +420,9 @@ Private Function LoColIdx(ByVal lo As ListObject, ByVal colName As String) As Lo
 End Function
 
 ' Userstamp: prijavljeni app-korisnik (kad je AUTH ukljucen) -> Windows nalog -> "Operator".
-Private Function AuditUser() As String
+' Public od CEN-11: trag storna cenovnika (StorniranoBy) nosi ISTOG autora kao
+' audit kolone reda, bez druge kopije ovog lanca.
+Public Function AuditUser() As String
     On Error Resume Next
     Dim u As String
     u = modAuth.GetCurrentUser()
