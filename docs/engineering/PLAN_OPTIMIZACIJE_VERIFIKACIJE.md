@@ -381,7 +381,7 @@ celog kataloga do commit-a, a F-2 i F-8 daju isto ubrzanje bez tog slabljenja.
 | ID | Stavka | Dobitak | Rizik | Trud | Gde | Kriterijum prihvatanja |
 |---|---|---|---|---|---|---|
 | **D-1** | Sitna režija: pamćenje `_suita_testa`; `--vrati` samo nad primenjenim članovima (`D2a`, `D2b`, `P8c`) | 27 s → ispod 1 s po pozivu; 1,0 s → 0,05 s po prolazu | nizak | S | L | isti plan (215 prolaza, ista podela); self-test oba alata zelen |
-| **D-2** | Izbor testa kao podrazumevani put dokaza u rezu, posle diferencijalnog prijema (`D4`, `P2`) | prolaz 100–400 s → 20–26 s; rast postaje linearan `[I]` | testovi koji sami ne prolaze i stavke vraćene na celu suitu koštaju po 100–400 s (udeo `[?]`) | M | L + W | isti rez u oba režima, verdikt identičan po stavci, nad najmanje 50 sabotaža iz obe velike suite (0 razlika u 50 dopušta do 5,8% uz 95%); spisak iz S-4a postoji |
+| **D-2** | Izbor testa kao podrazumevani put dokaza u rezu, posle diferencijalnog prijema (`D4`, `P2`) | prolaz 100–400 s → 20–26 s; rast postaje linearan `[I]` | testovi koji sami ne prolaze i stavke vraćene na celu suitu koštaju po 100–400 s (udeo `[?]`) | M | L + W | isti rez u oba režima, verdikt identičan po stavci, nad najmanje 50 sabotaža iz obe velike suite (0 razlika u 50 dopušta do 5,8% uz 95%); spisak iz S-4a postoji. **Alat (G1):** `python tools/dokaz.py --prijem --radnika 4` — jedan poziv nad jednim snimkom, izbor pa cela suite po stavci; imenilac su samo slučajne stavke koje je izbor presudio sam (43 ciljane i povratci na celu suitu ne ulaze), najmanje 50, od toga najmanje 15 u RAT i u BFP |
 | **D-3** | Kontrolne sabotaže u svakom pozivu: placebo mutacija koja menja samo komentar ne sme biti priznata (`D12`) | dvosmerni dokaz samog dokaza u Excelu | jedan prolaz više | S | L + W | lažan izlaz u kome placebo „obara" tvrdnju → NIJE DOKAZANO |
 | **D-4** | Opcija `--baza-iz-markera`, samo za suite koje se mere celom suitom (`D3`, `RV-12`) — **uslovno, posle G1** | 4–11 min po pozivu bez izbora `[I]`; uz izbor približno ništa | sužava (§5.3); marker ne hvata nedeterminizam između dva puštanja | S | L | važeći marker → nula baznih poziva cele suite; drugi otisak → baza se pušta; uz `--izbor` se baza izbora uvek pušta |
 | **D-5** | Obim reza bira alat: `dokaz.py --od <ref>` (izmenjeni unosi, sabotaže čiji je fajl, procedura ili test diran) (`D8`, `P4`) | nema propuštenih i odloženih „dirnutih" stavki (2 od 11 odloženih je istrunulo) | pravilo o pomoćnom kodu može izabrati previše | M | L | sintetički diff: svaka vrsta pogotka bira svoju stavku; nad diff-om stavke 288 bira svih 11 |
@@ -820,7 +820,44 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    njihovih 28 sabotaža daje 26 OK `[M]`. Preostale dve su zatečene i ne
    obaraju ništa nad fixture-om (`POZNATI_NALAZI_DOKAZ`, zaseban rez).
 3. **G1:** prijem izbora kao podrazumevanog puta u rezu. Uslov je nula razlika
-   prema celoj suiti nad bar 50 sabotaža.
+   prema celoj suiti nad bar 50 sabotaža. Komanda:
+   `python tools/dokaz.py --prijem --radnika 4` (uzorak bez Excela:
+   `--prijem --plan`). Uzorak čine 43 ciljane stavke (S-4a, mehanizam izbora,
+   `POZNATI_NALAZI_DOKAZ`) i 60 slučajnih (RAT 36, BFP 24), determinističan,
+   sa otiskom. **Imenilac** su samo slučajne stavke koje je izbor presudio sam.
+   Povratak na celu suitu (`SKUPA`) ne ulazi, jer je tamo verdikt po
+   konstrukciji jednak celoj suiti. Traži se najmanje 50 takvih, od toga
+   najmanje 15 u RAT i u BFP. Za V2 (O-1) poziv je `--prijem 115`, uz najmanje
+   100 presuđenih; alat i tada traži 50, pa se M čita iz reda `G1 UZORAK`. Pravila i klase: `docs/EXCEL_TEST_HARNESS.md`, „Prijem izbora (G1)".
+
+   **Ishod (18.11.2026, Windows operatera, `--radnika 4`, nad `main`
+   `aa6c03f1`, otisak uzorka `3ff4e52a91839e23`) — G1 PROŠAO, rc 0 `[M]`:**
+   - presuđeno izborom **59** slučajnih (RAT 35, BFP 24), **0 razlika**; van
+     ciljanih orijentaciono najviše **5,0%** uz 95% (pretpostavka
+     reprezentativnog uzorka; uzorak je stratifikovan, pa to nije garancija za
+     ceo katalog);
+   - OPASNA 0, STROZA 0, NEJASNO 0; ISTO 98 (59 slučajnih + 39 ciljanih, među
+     njima svih 28 sabotaža S-4a, bez ijedne S-4a regresije);
+   - **SKUPA slučajni 0/60:** nijedna slučajna stavka nije morala na celu
+     suitu, pa je udeo povrataka iz D-2 (`[?]`) u uzorku nula; 0/60 nije
+     dokaz da ih nema. SKUPA ciljani 4/43: tačno četiri `POZNATI_NALAZI_DOKAZ`
+     (negativne kontrole), u oba režima isti verdikt;
+   - **NEUPOREDIVO 1:** `panel-kljuc-se-razisao-sa-sidebarom`. Zamena je
+     nosila Python komentar (`# SABOTAZA`), pa mutacija od nastanka (03.09.)
+     ne kompajlira — EXCEL UBIJEN, Compile error, na obe strane. Ispravljeno u
+     katalogu; jedini takav slučaj u 1406. Ispravljena mutacija obara svoju
+     tvrdnju: `--izbor` → OK, DOKAZANO (izbor) `[M]`.
+   - Trajanje nije zabeleženo.
+
+   Sledi zaseban process PR: izbor (`--izbor --radnika 4`) kao podrazumevan
+   put dokaza u rezu, u `CLAUDE.md` §5 i `.claude/rules/testovi.md`.
+
+   Nezavisni review (18.11.2026): #487 CONDITIONAL GO, #488 GO posle #487.
+   Uslov G1-REV-01 (ciljani test koji sam ne prolazi obara prijem) je zatvoren
+   u #487 kao pravilo presude; Windows prijem se zbog toga ne ponavlja, jer je
+   izmereno `baza izbora crvena 0`. **Otvoreno pre V2 (O-1):** alat danas
+   programski traži najmanje 50 presuđenih; za V2 prag od 100 mora postati
+   izvršna kapija (rc), ne samo broj koji se čita iz reda.
 4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
    fiksnog čekanja pri gašenju), **F-8** (keš hook-a).
 5. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi

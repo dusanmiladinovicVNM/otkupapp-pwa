@@ -2867,10 +2867,13 @@ SABOTAZE = {
     # Paneli su od v6-ui-200 stavke sidebara, pa zive u DVA registra: modUiScreens
     # ih crta, modUiPanel ih otvara. Kljuc preimenovan u jednom, a zaboravljen u
     # drugom, daje stavku koja se vidi i ne otvara -- bez ijedne greske.
+    # Do 18.11.2026 je zamena nosila Python komentar ("# SABOTAZA"): VBA ga ne
+    # kompajlira, pa je mutacija od nastanka davala samo EXCEL UBIJEN (Compile
+    # error: Syntax error) -- nasao G1 prijem (NEUPOREDIVO na obe strane).
     "panel-kljuc-se-razisao-sa-sidebarom": (
         "modUiPanel.bas",
         "        \"MAT_ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")\n",
-        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")   # SABOTAZA\n",
+        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN|Admin\")   ' SABOTAZA\n",
         "T_UiPanel_StavkaSidebara",
         "svaki panel ima svoj red u registru ekrana",
     ),
