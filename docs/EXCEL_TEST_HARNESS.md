@@ -1149,7 +1149,8 @@ self-test tvrdi da je katalog pročitan kroz `ast` jednak učitanom.
 |---|---|
 | `KATALOG` | unos je nov, ili mu se promenio bilo koji član, ili mu je dodat, izmenjen ili obrisan unos u `POZNATI_NALAZI_DOKAZ` (taj unos menja verdikt dokaza baš za tu sabotažu) |
 | `PROCEDURA` | dirnuta je procedura u kojoj živi sidro (isti pojam kao kolona procedure u `--plan`): izmenjen, dodat ili obrisan red, gledano i na novoj i na staroj strani |
-| `TEST` | dirnuta je procedura ciljanog testa (Sub u `_TEST_FAJLOVI`), ili **kod** deklaracija test-modula — `FX_*` konstante i stanje dele svi testovi modula, pa se tada računaju dirnuti svi |
+| `POZIVALAC` | (D-5b) procedura sidra **nije** dirnuta, ali poziva dirnutu: direktno (dubina 1) ili preko jedne posredne (dubina 2, `_OD_DUBINA`). Seme su imena dirnutih procedura (obe strane) i imena deklarisana na dirnutim redovima **koda** van procedura: izmenjena ili obrisana `Public Const X` čini dubinom 1 svaku proceduru koja pominje `X` (`_OD_SEME_DEKLARACIJE`) |
+| `TEST` | dirnuta je procedura ciljanog testa (Sub u `_TEST_FAJLOVI`), ili **kod** deklaracija test-modula — `FX_*` konstante i stanje dele svi testovi modula, pa se tada računaju dirnuti svi — ili (D-5b) ciljani test zove do dubine 2 dirnutu proceduru **test-modula** (zajednički test-pomoćnik, npr. `ZbrIzdataPodPrijemnicu`). Seme iz produkcije se na testove **ne** širi |
 | `FAJL` | rezerva: dirnut je **kod van procedura** (deklaraciona sekcija, ili red između procedura koji nije komentar — npr. `#If VBA7` grana zaglavlja u `modOtkupUI.FormHwnd`), ili sidro u novom tekstu nema **tačno jedan** pogodak a fajl je dirnut (to je APPLY-FAIL materijal) |
 | `FIXTURE` | dirnut je ulaz fixture-a: `tools/make_fixture.py` ili `schema/schema.json` (fixture od kanona uzima `formats`). Fixture vide svi testovi — `cilj-zbirna-bez-provere-postojanja` je maskirana baš nad fixture-om — pa se bira **ceo katalog** |
 
@@ -1174,11 +1175,51 @@ self-test tvrdi da je katalog pročitan kroz `ast` jednak učitanom.
   skoro svi fajlovi u `src-vba` takvi — paralelna sesija u istom klonu bi tada
   pala na `git add`/`commit`. `--od` ne piše ni u radno stablo ni u `.git`.
 
+**Graf poziva (D-5b).** `POZIVALAC` i `TEST` preko pomoćnika čitaju graf
+poziva **po imenu**, nad **svim** modulima `src-vba` nove strane, ne samo nad
+dirnutim fajlovima (`_od_graf`, čista funkcija; jezgro ga prima kao ulaz):
+
+- radno stablo: spisak iz `git ls-files --cached --others --exclude-standard`,
+  sadržaj sa diska kao bajtovi; istorija: svi blobovi commit-a jednim
+  `git cat-file --batch`. I dalje samo plumbing, bez upisa u `.git/index`.
+  Graf se gradi samo kad rez dira kod u `src-vba`;
+- granice procedura su iz `sabotaza._procedure_po_redu`;
+- telo se čita **bez string literala i komentara** (`'`, `Rem`, i komentar
+  koji se nastavlja u sledeći red kroz ` _`), a nastavak reda spaja redove.
+  Izuzetak je string u istoj naredbi posle `Application.Run`/`Run`,
+  `.OnAction =` i `CallByName`: on se računa kao poziv, uz skinut prefiks
+  `modX.` i `Knjiga!`. Zato `Application.Run m & ".Scr_Build"` zove
+  `Scr_Build`;
+- **lokalno ime zaklanja proceduru** (VBA): parametar ili `Dim`/`Static`/`Const`
+  u proceduri nije poziv istoimene procedure; kvalifikovan `modX.Ime` ostaje
+  poziv. Bez toga parametar `testName` u BFP `AssertEquals` „zove"
+  `modTest.TestName`, čiji registar (`Case N: TestName = ...`) dira skoro
+  svaki rez koji dodaje test. Nad rezom 1b (`d19c2dae..a1d98e76`) to je bilo
+  451 izabrana stavka umesto 65 (`TEST` 417 umesto 10);
+- sopstveno ime se ne računa (Function ga pominje pri svakom vraćanju
+  vrednosti), a istoimene procedure u više modula su isti čvor (višak,
+  bezbedan smer);
+- BFS po nivoima, svako ime najviše jednom, pa se ciklus `A`↔`B` završava.
+  Dubina se meri od **najbliže** dirnute procedure.
+
+Gradnja grafa nad radnim stablom (194 modula, 6680 procedura, Linux): čitanje
+sa diska 0,01 s, graf 0,43–0,71 s (oko polovine je `_procedure_po_redu`).
+Istorija: `cat-file --batch` 0,09–0,13 s, pa graf.
+
 Pre plana ili dokaza ide red po izabranoj stavki (`OD <ime> <razlozi>`, uz
 proceduru, test ili fajl), uz dirnut fixture red `OD fixture: dirnut ...`, i
 zbirni red
-`OD <ref> (baza <sha8>): izabrano N -- KATALOG a, PROCEDURA b, TEST c, FAJL d, FIXTURE e`.
-Stavka može imati više razloga, pa zbir nije N.
+`OD <ref> (baza <sha8>): izabrano N -- KATALOG a, PROCEDURA b, POZIVALAC c, TEST d, FAJL e, FIXTURE f`.
+Stavka može imati više razloga, pa zbir nije N. `POZIVALAC` i `TEST` preko
+pomoćnika nose proceduru, dubinu i preko čega:
+
+```
+OD s6k4-okvir-guta-razlog                 POZIVALAC modStornoFlow.bas::RunPrijemnicaCorrection (dubina 2, preko IsPaletaPreradjena, kroz PreradjenaPaletaRazlog)
+OD amb-odl22-vlasnik-broja-iz-pogresne-kolone  TEST Test_PRJ_VlasnikBrojaJeNjenKupac (dubina 1, preko ZbrIzdataPodPrijemnicu)
+```
+
+(prvi red iz `5c3d72a8`, drugi iz `60a7957d`, oba kroz `od_istorija`; poravnanje
+je ovde skraćeno.)
 
 **Odbija se (rc 2):**
 - `--od` uz filter ili uz `--prijem` — dvosmisleno je koji skup se meri; pre
@@ -1187,19 +1228,49 @@ Stavka može imati više razloga, pa zbir nije N.
   dostupan (Python pušten van Git Bash-a) i folder van repoa javljaju se kao
   takvi, ne kao loša referenca; bez zajedničkog pretka poruka to kaže, a u
   plitkom klonu (`shallow`) savetuje `git fetch --unshallow`;
-- prazan izbor: „rez ne dira nijednu sabotažu (kod, katalog ni fixture;
-  pozivaoci se ne biraju) -- dokaz nema šta da meri".
+- prazan izbor: „rez ne dira nijednu sabotažu (kod, pozivaoce do dubine 2,
+  katalog ni fixture) -- dokaz nema šta da meri".
 
 Uz `--izbor`, `--radnika`, `--plan`, `--izolacija` i `--grupe` radi normalno:
-`--od` samo zamenjuje filter. Bez `--od` je izlaz bajt-isti kao pre D-5.
+`--od` samo zamenjuje filter. Bez `--od` je izlaz bajt-isti kao pre D-5 (i
+posle D-5b).
 
-**Poznato ograničenje: pozivaoci dirnute procedure se ne biraju.** Izmena u
-`BrojJednak` menja ponašanje `ZBR-NORM-02`, čije sidro živi u pozivaocu, a
-`--od` to ne vidi. Nad rezom stavke 288 zato ne bira svih 11 odloženih:
-nedostaju `s6k4` sabotaže u pozivaocima `IsPaletaPreradjena` (plan, Prilog D.3,
-tačka 4). Dok se to ne odluči, sabotaže pozivalaca procedure koju je rez
-promenio u ponašanju dodaju se ručno, posebnim pozivom po prefiksu. Ne prati se
-ni sam alat (`run_vba.py`, `sabotaza.py`, `dokaz.py`) — on ima svoj self-test.
+**Poznata ograničenja (posle D-5b).** Pozivaoci se biraju do dubine 2. Van
+izbora ostaje:
+
+- `Application.Run` sa **izračunatim** imenom (`Application.Run procName`,
+  `QualifiedProc(...)`) i `.OnAction` iz tabele (`btn.OnAction = specs(i)(1)`):
+  imena nema u tekstu;
+- događaji i UI handleri (`_Click`, `Worksheet_Change`, ...): niko ih ne zove
+  po imenu, pa ni njihovi pozivaoci ne postoje;
+- širenje iz produkcije na testove: test koji zove dirnutu **produkcionu**
+  proceduru se ne bira (to bi biralo skoro sve). Bira se samo sabotaža čije
+  sidro je pozivalac;
+- doslovno ime u `Application.OnTime`/`OnKey` i ime prosleđeno kao string
+  omotaču koji tek on pušta (`CallOptional "X"`, `E2E_RunVbaSuite "X"`): graf
+  stringove čita samo uz `Run`, `.OnAction` i `CallByName`. Danas je jedino
+  pogođeno sidro u `ShowToast` (`OnTime ... "HideToast"`);
+- okvir suite-a: procedure test-modula koje suite pušta PRE testa (BFP seed
+  `SeedBusinessFlowProMasterData` → `SeedKupac`..., prolog `RunAllTests` →
+  `ResetSeamova`) zovu test, a test njih ne. Izmena tela takve procedure ne
+  bira nijedan TEST, iako menja podatke svih testova suite-a. Nad 25 spojenih
+  PR-ova BFP seed nije diran van `FIXTURE`; `ResetSeamova` jeste dva puta.
+  Uz takav rez pusti dokaz po prefiksu suite-a ili ceo katalog;
+- smer pozvanih: sabotaža u proceduri koju dirnuta procedura **zove** se ne
+  bira (rez dodao kapiju u pozivaocu); maskiranje tim putem nije pokazano;
+- dubina veća od 2;
+- graf je po imenu, pa je višak moguć: istoimena procedura ili promenljiva
+  modula u drugom modulu i član objekta `.Ime` izgledaju isto kao poziv
+  procedure (ili pominjanje konstante) `Ime`;
+- dva pravila grafa **skidaju** pozivaoca, pa bi njihova greška bila manjak,
+  ne višak: lokalno ime (zaglavlje, `Dim`/`Static`/`Const`, čitano uprošćeno)
+  zaklanja istoimenu proceduru, i sopstveno ime procedure se ne računa — osim
+  kvalifikovanog (`modX.Ime`), pa je omotač istog imena
+  (`modScrDoplata.StampajKO` → `modPrint.StampajKO`) i dalje pozivalac.
+
+Za te slučajeve se sabotaže i dalje dodaju ručno, posebnim pozivom po
+prefiksu. Ne prati se ni sam alat (`run_vba.py`, `sabotaza.py`, `dokaz.py`) —
+on ima svoj self-test.
 
 **Šta je izmereno** (Linux, bez Excela): `_self_test_od` nad sintetičkim
 tekstovima (svaka vrsta razloga bira svoju stavku i nijednu drugu; brisanje,
@@ -1215,6 +1286,25 @@ checkout-a). Brojevi: plan, Prilog D.3, tačka 4. Na Windows-u (Git Bash,
 daje i istorijska provera nad istom bazom (`aa6c03f1..0b811e51`: 1 stavka,
 `KATALOG`). `--od` uz `--izbor` i Excel nije pušten, a koliko vremena izbor po
 diff-u štedi u pravom rezu nije mereno.
+
+**D-5b (Linux, bez Excela).** `_self_test_od` dobija sintetičke module za
+pozivaoce: dubina 1 i 2 biraju, dubina 3 ne; pominjanje u stringu, u `'`
+komentaru, u `Rem` komentaru i u komentaru koji se nastavlja kroz ` _` se ne
+računa; `Application.Run "modP.Dno"`, `.OnAction = "'Knjiga.xlsm'!Dno"`,
+`CallByName o, "Dno", ...` i `Application.Run _` sa imenom u sledećem redu se
+računaju; ciklus `CA`↔`CB` se završava, a dirnut `CA` ostaje samo `PROCEDURA`;
+lokalno ime i parametar zaklanjaju proceduru, a `modP.Dno` uz lokalno `dno` je
+poziv; seme iz deklaracije (`Const`, obrisana `Const`, `Const` u nastavku reda,
+član `Enum`-a), a komentar u deklaracijama ne; isto ime u dva modula; promena
+test-pomoćnika bira `TEST` za testove koji ga zovu (dubina 1 i 2), a
+produkciona promena ne bira `TEST` širenjem. `main --od --plan` uz lažan git
+sloj dobija četvrti prolaz u kome je jedina veza stavke sa rezom `POZIVALAC`
+iz nedirnutog modula, a git sloj tvrdi da su „svi" svi moduli (i nedirnut, i
+nov van git-a, bez ne-modula), u istoriji iz commit-a a ne sa diska, i da graf
+iz njih bira pozivaoca u nedirnutom CRLF modulu. Bez `--od` je izlaz i dalje
+bajt-isti (`--grupe 8 --plan` 187 785 bajtova, `--plan` 239 601,
+`relink --grupe 6 --plan` 626). Brojevi istorije i dvosmerni dokaz: plan,
+Prilog D.3, tačka 4.
 
 ## Trijaža masovnih padova
 
