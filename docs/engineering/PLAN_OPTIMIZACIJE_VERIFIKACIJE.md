@@ -962,7 +962,7 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    | Diff | D-5 | D-5b | Prihvat |
    |---|---|---|---|
    | `5c3d72a8^` → `5c3d72a8` | 12 | 39 | **11/11**: 5 `PROCEDURA`; 3 `POZIVALAC` dubina 1 (`SkiniPaleteZaStornoPrijemnice`); 3 dubina 2 (`RunPrijemnicaCorrection`, kroz `PreradjenaPaletaRazlog`) |
-   | `d19c2dae` → `a1d98e76` (rez 1b) | 35 | 65 | **11/11** |
+   | `d19c2dae` → `a1d98e76` (rez 1b) | 35 | 70 | **11/11** |
    | `60a7957d^` → `60a7957d` | 30 | 114 | svih 8 sa sidrom u `ReassignPrijemnicaToZbirna_TX` i dalje tu (`PROCEDURA`). Rast je većinom `TEST` 98: promenjeni su zajednički test-pomoćnici `ZbrIzdataPodPrijemnicu` i `S6K6Zbirna` |
    | `1559def1^` → `1559def1` | 2 | 2 | isto (`KATALOG`) |
    | `3c216acf`, `5655661e` (samo dokumenti) | 0 | 0 | isto |
@@ -971,9 +971,9 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
      rezom 1b dala 451 stavku (`TEST` 417): parametar `testName` u BFP
      `AssertEquals` je „zvao" `modTest.TestName`, a registar testova
      (`Case N: TestName = ...`) dira svaki rez koji dodaje test. Sa pravilom
-     je 65, a 11/11 ostaje.
+     je 65 (posle ispravke za omotač istog imena 70), a 11/11 ostaje.
    - **25 spojenih PR-ova** (`merge_parovi.txt`, prvi roditelj → merge):
-     zbir izabranih 9994 → 10 400 (+406). Medijana razlike je +7, a najviše
+     zbir izabranih 9994 → 10 416 (+422). Medijana razlike je +7, a najviše
      +83 (`5a9bd868`: 180 → 263). Nijedna stavka koju bira D-5 ne ispada.
      Deset parova je bez razlike: šest sa celim katalogom (`FIXTURE`), jedan
      sa 1374 od 1382 (`638bf299`, `TEST` iz deklaracija test-modula) i tri
@@ -994,25 +994,29 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
      toga je graf oko 1,1 s.
      Ostatak je `_izaberi` → `_suita_testa` nad celim katalogom pre filtera
      `--od`, i taj trošak postoji i bez D-5b.
-   - Uz oko 5 s po stavci izborom (CLAUDE.md §5), 65 stavki reza 1b je oko
+   - Uz oko 5 s po stavci izborom (CLAUDE.md §5), 70 stavki reza 1b je oko
      5–6 min serijski. To nije mereno.
-   - **Dvosmerni dokaz** (`d5b_dvosmerno.py`, `d5b_samo_a5b.py`): 30 od 31
-     D-5b mutanta padaju po imenu (`D5: pozivaoci: ...`, `D5: main ne
-     prosledi graf ...`, `D5: git sloj: svi ...`). Zelen ostaje P14 (BFS bez
-     skupa viđenih imena), koji je uz dubinu 2 ekvivalentan: ime sa nivoa 0
-     koje upadne i u nivo 1 ne menja nijednu dubinu, jer se pogodak traži od
-     nivoa 0 naviše. Prvi prolaz je našao rupu (mutant „komentari se ne
-     brišu" je ostao zelen, jer je `Rem` u istoj sintetičkoj proceduri palio
-     pun obrazac), pa su `'` i `Rem` razdvojeni u dve procedure; posle toga
-     mutant pada. Raniji mutanti nad istim fajlom: D-5 42/43 (D14 je i dalje
-     ekvivalentan), G1 30/30, R-4/D-6 26/26. Dva D-5 isečka su pomerena jer
-     se kod pomerio (`N18`, `D10`), sa istim značenjem;
-   - self-test `dokaz.py` 1,04–1,06 s (tri merenja, naizmenično sa
-     `HEAD:tools/dokaz.py` na istoj mašini: pre D-5b 0,87–0,90 s); deo D-5b
-     je oko 0,15 s, uglavnom git sloj nad privremenim repoom. Bez `--od` je izlaz bajt-isti: `--grupe 8 --plan`
-     187 785 bajtova, `--plan` 239 601, `relink --grupe 6 --plan` 626.
-     `--od origin/main --plan` na ovoj grani (dira samo `tools/` i `docs/`):
-     rc 2, „rez ne dira nijednu sabotažu". Windows i Excel nisu pušteni.
+   - **Dvosmerni dokaz:** nezavisan, osmišljen iz diff-a (`d5b_final.py`), nad
+     konačnim kodom. D-5b mutanti 67/67 padaju po imenu (`D5: pozivaoci: ...`,
+     `D5: main ne prosledi graf ...`, `D5: git sloj: svi ...`); prvi prolaz je
+     ostavio 15 zelenih „proba", za koje su dodati test slučajevi. Uz to
+     implementatorovih 61 + 31 + 2: zeleni su samo P14 i P23 (BFS bez skupa
+     viđenih imena), ekvivalentni jer se pogodak traži od nivoa 0 naviše.
+     Raniji mutanti nad istim fajlom: D-5 42/43 (D14 ekvivalentan), G1 30/30,
+     R-4/D-6 26/26. Dva D-5 isečka su pomerena (`N18`, `D10`), sa istim
+     značenjem;
+   - **Review** (ugao „propušten izbor"; uglovi „višak i cena" i „integracija"
+     nisu pušteni): 4 nalaza. Ispravljena dva: sopstveno ime brisalo je i
+     kvalifikovan poziv, pa omotač istog imena (`modScrDoplata.StampajKO` →
+     `modPrint.StampajKO`) nije bio pozivalac; deklaracija posle `:` nije
+     davala seme. Dva su upisana kao ograničenja (`docs/EXCEL_TEST_HARNESS.md`):
+     okvir suite-a (seed i prolog zovu test, ne obrnuto) i
+     `OnTime`/`OnKey`/ime kao string omotaču/smer pozvanih;
+   - self-test `dokaz.py` 1,03–1,13 s (pre D-5b 0,87–0,90 s). Bez `--od` je
+     izlaz bajt-isti kao u `main`-u: `--grupe 8 --plan` 187 785 bajtova,
+     `--plan` 239 601, `relink --grupe 6 --plan` 626. `--od origin/main --plan`
+     na ovoj grani (dira samo `tools/` i `docs/`): rc 2, „rez ne dira nijednu
+     sabotažu". Windows i Excel nisu pušteni.
 5. **D-3** (placebo u svakom pozivu), **R-1** (2 s fiksnog čekanja pri
    gašenju), **F-8** (keš hook-a).
 6. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi

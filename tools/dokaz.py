@@ -1041,9 +1041,12 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
 # procName`), dogadjaje i UI handlere (Click, OnAction iz tabele), ni sirenje
 # iz produkcije na testove (test koji zove dirnutu produkcionu proceduru se ne
 # bira, osim ako je i sabotaza pozivalac). Graf je po imenu, pa je istoimena
-# procedura u drugom modulu ista (visak, bezbedan smer); jedino pravilo koje
-# SKIDA pozivaoca je zaklanjanje lokalnim imenom (_od_lokalna, uprosceno
-# citanje zaglavlja i Dim/Static/Const). Nad 5c3d72a8 (stavka
+# procedura u drugom modulu ista (visak, bezbedan smer). Dva pravila SKIDAJU
+# pozivaoca: zaklanjanje lokalnim imenom (_od_lokalna, uprosceno citanje
+# zaglavlja i Dim/Static/Const) i sopstveno ime bez kvalifikacije (`modX.Ime`
+# ostaje poziv -- omotac istog imena). Ne vidi ni OnTime/OnKey, ni ime kao
+# string omotacu (CallOptional "X"), ni okvir suite-a (seed/prolog zove test,
+# ne obrnuto), ni smer pozvanih. Nad 5c3d72a8 (stavka
 # 288) to daje svih 11 odlozenih (plan, Prilog D.3, tacka 4). Ne prati se ni
 # sam alat (run_vba, sabotaza, dokaz) -- on ima svoj self-test.
 _OD_VRSTE = ("KATALOG", "PROCEDURA", "POZIVALAC", "TEST", "FAJL", "FIXTURE")
@@ -1352,8 +1355,8 @@ def _od_deklarisano(redovi: list, kod: list, prvi: int) -> dict:
             m = _OD_PRVO_IME.match(logicki)
             if vrsta == "enum" and m and not _OD_BLOK_KRAJ.match(logicki):
                 imena.append(m.group(1))
-        else:
-            imena = _od_imena_deklaracije(logicki)
+        else:                       # `Const A = 1: Const B = 2` -- svaka naredba
+            imena = [i for deo in logicki.split(":") for i in _od_imena_deklaracije(deo.strip())]
         for ime in imena:
             out.setdefault(ime.lower(), ime)
     return out
@@ -1401,8 +1404,10 @@ def _od_dirnuto(stari, novi, podeli):
     # Procedura koje nema na novoj strani su obrisani redovi -- vec su u
     # `procedure`; ovde su dovoljna imena nove strane.
     sve = {p[0].lower() for p in mb[0]}
+    prikaz = {p[0].lower(): p[0] for p in ma[0] + mb[0] if p[0].lower() in procedure}
     return {"procedure": procedure, "deklaracije": deklaracije, "sve": sve,
-            "tekst": b if novi is not None else None, "mapa": mb, "imena": imena}
+            "tekst": b if novi is not None else None, "mapa": mb, "imena": imena,
+            "prikaz": prikaz}
 
 
 def _od_dinamicki(telo: str) -> set:
@@ -1481,7 +1486,9 @@ def _od_graf(tekstovi_svi: dict, podeli) -> dict:
     skup identifikatora tela bez sopstvenog imena}, "imena": {ime malim: Ime},
     "mape": {fajl: (tekst LF, mapa za _od_gde)}}. Sopstveno ime se brise jer
     ga Function pominje pri svakom vracanju vrednosti (`F = x`): istoimena
-    procedura u drugom modulu bi inace "zvala" dirnutu.
+    procedura u drugom modulu bi inace "zvala" dirnutu. KVALIFIKOVANO
+    (`modX.Ime`, `"modX.Ime"` uz Run) ostaje: omotac istog imena (npr.
+    modScrDoplata.StampajKO -> modPrint.StampajKO) jeste pozivalac.
     """
     tela, imena, mape = {}, {}, {}
     for fajl in sorted(tekstovi_svi):
@@ -1497,7 +1504,8 @@ def _od_graf(tekstovi_svi: dict, podeli) -> dict:
                 telo = _OD_NASTAVAK.sub(" ", telo)
             tok = _od_tokeni(telo)
             mi = ime.lower()
-            tok.discard(mi)
+            if mi in tok and not re.search(r"\.\s*" + re.escape(mi) + r"\b", telo.lower()):
+                tok.discard(mi)
             kljuc = (fajl, mi)
             tela[kljuc] = tela[kljuc] | tok if kljuc in tela else tok
             imena.setdefault(mi, ime)
@@ -1597,6 +1605,8 @@ def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
         seme, test_seme = set(), set()
         for fajl, d in dirnuto.items():
             s = set(d["procedure"])
+            for k, v in d.get("prikaz", {}).items():   # i obrisana procedura
+                prikaz.setdefault(k, v)
             if _OD_SEME_DEKLARACIJE:
                 s |= set(d["imena"])
                 for k, v in d["imena"].items():
@@ -5024,6 +5034,110 @@ def _self_test_od_pozivaoci(podeli) -> list:
           "promena test-pomocnika ne bira TEST za testove koji ga zovu (%r)" % (r,))
     tvrdi(set(r) == {"s-ustringu", "s-ukomentaru"},
           "promena test-pomocnika bira i stavke cijem testu nije pomocnik (%r)" % (r,))
+
+    # --- dopuna posle dvosmernog dokaza (preziveli mutanti) i review-a ------
+    def mali(moduli, fajl, staro, novo, kat_m=None, test_f=("modT.bas",)):
+        assert moduli[fajl].count(staro) == 1, staro
+        nov = dict(moduli, **{fajl: moduli[fajl].replace(staro, novo)})
+        if kat_m is None:
+            kat_m = {}
+            for f, t in sorted(nov.items()):
+                for i in re.findall(r"^Public (?:Sub|Function) (\w+)", t, re.M):
+                    sid = "    s_%s = 1\n" % i.lower()
+                    if f != "modT.bas" and t.count(sid) == 1:
+                        kat_m["s-" + i.lower()] = (f, sid, sid.replace("1", "9"), "T_0", "t")
+        try:
+            return _od_razlozi(kat_m, kat_m, {fajl: (moduli[fajl], nov[fajl])}, podeli,
+                               test_f, graf=_od_graf(nov, podeli))
+        except Exception as e:              # noqa: BLE001 -- pad je nalaz
+            return {"pukla": [repr(e)]}
+    zag_p = 'Attribute VB_Name = "modP"\n'
+    zag_s = 'Attribute VB_Name = "modS"\n'
+    dno = proc("Dno", "x = 1")
+
+    r = mali({"modP.bas": zag_p + dno + proc("StrRem", "Rem napomena", 'z = "Dno"')},
+             "modP.bas", "    x = 1\n", "    x = 2\n")
+    tvrdi("s-strrem" not in r, "uz Rem (pun obrazac) se ime u stringu racuna kao poziv")
+    r = mali({"modP.bas": zag_p + "Option Explicit\n\n" + dno,
+              "modS.bas": zag_s + proc("KoristiKN", "y = KN + 1")},
+             "modP.bas", "Option Explicit\n", "Option Explicit\nPublic Const KN As Long = 1\n")
+    tvrdi(opis(r, "s-koristikn") == ["modS.bas::KoristiKN (dubina 1, preko KN)"],
+          "dodata deklaracija (samo nova strana) ne daje seme (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + "Public Type TRed\n    Iznos As Double\nEnd Type\n\n" + dno,
+              "modS.bas": zag_s + proc("KoristiTip", "Dim r As TRed")
+              + proc("KoristiPolje", "y = o.Iznos")},
+             "modP.bas", "    Iznos As Double\n", "    Iznos As Currency\n")
+    tvrdi(r.get("s-koristitip") == ["POZIVALAC"] and "s-koristipolje" not in r,
+          "clan Type-a: seme mora biti ime Type-a, ne ime polja (%r)" % (r,))
+    vba7 = (zag_p + dno + "#If VBA7 Then\nPublic Sub P2(ByVal h As LongPtr)\n#Else\n"
+            "Public Sub P2(ByVal h As Long)\n#End If\n    s_p2 = 1\nEnd Sub\n\n")
+    r = mali({"modP.bas": vba7, "modS.bas": zag_s + proc("ZoviP2", "P2 1")}, "modP.bas",
+             "Public Sub P2(ByVal h As LongPtr)\n",
+             "Public Sub P2(ByVal h As LongPtr, Optional k As Long)\n")
+    tvrdi(opis(r, "s-zovip2") == ["modS.bas::ZoviP2 (dubina 1, preko P2)"],
+          "#If VBA7 zaglavlje (kod izmedju procedura) ne daje seme procedure (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + dno + proc("Sred", "Dno") + proc("Oba", "Sred", "Dno")},
+             "modP.bas", "    x = 1\n", "    x = 2\n")
+    tvrdi(opis(r, "s-oba") == ["modP.bas::Oba (dubina 1, preko Dno)"],
+          "dubina nije najkraca (%r)" % (opis(r, "s-oba"),))
+    r = mali({"modP.bas": zag_p + dno + proc("Sred", "Dno"),
+              "modS.bas": zag_s + proc("Vrh", "Sred")}, "modP.bas", dno, "")
+    tvrdi(opis(r, "s-sred") == ["modP.bas::Sred (dubina 1, preko Dno)"]
+          and r.get("s-vrh") == ["POZIVALAC"],
+          "obrisana procedura nije seme, ili joj se ime ne ispisuje (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + dno,
+              "modS.bas": zag_s + "Public Property Get Vr() As Long\n    Dno\n    s_vrg = 1\n"
+              "End Property\n\nPublic Property Let Vr(ByVal v As Long)\n    s_vrl = 1\n"
+              "End Property\n"}, "modP.bas", "    x = 1\n", "    x = 2\n",
+             kat_m={"s-vrg": ("modS.bas", "    s_vrg = 1\n", "    s_vrg = 9\n", "T_0", "t")})
+    tvrdi(r.get("s-vrg") == ["POZIVALAC"], "Property Let gazi telo Property Get (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + dno + proc("PreRun", 'z = "Dno": Application.Run "Nesto"')},
+             "modP.bas", "    x = 1\n", "    x = 2\n")
+    tvrdi("s-prerun" not in r, "string PRE Run se racuna kao ime procedure")
+    r = mali({"modP.bas": zag_p + dno, "modS.bas": zag_s + "\n" + proc("KoristiDno", "Dno")},
+             "modP.bas", "    x = 1\n", "    x = 2\n",
+             kat_m={"s-zag": ("modS.bas", "Public Sub KoristiDno()\n",
+                              "Public Sub KoristiDno2()\n", "T_0", "t")})
+    tvrdi(r.get("s-zag") == ["POZIVALAC"], "sidro na zaglavlju pozivaoca nije POZIVALAC")
+    poz = _od_pozivaoci(_od_graf({"modP.bas": zag_p + dno + proc("Sred", "Dno")
+                                  + proc("Vrh", "Sred") + proc("Cetvrti", "Vrh")}, podeli),
+                        {"dno"}, 3)
+    tvrdi(poz.get(("modP.bas", "cetvrti")) == (3, "dno", "vrh"),
+          "dubina 3: seme mora ostati pravo seme (%r)" % (poz.get(("modP.bas", "cetvrti")),))
+    r = mali({"modP.bas": zag_p + "Public Const _\n    KX As Long = 1\n\n" + dno,
+              "modS.bas": zag_s + proc("KoristiKX", "y = KX")},
+             "modP.bas", "Public Const _\n", "Global Const _\n")
+    tvrdi(r.get("s-koristikx") == ["POZIVALAC"],
+          "deklaracija sa imenom u nastavku reda (dirnut prvi red) ne daje seme")
+    r = mali({"modP.bas": zag_p + 'Public Declare PtrSafe Function GetTickCount Lib "kernel32" '
+              "() As Long\n\n" + dno, "modS.bas": zag_s + proc("ZoviTick", "y = GetTickCount()")},
+             "modP.bas", 'Lib "kernel32" ()', 'Lib "kernel32.dll" ()')
+    tvrdi(opis(r, "s-zovitick") == ["modS.bas::ZoviTick (dubina 1, preko GetTickCount)"],
+          "izmenjen Declare ne daje seme (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + "Public Const K1 As Long = 1: Public Const K2 As Long = 2\n\n"
+              + dno, "modS.bas": zag_s + proc("KoristiK2", "y = K2")},
+             "modP.bas", "K2 As Long = 2", "K2 As Long = 22")
+    tvrdi(r.get("s-koristik2") == ["POZIVALAC"],
+          "druga naredba deklaracije posle `:` ne daje seme (%r)" % (r,))
+    r = mali({"modP.bas": zag_p + dno,
+              "modS.bas": zag_s + proc("Dno", "y = modP.Dno + 1", vrsta="Function")},
+             "modP.bas", "    x = 1\n", "    x = 2\n",
+             kat_m={"s-omotac": ("modS.bas", "    s_dno = 1\n", "    s_dno = 9\n", "T_0", "t")})
+    tvrdi(opis(r, "s-omotac") == ["modS.bas::Dno (dubina 1, preko Dno)"],
+          "omotac istog imena (modS.Dno -> modP.Dno) nije pozivalac (%r)" % (r,))
+    kat_t = {"s-nesto": ("modS.bas", "    s_nesto = 1\n", "    s_nesto = 9\n", "T_9", "t"),
+             "s-t1": ("modS.bas", "    z = 1\n", "    z = 9\n", "T_1", "t")}
+    t_mod = 'Attribute VB_Name = "modT"\n' + proc("PomocT", "h = 1") + proc("T_1", "PomocT")
+    r = mali({"modT.bas": t_mod, "modS.bas": zag_s + proc("T_9", "PomocT") + proc("Nesto", "z = 1")},
+             "modT.bas", "    h = 1\n", "    h = 2\n", kat_m=kat_t)
+    tvrdi(r == {"s-t1": ["TEST"]}, "TEST preko pomocnika gleda i produkciju istog imena "
+          "(%r)" % (r,))
+    t_mod2 = 'Attribute VB_Name = "modT"\n' + proc("PomocT", "h = 1") + proc("T_1", "PomocT", "k = 1")
+    nov_t = t_mod2.replace("    h = 1\n", "    h = 2\n").replace("    k = 1\n", "    k = 2\n")
+    r = _od_razlozi(kat_t, kat_t, {"modT.bas": (t_mod2, nov_t)}, podeli, ("modT.bas",),
+                    graf=_od_graf({"modT.bas": nov_t, "modS.bas": zag_s + proc("Nesto", "z = 1")},
+                                  podeli))
+    tvrdi(r.get("s-t1") == ["TEST"], "dirnut i test i pomocnik: TEST nije tacno jednom (%r)" % (r,))
     return nalazi
 
 
@@ -5062,6 +5176,7 @@ def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
         pisi("src-vba/modD.bas", "Attribute VB_Name = \"modD\"\r\nPublic Sub R()\r\n"
              "    P1\r\n    r = 1\r\nEnd Sub\r\n")
         pisi("src-vba/beleska.txt", "Public Sub P1()\n")
+        pisi("src-vba/modE.bas", "Attribute VB_Name = \"modE\"\n")   # brise se posle commita
         pisi("tools/sabotaza.py", "SABOTAZE = %r\nPOZNATI_NALAZI_DOKAZ = {'s-q': 'X'}\n"
              % (kat,))
         pisi("tools/make_fixture.py", "X = 1\n")
@@ -5072,6 +5187,7 @@ def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
         pisi("src-vba/modA.bas", mod_a.replace("    y = 2\n", "    y = 3\n")
              .replace("\n", "\r\n"))
         pisi("src-vba/modB.bas", mod_b)                     # samo kraj reda
+        os.remove(os.path.join(repo, "src-vba", "modE.bas"))  # jos u indeksu, nema na disku
         pisi("src-vba/modN.bas", "Attribute VB_Name = \"modN\"\n' \xe8\n")
         pisi("tools/make_fixture.py", "X = 2\n")
         pisi("schema/schema.json", "{}\r\n")                 # samo kraj reda

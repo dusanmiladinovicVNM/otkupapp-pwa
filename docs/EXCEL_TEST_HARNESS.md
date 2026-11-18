@@ -1246,13 +1246,27 @@ izbora ostaje:
 - širenje iz produkcije na testove: test koji zove dirnutu **produkcionu**
   proceduru se ne bira (to bi biralo skoro sve). Bira se samo sabotaža čije
   sidro je pozivalac;
+- doslovno ime u `Application.OnTime`/`OnKey` i ime prosleđeno kao string
+  omotaču koji tek on pušta (`CallOptional "X"`, `E2E_RunVbaSuite "X"`): graf
+  stringove čita samo uz `Run`, `.OnAction` i `CallByName`. Danas je jedino
+  pogođeno sidro u `ShowToast` (`OnTime ... "HideToast"`);
+- okvir suite-a: procedure test-modula koje suite pušta PRE testa (BFP seed
+  `SeedBusinessFlowProMasterData` → `SeedKupac`..., prolog `RunAllTests` →
+  `ResetSeamova`) zovu test, a test njih ne. Izmena tela takve procedure ne
+  bira nijedan TEST, iako menja podatke svih testova suite-a. Nad 25 spojenih
+  PR-ova BFP seed nije diran van `FIXTURE`; `ResetSeamova` jeste dva puta.
+  Uz takav rez pusti dokaz po prefiksu suite-a ili ceo katalog;
+- smer pozvanih: sabotaža u proceduri koju dirnuta procedura **zove** se ne
+  bira (rez dodao kapiju u pozivaocu); maskiranje tim putem nije pokazano;
 - dubina veća od 2;
 - graf je po imenu, pa je višak moguć: istoimena procedura ili promenljiva
   modula u drugom modulu i član objekta `.Ime` izgledaju isto kao poziv
   procedure (ili pominjanje konstante) `Ime`;
-- lokalna imena se čitaju uprošćeno (zaglavlje, `Dim`/`Static`/`Const`). To
-  je jedino pravilo grafa koje **skida** pozivaoca, pa bi njegova greška bila
-  manjak, ne višak.
+- dva pravila grafa **skidaju** pozivaoca, pa bi njihova greška bila manjak,
+  ne višak: lokalno ime (zaglavlje, `Dim`/`Static`/`Const`, čitano uprošćeno)
+  zaklanja istoimenu proceduru, i sopstveno ime procedure se ne računa — osim
+  kvalifikovanog (`modX.Ime`), pa je omotač istog imena
+  (`modScrDoplata.StampajKO` → `modPrint.StampajKO`) i dalje pozivalac.
 
 Za te slučajeve se sabotaže i dalje dodaju ručno, posebnim pozivom po
 prefiksu. Ne prati se ni sam alat (`run_vba.py`, `sabotaza.py`, `dokaz.py`) —
