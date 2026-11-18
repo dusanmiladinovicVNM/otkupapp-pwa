@@ -1103,6 +1103,9 @@
       "BrojDokumenta": "text",
       "PozivNaBroj": "text"
     },
+    "tblCenovnik": {
+      "StornoRazlog": "text"
+    },
     "tblDoplata": {
       "BrojDokumenta": "text",
       "BrojSpecifikacije": "text"

@@ -14261,6 +14261,49 @@ SABOTAZE = {
         "T_Cen_PitanjaSuGejtovana",
         "374 odustajanje od storna je javljeno kao otkazano, ne kao greska",
     ),
+    # Revizija 18.11.2026 (K0): ispravka sa necitljivim datumom bi tiho postala
+    # ispravka na danas -- stari red storniran, cena preseljena.
+    "cen-ispravka-datum-danas": (
+        "modMaticniUnos.bas",
+        "        If datumObavezan Then\n",
+        "        If False Then   ' SABOTAZA: ispravka sa necitljivim datumom postaje danas\n",
+        "T_Cen_IspravkaVezaUObaSmera",
+        "370 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas",
+    ),
+    # K13: StornoRazlog bez ugovora formata -- "=duplo" Excel upise kao formulu.
+    "cen-razlog-bez-text-formata": (
+        "modSchema.bas",
+        '    k("StornoRazlog") = "text"\n',
+        "    ' SABOTAZA: StornoRazlog ostaje General (bez ugovora formata)\n",
+        "T_Cen_StornoJednokratanSaRazlogom",
+        "369 razlog koji pocinje sa = ostaje doslovan tekst, ne formula",
+    ),
+    # K10: posle prefill-a bez cene predlog ostaje izracunat nad mestom koje je
+    # forma imala PRE prepisa.
+    "cen-prefill-bez-predloga": (
+        "modOtkupUI.bas",
+        "    If Len(cenaSpec) = 0 Or (mKlasa = 2 And Len(cena2Spec) = 0) Then AutoFillCena False\n",
+        "    ' SABOTAZA: prefill bez cene ne racuna predlog nad konacnim mestom i datumom\n",
+        "T_Cen_PredlogCenePratiDatumIOM",
+        "373 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a",
+    ),
+    # K11: promena rezima ne racuna predlog, pa cena iz F1 prelazi u F4.
+    "cen-rezim-bez-predloga": (
+        "modOtkupUI.bas",
+        "        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then AutoFillCena False\n",
+        "        ' SABOTAZA: promena rezima ne racuna predlog cene\n",
+        "T_Cen_PredlogCenePratiDatumIOM",
+        "373 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)",
+    ),
+    # K9: kljuc odbijanja stize do Poruka() kroz promenljivu; bez reda u
+    # katalogu operater bi video "[CEN_ERR_DUPLIKAT]".
+    "cen-kljuc-van-kataloga": (
+        "modPoruke.bas",
+        '    UpsertRow lo, existing, "CEN_ERR_DUPLIKAT", _\n',
+        '    UpsertRow lo, existing, "CEN_ERR_DUPLIKAX", _\n',
+        "T_Cen_UnosOdbijaIPusta",
+        "368 kljucevi odbijanja cenovnika su u katalogu poruka",
+    ),
 }
 
 

@@ -620,6 +620,8 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
         "Storno cene nije upisan."
     UpsertRow lo, existing, "CEN_ERR_ISPRAVKA_NIJE_UPISANA", _
         "Ispravka cene nije upisana."
+    UpsertRow lo, existing, "CEN_ERR_MIGRACIJA", _
+        "Migracija duplikata cenovnika nije uspela; tabela je vra" & ChrW(263) & "ena. Detalji su u logu."
     UpsertRow lo, existing, "CEN_ASK_RAZLOG_STORNO", _
         "Razlog storna cene (obavezno). Storno je kona" & ChrW(269) & "an i ne poni" & ChrW(353) & "tava se."
     UpsertRow lo, existing, "CEN_ASK_RAZLOG_ISPRAVKE", _

@@ -52,7 +52,7 @@ Kanon je `schema/schema.json:119-141`. Nove kolone 12–17 su **na kraju**, jer
 | 5 | `Klasa` | `I` ili `II`, kanonski oblik (`KlasaKanon:734`). | `UpisiCenu:641` |
 | 6 | `Cena` | din/kg sa PDV-om, > 0, dve decimale (`Round(cena, 2)`). | `UpisiCenu:642` |
 | 7 | `CreatedAt` | Trag unosa (`Now`). Ne ulazi u pravilo. | `UpisiCenu:643` |
-| 8 | `Stornirano` | `Da` = storniran; prazno = red učestvuje u pravilu. | `StornirajRedNaIndeksu:669` |
+| 8 | `Stornirano` | Tačno `Da` = storniran; sve ostalo = red učestvuje u pravilu. Isto čitanje kao `modHelpers.ExcludeStornirano`, kroz koje filtrira lista (CEN-ODL-10), i kao stari `GetVazecaCena` (`modCenovnik.JeStorno`; revizija 18.11.2026 je našla da su pravilo i lista ranije čitali različito). | `StornirajRedNaIndeksu:669` |
 | 9 | `CreatedBy` | Pečat `AppendRow` (`modDataAccess.StampRowAudit`). | `modDataAccess` |
 | 10 | `ModifiedAt` | Pečat; menja ga i storno i upis veze ispravke. | `modDataAccess` |
 | 11 | `ModifiedBy` | Isto. | `modDataAccess` |
@@ -82,15 +82,15 @@ Linije su `src-vba/modCenovnik.bas` ako nije drugačije navedeno. Testovi su
 | **CEN-01** | Red je odluka: ključ je `VrstaVoca` + `SortaVoca` + `Klasa`, nivo je globalna (prazan `StanicaID`) ili posebna, a `Datum` je dan od kog važi. Cena je din/kg sa PDV-om; ništa se na nju ne dodaje. | `UpisiCenu:610` (oblik reda); kanon `schema/schema.json:119-141` | 368 |
 | **CEN-02** | Red se posle unosa ne menja. Posle unosa se pišu samo storno kolone (8, 13–15), `ZamenjenSaID` i pečat `Modified*`. Jedini pisac je `modCenovnik` (A11). `MatIzmeni` za cenovnik odbija (`MATU_ERR_CENOVNIK_APPEND`), a ekran nema radnju „Izmeni". | `docs/DOMEN/WRITE_OWNERSHIP.json:61-67` + `python tools/who_writes.py --check-ownership`; `modMaticniUnos.MatIzmeni`; `modMaticniEkran.Radnje` | 369, 370; `T_MatEkran_RadnjeIRezim` (nema `izmeni`) |
 | **CEN-03** | Najviše jedan nestorniran red po (vrsta, sorta, klasa, stanica, dan); poređenje je trim, bez razlike u veličini slova. Pisac duplikat odbija (`CEN_ERR_DUPLIKAT`). Čitalac ga ne razrešava nego diže `ERR_CEN_DUPLI_KLJUC`. Storno oslobađa ključ, i u istoj transakciji (ispravka: `izuzmiID`). | pisac `CenaUnosProblem:282-299`; čitalac `CenPobednik:103-109`; zatečeno `MigrirajDupleCene:482` (CEN-ODL-04) | 367, 368, 371 |
-| **CEN-04** | Provere unosa, ovim redom: vrsta obavezna; vrsta (i sorta kad je data) postoji u `tblKulture`; klasa `I`/`II`; cena > 0, ≤ 9999999999.99, najviše dve decimale; stanica (kad je data) postoji u `tblStanice`; datum u poslovnoj godini (1900–2199, `modParse.bas:7-8`); granica (CEN-09); duplikat (CEN-03). Ishod je ključ poruke `CEN_ERR_*`; editor po ključu bira polje za fokus. | `CenaUnosProblem:231`; drugi zid `UpisiCenu:617-618`; prevod u fokus `modMaticniUnos.CenaOdbij` | 368 |
+| **CEN-04** | Provere unosa, ovim redom: vrsta obavezna; vrsta (i sorta kad je data) postoji u `tblKulture`; klasa `I`/`II`; cena > 0, ≤ 9999999999.99, najviše dve decimale; stanica (kad je data) postoji u `tblStanice`; datum u poslovnoj godini (1900–2199, `modParse.bas:7-8`); granica (CEN-09); duplikat (CEN-03). Ishod je ključ poruke `CEN_ERR_*`; editor po ključu bira polje za fokus. | `CenaUnosProblem:231`; drugi zid `UpisiCenu:617-618`; prevod u fokus `modMaticniUnos.CenaOdbij` | 368 (provere i postojanje svih ključeva u katalogu); fokus samo za datum ispravke (370), ostala polja **bez testa** |
 | **CEN-05** | Važeća cena za (stanica, roba, klasa, dan): kandidati su nestornirani redovi tog ključa sa danom od 1 do dana upita, globalni ili baš te stanice. Pobeđuje najkasniji dan; istog dana posebna pobeđuje globalnu. Prazna stanica upita vidi samo globalne. Nova globalna cena time prekida raniju posebnu. | `CenPobednik:80` | 366, 367 |
 | **CEN-06** | Rezerva: kad sorta nema nijedan važeći red za tu stanicu i dan, isto pravilo važi za istu vrstu bez sorte. Sorta pobeđuje i noviju rezervu. Kultura bez sorte nema rezervu. | `CenVazeciRed:126` | 366 (C1, C2, C11, C15, C16, C17) |
 | **CEN-07** | Bez reda nema cene — nikad 0. `TryVazecaCena` tada vraća `False`, a forma polje ne dira. Pobednik sa cenom ≤ 0 (zatečen ili nečitljiv broj) znači „nema cene"; stariji red se tada ne traži (`:204-207`). Kvar čitanja (nema tabele ili kolone, prekršen CEN-03) ide u log i znači „nema predloga": predlog ne sme da obori unos dokumenta. | `TryVazecaCena:183`; pozivalac `modOtkupUI.AutoFillCena` | 367, 373 |
 | **CEN-08** | Buduća cena ne važi pre svog dana. Predlog na formi se računa za datum dokumenta (`modOtkupUI.DatumIzPolja`; danas dok polje nije čitljivo), ne za danas. Stari bag „buduća cena važi odmah" ne prelazi. | `CenPobednik:93` (`d <= danUpita`); `modOtkupUI.AutoFillCena` | 366 (C10), 373 |
-| **CEN-09** | `Datum` novog reda je od danas − 31 do danas + 366, ivice uključene. „Danas" je lokalni `Date` računara. Ispravka koja zadržava stari `Datum` nije pod granicom; kad ispravka menja datum, nov datum jeste. Prazan ili nečitljiv datum u editoru znači danas. | `CenaUnosProblem:274-280`; izuzetak `CenaIspravkaProblem:355-356` i `IspraviCenu:444`; prazan datum `modMaticniUnos.CenaIzPolja` | 368, 370 |
+| **CEN-09** | `Datum` novog reda je od danas − 31 do danas + 366, ivice uključene. „Danas" je lokalni `Date` računara. Ispravka koja zadržava stari `Datum` nije pod granicom; kad ispravka menja datum, nov datum jeste. Prazan ili nečitljiv datum u editoru znači danas **samo pri unosu** (PLT-52). Ispravka ga odbija (`CEN_ERR_DATUM`, fokus na datum), kao AgriX (`IspravkaCeneInput.vaziOd` je obavezan): tiho „danas" bi stornirao stari red i preselio cenu na danas, bez povratka za red stariji od granice. | `CenaUnosProblem:274-280`; izuzetak `CenaIspravkaProblem:355-356` i `IspraviCenu:444`; datum `modMaticniUnos.CenaIzPolja` (`datumObavezan`) | 368 (granica), 370 (granica ispravke; prazan i nečitljiv datum ispravke); „prazno = danas" pri unosu **bez testa** |
 | **CEN-10** | Cena na stavci dokumenta je snimak (`docs/DOMEN/DOCUMENT_HEADER_LINES.md:271-279`, §4.1d). Cenovnik daje samo predlog u polje forme. Stavka ne pamti red cenovnika. Storno ili ispravka cenovnika ne menja izdat dokument. | struktura: redove `tblCenovnik` čitaju samo `modCenovnik` i lista `modMaticniIzvor`; ostali pomeni `TBL_CENOVNIK` (`modSetup`, `modSchema`, `modSchemaGuard`, `modPregledListova`) su šema i administracija (grep, 18.11.2026); pisac dokumenta traži samo `Cena > 0` | nema posebnog testa (v. §10) |
-| **CEN-11** | Storno nosi razlog, autora i vreme zajedno: `Stornirano = Da`, `StorniranoAt = Now`, `StorniranoBy = AuditUser()`, `StornoRazlog`. Razlog je obavezan, 1–500 znakova posle skidanja belina na krajevima (razmak, tab, CR, LF, NBSP). Sve četiri ćelije idu u jednoj transakciji. | provera `CenaStornoProblem:305` → `RazlogProblem:695`, `TrimBeline:707`; upis `StornirajRedNaIndeksu:660-673` | 369 |
-| **CEN-12** | Storno je jednokratan i konačan. Storniran red se ne stornira ni ne ispravlja ponovo (`CEN_ERR_STORNIRANA`). Drugi zid čita stanje ćelije u istoj transakciji, ne iz provere pre nje. Storno se ne poništava: `modCenovnik` ne piše u žurnal storna i radnje vraćanja nema. Pogrešan storno se popravlja novim unosom. | `CenaStornoProblem:314-317`; drugi zid `StornirajRedNaIndeksu:667` | 369 |
+| **CEN-11** | Storno nosi razlog, autora i vreme zajedno: `Stornirano = Da`, `StorniranoAt = Now`, `StorniranoBy = AuditUser()`, `StornoRazlog`. Razlog je obavezan, 1–500 znakova posle skidanja belina na krajevima (razmak, tab, CR, LF, NBSP). Sve četiri ćelije idu u jednoj transakciji. `StornoRazlog` je pod ugovorom formata (`schema/schema.json` `formats`: tekst), pa razlog koji počinje sa `=` ostaje doslovan tekst, ne formula. | provera `CenaStornoProblem:305` → `RazlogProblem:695`, `TrimBeline:707`; upis `StornirajRedNaIndeksu:660-673` | 369 |
+| **CEN-12** | Storno je jednokratan i konačan. Storniran red se ne stornira ni ne ispravlja ponovo (`CEN_ERR_STORNIRANA`). Drugi zid čita stanje ćelije u istoj transakciji, ne iz provere pre nje (drugi zid je **bez testa**: na sva tri puta ga zaklanja provera pre njega). Storno se ne poništava: `modCenovnik` ne piše u žurnal storna i radnje vraćanja nema. Pogrešan storno se popravlja novim unosom. | `CenaStornoProblem:314-317`; drugi zid `StornirajRedNaIndeksu:667` | 369 |
 | **CEN-13** | Ispravka je u **jednoj** transakciji: storno starog reda (oslobađa ključ), nov red sa `IspravkaOdID` = stari, pa `ZamenjenSaID` = nov na starom. Nosi pun nov red (vrsta, sorta, klasa, stanica, datum, cena). Ispravka bez ijedne promene se odbija **pre** storna (`CEN_ERR_ISPRAVKA_BEZ_PROMENE`): isti dan, tekst bez razlike u veličini slova, klasa kanonski, cena u parama; razlog se ne računa. Pri grešci se tabela vraća, a `noviID` je prazan. | `IspraviCenu:421-470`; `CenaIspravkaProblem:325-357` | 370 |
 
 **Napomena uz CEN-03 (čitanje koda, nije izmereno).** Čitalac ne traži duplikate
@@ -161,9 +161,9 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
 | ID | Odluka |
 |---|---|
 | **CEN-ODL-01** | *(vlasnik)* Pravo je postojeće `MaticniPodaci` (`OBL_MATICNI`) kroz `modMaticniUnos.MatBranaUpisa`. Nema novog prava `cene:write` (AgriXSystems O179 se ne prenosi). |
-| **CEN-ODL-02** | *(vlasnik)* Predlog cene na formi otkupa i dokumenata se osvežava na promenu vrste i sorte i na uključivanje II klase (kao do sada) **i** na promenu datuma i otkupnog mesta (`modOtkupUI.OnDatumChanged`, `OnStanicaChanged`). Upisuje se samo kad cena postoji (CEN-07). |
+| **CEN-ODL-02** | *(vlasnik)* Predlog cene na formi otkupa i dokumenata se osvežava na promenu vrste i sorte i na uključivanje II klase (kao do sada) **i** na promenu datuma i otkupnog mesta (`modOtkupUI.OnDatumChanged`, `OnStanicaChanged`). Računa se iznova i na kraju prefill-a kad dokument ne donosi cenu za neku klasu (nad konačnim datumom i mestom; cena sa dokumenta se zatim vraća i ima poslednju reč) i pri stvarnoj promeni režima (`SelectModeCore`), jer opseg upita zavisi od režima (CEN-ODL-08). Upisuje se samo kad cena postoji (CEN-07). |
 | **CEN-ODL-03** | *(vlasnik)* Pre upisa nove **globalne** cene operater vidi spisak stanica čija ranija posebna cena od tog dana prestaje i bira Da/Ne (`MsgBox` sa podrazumevanim „Ne", `modMaticniEkran.PotvrdiPrekidPosebnih`). Važi za unos i za ispravku. |
-| **CEN-ODL-04** | *(vlasnik)* Zatečeni duplikati (stari model je dozvoljavao više nestorniranih redova istog ključa i dana i birao kasniji red tabele) rešava migracija: kasniji red tabele ostaje, raniji se storniraju sa razlogom koji imenuje pobednika („Zamenjen kasnijim redom CEN-… istog kljuca i dana (migracija CEN-ODL-04)."). To je isto pravilo koje planira AgriXSystems F6 (`docs/STANJE.md:12639-12640`). Ključ je (vrsta, sorta, klasa, stanica, dan); red bez čitljivog datuma se ne dira. Jedna transakcija; drugi prolaz ne upisuje ništa. Zove je `modSetup.EnsureCenovnikSchema` (`modSetup.bas:1015`), a nju `EnsurePaletniListSchema` i Admin „Ensure" (`modAdmin.AdminEnsureEverything`). `EnsureRuntimeSchema` je namerno **ne** zove: tamo nema backfill-a. **Posledica:** self-heal pri startu (`modMain.InitApp` → `EnsureRuntimeSchema` → `modSchema.EnsureAllTables`, `modSetup.bas:1235`) dopuni nove kolone, ali duplikate ostavi (čitanje koda). Do pokretanja Ensure (Admin → Ensure) čitalac za taj ključ prijavljuje grešku i ne predlaže cenu (CEN-03, CEN-07; v. napomenu uz CEN-03). |
+| **CEN-ODL-04** | *(vlasnik)* Zatečeni duplikati (stari model je dozvoljavao više nestorniranih redova istog ključa i dana i birao kasniji red tabele) rešava migracija: kasniji red tabele ostaje, raniji se storniraju sa razlogom koji imenuje pobednika („Zamenjen kasnijim redom CEN-… istog kljuca i dana (migracija CEN-ODL-04)."). To je isto pravilo koje planira AgriXSystems F6 (`docs/STANJE.md:12639-12640`). Ključ je (vrsta, sorta, klasa, stanica, dan); red bez čitljivog datuma se ne dira. Jedna transakcija; drugi prolaz ne upisuje ništa. Zove je `modSetup.EnsureCenovnikSchema` (`modSetup.bas:1015`), a nju `EnsurePaletniListSchema` i Admin „Ensure" (`modAdmin.AdminEnsureEverything`). `EnsureRuntimeSchema` je namerno **ne** zove: tamo nema backfill-a. **Posledica:** self-heal pri startu (`modMain.InitApp` → `EnsureRuntimeSchema` → `modSchema.EnsureAllTables`, `modSetup.bas:1235`) dopuni nove kolone, ali duplikate ostavi (čitanje koda). Do pokretanja Ensure (Admin → Ensure), kad je dan upita na dan duplikata ili kasniji i par se u redosledu tabele sretne pre novijeg reda (napomena uz CEN-03): (1) predlog cene pada za ključ duplikata i za svaku sortu te vrste koja tog dana na toj stanici nema sopstveni važeći red, jer čita rezervu (CEN-06); (2) unos i ispravka **globalne** cene te robe u Matičnim padaju i kad je datum novog reda kasniji, jer pregled (`MatCenaPregled` → `PrekinutePosebneCene`) grešku čitanja namerno ne guta, pa se ništa ne upisuje — posebna cena se upisuje normalno; (3) nova kasnija cena, upisana na kraj tabele, ne vraća predlog. Lek je Admin → Ensure ili ručni storno jednog od duplikata; Ensure treba ponoviti i posle `modMigracija.MigrirajPodatkeIzStarog`, koja kopira stari `tblCenovnik` bez migracije. Kad migracija ne uspe, `EnsureCenovnikSchema` diže grešku (`ERR_CEN_MIGRACIJA`, `CEN_ERR_MIGRACIJA`), pa Ensure ne javlja uspeh. |
 | **CEN-ODL-05** | *(prevod)* Ključ robe je tekst (`VrstaVoca` + `SortaVoca`), ne `KulturaID` — isti ključ kao doplata (DOP-ODL-02). ⚠ IDENTITY RISK, prihvaćen: preimenovanje vrste ili sorte u `tblKulture` odvaja stare redove cenovnika od robe. Isto preslikavanje teksta u kulturu planira AgriXSystems F6 (`docs/STANJE.md:12637-12638`). |
 | **CEN-ODL-06** | *(prevod)* `StanicaID` je strani ključ na `tblStanice` (`COL_STA_ID`). Proverava se pri unosu (`StanicaPostoji:863`); aktivnost stanice se ne gleda ni pri unosu ni pri čitanju. |
 | **CEN-ODL-07** | *(prevod)* Red bez čitljivog datuma (ili sa godinom van 1900–2199) ne učestvuje: ni u pravilu, ni u proveri duplikata, ni u migraciji (`DanVrednosti:758`, `JeAktivanSaDanom:793`). |
@@ -243,7 +243,9 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
 6. **`.claude/rules/agrohemija-i-cene.md:46`** i dalje imenuje `GetVazecaCena` /
    `AddCena`. Ispravka ide kroz zaseban process PR (`CLAUDE.md` §6).
 7. **Admin.** Ensure posle uvoza koda u zatečenu svesku je obavezan korak:
-   bez njega zatečeni duplikati obaraju predlog za svoj ključ (CEN-ODL-04).
+   bez njega zatečeni duplikati obaraju predlog za svoj ključ i za sorte koje
+   čitaju rezervu, i zaustavljaju unos globalne cene te robe (CEN-ODL-04, tačke
+   1–3). Isto posle `modMigracija.MigrirajPodatkeIzStarog`.
 
 ## 9) Sposobnosti i testovi
 
@@ -270,7 +272,7 @@ Testovi (`modTest`, indeksi fiksirani unapred; nijedan nije pušten):
 | 370 | `T_Cen_IspravkaVezaUObaSmera` | CEN-13, izuzetak granice iz CEN-09 |
 | 371 | `T_Cen_MigracijaDuplikataIdempotentna` | CEN-ODL-04 |
 | 372 | `T_Cen_PregledPrekidaPosebne` | pregled pre upisa (§4, CEN-ODL-03) |
-| 373 | `T_Cen_PredlogCenePratiDatumIOM` | CEN-ODL-02, -12, -13; CEN-07 na formi, kroz pravi `UiEvent` |
+| 373 | `T_Cen_PredlogCenePratiDatumIOM` | CEN-ODL-02 (datum, OM, prefill sa i bez cene, promena režima F1 → F4); CEN-ODL-13 samo krak F1; CEN-07 na formi, kroz pravi `UiEvent`. CEN-ODL-12 **bez testa** |
 | 374 | `T_Cen_PitanjaSuGejtovana` | seam: pitanje se zabeleži, ništa se ne upiše |
 
 **Premisa postojećeg testa se menja:** `T_MatEkran_RadnjeIRezim` (indeks 149)
@@ -294,8 +296,22 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
   ponašanje combo-a, nije izmereno.
 - CEN-10 nema svoj test u ovom rezu; tvrdnja stoji na grep-u i na
   `DOCUMENT_HEADER_LINES.md` §4.1d.
+- Bez testa (revizija 18.11.2026): CEN-ODL-12 (okidači ne diraju tip
+  ambalaže), CEN-ODL-13 van F1 (OM ne okida u F3/F4, datum okida u F2–F4),
+  fokus po ključu za polja osim datuma ispravke, „prazno = danas" pri unosu,
+  drugi zid storna (CEN-12) i greška Ensure-a na neuspeloj migraciji
+  (CEN-ODL-04; okidač bi tražio pokvaren upis usred Ensure-a).
+- Pregled pre upisa: grana rezerve (nova globalna cena sorte prekida posebnu
+  cenu vrste bez sorte) i poziv sa `izuzmiID` (ispravka) nemaju svoj slučaj u
+  372.
+- Potvrda prekida posebnih cena ide kroz `MsgBox`, koji odseca tekst duži od
+  oko 1024 znaka: kod mnogo stanica nestaju poslednje stavke i samo pitanje.
+  Zapisano, nije ispravljeno.
+- Promena režima uvek računa predlog iznova, pa ručno uneta cena ne preživi
+  prelazak F1 ↔ F2. Kad za nov opseg cene nema, ostaje cena iz prethodnog
+  režima (polje se ne prazni).
 - Hipoteza: kod ispravke posle storna dvoklasnog dokumenta `dveklase` stiže u
   prefill posle cena, pa `SetKlasa 2` → `AutoFillCena` može da pregazi cenu
-  storniranog dokumenta cenom iz cenovnika. **Nije reprodukovana i nije deo ovog
-  rada**; ovaj rez taj put ne menja, menja samo vrednost koja pregazi (sada cena
-  na datum dokumenta).
+  storniranog dokumenta cenom iz cenovnika. **Nije reprodukovana.** Od revizije
+  18.11.2026 `ApplyPrefill` na kraju vraća cene koje spec nosi, pa taj put, ako
+  postoji, više ne pregazi cenu dokumenta; dvoklasan slučaj nema test.

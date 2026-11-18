@@ -1014,7 +1014,11 @@ Public Sub EnsureCenovnikSchema()
 
     migrirano = modCenovnik.MigrirajDupleCene()
     If migrirano < 0 Then
-        LogSetup "ERROR", "EnsureCenovnikSchema: migracija duplikata nije uspela (tabela vracena, v. log)"
+        ' Ne guta se: operater je Ensure pokrenuo bas kao lek za CEN-03, pa
+        ' "Ensure zavrsen" posle neuspele migracije bio bi lazan uspeh. EH ispod
+        ' loguje i dize dalje, pa je pozivaoci (Admin, PaletniList) prikazu.
+        Err.Raise modCenovnik.ERR_CEN_MIGRACIJA, "EnsureCenovnikSchema", _
+                  Poruka("CEN_ERR_MIGRACIJA")
     ElseIf migrirano > 0 Then
         LogSetup "OK", "EnsureCenovnikSchema: stornirano " & migrirano & " zatecenih duplikata (CEN-ODL-04)"
     End If

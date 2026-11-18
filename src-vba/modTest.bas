@@ -34098,7 +34098,7 @@ End Sub
 Private Sub T_Cen_UnosOdbijaIPusta()
     Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
     Dim dan As Date, idG As String, idP As String, nPre As Long
-    Dim ok As Boolean, c As Double
+    Dim ok As Boolean, c As Double, k As Variant, bez As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -34203,6 +34203,19 @@ Private Sub T_Cen_UnosOdbijaIPusta()
     AssertEq m("losDup"), "", "368 pisac odbija duplikat praznim ID-em (drugi zid)"
     AssertEq m("losaStanica"), "", "368 pisac odbija nepoznatu stanicu praznim ID-em"
     AssertEq m("nLosih"), 0, "368 odbijen upis ne dodaje red"
+
+    ' Kljucevi odbijanja stizu do Poruka() kroz PROMENLJIVU (CenaUnosProblem ->
+    ' CenaOdbij), pa ih staticki PORUKA ne vidi -- postojanje u katalogu meri
+    ' samo ova tvrdnja (testovi.md, "Poruka() nikad ne vraca prazno").
+    For Each k In Array("CEN_ERR_VRSTA_OBAVEZNA", "CEN_ERR_KULTURA_NEPOZNATA", "CEN_ERR_KLASA", _
+                        "CEN_ERR_CENA_POZITIVNA", "CEN_ERR_CENA_OPSEG", "CEN_ERR_CENA_DECIMALE", _
+                        "CEN_ERR_STANICA_NEPOZNATA", "CEN_ERR_DATUM", "CEN_ERR_DATUM_GRANICA", _
+                        "CEN_ERR_DUPLIKAT", "CEN_ERR_NEMA_REDA", "CEN_ERR_STORNIRANA", _
+                        "CEN_ERR_RAZLOG_OBAVEZAN", "CEN_ERR_RAZLOG_DUZINA", _
+                        "CEN_ERR_ISPRAVKA_BEZ_PROMENE")
+        If PorukaNedostaje(CStr(k)) Then bez = bez & " " & k
+    Next k
+    AssertEq bez, "", "368 kljucevi odbijanja cenovnika su u katalogu poruka"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34270,6 +34283,12 @@ Private Sub T_Cen_StornoJednokratanSaRazlogom()
     ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
     m("vaziNova") = (ok And cid = id2 And Format$(c, "0.00") = Format$(310, "0.00"))
 
+    ' Razlog koji pocinje sa "=" Excel bi u General koloni upisao kao FORMULU
+    ' (#NAME?), pa bi obavezan razlog nestao; kolona je zato pod ugovorom
+    ' formata (schema.json "formats": tblCenovnik.StornoRazlog = text).
+    m("pFormula") = modCenovnik.StornirajCenu(id2, "=duplo")
+    m("rFormula") = NzToText(CenCelija(id2, COL_CEN_STORNO_RAZLOG))
+
     tx.RollbackTx
     txZapoceta = False
 
@@ -34294,6 +34313,8 @@ Private Sub T_Cen_StornoJednokratanSaRazlogom()
     AssertEq m("kPonovo"), "", "369 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti"
     AssertEq m("novi"), True, "369 pisac upisuje novu cenu istog kljuca i dana posle storna"
     AssertEq m("vaziNova"), True, "369 posle storna i novog unosa vazi nova cena"
+    AssertEq m("pFormula"), "", "369 storno sa razlogom koji pocinje sa = uspeva"
+    AssertEq m("rFormula"), "=duplo", "369 razlog koji pocinje sa = ostaje doslovan tekst, ne formula"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34318,6 +34339,7 @@ Private Sub T_Cen_IspravkaVezaUObaSmera()
     Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
     Dim dan As Date, id As String, novi As String, n2 As String, n3 As String
     Dim n4 As String, n5 As String, nPre As Long, ok As Boolean, c As Double, cid As String
+    Dim pd As Object, n6 As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -34342,6 +34364,17 @@ Private Sub T_Cen_IspravkaVezaUObaSmera()
     m("pEditor") = modMaticniUnos.MatIspravkaCeneProblem(id, _
                        CenPoljaEditora(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, "310.00"))
     m("netaknut") = CenTekst(id, COL_STORNIRANO) & "|" & CStr(CenBrojRedova() - nPre)
+
+    ' --- prazan i necitljiv datum: ispravka ga ODBIJA, nije "danas" -------
+    ' Tiho "danas" bi stornirao stari red i preselio cenu na danasnji dan.
+    Set pd = CenPoljaEditora(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, "320")
+    pd("datum") = ""
+    m("pDatPrazan") = modMaticniUnos.MatIspravkaCeneProblem(id, pd)
+    m("fDatPrazan") = NzToText(pd(modMaticniUnos.MAT_FOKUS))
+    pd("datum") = "31.11.2026"
+    m("pDatLos") = modMaticniUnos.MatIspravkaCeneProblem(id, pd)
+    m("wDatLos") = modMaticniUnos.MatIspraviCenu(id, pd, "razlog", n6)
+    m("datLosNetaknut") = CenTekst(id, COL_STORNIRANO) & "|" & CStr(CenBrojRedova() - nPre) & "|" & n6
 
     ' --- bez razloga: odbija se pre ikakvog upisa -------------------------
     m("pBezRazloga") = modCenovnik.IspraviCenu(id, dan, FX_VRSTA, FX_SORTA, KLASA_I, 320, "", "", n5)
@@ -34392,6 +34425,14 @@ Private Sub T_Cen_IspravkaVezaUObaSmera()
     AssertEq m("pEditor"), Poruka("CEN_ERR_ISPRAVKA_BEZ_PROMENE"), _
              "370 ispravka iz editora: 310.00 i 310 su ista cena"
     AssertEq m("netaknut"), "|0", "370 odbijena ispravka nista ne stornira i ne dodaje red"
+    AssertEq m("pDatPrazan"), Poruka("CEN_ERR_DATUM"), _
+             "370 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas"
+    AssertEq m("fDatPrazan"), "datum", "370 odbijen prazan datum ispravke nosi fokus na datum"
+    AssertEq m("pDatLos"), Poruka("CEN_ERR_DATUM"), _
+             "370 ispravka sa necitljivim datumom (31.11.) se odbija (CEN_ERR_DATUM)"
+    AssertEq (Len(m("wDatLos")) > 0), True, "370 pisac editora odbija ispravku sa necitljivim datumom"
+    AssertEq m("datLosNetaknut"), "|0|", _
+             "370 ispravka sa necitljivim datumom ne stornira stari red i ne dodaje nov"
     AssertEq m("pBezRazloga"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), _
              "370 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
     AssertEq m("bezRazlogaNetaknut"), "|0|", "370 ispravka bez razloga ne upisuje nista"
@@ -34615,7 +34656,9 @@ End Sub
 ' Tvrdi se nad fgCena1T: datum pre d1 ne dira unetu cenu; datum >= d1 bez OM
 ' daje globalnu, i na dan posebne (prazna stanica vidi samo globalne); izbor
 ' FX_STANICA uz datum >= d2 daje posebnu; povratak datuma u [d1, d2) vraca
-' globalnu; brisanje OM vraca globalnu.
+' globalnu; brisanje OM vraca globalnu. Prefill bez cene predlaze cenu za
+' mesto i datum iz spec-a, prefill sa cenom zadrzava cenu dokumenta, a promena
+' rezima F1 -> F4 racuna predlog iznova (F4 vidi samo globalnu).
 Private Sub T_Cen_PredlogCenePratiDatumIOM()
     Dim f As frmOtkupUI, zf As Object, ctx As Object, cbOM As MSForms.ComboBox
     Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
@@ -34686,6 +34729,24 @@ Private Sub T_Cen_PredlogCenePratiDatumIOM()
     SetComboByID cbOM, ""
     modOtkupUI.UiEvent "cbOM", "Change", Empty
     m("c6") = CenPoljeCeneI(zf)
+    ' h) prefill BEZ cene (otpremnica bez cene): predlog nad KONACNIM mestom i
+    '    datumom, ne nad onim sto je forma imala pre prepisa ("omid" stize
+    '    posle "vrsta")
+    zf.Controls("fgCena").Controls("fgCena1T").text = "777"
+    modOtkupUI.ApplyPrefill "datum=" & Format$(d2, "dd.mm.yyyy") & "|vrsta=" & FX_VRSTA & _
+                            "|sorta=" & FX_SORTA & "|omid=" & FX_STANICA
+    m("omPrefill") = GetComboID(cbOM)
+    m("c7") = CenPoljeCeneI(zf)
+    ' i) prefill SA cenom: cena dokumenta ima poslednju rec
+    modOtkupUI.ApplyPrefill "datum=" & Format$(d2, "dd.mm.yyyy") & "|vrsta=" & FX_VRSTA & _
+                            "|sorta=" & FX_SORTA & "|omid=" & FX_STANICA & "|cena=555"
+    m("c8") = CenPoljeCeneI(zf)
+    ' j) promena rezima F1 -> F4 (prijemnica ne nosi stanicu): predlog se
+    '    racuna iznova, pa cena iz F1 ne prelazi u F4
+    modOtkupUI.SelectMode f, "F4"
+    m("datF4") = CStr(zf.Controls("fgDatum").Controls("fgDatumT").text)
+    m("vrstaF4") = CStr(ctx.Controls("cbVrsta").value)
+    m("c9") = CenPoljeCeneI(zf)
 
     CenVratiLock prevSt, prevDat
     tx.RollbackTx
@@ -34705,6 +34766,14 @@ Private Sub T_Cen_PredlogCenePratiDatumIOM()
     AssertEq m("c4"), Format$(250, "0.00"), "373 povratak datuma pre posebne cene vraca globalnu"
     AssertEq m("c5"), Format$(270, "0.00"), "373 datum ponovo na dan posebne vraca posebnu"
     AssertEq m("c6"), Format$(250, "0.00"), "373 brisanje otkupnog mesta vraca globalnu cenu"
+    AssertEq m("omPrefill"), FX_STANICA, "373 preduslov: prefill postavlja otkupno mesto iz spec-a"
+    AssertEq m("c7"), Format$(270, "0.00"), _
+             "373 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a"
+    AssertEq m("c8"), Format$(555, "0.00"), "373 prefill sa cenom zadrzava cenu dokumenta"
+    AssertEq m("datF4"), Format$(d2, "dd.mm.yyyy"), "373 preduslov: promena rezima ne menja datum"
+    AssertEq m("vrstaF4"), FX_VRSTA, "373 preduslov: promena rezima ne menja robu"
+    AssertEq m("c9"), Format$(250, "0.00"), _
+             "373 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description

@@ -53,6 +53,9 @@ Public Const CEN_R_KOLONA As Long = 8
 
 ' Prekrsen preduslov CEN-03 u citanju: dva nestornirana reda istog kljuca i dana.
 Public Const ERR_CEN_DUPLI_KLJUC As Long = vbObjectError + 7710
+' Migracija zatecenih duplikata (CEN-ODL-04) nije uspela; tabela je vracena.
+' Dize je modSetup.EnsureCenovnikSchema, da Admin -> Ensure ne javi uspeh.
+Public Const ERR_CEN_MIGRACIJA As Long = vbObjectError + 7711
 
 Private Const ERR_CEN_UNOS As Long = vbObjectError + 7706
 Private Const ERR_CEN_STORNIRANA As Long = vbObjectError + 7707
@@ -741,8 +744,13 @@ Private Function KlasaKanon(ByVal klasa As String) As String
     End If
 End Function
 
+' Storno je TACNO "Da" -- isto citanje kao modHelpers.ExcludeStornirano, kroz
+' koje lista cenovnika (CenovnikPoredak) i svi ostali citaoci filtriraju, i kao
+' stari GetVazecaCena. Siroko citanje (Trim, bez razlike u velicini slova) bi
+' rucno upisan "da" pravilu sakrilo, a listi ostavilo kao vazeci red: operater
+' bi video red koji Storniraj/Ispravi odbijaju kao vec storniran.
 Private Function JeStorno(ByVal v As Variant) As Boolean
-    JeStorno = (StrComp(Trim$(NzToText(v)), STORNO_DA, vbTextCompare) = 0)
+    JeStorno = (NzToText(v) = STORNO_DA)
 End Function
 
 ' Cena ima najvise dve decimale (pare).

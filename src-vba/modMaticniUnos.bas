@@ -352,7 +352,8 @@ Public Function MatCenaPregled(ByVal polja As Object, _
                                Optional ByVal izuzmiID As String = "") As String
     Dim dat As Date, vrsta As String, sorta As String, klasa As String
     Dim cena As Double, stanicaID As String
-    If Len(CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID)) > 0 Then Exit Function
+    If Len(CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, _
+                       Len(izuzmiID) > 0)) > 0 Then Exit Function
     If Len(stanicaID) > 0 Then Exit Function
     MatCenaPregled = modCenovnik.PrekinutePosebneCene(dat, vrsta, sorta, klasa, izuzmiID)
 End Function
@@ -365,7 +366,7 @@ Public Function MatIspravkaCeneProblem(ByVal staraID As String, ByVal polja As O
     Dim dat As Date, vrsta As String, sorta As String, klasa As String
     Dim cena As Double, stanicaID As String, k As String, tx As clsTransaction
     On Error GoTo EH
-    MatIspravkaCeneProblem = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID)
+    MatIspravkaCeneProblem = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, True)
     If Len(MatIspravkaCeneProblem) > 0 Then Exit Function
     k = modCenovnik.CenaIspravkaProblem(staraID, dat, vrsta, sorta, klasa, cena, stanicaID)
     If Len(k) > 0 Then MatIspravkaCeneProblem = CenaOdbij(polja, k, sorta)
@@ -386,7 +387,7 @@ Public Function MatIspraviCenu(ByVal staraID As String, ByVal polja As Object, _
     noviID = ""
     MatIspraviCenu = MatBranaUpisa("CENOVNIK")
     If Len(MatIspraviCenu) > 0 Then Exit Function
-    MatIspraviCenu = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID)
+    MatIspraviCenu = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, True)
     If Len(MatIspraviCenu) > 0 Then Exit Function
     MatIspraviCenu = modCenovnik.IspraviCenu(staraID, dat, vrsta, sorta, klasa, cena, _
                                              stanicaID, razlog, noviID)
@@ -665,13 +666,17 @@ End Function
 ' procitati, inace poruka uz polja(MAT_FOKUS):
 '   1) Proveri -- obaveznost i combo iz svog spiska (i stanica, u PRIKAZ obliku);
 '   2) cena je broj (MATU_ERR_BROJ, fokus na cenu);
-'   3) prazan ili neispravan datum znaci DANAS -- isto sto legacy forma radi;
+'   3) prazan ili neispravan datum znaci DANAS pri UNOSU -- isto sto legacy
+'      forma radi (PLT-52). ISPRAVKA (datumObavezan) ga odbija sa CEN_ERR_DATUM:
+'      AgriX trazi vaziOd za ispravku, a tiho "danas" bi stornirao stari red i
+'      preselio cenu na danas, bez povratka za red stariji od granice (CEN-09);
 '   4) stanica: prikaz "Naziv (ST-xxx)" -> ID, isti prevod koji opsti upis radi
 '      za combo stranog kljuca (IdZaCombo); prazno ostaje prazno (= globalna).
 Private Function CenaIzPolja(ByVal polja As Object, ByRef dat As Date, _
                              ByRef vrsta As String, ByRef sorta As String, _
                              ByRef klasa As String, ByRef cena As Double, _
-                             ByRef stanicaID As String) As String
+                             ByRef stanicaID As String, _
+                             Optional ByVal datumObavezan As Boolean = False) As String
     CenaIzPolja = Proveri("CENOVNIK", polja)
     If Len(CenaIzPolja) > 0 Then Exit Function
     If Not TryParseDouble(Vred(polja, "cena"), cena) Then
@@ -679,9 +684,15 @@ Private Function CenaIzPolja(ByVal polja As Object, ByRef dat As Date, _
                             Poruka("MATU_ERR_BROJ"))
         Exit Function
     End If
-    If Not TryParseDateValue(Vred(polja, "datum"), dat) Then dat = Date
     vrsta = Vred(polja, "vrsta")
     sorta = Vred(polja, "sorta")
+    If Not TryParseDateValue(Vred(polja, "datum"), dat) Then
+        If datumObavezan Then
+            CenaIzPolja = CenaOdbij(polja, "CEN_ERR_DATUM", sorta)
+            Exit Function
+        End If
+        dat = Date
+    End If
     klasa = Vred(polja, "klasa")
     stanicaID = IdZaCombo(modMaticniIzvor.MatPolje("CENOVNIK", "stanica"), _
                           Vred(polja, "stanica"))

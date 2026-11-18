@@ -678,6 +678,11 @@ Private Function FormatRegistry() As Object
 
     Set k = CreateObject("Scripting.Dictionary")
     k.CompareMode = vbTextCompare
+    k("StornoRazlog") = "text"
+    Set reg("tblCenovnik") = k
+
+    Set k = CreateObject("Scripting.Dictionary")
+    k.CompareMode = vbTextCompare
     k("BrojDokumenta") = "text"
     k("BrojSpecifikacije") = "text"
     Set reg("tblDoplata") = k

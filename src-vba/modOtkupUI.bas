@@ -4276,6 +4276,14 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ResetFokusOkvira
     ' podrazumevana vrsta/sorta iz Podesavanja - samo ako roba nije izabrana
     ApplyDefaultRoba
+    ' Predlog cene zavisi od REZIMA (CenaPoStanici: F1/F2 pitaju posebnu cenu
+    ' izabranog mesta, ostali samo globalnu), pa cena izracunata u jednom
+    ' rezimu ne sme da predje u drugi -- ista relacija kao broj dokumenta ispod.
+    ' Bez uslova o opsegu: obilazak preko rezima bez cene (F1 -> F5 -> F4) bi
+    ' ga zaobisao. Pre MarkClean-a, jer predlog nije izmena operatera.
+    If Not mBuilding Then
+        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then AutoFillCena False
+    End If
     ' nov dokument -> nista nije neupisano
     MarkClean
     mPopMute = False
@@ -9512,7 +9520,7 @@ Public Sub ApplyPrefill(ByVal spec As String)
     ' modul-level deo, pa modul ostaje "mek" za self-update).
     Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
     Dim cbPart As MSForms.ComboBox, cbPar As MSForms.ComboBox
-    Dim fokus As String, imaBroj As Boolean
+    Dim fokus As String, imaBroj As Boolean, cenaSpec As String, cena2Spec As String
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(spec) = 0 Then Exit Sub
@@ -9543,7 +9551,9 @@ Public Sub ApplyPrefill(ByVal spec As String)
                         imaBroj = True
                     End If
                 Case "brzbirne": zf.Controls("fgBrZbir").Controls("fgBrZbirT").text = v
-                Case "cena":     If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = v
+                Case "cena"
+                    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = v
+                    cenaSpec = v
                 Case "tipamb":   If Len(v) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = v
                 Case "vrsta"
                     ctx.Controls("cbVrsta").value = v
@@ -9568,7 +9578,9 @@ Public Sub ApplyPrefill(ByVal spec As String)
                 Case "kol2":     If Len(v) > 0 Then zf.Controls("fgKgII").Controls("fgKgIIT").text = v
                 Case "amb1":     If Len(v) > 0 Then zf.Controls("fgKolAmb").Controls("fgKolAmbT").text = v
                 Case "amb2":     If Len(v) > 0 Then zf.Controls("fgKolAmbII").Controls("fgKolAmbIIT").text = v
-                Case "cena2":    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = v
+                Case "cena2"
+                    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = v
+                    cena2Spec = v
                 Case "ambpr":    If Len(v) > 0 Then zf.Controls("fgAmbPr").Controls("fgAmbPrT").text = v
                 Case "parcela":  If Len(v) > 0 Then SetComboByID cbPar, v
                 ' Smer reversa (F7, ispravka 10d). Segmenti su Label-i, pa nema
@@ -9578,6 +9590,17 @@ Public Sub ApplyPrefill(ByVal spec As String)
             End Select
         End If
     Next par
+
+    ' PREDLOG CENE posle prepisa. Tokom petlje predlog daju samo Change na
+    ' vrsti/sorti (i SetKlasa), a racunaju ga sa OM i datumom kakvi su u tom
+    ' trenutku bili -- "omid" stize posle "vrsta", a datum se ne menja kad je
+    ' roba ista. Zato se racuna jos jednom ovde, nad KONACNIM datumom i mestom,
+    ' kad dokument ne donosi cenu za neku klasu. Cena sa dokumenta se zatim
+    ' vraca: ona ima poslednju rec (legacy relacija), i zato sto bi je predlog
+    ' iz SetKlasa ("dveklase" posle "cena") inace pregazio.
+    If Len(cenaSpec) = 0 Or (mKlasa = 2 And Len(cena2Spec) = 0) Then AutoFillCena False
+    If Len(cenaSpec) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = cenaSpec
+    If Len(cena2Spec) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = cena2Spec
 
     RecalcVrednost
     mPopMute = False
