@@ -22173,6 +22173,19 @@ EH:
 End Sub
 
 ' Greska koju digne mreza F8 za zbirne -- "" znaci da je citalac prosao.
+' Poruka greske STROGOG citaca stavki zbirne (ZbirStavkiPoZbirni), ili "" kad
+' prodje. Meri bas citaoca, ne mrezu -- v. korak (4) u
+' Test_ZBR_CitalacStavkiDrziUgovor: mreza ima i drugu branu sa istom porukom.
+Private Function ZbrStavkeCitacGreska() As String
+    Dim z As Object
+    On Error Resume Next
+    Err.Clear
+    Set z = modDokumenta.ZbirStavkiPoZbirni()
+    If Err.Number <> 0 Then ZbrStavkeCitacGreska = Err.description
+    Err.Clear
+    On Error GoTo 0
+End Function
+
 Private Function ZbrMrezaGreska(ByVal broj As String) As String
     Dim d As Variant
     On Error Resume Next
@@ -22333,10 +22346,21 @@ Private Sub Test_ZBR_CitalacStavkiDrziUgovor()
     Set tx = Nothing
 
     ' --- (4) zaglavlje bez stavki ---
+    '
+    ' Strogi citac se meri SAM, pre mreze. Mreza F8 posle njega po redu zove i
+    ' ZbirStavkiZaZbirnu, koja za zaglavlje bez stavki dize ISTU poruku -- pa
+    ' tvrdnja samo nad mrezom ne razlikuje koja je brana radila. Dokaz.py je
+    ' zato sabotazu zbr-citalac-pusta-zaglavlje-bez-stavki javljao kao NE OBARA
+    ' NISTA i izborom i celom suite-om (18.11.2026).
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
     ObrisiStavkeZbirne zbrID
+    Dim citac As String
+    citac = ZbrStavkeCitacGreska()
+    AssertTrue InStr(1, citac, "nema nijednu stavku", vbTextCompare) > 0 And _
+               InStr(1, citac, zbrID, vbTextCompare) > 0, _
+               "ZBR ugovor: zaglavlje bez stavki obara strogi citac stavki i imenuje dokument"
     AssertTrue InStr(1, ZbrMrezaGreska(broj), "nema nijednu stavku", vbTextCompare) > 0, _
                "ZBR ugovor: zaglavlje bez stavki obara citaoca po imenu"
     tx.RollbackTx

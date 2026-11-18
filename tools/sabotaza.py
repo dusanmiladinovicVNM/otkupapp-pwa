@@ -747,12 +747,17 @@ SABOTAZE = {
         "Test_ZBR_CitalacStavkiDrziUgovor",
         "ZBR ugovor: dve stavke iste klase obaraju citaoca po imenu",
     ),
+    # Tvrdnja meri STROGI citac sam, ne mrezu: mreza F8 po redu zove i
+    # ZbirStavkiZaZbirnu, koja dize istu poruku, pa je tvrdnja nad mrezom ovu
+    # sabotazu propustala (dokaz.py 18.11.2026: NE OBARA NISTA, izborom i celom
+    # suite-om). Druga brana (po redu) se kroz mrezu ne moze sabotirati sama --
+    # strogi citac je ispred nje i dize istu gresku.
     "zbr-citalac-pusta-zaglavlje-bez-stavki": (
         "modDokumenta.bas",
         "    RequireZaglavljaZbirneSaStavkama zagl, imaStavku, SRC\n",
         "    ' SABOTAZA: zaglavlje bez stavki prolazi kao dokument\n",
         "Test_ZBR_CitalacStavkiDrziUgovor",
-        "ZBR ugovor: zaglavlje bez stavki obara citaoca po imenu",
+        "ZBR ugovor: zaglavlje bez stavki obara strogi citac stavki i imenuje dokument",
     ),
     "zbr-lista-cita-zaglavlje": (
         "modScrDokumenti.bas",
