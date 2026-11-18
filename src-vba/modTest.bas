@@ -731,6 +731,7 @@ Public Sub RunAllTests()
     RunOne 368
     RunOne 369
     RunOne 370
+    RunOne 371
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1339,6 +1340,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 368: TestName = "T_Ljuska_StrelicaDajeFokusSvomPolju"
         Case 369: TestName = "T_RezimZbirne_F1NeNasledjuje"
         Case 370: TestName = "T_Zbirne_PickerOpisMestaKgAmb"
+        Case 371: TestName = "T_Ljuska_DvoklikVanRedaNeUcitava"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1717,6 +1719,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 368: T_Ljuska_StrelicaDajeFokusSvomPolju
         Case 369: T_RezimZbirne_F1NeNasledjuje
         Case 370: T_Zbirne_PickerOpisMestaKgAmb
+        Case 371: T_Ljuska_DvoklikVanRedaNeUcitava
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -33107,6 +33110,14 @@ Private Sub T_Ljuska_StrelicaOtvaraPunuListu()
     nKoop = kp.ListCount
     punoVoz = nVoz: If punoVoz > 14 Then punoVoz = 14
     punoKoop = nKoop: If punoKoop > 14 Then punoKoop = 14
+    ' Preduslovi PRE koraka koji od njih zavise: bez dva vozaca cb.List(1, 0)
+    ' pukne kao "Could not get the List property", ne pod imenom uzroka.
+    If nVoz < 2 Or nKoop < 2 Then
+        ReleaseOtkupUIForm f
+        On Error GoTo 0
+        AssertEq (nVoz >= 2), True, "preduslov: fixture ima bar dva vozaca"
+        AssertEq (nKoop >= 2), True, "preduslov: F1 ima bar dva kooperanta"
+    End If
 
     ' A) izabran vozac -> strelica nudi SVE, i iz nje se bira drugi
     pre = modOtkupUI.PanelIzboraMiruj(True)
@@ -33162,7 +33173,6 @@ Private Sub T_Ljuska_StrelicaOtvaraPunuListu()
     ReleaseOtkupUIForm f
     On Error GoTo 0
 
-    AssertEq (nVoz >= 2), True, "preduslov: fixture ima bar dva vozaca"
     AssertEq redIzabran, punoVoz, "strelica nad izabranim vozacem otvara PUNU listu, ne samo izabranog"
     AssertEq idxPosle, 1, "iz pune liste se bira drugi vozac (pop1)"
     AssertEq vidZatvoren, False, "drugi klik na strelicu zatvara panel"
@@ -33170,7 +33180,6 @@ Private Sub T_Ljuska_StrelicaOtvaraPunuListu()
     AssertEq (ocekKuc > 0 And ocekKuc < punoVoz), True, "preduslov: kucani podniz suzava listu vozaca"
     AssertEq redKuc, ocekKuc, "kucanje i dalje suzava listu"
     AssertEq redAlt, punoVoz, "Alt+dole nad izabranom stavkom otvara punu listu"
-    AssertEq (nKoop >= 2), True, "preduslov: F1 ima bar dva kooperanta"
     AssertEq redKoop, punoKoop, "strelica nad izabranim kooperantom otvara punu listu"
     Exit Sub
 EH:
@@ -33230,6 +33239,13 @@ Private Sub T_Ljuska_StrelicaDajeFokusSvomPolju()
     nOM = f.Controls("zCtx").Controls("cbOM").ListCount
     nKoop = kp.ListCount
     nTip = f.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").ListCount
+    ' Preduslov PRE koraka koji od njega zavise (kp.List(0, 0) bez kooperanata).
+    If nOM = 0 Or nKoop = 0 Or nTip = 0 Then
+        ReleaseOtkupUIForm f
+        On Error GoTo 0
+        AssertEq (nOM > 0 And nKoop > 0 And nTip > 0), True, _
+                 "preduslov: otkupna mesta, kooperanti i tipovi ambalaze nisu prazni"
+    End If
 
     For Each nm In Array("cbVrsta", "cbSorta", "cbOM", "cbVozac", "cbKupac")
         If BrojSinkovaSaTagom(CStr(nm) & "D") <> 2 Then losePodloge = losePodloge & " " & CStr(nm)
@@ -33271,8 +33287,6 @@ Private Sub T_Ljuska_StrelicaDajeFokusSvomPolju()
     ReleaseOtkupUIForm f
     On Error GoTo 0
 
-    AssertEq (nOM > 0 And nKoop > 0 And nTip > 0), True, _
-             "preduslov: otkupna mesta, kooperanti i tipovi ambalaze nisu prazni"
     AssertEq fKup, "cbKupac", "strelica partnera daje fokus partneru, a ne Vrsti"
     AssertEq fOM, "cbOM", "strelica otkupnog mesta daje fokus otkupnom mestu"
     AssertEq (visKup And zatKup), True, "panel partnera se otvara i drugi klik ga zatvara"
@@ -33503,4 +33517,68 @@ CleanUp:
     End If
     SledKraj tx, redoviPre, errNum, errDesc, "T_Zbirne_PickerOpisMestaKgAmb", _
              "370: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' ============================================================
+' 371. DVOKLIK VAN REDA MREZE NE UCITAVA RED (review 18.11.2026)
+'
+' clsFlatBtn salje DblClick za SVAKI ozicen Label, a UiDblClick je posle
+' RowFromTag (koji za tag van mreze ne radi nista) ucitavao ZAOSTALI izabrani
+' red u formu. Od zahteva 18.11.2026 je i podloga kontekstnog polja ozicena
+' (tag strelice), pa bi dvoklik po ivici polja Kooperant prepisao kilograme i
+' broj iz izabranog reda liste. Dvoklik na sam red mora i dalje da ucitava.
+'
+' Mreza se puni kroz isti seam kao 2120 (T_Otp_OpsegIOznake); red se bira
+' pravim klikom (UiEvent "rb0"). Nalazi se tvrde POSLE oslobadjanja forme.
+' ============================================================
+Private Sub T_Ljuska_DvoklikVanRedaNeUcitava()
+    Dim f As frmOtkupUI, zf As Object, prev As String
+    Dim nRed As Long, kgPosleVan As String, brojPosleReda As String, brojReda As String
+    Dim errNum As Long, errDesc As String
+
+    prev = modOtkupUI.ActiveMode
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    On Error GoTo EH
+    modOtkupUI.ActiveMode = "F1"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    ' Lista SVI i bez aktivne otpremnice: klik na red tu samo BIRA red (u listi
+    ' otpremnica bi aktivirao otpremnicu i prebacio listu). Lista je stanje
+    ' modula ekrana i prezivi tudji test, pa se postavlja izricito.
+    modScrDokumenti.Scr_OtpTestReset
+    modScrDokumenti.Scr_Event "lsSVI", "Click"
+    modUiData.ResetCache
+    modScrDokumenti.Scr_ResetCache
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    nRed = modOtkupUI.GridBrojRedova()
+    If nRed > 0 Then
+        brojReda = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
+        modOtkupUI.UiEvent "rb0", "Click", Empty
+        SetPolje zf, "fgKgI", "777"
+        SetPolje zf, "fgBrOtpr", "RUCNI-371"
+        ' dvoklik po podlozi polja Kooperant (nosi tag strelice)
+        modOtkupUI.UiEvent "cbKupacD", "DblClick", Empty
+        kgPosleVan = Polje(zf, "fgKgI")
+        ' kontrola: dvoklik na SAM red i dalje ucitava red
+        modOtkupUI.UiEvent "rb0", "DblClick", Empty
+        brojPosleReda = Trim$(Polje(zf, "fgBrOtpr"))
+    End If
+
+    modOtkupUI.GridTestLoad ""
+    ReleaseOtkupUIForm f
+    modOtkupUI.GridOtkaciFormuTest
+    modOtkupUI.ActiveMode = prev
+    On Error GoTo 0
+
+    AssertEq (nRed > 0), True, "371 preduslov: lista dokumenata F1 nije prazna"
+    AssertEq kgPosleVan, "777", "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red"
+    AssertEq brojPosleReda, brojReda, "371 kontrola: dvoklik na red mreze i dalje ucitava red"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    modOtkupUI.GridTestLoad ""
+    ReleaseOtkupUIForm f
+    modOtkupUI.GridOtkaciFormuTest
+    modOtkupUI.ActiveMode = prev
+    Err.Raise errNum, "modTest.T_Ljuska_DvoklikVanRedaNeUcitava", errDesc
 End Sub

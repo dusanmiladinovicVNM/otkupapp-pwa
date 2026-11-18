@@ -13861,6 +13861,15 @@ SABOTAZE = {
         "T_Zbirne_PickerOpisMestaKgAmb",
         "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj",
     ),
+    # 371 (review 18.11.2026): dvoklik po ozicenom Label-u van mreze opet ucita
+    # zaostali izabrani red -- podloga kontekstnog polja je to ucinila cestim.
+    "dvoklik-van-reda-ucitava": (
+        "modOtkupUI.bas",
+        "    If RowIndexFromTag(tag) < 0 Then Exit Sub   ' dvoklik van reda mreze ne ucitava red\n",
+        "    ' SABOTAZA: dvoklik van reda mreze ucitava izabrani red\n",
+        "T_Ljuska_DvoklikVanRedaNeUcitava",
+        "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red",
+    ),
 }
 
 

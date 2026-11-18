@@ -5330,7 +5330,14 @@ End Function
 '
 ' Ljuska i dalje ne zna nijedan ekran po imenu -- zna samo svoj POCETNI, koji
 ' jedini ima formu za unos ispod mreze.
+'
+' DVOKLIK RADI SAMO NAD REDOM MREZE (review 18.11.2026). clsFlatBtn salje
+' DblClick za SVAKI ozicen Label -- strelicu, dugme, cip, red panela, a od
+' zahteva 18.11.2026 i podlogu kontekstnog polja. Bez ovog reda bi dvoklik po
+' ivici polja Kooperant (uz izabran red liste) prepisao formu tim redom
+' (LoadRowIntoForm), a na drugom ekranu poslao "dbl:" za zaostali izbor.
 Private Sub UiDblClick(ByVal tag As String)
+    If RowIndexFromTag(tag) < 0 Then Exit Sub   ' dvoklik van reda mreze ne ucitava red
     RowFromTag tag
     If mScreen = SCR_POCETNI Then
         LoadRowIntoForm
@@ -7125,9 +7132,10 @@ End Sub
 ' TRI KOLONE, po obrascu FillFormPartner: 0 = broj (prikaz i .text -- to cita
 ' p("brojZbirne")), 1 = skriven ZbirnaID (vise ID-jeva sa "|" kad je dokument
 ' na dva reda), 2 = opis za panel (mesta, kg, amb). Opis se NE racuna ovde:
-' ova rutina ide na svaki RefreshFromData (svaka navigacija, svaki upis), a
-' opis se vidi samo u prijemnici -- racuna ga ZbirneOpisUpisi pri otvaranju
-' panela (zahtev operatera 18.11.2026).
+' ova rutina ide na svaki RefreshFromData (svaki upis i radnja koja menja
+' podatke, sync, promena prava, povratak iz panela -- NE promena rezima ni
+' ekrana), a opis se vidi samo u prijemnici -- racuna ga ZbirneOpisUpisi pri
+' otvaranju panela (zahtev operatera 18.11.2026).
 Public Sub FillZbirneCombo(frm As Object)
     Dim CB As MSForms.ComboBox, src As Variant, iBroj As Long, iDat As Long
     Dim r As Long, n As Long, arr() As Variant, key() As Double, i As Long, j As Long
@@ -7160,7 +7168,8 @@ Public Sub FillZbirneCombo(frm As Object)
     ' ZbirnaPostoji. Picker i writer time gledaju istu definiciju "aktivne", pa
     ' se ne mogu raziici. Radi nad prosledjenim nizom, bez novog citanja lista:
     ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
-    ' a ovo se zove na svaki RefreshFromData (svaka navigacija i svaki upis).
+    ' a ovo se zove na svaki RefreshFromData (upis, radnja nad podacima, sync,
+    ' povratak iz panela -- ne pri promeni rezima ni ekrana).
     '
     ' MIG-005b: JEDNA STAVKA PO DOKUMENTU, ne po redu.
     '
