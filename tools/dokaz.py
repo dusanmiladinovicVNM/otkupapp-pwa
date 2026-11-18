@@ -15,6 +15,7 @@ se citalo kao zeleno (v. docs/engineering/postmortems/2026-08-verifikacija.md 10
     python tools/dokaz.py amb-pisac --izbor    # pusta samo SVOJ test, ne celu suite
     python tools/dokaz.py --izolacija          # koji ciljani testovi ne prolaze SAMI
     python tools/dokaz.py --prijem --radnika 4 # G1: izbor prema celoj suiti, po stavci
+    python tools/dokaz.py --od origin/main --izbor --radnika 4   # D-5: obim reza iz diff-a
 
 CETIRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
 
@@ -91,8 +92,11 @@ obara -- i traje satima nad celim katalogom, pa se pusta nad onim sto je izmena
 dirala.
 """
 import argparse
+import ast
+import bisect
 import concurrent.futures
 import contextlib
+import difflib
 import hashlib
 import io
 import importlib.util
@@ -983,6 +987,474 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
     return stavke
 
 
+# --- D-5: obim reza iz diff-a (`--od REF`) ---------------------------------
+#
+# CLAUDE.md 5 trazi da se u rezu puste NOVE i DIRNUTE sabotaze. Do D-5 je skup
+# birala sesija, rucno, po prefiksu imena -- pa su ispadale sabotaze iste
+# procedure iz druge porodice imena. Primer: PRJ-ZBR-02 (60a7957d) je dodao
+# kapiju robe u ReassignPrijemnicaToZbirna_TX, i od tada
+# `cilj-zbirna-bez-provere-postojanja` ne obara nista -- otkriveno tri nedelje
+# kasnije, jer niko nije pomislio na `cilj-zbirna-*` uz `prj-zbr-*`.
+#
+# Sada skup bira diff: baza = merge-base(REF, HEAD), a poredi se sa RADNIM
+# STABLOM (commitovano + necommitovano), jer dokaz meri snimak radnog stabla
+# (D-6). Stavka NOVOG kataloga se bira ako vazi bar jedno:
+#
+#   KATALOG    unos je nov, ili mu se promenio bilo koji clan, ili mu se
+#              promenio (dodat, izmenjen, obrisan) unos u POZNATI_NALAZI_DOKAZ
+#              -- taj unos menja verdikt dokaza za bas tu sabotazu;
+#   PROCEDURA  dirnuta je procedura u kojoj zivi sidro (isti pojam kao
+#              `_procedura`) -- izmenjen, dodat ili obrisan red, gledano i na
+#              novoj i na staroj strani (obrisan red se pripisuje proceduri u
+#              STAROM tekstu);
+#   TEST       dirnuta je procedura ciljanog testa (Sub u _TEST_FAJLOVI), ili
+#              KOD deklaracija test-modula (FX_* konstante i stanje dele svi
+#              testovi tog modula, pa se tada racunaju dirnuti svi);
+#   FAJL       rezerva: dirnut je KOD van procedura (deklaraciona sekcija, ili
+#              red izmedju procedura koji nije komentar -- npr. `#If VBA7`
+#              grana zaglavlja, koju _procedure_po_redu ne pripise proceduri),
+#              ili sidro u novom tekstu nema TACNO jedan pogodak a fajl je
+#              dirnut (bolje previse nego propust; to je APPLY-FAIL materijal);
+#   FIXTURE    dirnut je ulaz fixture-a (_OD_FIXTURE): podatke koje testovi
+#              citaju seje make_fixture.py, a od kanona uzima "formats". Izmena
+#              fixture-a menja da li sabotaza obara test (cilj-zbirna-bez-
+#              provere-postojanja je MASKIRANA bas nad fixture-om), pa se tada
+#              bira CEO katalog.
+#
+# Komentar i prazan red van procedura ne biraju nista (v. _od_bez_koda):
+# zaglavlje modula je komentar koji svaki rez dopuni.
+#
+# POZNATO OGRANICENJE: pozivaoci dirnute procedure se NE biraju. Izmena u
+# BrojJednak menja ponasanje ZBR-NORM-02 (sidro u pozivaocu), a izbor to ne
+# vidi. Nad diff-om 5c3d72a8 (stavka 288) zato fali 6 od 11 odlozenih: s6k4-*
+# u pozivaocima IsPaletaPreradjena, dubina 1 i 2 (plan, Prilog D.3, tacka 4).
+# Ne prati se ni sam alat (run_vba, sabotaza, dokaz) -- on ima svoj self-test.
+_OD_VRSTE = ("KATALOG", "PROCEDURA", "TEST", "FAJL", "FIXTURE")
+_OD_EKST = (".bas", ".cls", ".frm", ".doccls")
+_OD_PUT_KATALOGA = "tools/sabotaza.py"
+_OD_FIXTURE = ("tools/make_fixture.py", "schema/schema.json")
+# Drugi prolaz difflib-a (autojunk=False) raste brze od proizvoda duzina; blok
+# zamene veci od ovoga ostaje CEO dirnut (vise izabranih, nikad manje). Mereno
+# nad BFP-om sa razmakom na kraju svakog reda: blok 1000x1000 0,11 s, 2000x2000
+# 0,61 s; bez praga ceo fajl (36k x 36k) nije zavrsio ni za 5 minuta.
+_OD_DRUGI_PROLAZ_MAX = 1000000
+_OD_MUTATORI = {"update", "pop", "popitem", "setdefault", "clear",
+                "__setitem__", "__delitem__"}
+
+
+class _OdGreska(Exception):
+    """Ulaz za `--od` se ne moze procitati -- rc 2 sa ovom porukom."""
+
+
+def _od_literal(cvor, imena: dict):
+    """Vrednost literala bez izvrsavanja koda.
+
+    Katalog je JEDAN literal; jedino sto nije ast.literal_eval je spoj
+    stringova sa `+` (jedan unos danas) i imena modul-konstanti tipa ESCN.
+    """
+    if isinstance(cvor, ast.Constant):
+        return cvor.value
+    if isinstance(cvor, (ast.Tuple, ast.List)):
+        vr = [_od_literal(e, imena) for e in cvor.elts]
+        return tuple(vr) if isinstance(cvor, ast.Tuple) else vr
+    if isinstance(cvor, ast.Dict):
+        if any(k is None for k in cvor.keys):
+            raise ValueError("red %d: `**` u katalogu" % cvor.lineno)
+        return dict(zip((_od_literal(k, imena) for k in cvor.keys),
+                        (_od_literal(v, imena) for v in cvor.values)))
+    if isinstance(cvor, ast.BinOp) and isinstance(cvor.op, ast.Add):
+        a, b = _od_literal(cvor.left, imena), _od_literal(cvor.right, imena)
+        if isinstance(a, str) and isinstance(b, str):
+            return a + b
+    if isinstance(cvor, ast.Name) and cvor.id in imena:
+        return imena[cvor.id]
+    if (isinstance(cvor, ast.Call) and isinstance(cvor.func, ast.Name)
+            and cvor.func.id == "chr" and len(cvor.args) == 1 and not cvor.keywords
+            and isinstance(cvor.args[0], ast.Constant)
+            and isinstance(cvor.args[0].value, int)):
+        return chr(cvor.args[0].value)
+    raise ValueError("red %d: %s nije literal"
+                     % (getattr(cvor, "lineno", 0), type(cvor).__name__))
+
+
+def _od_recnici(tekst: str, ciljevi: dict) -> dict:
+    """{ime: recnik} za recnike `ciljevi` ({ime: obavezan}) iz izvora
+    sabotaza.py, bez izvrsavanja (ast), u jednom prolazu. Neobavezan recnik
+    kog nema je {}.
+
+    Odbija se (ValueError) sve sto bi recnik menjalo posle literala na nivou
+    modula -- tada literal ne bi bio ono sto alat koristi.
+    """
+    stablo = ast.parse(tekst)
+    imena, nadjeni = {}, {}
+    for st in stablo.body:
+        if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if (isinstance(st, ast.Assign) and len(st.targets) == 1
+                and isinstance(st.targets[0], ast.Name)):
+            ime = st.targets[0].id
+            if ime in ciljevi:
+                if ime in nadjeni:
+                    raise ValueError("red %d: %s dodeljen dvaput" % (st.lineno, ime))
+                nadjeni[ime] = _od_literal(st.value, imena)
+                if not isinstance(nadjeni[ime], dict):
+                    raise ValueError("red %d: %s nije recnik" % (st.lineno, ime))
+                continue
+            try:
+                vr = _od_literal(st.value, imena)
+            except ValueError:
+                imena.pop(ime, None)
+            else:
+                if isinstance(vr, str):
+                    imena[ime] = vr
+        if not nadjeni:
+            continue
+        for cvor in ast.walk(st):
+            meta = None
+            if isinstance(cvor, ast.Subscript) and not isinstance(cvor.ctx, ast.Load):
+                meta = cvor.value
+            elif isinstance(cvor, ast.Attribute) and cvor.attr in _OD_MUTATORI:
+                meta = cvor.value
+            elif isinstance(cvor, ast.AugAssign):
+                meta = cvor.target
+            if isinstance(meta, ast.Name) and meta.id in nadjeni:
+                raise ValueError("red %d: %s se menja posle literala"
+                                 % (getattr(cvor, "lineno", 0), meta.id))
+    for ime, obavezan in ciljevi.items():
+        if ime not in nadjeni:
+            if obavezan:
+                raise ValueError("dodela %s = {...} nije nadjena" % ime)
+            nadjeni[ime] = {}
+    return nadjeni
+
+
+def _od_katalog_iz_teksta(tekst: str) -> dict:
+    """SABOTAZE iz izvora sabotaza.py, bez izvrsavanja (ast)."""
+    return _od_recnici(tekst, {"SABOTAZE": True})["SABOTAZE"]
+
+
+def _od_blokovi(a: list, b: list) -> list:
+    """[(i1, i2, j1, j2)] neravnanih blokova a[i1:i2] -> b[j1:j2] -- difflib.
+
+    Tekst, ne `git diff`, da bi jezgro bilo merljivo bez git-a. autojunk=False
+    nad celim fajlom od 36k redova traje sekunde (BFP: 2,3 s), a samo
+    autojunk=True proglasi "cest" red (prazan, End If) za izmenjen. Zato:
+    grubo poravnanje sa autojunk, pa svaki blok zamene ponovo bez njega.
+    Blok veci od _OD_DRUGI_PROLAZ_MAX (rez koji prepise skoro ceo veliki
+    modul) ostaje ceo dirnut -- drugi prolaz bi trajao minutima, a ishod je
+    samo veci izbor.
+    """
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(
+            None, a, b, autojunk=True).get_opcodes():
+        if op == "equal":
+            continue
+        if i1 == i2 or j1 == j2 or (i2 - i1) * (j2 - j1) > _OD_DRUGI_PROLAZ_MAX:
+            out.append((i1, i2, j1, j2))
+            continue
+        for op2, k1, k2, l1, l2 in difflib.SequenceMatcher(
+                None, a[i1:i2], b[j1:j2], autojunk=False).get_opcodes():
+            if op2 != "equal":
+                out.append((i1 + k1, i1 + k2, j1 + l1, j1 + l2))
+    return out
+
+
+def _od_klizi(x: list, p: int, q: int, lo: int, hi: int, mapa: tuple) -> int:
+    """Pocetak cistog umetka/brisanja x[p:q] koji dira NAJMANJE procedura.
+
+    Umetak se sme pomeriti dok je red ispred (iza) njega jednak njegovom
+    poslednjem (prvom) redu -- diff je tada podjednako tacan. difflib takav
+    blok cesto stavi tako da uzme `End Function` PRETHODNE procedure, pa nova
+    funkcija "dira" susednu (60a7957d: PrijemnicaBrojRazlog). Git to resava
+    heuristikom uvlacenja; ovde je merilo sam izbor: najmanje procedura, pa
+    najnizi polozaj. lo/hi su granice susednih blokova na istoj strani.
+    """
+    n = q - p
+    gore, dole = p, p
+    while gore > lo and x[gore - 1] == x[gore - 1 + n]:
+        gore -= 1
+    while dole + n < hi and x[dole] == x[dole + n]:
+        dole += 1
+    if gore == dole or (dole - gore + 1) * n > 200000:
+        return p
+    najbolji = None
+    for poc in range(gore, dole + 1):
+        dirnuto = {_od_gde(r, mapa) for r in range(poc, poc + n)} - {None}
+        kljuc = (len(dirnuto), -poc)
+        if najbolji is None or kljuc < najbolji[0]:
+            najbolji = (kljuc, poc)
+    return najbolji[1]
+
+
+def _od_mapa(tekst: str, podeli) -> tuple:
+    """(procedure, pocetci, prvi): procedure po redu i red prve procedure."""
+    procedure = podeli(tekst)
+    prvi = procedure[0][2] if procedure else tekst.count("\n") + 1
+    return procedure, [p[2] for p in procedure], prvi
+
+
+def _od_gde(red: int, mapa: tuple):
+    """Ime procedure (malim slovima) koja sadrzi red, "" za deklaracije, None
+    za red izmedju procedura."""
+    procedure, pocetci, prvi = mapa
+    if red < prvi:
+        return ""
+    k = bisect.bisect_right(pocetci, red) - 1
+    if k >= 0 and procedure[k][2] <= red <= procedure[k][3]:
+        return procedure[k][0].lower()
+    return None
+
+
+def _od_bez_koda(red: str) -> bool:
+    """Prazan red ili komentar -- u deklaracionoj sekciji ne menja ponasanje.
+
+    Zaglavlje modula je dugacak komentar koji svaki rez dopuni (REV oznake,
+    stavke); bez ovoga bi svaka takva dopuna birala SVE sabotaze fajla (nad
+    5c3d72a8: 24 stavke umesto 12, samo zbog komentara). Komentar koji
+    se zavrsava sa `_` nastavlja se u sledeci red, pa se racuna kao kod.
+    """
+    t = red.strip()
+    if not t:
+        return True
+    return (t.startswith("'") or t[:4].lower() == "rem ") and not t.endswith("_")
+
+
+def _od_dirnuto(stari, novi, podeli):
+    """Sta je izmena dirala u jednom fajlu, ili None ako je izmena samo kraj
+    reda (ili je nema). stari/novi None = fajl ne postoji na toj strani."""
+    a = (stari or "").replace("\r\n", "\n")
+    b = (novi or "").replace("\r\n", "\n")
+    if a == b and (stari is None) == (novi is None):
+        return None
+    ma, mb = _od_mapa(a, podeli), _od_mapa(b, podeli)
+    ra, rb = a.split("\n"), b.split("\n")
+    blokovi = _od_blokovi(ra, rb)
+    ia, ib = set(), set()
+    for k, (i1, i2, j1, j2) in enumerate(blokovi):
+        pre = blokovi[k - 1] if k else (0, 0, 0, 0)
+        posle = blokovi[k + 1] if k + 1 < len(blokovi) else (len(ra),) * 2 + (len(rb),) * 2
+        if i1 == i2:
+            j1 = _od_klizi(rb, j1, j2, pre[3], posle[2], mb)
+            j2 = j1 + (blokovi[k][3] - blokovi[k][2])
+        elif j1 == j2:
+            i1 = _od_klizi(ra, i1, i2, pre[1], posle[0], ma)
+            i2 = i1 + (blokovi[k][1] - blokovi[k][0])
+        ia.update(range(i1, i2))
+        ib.update(range(j1, j2))
+    procedure, deklaracije = set(), False
+    for redovi, mapa, tekst in ((ia, ma, ra), (ib, mb, rb)):
+        for red in redovi:
+            gde = _od_gde(red, mapa)
+            if gde:
+                procedure.add(gde)
+            else:                       # deklaracije ili izmedju procedura
+                deklaracije = deklaracije or not _od_bez_koda(tekst[red])
+    # Procedura koje nema na novoj strani su obrisani redovi -- vec su u
+    # `procedure`; ovde su dovoljna imena nove strane.
+    sve = {p[0].lower() for p in mb[0]}
+    return {"procedure": procedure, "deklaracije": deklaracije, "sve": sve,
+            "tekst": b if novi is not None else None, "mapa": mb}
+
+
+def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
+                test_fajlovi, stari_poznati: dict = None, novi_poznati: dict = None,
+                fixture: bool = False) -> dict:
+    """CISTA JEZGRA D-5: {ime: [razlozi]} za stavke NOVOG kataloga koje rez dira.
+
+    tekstovi = {fajl (kao u katalogu): (stari_tekst, novi_tekst)}; None znaci
+    da fajl na toj strani ne postoji. *_poznati = POZNATI_NALAZI_DOKAZ na
+    obe strane; fixture = dirnut je ulaz fixture-a. Stavka bez razloga se ne
+    vraca.
+    """
+    stari_poznati, novi_poznati = stari_poznati or {}, novi_poznati or {}
+    dirnuto = {}
+    for fajl, (stari, novi) in tekstovi.items():
+        d = _od_dirnuto(stari, novi, podeli)
+        if d is not None:
+            dirnuto[fajl] = d
+    testovi = set()
+    for fajl in test_fajlovi:
+        if fajl in dirnuto:
+            d = dirnuto[fajl]
+            testovi |= d["sve"] if d["deklaracije"] else d["procedure"]
+
+    out = {}
+    for ime, unos in novi_kat.items():
+        fajl, sidro, _zamena, test, _tvrdnja = unos
+        razlozi = []
+        if (ime not in stari_kat or tuple(stari_kat[ime]) != tuple(unos)
+                or stari_poznati.get(ime) != novi_poznati.get(ime)):
+            razlozi.append("KATALOG")
+        d = dirnuto.get(fajl)
+        fajl_razlog = False
+        if d is not None:
+            poz = -1 if d["tekst"] is None else d["tekst"].find("\n" + sidro)
+            if poz < 0 or d["tekst"].count("\n" + sidro) != 1:
+                fajl_razlog = True
+            if poz >= 0:
+                gde = _od_gde(d["tekst"][:poz + 1].count("\n"), d["mapa"])
+                if gde and gde in d["procedure"]:
+                    razlozi.append("PROCEDURA")
+            fajl_razlog = fajl_razlog or d["deklaracije"]
+        if str(test).lower() in testovi:
+            razlozi.append("TEST")
+        if fajl_razlog:
+            razlozi.append("FAJL")
+        if fixture:
+            razlozi.append("FIXTURE")
+        if razlozi:
+            out[ime] = razlozi
+    return out
+
+
+def _od_git(args: list, koren: str = None, ok_rc=(0,)) -> bytes:
+    """stdout git-a (bajtovi); greska je _OdGreska, ne traceback."""
+    try:
+        r = subprocess.run(["git"] + list(args), cwd=koren or ROOT,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError as exc:
+        raise _OdGreska("git nije dostupan: %s" % exc)
+    if r.returncode not in ok_rc:
+        raise _OdGreska("git %s: %s" % (" ".join(args),
+                                       r.stderr.decode("utf-8", "replace").strip()))
+    return r.stdout
+
+
+def _od_baza(ref: str, glava: str = None, koren: str = None) -> str:
+    """sha merge-base(ref, glava ili HEAD). Poziva se PRE citanja kataloga."""
+    if not ref or ref.startswith("-"):
+        raise _OdGreska("neispravna referenca %r" % ref)
+    # Prvo git i repo: inace bi "git nije dostupan" (Python pusten van Git
+    # Bash-a) i "not a git repository" izasli kao losa referenca, i za HEAD.
+    _od_git(["rev-parse", "--git-dir"], koren)
+    for r in (ref, glava or "HEAD"):
+        try:
+            _od_git(["rev-parse", "--verify", "--quiet", r + "^{commit}"], koren)
+        except _OdGreska:
+            raise _OdGreska("git ne prepoznaje referencu %r" % r)
+    # merge-base bez zajednickog pretka: rc 1 i prazan izlaz -- nije pad git-a.
+    baza = _od_git(["merge-base", ref, glava or "HEAD"], koren,
+                   ok_rc=(0, 1)).decode().strip()
+    if not baza:
+        try:
+            plitak = _od_git(["rev-parse", "--is-shallow-repository"],
+                             koren).decode().strip() == "true"
+        except _OdGreska:
+            plitak = False
+        raise _OdGreska("%s i %s nemaju zajednickog pretka%s" % (
+            ref, glava or "HEAD", " -- klon je plitak (shallow), pa je pretak "
+            "mozda odsecen: `git fetch --unshallow`" if plitak else ""))
+    return baza
+
+
+def _od_nule(b: bytes) -> list:
+    return [p for p in b.decode("utf-8").split("\0") if p]
+
+
+def _od_ulazi(baza: str, glava: str = None, koren: str = None) -> dict:
+    """Sve sto jezgro trazi, iz git-a: stari katalog i POZNATI_NALAZI_DOKAZ,
+    novi (samo uz glavu), tekstovi src-vba i dirnuti ulazi fixture-a.
+
+    glava=None: nova strana je RADNO STABLO (i necommitovano, i nov fajl van
+    git-a -- ceo dirnut). glava=commit: istorijska provera, bez checkout-a.
+    Novi katalog je None za radno stablo: tamo je katalog onaj koji ce dokaz
+    meriti (ucitan modul). Samo plumbing: porcelain `git diff` nad radnim
+    stablom osvezi stat kes i PREPISE .git/index (index.lock), pa bi paralelna
+    sesija u istom klonu u tom trenutku pala na `git add`/`commit`.
+    """
+    koren = koren or ROOT
+    pre = "src-vba/"
+    putevi = ["src-vba"] + list(_OD_FIXTURE)
+    if glava:
+        izm = _od_nule(_od_git(["diff-tree", "-r", "--no-renames", "--name-only",
+                                "-z", baza, glava, "--"] + putevi, koren))
+    else:
+        izm = _od_nule(_od_git(["diff-index", "--no-renames", "--name-only", "-z",
+                                baza, "--"] + putevi, koren))
+        izm += _od_nule(_od_git(["ls-files", "--others", "--exclude-standard",
+                                 "-z", "--"] + putevi, koren))
+
+    def stablo(commit):
+        return set(_od_nule(_od_git(["ls-tree", "-r", "--name-only", "-z", commit,
+                                     "--"] + putevi, koren)))
+    u_bazi = stablo(baza)
+    u_glavi = stablo(glava) if glava else None
+
+    def blob(commit, put):
+        return _od_git(["show", "%s:%s" % (commit, put)], koren).decode("latin-1")
+
+    def strane(put):
+        stari = blob(baza, put) if put in u_bazi else None
+        if glava:
+            return stari, (blob(glava, put) if put in u_glavi else None)
+        try:
+            with open(os.path.join(koren, *put.split("/")), "rb") as fh:
+                return stari, fh.read().decode("latin-1")
+        except FileNotFoundError:
+            return stari, None
+
+    tekstovi, fixture = {}, []
+    for put in sorted(set(izm)):
+        if put in _OD_FIXTURE:
+            stari, novi = strane(put)
+            if (stari is None) != (novi is None) or (
+                    stari is not None
+                    and stari.replace("\r\n", "\n") != novi.replace("\r\n", "\n")):
+                fixture.append(put)
+        elif put.startswith(pre) and put.lower().endswith(_OD_EKST):
+            tekstovi[put[len(pre):]] = strane(put)
+
+    def katalog(commit):
+        try:
+            tekst = _od_git(["show", "%s:%s" % (commit, _OD_PUT_KATALOGA)],
+                            koren).decode("utf-8")
+        except _OdGreska:
+            return {}, {}               # katalog jos ne postoji: sve je novo
+        try:
+            r = _od_recnici(tekst, {"SABOTAZE": True, "POZNATI_NALAZI_DOKAZ": False})
+            return r["SABOTAZE"], r["POZNATI_NALAZI_DOKAZ"]
+        except (SyntaxError, ValueError) as exc:
+            raise _OdGreska("katalog u %s se ne cita bez izvrsavanja: %s"
+                            % (commit[:8], exc))
+
+    stari_kat, stari_poznati = katalog(baza)
+    novi_kat, novi_poznati = katalog(glava) if glava else (None, None)
+    return {"stari_kat": stari_kat, "stari_poznati": stari_poznati,
+            "novi_kat": novi_kat, "novi_poznati": novi_poznati,
+            "tekstovi": tekstovi, "fixture": fixture}
+
+
+def _od_iz_ulaza(ulaz: dict, novi_kat: dict, novi_poznati: dict, sab) -> dict:
+    """Jezgro nad ulazom iz git-a; novi katalog je ucitan modul (radno stablo)
+    ili katalog glave (istorija)."""
+    return _od_razlozi(ulaz["stari_kat"], novi_kat, ulaz["tekstovi"],
+                       sab._procedure_po_redu, sab._TEST_FAJLOVI,
+                       ulaz["stari_poznati"], novi_poznati, bool(ulaz["fixture"]))
+
+
+def od_istorija(ref: str, glava: str, sab, koren: str = None) -> tuple:
+    """(baza, {ime: razlozi}) za commit `glava` umesto radnog stabla.
+
+    Za istorijsku validaciju (npr. 60a7957d^ -> 60a7957d) bez checkout-a.
+    Pravilo o procedurama je ono iz `sab` (tekuci alat), katalog iz `glava`.
+    """
+    baza = _od_baza(ref, glava, koren)
+    ulaz = _od_ulazi(baza, glava, koren)
+    return baza, _od_iz_ulaza(ulaz, ulaz["novi_kat"], ulaz["novi_poznati"], sab)
+
+
+def _od_red(s: dict, razlozi: list) -> str:
+    """Red ispisa jedne izabrane stavke: razlozi i gde."""
+    gde = {"PROCEDURA": s["proc"], "TEST": s["test"], "FAJL": s["fajl"]}
+    return "OD %-46s %s" % (s["ime"], "; ".join(
+        r + (" " + gde[r] if gde.get(r) else "") for r in razlozi))
+
+
+def _od_zbir(ref: str, baza: str, razlozi: dict) -> str:
+    return "OD %s (baza %s): izabrano %d -- %s" % (ref, baza[:8], len(razlozi), ", ".join(
+        "%s %d" % (v, sum(1 for r in razlozi.values() if v in r)) for v in _OD_VRSTE))
+
+
 _BAZEN = []        # radnici tekuceg dokaza -- za ciscenje pri prekidu
 _AKTIVNI = []      # izvrsioci u toku -- prekid ceka njih PRE ciscenja
 _UNAPRED = []      # baze unapred u toku -- prekid ih OTKAZUJE pre cekanja
@@ -1797,6 +2269,11 @@ def main(argv: list) -> int:
                          "slucajnih, podrazumevano %d) ide izborom PA celom "
                          "suite-om, i verdikti se porede; uz filter meri samo "
                          "filtrirane stavke (presuda je tada NEJASNO)" % G1_N)
+    ap.add_argument("--od", metavar="REF", default=None,
+                    help="D-5: obim reza iz diff-a -- sabotaze koje rez od "
+                         "merge-base(REF, HEAD) do radnog stabla dira (unos "
+                         "kataloga, procedura sidra, ciljani test, deklaracije); "
+                         "zamenjuje filter")
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da pravila grupisanja, ocena i orkestracija prolaza grizu")
     args = ap.parse_args(argv)
@@ -1826,6 +2303,18 @@ def main(argv: list) -> int:
         print("--prijem 0: prijem bez slucajnih ne postoji -- izostavi opciju "
               "ili zadaj N >= %d" % G1_MIN, file=sys.stderr)
         return 2
+    od_baza = None
+    if args.od is not None:
+        if args.filter or args.prijem:
+            print("--od bira obim iz diff-a -- ne ide uz filter (%s) ni uz "
+                  "--prijem: dvosmisleno je koji skup se meri"
+                  % (" ".join(args.filter) or "--prijem"), file=sys.stderr)
+            return 2
+        try:
+            od_baza = _od_baza(args.od)
+        except _OdGreska as exc:
+            print("--od %s: %s" % (args.od, exc), file=sys.stderr)
+            return 2
     if args.prijem:
         if args.grupe > 1 or args.izolacija:
             print("--prijem meri svaku stavku POJEDINACNO, izborom pa celom "
@@ -1844,6 +2333,27 @@ def main(argv: list) -> int:
     sab = _modul_sabotaza()
     poznati_spisak = getattr(sab, "POZNATI_NALAZI_DOKAZ", {})
     stavke = _izaberi(sab, args.filter)
+
+    od_razlozi = None
+    if od_baza is not None:
+        try:
+            ulaz = _od_ulazi(od_baza)
+        except _OdGreska as exc:
+            print("--od %s: %s" % (args.od, exc), file=sys.stderr)
+            return 2
+        od_razlozi = _od_iz_ulaza(ulaz, sab.SABOTAZE, poznati_spisak, sab)
+        stavke = [s for s in stavke if s["ime"] in od_razlozi]
+        if not stavke:
+            print("--od %s (baza %s): rez ne dira nijednu sabotazu (kod, katalog ni "
+                  "fixture; pozivaoci se ne biraju) -- dokaz nema sta da meri"
+                  % (args.od, od_baza[:8]), file=sys.stderr)
+            return 2
+        for s in stavke:
+            print(_od_red(s, od_razlozi[s["ime"]]))
+        if ulaz["fixture"]:
+            print("OD fixture: dirnut %s -- fixture vide svi testovi, pa se meri "
+                  "CEO katalog" % ", ".join(ulaz["fixture"]))
+        print(_od_zbir(args.od, od_baza, od_razlozi), flush=True)
 
     if not stavke:
         print("filter ne pogadja nijednu sabotazu", file=sys.stderr)
@@ -1892,6 +2402,8 @@ def main(argv: list) -> int:
         shutil.rmtree(ctx["radni"], ignore_errors=True)
         return 2
     stavke = _izaberi(sab, args.filter, ctx["snimak"])
+    if od_razlozi is not None:
+        stavke = [s for s in stavke if s["ime"] in od_razlozi]
     if args.prijem:
         stavke = [s for s in stavke if s["ime"] in sloj]
         if len(stavke) != len(sloj):
@@ -3690,12 +4202,361 @@ def _self_test_g1() -> list:
     return nalazi
 
 
+def _self_test_od() -> list:
+    """D-5: `--od` bira tacno ono sto rez dira -- nad sintetickim tekstovima."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("D5: " + opis)
+
+    sab = _modul_sabotaza()
+    podeli = sab._procedure_po_redu
+    mod_a = ("Attribute VB_Name = \"modA\"\nOption Explicit\n' zaglavlje\n"
+             "Private Const K As Long = 1\n\nPublic Sub P1()\n    x = 1\n    y = 2\n"
+             "End Sub\n\nPublic Sub P2()\n    z = 3\nEnd Sub\n")
+    mod_b = "Attribute VB_Name = \"modB\"\nPublic Sub Q()\n    q = 1\nEnd Sub\n"
+    mod_t = ("Attribute VB_Name = \"modT\"\nPublic Sub T_A()\n    AssertEq 1, 1, \"a\"\n"
+             "End Sub\n\nPublic Sub T_Q()\n    AssertEq 2, 2, \"q\"\nEnd Sub\n")
+    kat = {"s-p1": ("modA.bas", "    x = 1\n", "    x = 9\n", "T_A", "a"),
+           "s-p2": ("modA.bas", "    z = 3\n", "    z = 9\n", "T_Z", "z"),
+           "s-q": ("modB.bas", "    q = 1\n", "    q = 9\n", "T_Q", "q")}
+
+    def izbor(tekstovi, novi_kat=None, stari_kat=None, **kw):
+        try:
+            return _od_razlozi(kat if stari_kat is None else stari_kat,
+                               kat if novi_kat is None else novi_kat,
+                               tekstovi, podeli, ("modT.bas",), **kw)
+        except Exception as e:              # noqa: BLE001 -- pad je nalaz
+            return "pukla: %r" % (e,)
+
+    dug = mod_a.replace("    z = 3\n", "    z = 3\n" + "    z = z + 1\n" * 12)
+    # Oblik modOtkupUI.FormHwnd: dva zaglavlja u #If granama; drugo pregazi
+    # prvo, pa VBA7 grana ne pripada nijednoj proceduri.
+    vba7 = mod_a.replace("Public Sub P2()\n", "#If VBA7 Then\nPublic Sub P2()\n"
+                         "    Dim h As LongPtr\n#Else\nPublic Sub P2()\n"
+                         "    Dim h As Long\n#End If\n")
+    t_dekl = mod_t.replace("Public Sub T_A()", "Private Const FX As Long = 1\n\n"
+                           "Public Sub T_A()")
+
+    def a_u(staro, novo):
+        assert mod_a.count(staro) == 1, staro
+        return {"modA.bas": (mod_a, mod_a.replace(staro, novo))}
+
+    slucajevi = [
+        ("izmena reda u proceduri sidra", a_u("    y = 2\n", "    y = 3\n"),
+         {"s-p1": ["PROCEDURA"]}),
+        ("brisanje reda (samo stara strana)", a_u("    y = 2\n", ""),
+         {"s-p1": ["PROCEDURA"]}),
+        ("dodat red u drugoj proceduri istog fajla",
+         a_u("    z = 3\n", "    z = 3\n    w = 0\n"), {"s-p2": ["PROCEDURA"]}),
+        # Duga P2 cini zajednicki SUFIKS najduzim poklapanjem, pa difflib
+        # uzme `End Sub` od P1 u umetak (oblik iz 60a7957d); klizanje to vraca.
+        ("nov Sub izmedju dva postojeca ne dira susede",
+         {"modA.bas": (dug, dug.replace(
+             "End Sub\n\nPublic Sub P2()",
+             "End Sub\n\nPublic Sub P0()\n    w = 1\nEnd Sub\n\nPublic Sub P2()"))}, {}),
+        ("komentar izmedju procedura ne bira",
+         a_u("End Sub\n\nPublic Sub P2()", "End Sub\n\n' o P2\nPublic Sub P2()"), {}),
+        ("komentar odmah posle End Sub ne bira",
+         a_u("    y = 2\nEnd Sub\n", "    y = 2\nEnd Sub\n' kraj P1\n"), {}),
+        ("izmena samo reda End Sub bira proceduru",
+         a_u("    y = 2\nEnd Sub\n", "    y = 2\nEnd Sub ' P1\n"), {"s-p1": ["PROCEDURA"]}),
+        ("kod izmedju procedura (#If grana zaglavlja) bira ceo fajl",
+         {"modA.bas": (vba7, vba7.replace("As LongPtr", "As LongLong"))},
+         {"s-p1": ["FAJL"], "s-p2": ["FAJL"]}),
+        ("sidro sa dva pogotka posle reza bira FAJL",
+         a_u("    z = 3\n", "    z = 3\n    x = 1\n"),
+         {"s-p1": ["FAJL"], "s-p2": ["PROCEDURA"]}),
+        ("izmena deklaracija bira sve u fajlu",
+         a_u("K As Long = 1", "K As Long = 2"),
+         {"s-p1": ["FAJL"], "s-p2": ["FAJL"]}),
+        ("komentar u zaglavlju ne bira", a_u("' zaglavlje\n", "' zaglavlje 2\n"), {}),
+        ("sidro se ne nalazi a fajl je dirnut", a_u("    x = 1\n", "    x = 2\n"),
+         {"s-p1": ["FAJL"]}),
+        ("dirnut ciljani test",
+         {"modT.bas": (mod_t, mod_t.replace("2, 2", "2, 3"))}, {"s-q": ["TEST"]}),
+        ("deklaracije test-modula biraju sve testove modula",
+         {"modT.bas": (t_dekl, t_dekl.replace("= 1", "= 2"))},
+         {"s-p1": ["TEST"], "s-q": ["TEST"]}),
+        ("nov fajl je ceo dirnut", {"modB.bas": (None, mod_b)},
+         {"s-q": ["PROCEDURA", "FAJL"]}),
+        ("obrisan fajl bira FAJL (sidra nema)", {"modB.bas": (mod_b, None)},
+         {"s-q": ["FAJL"]}),
+        ("samo kraj reda (LF -> CRLF)",
+         {"modA.bas": (mod_a, mod_a.replace("\n", "\r\n")),
+          "modT.bas": (mod_t.replace("\n", "\r\n"), mod_t)}, {}),
+        ("bez dirnutih fajlova", {}, {}),
+    ]
+    for opis, tekstovi, ocekivano in slucajevi:
+        dobijeno = izbor(tekstovi)
+        tvrdi(dobijeno == ocekivano, "%s: ocekivano %r, dobijeno %r"
+              % (opis, ocekivano, dobijeno))
+
+    izmenjen = dict(kat, **{"s-q": ("modB.bas", "    q = 1\n", "    q = 8\n", "T_Q", "q")})
+    tvrdi(izbor({}, novi_kat=izmenjen) == {"s-q": ["KATALOG"]},
+          "izmenjen unos kataloga nije izabran (ili je izabran i drugi)")
+    nov = dict(kat, **{"s-novi": ("modB.bas", "    q = 1\n", "    q = 7\n", "T_Q", "q")})
+    tvrdi(izbor({}, novi_kat=nov) == {"s-novi": ["KATALOG"]},
+          "nov unos kataloga nije izabran (ili je izabran i drugi)")
+    for k, clan in ((3, "test"), (4, "tvrdnja")):
+        unos = list(kat["s-q"])
+        unos[k] += "2"
+        tvrdi(izbor({}, novi_kat=dict(kat, **{"s-q": tuple(unos)})) == {"s-q": ["KATALOG"]},
+              "unos kome je promenjen samo %s nije izabran" % clan)
+    for opis, st, nv in (("dodat", {}, {"s-q": "NE OBARA NISTA"}),
+                         ("obrisan", {"s-q": "NE OBARA NISTA"}, {}),
+                         ("izmenjen", {"s-q": "PALA A"}, {"s-q": "PALA B"})):
+        tvrdi(izbor({}, stari_poznati=st, novi_poznati=nv) == {"s-q": ["KATALOG"]},
+              "%s unos POZNATI_NALAZI_DOKAZ ne bira svoju sabotazu (ili bira i drugu)"
+              % opis)
+    tvrdi(izbor({}, stari_poznati={"s-q": "X"}, novi_poznati={"s-q": "X"}) == {},
+          "nepromenjen unos POZNATI_NALAZI_DOKAZ bira")
+    tvrdi(izbor({}, fixture=True) == {i: ["FIXTURE"] for i in kat},
+          "dirnut fixture ne bira CEO katalog")
+    tvrdi(izbor(a_u("    y = 2\n", "    y = 3\n"), fixture=True)
+          == {"s-p1": ["PROCEDURA", "FIXTURE"], "s-p2": ["FIXTURE"], "s-q": ["FIXTURE"]},
+          "FIXTURE se ne pise uz drugi razlog (zbirni red bi ga potcenio)")
+    # Blok iznad praga: cest red X je za grubi prolaz smece, pa je sve jedan
+    # blok zamene; drugi prolaz bi ga usitnio po X -- iznad praga ne sme.
+    n = 1001
+    a = ["X" if i % 50 == 25 else "a%d" % i for i in range(n)]
+    tvrdi(_od_blokovi(a, ["X" if i % 50 == 25 else "b%d" % i for i in range(n)])
+          == [(0, n, 0, n)], "blok zamene iznad _OD_DRUGI_PROLAZ_MAX ide u drugi prolaz")
+
+    # Stari katalog se cita bez izvrsavanja (ast) -- i mora biti ISTI kao onaj
+    # koji ucitan modul daje; konstrukcija koju citac ne zna je rc 2 u radu, a
+    # ovde nalaz cim se uvede.
+    try:
+        with open(os.path.join(ROOT, "tools", "sabotaza.py"), encoding="utf-8") as fh:
+            procitan = _od_recnici(fh.read(), {"SABOTAZE": True,
+                                               "POZNATI_NALAZI_DOKAZ": True})
+    except (OSError, SyntaxError, ValueError) as e:
+        procitan = {"SABOTAZE": repr(e), "POZNATI_NALAZI_DOKAZ": repr(e)}
+    for ime in ("SABOTAZE", "POZNATI_NALAZI_DOKAZ"):
+        tvrdi(procitan[ime] == getattr(sab, ime, None),
+              "%s citan kroz ast nije jednak izvrsenom (%s)" % (ime, procitan[ime]
+              if isinstance(procitan[ime], str) else "razlikuje se"))
+    tvrdi(_od_recnici("SABOTAZE = {}\n", {"POZNATI_NALAZI_DOKAZ": False})
+          == {"POZNATI_NALAZI_DOKAZ": {}},
+          "stari katalog bez POZNATI_NALAZI_DOKAZ nije prazan recnik")
+    tvrdi(_od_katalog_iz_teksta('ESCN = "\\n"\nSABOTAZE = {"a": ("f", "x" + ESCN, '
+                                '"y", "T", "t")}\n') == {"a": ("f", "x\n", "y", "T", "t")},
+          "citac kataloga ne zna spoj `+` ili ime modul-konstante")
+    for los in ('SABOTAZE = {"a": 1}\nSABOTAZE["b"] = 2\n',
+                'SABOTAZE = {"a": 1}\nSABOTAZE.update({"b": 2})\n',
+                'SABOTAZE = {"a": f()}\n', 'X = 1\n'):
+        try:
+            _od_katalog_iz_teksta(los)
+            tvrdi(False, "citac kataloga prihvata %r" % los)
+        except ValueError:
+            pass
+
+    # main: --od uz filter ili --prijem, i nepoznata ref -> rc 2 PRE kataloga.
+    # HEAD ide kroz zamenu _od_baza (vazeca ref i bez git-a), pa odbijanje
+    # filtera ne zavisi od toga da li je ROOT git repo.
+    citano = []
+    pravi_mod, prava_baza = _modul_sabotaza, _od_baza
+
+    def ne_citaj():
+        citano.append(1)
+        raise RuntimeError("katalog citan pre odbijanja")
+
+    def baza(ref, *a, **kw):
+        return "f" * 40 if ref == "HEAD" else prava_baza(ref, *a, **kw)
+    globals()["_modul_sabotaza"] = ne_citaj
+    globals()["_od_baza"] = baza
+    try:
+        with contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(io.StringIO()):
+            rcs = [main(["--od", "HEAD", "amb-pisac"]), main(["--od", "HEAD", "--prijem"]),
+                   main(["--od", "HEAD", "--prijem", "60"]),
+                   main(["--od", "nema/ref-d5-x", "--plan"])]
+    except BaseException as e:              # noqa: BLE001 -- pad je nalaz
+        rcs = [repr(e)]
+    finally:
+        globals()["_modul_sabotaza"] = pravi_mod
+        globals()["_od_baza"] = prava_baza
+    tvrdi(rcs == [2, 2, 2, 2] and not citano,
+          "--od uz filter / --prijem / --prijem N / nepoznatu ref nije odbijen PRE "
+          "citanja kataloga (%r, citano %d)" % (rcs, len(citano)))
+    # Izbor posle snimka (D-6) se ne dostize bez Excela -- igla.
+    tvrdi(inspect.getsource(main).count('s["ime"] in od_razlozi]') == 2,
+          "izbor ne vazi i posle snimka")
+
+    # main --od --plan PONASANJEM, uz lazan git sloj i mali katalog nad pravim
+    # modulom: poredi se RADNO STABLO (glava=None), novi katalog je ucitan
+    # modul (KATALOG mora moci da okine), POZNATI_NALAZI_DOKAZ i fixture
+    # stizu do jezgra, a prazan izbor je rc 2.
+    imena = sorted(sab.SABOTAZE)[:3]
+    mali = {i: sab.SABOTAZE[i] for i in imena}
+    star = dict(mali, **{imena[0]: mali[imena[0]][:4] + (mali[imena[0]][4] + "x",)})
+
+    suite = {}
+
+    class Lazni:
+        SABOTAZE, POZNATI_NALAZI_DOKAZ = mali, {imena[1]: "NE OBARA NISTA"}
+
+        def __getattr__(self, k):
+            return getattr(sab, k)
+
+        @staticmethod
+        def _suita_testa(test):         # tri prolaza main-a, isti testovi
+            if test not in suite:
+                suite[test] = sab._suita_testa(test)
+            return suite[test]
+    lazni, pozivi, ishodi = Lazni(), [], []
+
+    def ulazi_za(stari_kat, stari_poznati, fixture):
+        def ulazi(baza, glava=None, koren=None):
+            pozivi.append(glava)
+            return {"stari_kat": stari_kat, "stari_poznati": stari_poznati,
+                    "novi_kat": None, "novi_poznati": None, "tekstovi": {},
+                    "fixture": fixture}
+        return ulazi
+    prava_ulazi = _od_ulazi
+    globals()["_modul_sabotaza"] = lambda: lazni
+    globals()["_od_baza"] = lambda ref, *a, **kw: "e" * 40
+    try:
+        for ul in (ulazi_za(mali, Lazni.POZNATI_NALAZI_DOKAZ, []),
+                   ulazi_za(star, {}, []),
+                   ulazi_za(mali, Lazni.POZNATI_NALAZI_DOKAZ, ["tools/make_fixture.py"])):
+            globals()["_od_ulazi"] = ul
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = main(["--od", "HEAD", "--plan"])
+            red = [r.split()[1] for r in out.getvalue().splitlines()
+                   if r.startswith("OD ") and r.split()[1] in mali]
+            ishodi.append((rc, red, out.getvalue(), err.getvalue()))
+    except BaseException as e:              # noqa: BLE001 -- pad je nalaz
+        ishodi = [repr(e)] * 3
+    finally:
+        globals()["_modul_sabotaza"] = pravi_mod
+        globals()["_od_baza"] = prava_baza
+        globals()["_od_ulazi"] = prava_ulazi
+    prazan, katalog, fixture = ishodi
+    tvrdi(isinstance(prazan, tuple) and prazan[0] == 2
+          and "rez ne dira nijednu sabotazu" in prazan[3],
+          "prazan izbor nije rc 2 sa porukom (%r)" % (prazan[:2],))
+    tvrdi(isinstance(katalog, tuple) and katalog[0] == 0
+          and katalog[1] == imena[:2] and "izabrano 2 -- KATALOG 2," in katalog[2],
+          "main ne poredi stari katalog sa UCITANIM, ili ne prosledi "
+          "POZNATI_NALAZI_DOKAZ (%r)" % (katalog[:2],))
+    tvrdi(isinstance(fixture, tuple) and fixture[0] == 0 and fixture[1] == imena
+          and "OD fixture: dirnut tools/make_fixture.py" in fixture[2]
+          and "FIXTURE 3" in fixture[2],
+          "dirnut fixture ne bira ceo katalog u main-u (%r)" % (fixture[:2],))
+    tvrdi(pozivi == [None] * 3, "main ne poredi sa RADNIM STABLOM (glava %r)" % pozivi)
+    nalazi.extend(_self_test_od_git(kat, mod_a, mod_b, podeli))
+    return nalazi
+
+
+def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
+    """D-5 git sloj nad privremenim repoom: CRLF na disku, nov fajl van git-a,
+    fixture (sadrzaj prema samo kraju reda), bajt van ASCII, .git/index se NE
+    prepisuje, pretka nema, koren van repoa."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("D5: git sloj: " + opis)
+
+    tmp = tempfile.mkdtemp(prefix="d5git_")
+    repo, nerepo = os.path.join(tmp, "r"), os.path.join(tmp, "n")
+
+    def g(*a):
+        return subprocess.run(
+            ["git", "-c", "user.name=d5", "-c", "user.email=d5@example.invalid",
+             "-c", "core.autocrlf=false"] + list(a), cwd=repo, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+
+    def pisi(put, tekst):
+        with open(os.path.join(repo, *put.split("/")), "wb") as fh:
+            fh.write(tekst.encode("latin-1"))
+    stari_ceil = os.environ.get("GIT_CEILING_DIRECTORIES")
+    try:
+        for d in ("src-vba", "tools", "schema"):
+            os.makedirs(os.path.join(repo, d))
+        os.makedirs(nerepo)
+        pisi("src-vba/modA.bas", mod_a.replace("\n", "\r\n"))
+        pisi("src-vba/modB.bas", mod_b.replace("\n", "\r\n"))
+        pisi("src-vba/modC.bas", "Attribute VB_Name = \"modC\"\r\n")
+        pisi("tools/sabotaza.py", "SABOTAZE = %r\nPOZNATI_NALAZI_DOKAZ = {'s-q': 'X'}\n"
+             % (kat,))
+        pisi("tools/make_fixture.py", "X = 1\n")
+        pisi("schema/schema.json", "{}\n")
+        g("init", "-q")
+        g("add", "-A")
+        g("commit", "-q", "-m", "baza")
+        pisi("src-vba/modA.bas", mod_a.replace("    y = 2\n", "    y = 3\n")
+             .replace("\n", "\r\n"))
+        pisi("src-vba/modB.bas", mod_b)                     # samo kraj reda
+        pisi("src-vba/modN.bas", "Attribute VB_Name = \"modN\"\n' \xe8\n")
+        pisi("tools/make_fixture.py", "X = 2\n")
+        pisi("schema/schema.json", "{}\r\n")                 # samo kraj reda
+        # modC: isti sadrzaj, novo vreme (kao posle ImportAllVBA/izvoza).
+        # Porcelain `git diff` bi mu osvezio stat i PREPISAO index.
+        indeks = os.path.join(repo, ".git", "index")
+        sad = time.time()
+        os.utime(indeks, (sad - 100, sad - 100))
+        os.utime(os.path.join(repo, "src-vba", "modC.bas"), (sad + 100, sad + 100))
+        pre = os.stat(indeks).st_mtime_ns
+        ulaz = _od_ulazi(_od_baza("HEAD", koren=repo), koren=repo)
+        tvrdi(os.stat(indeks).st_mtime_ns == pre, "--od je prepisao .git/index")
+        tvrdi(ulaz["stari_kat"] == kat and ulaz["stari_poznati"] == {"s-q": "X"},
+              "stari katalog / POZNATI_NALAZI_DOKAZ iz baze nije procitan")
+        tvrdi(ulaz["fixture"] == ["tools/make_fixture.py"],
+              "fixture: ocekivano samo make_fixture.py (schema je samo kraj "
+              "reda), dobijeno %r" % (ulaz["fixture"],))
+        # Bajt van ASCII (rez u toku; vba_check ga tek treba da prijavi) ne
+        # sme da obori citanje -- zato bajtovi, ne tekst u kodnoj strani.
+        tvrdi(ulaz["tekstovi"].get("modN.bas")
+              == (None, "Attribute VB_Name = \"modN\"\n' \xe8\n"),
+              "nov fajl van git-a nije procitan kao ceo nov (bajtovi)")
+        razlozi = _od_razlozi(ulaz["stari_kat"], kat, ulaz["tekstovi"], podeli, ())
+        tvrdi(razlozi == {"s-p1": ["PROCEDURA"]},
+              "izbor nad radnim stablom: ocekivano s-p1 PROCEDURA, dobijeno %r" % razlozi)
+        sirota = g("commit-tree", "HEAD^{tree}", "-m", "sirota")
+        try:
+            _od_baza(sirota, koren=repo)
+            poruka = ""
+        except _OdGreska as e:
+            poruka = str(e)
+        tvrdi("nemaju zajednickog pretka" in poruka,
+              "commit bez zajednickog pretka: %r" % poruka)
+        os.environ["GIT_CEILING_DIRECTORIES"] = tmp
+        try:
+            _od_baza("HEAD", koren=nerepo)
+            poruka = ""
+        except _OdGreska as e:
+            poruka = str(e)
+        tvrdi(poruka and "ne prepoznaje referencu" not in poruka,
+              "koren van repoa javljen kao losa referenca: %r" % poruka)
+    except Exception as e:                  # noqa: BLE001 -- pad je nalaz
+        tvrdi(False, "nije izmeren: %r" % (e,))
+    finally:
+        if stari_ceil is None:
+            os.environ.pop("GIT_CEILING_DIRECTORIES", None)
+        else:
+            os.environ["GIT_CEILING_DIRECTORIES"] = stari_ceil
+
+        for koren_, _dir, fajlovi in os.walk(tmp):    # .git/objects su read-only
+            for f in fajlovi:
+                try:
+                    os.chmod(os.path.join(koren_, f), 0o700)
+                except OSError:
+                    pass
+        shutil.rmtree(tmp, ignore_errors=True)
+    return nalazi
+
+
 def _self_test(tiho: bool = False) -> int:
     nalazi = []
     _STOP.clear()
     nalazi.extend(_self_test_r4())
     nalazi.extend(_self_test_faza3())
     nalazi.extend(_self_test_g1())
+    nalazi.extend(_self_test_od())
 
     def tvrdi(uslov, opis):
         if not uslov:

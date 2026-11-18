@@ -1112,6 +1112,110 @@ ne radi sledeće:
 - ne menja podrazumevani put dokaza. To ide posle `PROSAO`, zasebnim process
   PR-om.
 
+### Obim reza iz diff-a (D-5) — `--od`
+
+Pravilo „u rezu samo nove i dirnute sabotaže" (CLAUDE.md §5) je do D-5 zavisilo
+od prefiksa koji sesija ukuca. Tako su ispadale sabotaže iste procedure iz druge
+porodice imena: PRJ-ZBR-02 (`60a7957d`) je dodao kapiju robe u
+`ReassignPrijemnicaToZbirna_TX`, a `cilj-zbirna-bez-provere-postojanja` od tada
+ne obara ništa — otkriveno tri nedelje kasnije.
+
+```bash
+git fetch origin                                             # baza od svezeg main-a
+python tools/dokaz.py --od origin/main --plan                # šta rez dira, bez Excela
+python tools/dokaz.py --od origin/main --izbor --radnika 4   # dokaz u rezu
+```
+
+**Pre `--od` uradi `git fetch origin`.** Baza se računa od lokalne kopije
+`origin/main`. Ako je ona zastarela, u izbor ulazi i ono što je u međuvremenu
+već spojeno u main. Smer je bezbedan (više izabranih, nikad manje), ali se meri
+tuđi rez. Izmereno 18.11.2026 na Windows-u: bez fetch-a main-a baza je bila
+`aa6c03f1` umesto `f1545309`, pa je izabrana `panel-kljuc-se-razisao-sa-sidebarom`
+(`KATALOG`), ispravka iz već spojenog G1. Baza se zato uvek ispisuje u zbirnom
+redu.
+
+**Šta se poredi.** Baza je `git merge-base REF HEAD`, a nova strana je **radno
+stablo**: commitovano i necommitovano, a nov fajl van git-a u `src-vba/` je ceo
+dirnut. Razlog je D-6 — dokaz meri snimak radnog stabla. Kraj reda se
+izjednačava pre poređenja, pa razlika samo u CRLF/LF ne bira ništa. Stari
+katalog se čita iz baze **bez izvršavanja** (`ast`): `SABOTAZE` je jedan
+literal, a jedino što nije `ast.literal_eval` su spoj stringova sa `+` i imena
+modul-konstanti (`ESCN`). Konstrukciju koju čitač ne zna `--od` odbija (rc 2), a
+self-test tvrdi da je katalog pročitan kroz `ast` jednak učitanom.
+
+**Razlozi** — stavka se bira ako važi bar jedan:
+
+| Razlog | Kada |
+|---|---|
+| `KATALOG` | unos je nov, ili mu se promenio bilo koji član, ili mu je dodat, izmenjen ili obrisan unos u `POZNATI_NALAZI_DOKAZ` (taj unos menja verdikt dokaza baš za tu sabotažu) |
+| `PROCEDURA` | dirnuta je procedura u kojoj živi sidro (isti pojam kao kolona procedure u `--plan`): izmenjen, dodat ili obrisan red, gledano i na novoj i na staroj strani |
+| `TEST` | dirnuta je procedura ciljanog testa (Sub u `_TEST_FAJLOVI`), ili **kod** deklaracija test-modula — `FX_*` konstante i stanje dele svi testovi modula, pa se tada računaju dirnuti svi |
+| `FAJL` | rezerva: dirnut je **kod van procedura** (deklaraciona sekcija, ili red između procedura koji nije komentar — npr. `#If VBA7` grana zaglavlja u `modOtkupUI.FormHwnd`), ili sidro u novom tekstu nema **tačno jedan** pogodak a fajl je dirnut (to je APPLY-FAIL materijal) |
+| `FIXTURE` | dirnut je ulaz fixture-a: `tools/make_fixture.py` ili `schema/schema.json` (fixture od kanona uzima `formats`). Fixture vide svi testovi — `cilj-zbirna-bez-provere-postojanja` je maskirana baš nad fixture-om — pa se bira **ceo katalog** |
+
+- Komentar i prazan red van procedura ne biraju. Zaglavlje modula je komentar
+  koji svaki rez dopuni; nad `5c3d72a8` bi samo to podiglo izbor sa 12 na 24
+  stavke.
+- Diff je `difflib` nad tekstom, da bi jezgro (`_od_razlozi`) bilo merljivo bez
+  git-a. Čist umetak ili brisanje se pomera na položaj koji dira najmanje
+  procedura: bez toga difflib novu funkciju često „zalepi" za `End Function`
+  prethodne, pa ta ispadne dirnuta. Nad 417 fajl-diffova iz istorije
+  (poslednjih 120 commit-a nad `src-vba`) skup dirnutih procedura i deklaracija
+  je **isti kao iz `git diff -U0`** u 417 od 417, mereno bez pravila o
+  komentaru; bez pomeranja 378 od 417, uvek višak. Sa pravilom o komentaru je
+  isto 404, a 13 razlika su samo komentar u deklaracionoj sekciji.
+- Blok zamene veći od 1000×1000 redova (rez koji prepiše skoro ceo veliki
+  modul, npr. uvlačenje) ostaje ceo dirnut, bez drugog, finog prolaza. Bez tog
+  praga prepis celog BFP-a nije završio ni za 5 minuta; sa njim 0,08–0,39 s.
+  Ishod je samo veći izbor, nikad manji.
+- Git se zove samo kroz plumbing (`diff-index`, `diff-tree`, `ls-files`,
+  `ls-tree`, `show`). Porcelain `git diff` nad radnim stablom osveži stat keš i
+  **prepiše `.git/index`** (`index.lock`), a posle `ImportAllVBA`/izvoza su
+  skoro svi fajlovi u `src-vba` takvi — paralelna sesija u istom klonu bi tada
+  pala na `git add`/`commit`. `--od` ne piše ni u radno stablo ni u `.git`.
+
+Pre plana ili dokaza ide red po izabranoj stavki (`OD <ime> <razlozi>`, uz
+proceduru, test ili fajl), uz dirnut fixture red `OD fixture: dirnut ...`, i
+zbirni red
+`OD <ref> (baza <sha8>): izabrano N -- KATALOG a, PROCEDURA b, TEST c, FAJL d, FIXTURE e`.
+Stavka može imati više razloga, pa zbir nije N.
+
+**Odbija se (rc 2):**
+- `--od` uz filter ili uz `--prijem` — dvosmisleno je koji skup se meri; pre
+  čitanja kataloga;
+- referenca koju git ne prepoznaje — pre čitanja kataloga. Git koji nije
+  dostupan (Python pušten van Git Bash-a) i folder van repoa javljaju se kao
+  takvi, ne kao loša referenca; bez zajedničkog pretka poruka to kaže, a u
+  plitkom klonu (`shallow`) savetuje `git fetch --unshallow`;
+- prazan izbor: „rez ne dira nijednu sabotažu (kod, katalog ni fixture;
+  pozivaoci se ne biraju) -- dokaz nema šta da meri".
+
+Uz `--izbor`, `--radnika`, `--plan`, `--izolacija` i `--grupe` radi normalno:
+`--od` samo zamenjuje filter. Bez `--od` je izlaz bajt-isti kao pre D-5.
+
+**Poznato ograničenje: pozivaoci dirnute procedure se ne biraju.** Izmena u
+`BrojJednak` menja ponašanje `ZBR-NORM-02`, čije sidro živi u pozivaocu, a
+`--od` to ne vidi. Nad rezom stavke 288 zato ne bira svih 11 odloženih:
+nedostaju `s6k4` sabotaže u pozivaocima `IsPaletaPreradjena` (plan, Prilog D.3,
+tačka 4). Dok se to ne odluči, sabotaže pozivalaca procedure koju je rez
+promenio u ponašanju dodaju se ručno, posebnim pozivom po prefiksu. Ne prati se
+ni sam alat (`run_vba.py`, `sabotaza.py`, `dokaz.py`) — on ima svoj self-test.
+
+**Šta je izmereno** (Linux, bez Excela): `_self_test_od` nad sintetičkim
+tekstovima (svaka vrsta razloga bira svoju stavku i nijednu drugu; brisanje,
+umetak nove procedure, deklaracije, `#If` grana, komentar, kraj reda, sidro sa
+dva pogotka, obrisan fajl, katalog i `POZNATI_NALAZI_DOKAZ`, fixture, prag
+drugog prolaza), `main --od --plan` ponašanjem uz lažan git sloj, i git sloj
+nad privremenim repoom (CRLF na disku, nov fajl van git-a, bajt van ASCII,
+`.git/index` se ne prepisuje, nema pretka, folder van repoa). Dvosmerni dokaz:
+42 od 43 mutanta padaju po imenu (`D5: ...`); jedini zeleni je ekvivalentan.
+Istorijska provera ide kroz `od_istorija` (commit umesto radnog stabla, bez
+checkout-a). Brojevi: plan, Prilog D.3, tačka 4. Na Windows-u (Git Bash,
+18.11.2026) self-test je zelen, a `--od origin/main --plan` je dao tačno ono što
+daje i istorijska provera nad istom bazom (`aa6c03f1..0b811e51`: 1 stavka,
+`KATALOG`). `--od` uz `--izbor` i Excel nije pušten, a koliko vremena izbor po
+diff-u štedi u pravom rezu nije mereno.
+
 ## Trijaža masovnih padova
 
 ```bash
