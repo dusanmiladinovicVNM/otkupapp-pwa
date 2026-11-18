@@ -843,7 +843,8 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    - **NEUPOREDIVO 1:** `panel-kljuc-se-razisao-sa-sidebarom`. Zamena je
      nosila Python komentar (`# SABOTAZA`), pa mutacija od nastanka (03.09.)
      ne kompajlira — EXCEL UBIJEN, Compile error, na obe strane. Ispravljeno u
-     katalogu; jedini takav slučaj u 1406.
+     katalogu; jedini takav slučaj u 1406. Ispravljena mutacija obara svoju
+     tvrdnju: `--izbor` → OK, DOKAZANO (izbor) `[M]`.
    - Trajanje nije zabeleženo.
 
    Sledi zaseban process PR: izbor (`--izbor --radnika 4`) kao podrazumevan
