@@ -1121,9 +1121,18 @@ porodice imena: PRJ-ZBR-02 (`60a7957d`) je dodao kapiju robe u
 ne obara ništa — otkriveno tri nedelje kasnije.
 
 ```bash
+git fetch origin                                             # baza od svezeg main-a
 python tools/dokaz.py --od origin/main --plan                # šta rez dira, bez Excela
 python tools/dokaz.py --od origin/main --izbor --radnika 4   # dokaz u rezu
 ```
+
+**Pre `--od` uradi `git fetch origin`.** Baza se računa od lokalne kopije
+`origin/main`. Ako je ona zastarela, u izbor ulazi i ono što je u međuvremenu
+već spojeno u main. Smer je bezbedan (više izabranih, nikad manje), ali se meri
+tuđi rez. Izmereno 18.11.2026 na Windows-u: bez fetch-a main-a baza je bila
+`aa6c03f1` umesto `f1545309`, pa je izabrana `panel-kljuc-se-razisao-sa-sidebarom`
+(`KATALOG`), ispravka iz već spojenog G1. Baza se zato uvek ispisuje u zbirnom
+redu.
 
 **Šta se poredi.** Baza je `git merge-base REF HEAD`, a nova strana je **radno
 stablo**: commitovano i necommitovano, a nov fajl van git-a u `src-vba/` je ceo
@@ -1201,8 +1210,11 @@ nad privremenim repoom (CRLF na disku, nov fajl van git-a, bajt van ASCII,
 `.git/index` se ne prepisuje, nema pretka, folder van repoa). Dvosmerni dokaz:
 42 od 43 mutanta padaju po imenu (`D5: ...`); jedini zeleni je ekvivalentan.
 Istorijska provera ide kroz `od_istorija` (commit umesto radnog stabla, bez
-checkout-a). Brojevi: plan, Prilog D.3, tačka 4. Na Windows-u `--od` nije
-pušten, a koliko vremena izbor po diff-u štedi u pravom rezu nije mereno.
+checkout-a). Brojevi: plan, Prilog D.3, tačka 4. Na Windows-u (Git Bash,
+18.11.2026) self-test je zelen, a `--od origin/main --plan` je dao tačno ono što
+daje i istorijska provera nad istom bazom (`aa6c03f1..0b811e51`: 1 stavka,
+`KATALOG`). `--od` uz `--izbor` i Excel nije pušten, a koliko vremena izbor po
+diff-u štedi u pravom rezu nije mereno.
 
 ## Trijaža masovnih padova
 

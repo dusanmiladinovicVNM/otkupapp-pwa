@@ -915,6 +915,14 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    Istorijski brojevi gore su ponovo izmereni posle ispravki i nisu se
    promenili (30, 12, 35, 0).
 
+   **Windows (Git Bash, 18.11.2026):** self-test zelen (pravi git, privremeni
+   repo); `--od origin/main --plan` nad zastarelim lokalnim `origin/main`
+   (baza `aa6c03f1`) je izabrao 1 stavku (`panel-kljuc-se-razisao-sa-sidebarom`,
+   `KATALOG`), isto što daje `od_istorija` nad `aa6c03f1..0b811e51` na Linux-u.
+   Pouka: pre `--od` ide `git fetch origin`, inače se meri i već spojen tuđi rez
+   (bezbedan smer, ali nepotreban posao). `--od` uz `--izbor` i Excel nije
+   pušten.
+
    **Prihvat „nad diff-om stavke 288 bira svih 11" NIJE ispunjen.** Stavke 288,
    289 i 322 ne imenuju šest `s6k4` sabotaža. Uzete su one čije sidro živi u
    pozivaocu `IsPaletaPreradjena`, direktnom ili preko `PreradjenaPaletaRazlog`,
