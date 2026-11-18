@@ -33525,15 +33525,22 @@ End Sub
 ' clsFlatBtn salje DblClick za SVAKI ozicen Label, a UiDblClick je posle
 ' RowFromTag (koji za tag van mreze ne radi nista) ucitavao ZAOSTALI izabrani
 ' red u formu. Od zahteva 18.11.2026 je i podloga kontekstnog polja ozicena
-' (tag strelice), pa bi dvoklik po ivici polja Kooperant prepisao kilograme i
-' broj iz izabranog reda liste. Dvoklik na sam red mora i dalje da ucitava.
+' (tag strelice), pa bi dvoklik po ivici polja Kooperant prepisao broj
+' dokumenta brojem izabranog reda liste. Dvoklik na sam red mora i dalje da
+' ucitava.
 '
-' Mreza se puni kroz isti seam kao 2120 (T_Otp_OpsegIOznake); red se bira
-' pravim klikom (UiEvent "rb0"). Nalazi se tvrde POSLE oslobadjanja forme.
+' Meri se BROJ, ne kilogrami: LoadRowIntoForm kg cita iz 4. kolone mreze, a u
+' listi F1 je to Vrsta (Broj, Datum, Partner, Vrsta...), pa CDbl pukne pod
+' Resume Next i kg se ne prepise ni bez garda. Prva verzija ovog testa je
+' merila kg i bila placebo -- dokaz.py je to javio kao NE OBARA NISTA.
+'
+' Mreza se puni kroz isti seam kao T_Otp_OpsegIOznake; red bira dvoklik na sam
+' red (UiEvent "rb0"), koji je ujedno i kontrola. Nalazi se tvrde POSLE
+' oslobadjanja forme.
 ' ============================================================
 Private Sub T_Ljuska_DvoklikVanRedaNeUcitava()
     Dim f As frmOtkupUI, zf As Object, prev As String
-    Dim nRed As Long, kgPosleVan As String, brojPosleReda As String, brojReda As String
+    Dim nRed As Long, brojPosleVan As String, brojPosleReda As String, brojReda As String
     Dim errNum As Long, errDesc As String
 
     prev = modOtkupUI.ActiveMode
@@ -33553,15 +33560,16 @@ Private Sub T_Ljuska_DvoklikVanRedaNeUcitava()
     nRed = modOtkupUI.GridBrojRedova()
     If nRed > 0 Then
         brojReda = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
-        modOtkupUI.UiEvent "rb0", "Click", Empty
-        SetPolje zf, "fgKgI", "777"
-        SetPolje zf, "fgBrOtpr", "RUCNI-371"
-        ' dvoklik po podlozi polja Kooperant (nosi tag strelice)
-        modOtkupUI.UiEvent "cbKupacD", "DblClick", Empty
-        kgPosleVan = Polje(zf, "fgKgI")
-        ' kontrola: dvoklik na SAM red i dalje ucitava red
+        ' kontrola: dvoklik na SAM red ucitava red. Ide PRVI: RowFromTag tu
+        ' deterministicki postavlja izabran red, pa sledeci korak ne zavisi od
+        ' toga sta je obican klik uradio (rezim oznacavanja, radnja ekrana).
+        SetPolje zf, "fgBrOtpr", "RUCNI-KONTROLA"
         modOtkupUI.UiEvent "rb0", "DblClick", Empty
         brojPosleReda = Trim$(Polje(zf, "fgBrOtpr"))
+        ' dvoklik po podlozi polja Kooperant (nosi tag strelice), uz izabran red
+        SetPolje zf, "fgBrOtpr", "RUCNI-371"
+        modOtkupUI.UiEvent "cbKupacD", "DblClick", Empty
+        brojPosleVan = Trim$(Polje(zf, "fgBrOtpr"))
     End If
 
     modOtkupUI.GridTestLoad ""
@@ -33570,8 +33578,10 @@ Private Sub T_Ljuska_DvoklikVanRedaNeUcitava()
     modOtkupUI.ActiveMode = prev
     On Error GoTo 0
 
-    AssertEq (nRed > 0), True, "371 preduslov: lista dokumenata F1 nije prazna"
-    AssertEq kgPosleVan, "777", "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red"
+    AssertEq (nRed > 0 And Len(brojReda) > 0 And brojReda <> "RUCNI-371" And _
+              brojReda <> "RUCNI-KONTROLA"), True, _
+             "371 preduslov: lista dokumenata F1 nije prazna i prvi red ima broj"
+    AssertEq brojPosleVan, "RUCNI-371", "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red"
     AssertEq brojPosleReda, brojReda, "371 kontrola: dvoklik na red mreze i dalje ucitava red"
     Exit Sub
 EH:
