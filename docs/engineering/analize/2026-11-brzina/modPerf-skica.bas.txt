@@ -1,8 +1,3 @@
-' Snimljeno i kao fajl (NIJE u repou): /tmp/claude-0/-home-user-otkupapp-pwa/a5452e41-8f9e-50b5-8598-ac82550f51f9/scratchpad/perf/modPerf.bas
-' (ASCII, CRLF). Provera: u KOPIJI src-vba u scratchpad-u (.../scratchpad/perf/repo) 'python3 tools/vba_check.py' daje
-' 'cisto (195 fajlova)', a 'python3 tools/who_writes.py --check-ownership' daje exit 0, bez pomena modPerf.
-' NIJE kompajlirano (nema Excela) -- Debug -> Compile VBAProject ostaje rucna kapija.
-
 Attribute VB_Name = "modPerf"
 Option Explicit
 
