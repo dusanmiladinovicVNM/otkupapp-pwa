@@ -213,9 +213,28 @@ Ako menjaš `modOtkupUI`, bilo koji `modScr*`, `modUiScreens`, `modUiPanel`,
 
 - `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
   zove direktno, bez vožnje celog upisa.
-- **Tri `SetFocus`-a** su iza `If Not IsTestMode()`. Forma bez `.Show` ne može da
-  primi fokus, a u nevidljivom Excelu `SetFocus` **ne puca nego trajno visi**. U
-  produkciji je `IsTestMode()` uvek `False`.
+- **`SetFocus` u test putanji ide kroz `modOtkupUI.DajFokus` ili iza
+  `If Not IsTestMode()`.** Forma bez `.Show` ne može da primi fokus, a u
+  nevidljivom Excelu `SetFocus` može trajno da visi. U produkciji je
+  `IsTestMode()` uvek `False`. Broj poziva se ovde namerno ne piše — ranije
+  „tri" je zastarelo s prvom doradom.
+  - **`DajFokus` je jedini gejt beleške fokusa.** U test režimu ne zove
+    `SetFocus` nego upiše ime kontrole u `mFokusTest`; čita ga `FokusTest`, a
+    prazni `FokusTestReset` (seam samo posmatra; zove ga i
+    `modTest.ResetSeamova`). Kroz `DajFokus` idu fokus posle greške upisa
+    (`FokusNaPolje`), klik na strelicu ili podlogu polja i izbor iz panela.
+    Sabotaža `s6k6-fokus-beleska-gluva` sidri baš njegov red, pa obara 271 i 368
+    zajedno. Beleška je modulska i preživi tuđ test: test koji meri više poteza
+    je prazni pred svaki (`FokusTestReset`).
+  - Ostali `SetFocus`-i u ljusci su iza `IsTestMode` (`ApplyPrefill`,
+    `ClearForm`), iza `mFrm.Visible` (`KeepKeys`) ili na putevima koje test ne
+    vozi (`OtkupUI_AktivirajLjusku`; `FocusKontekst` / `FocusPretraga` za Ctrl+K /
+    Ctrl+F; `DropCombo`, koji nema pozivaoca). Nov `SetFocus` ide kroz `DajFokus`.
+  - **Neobjašnjen izuzetak:** `SetKlasa` zove `SetFocus` bez garda (pod
+    `On Error Resume Next`), a `T_S6K6_FokusPosleGreske` do njega stiže kroz
+    prefill `dveklase=2` — i prolazi (run 18.11.2026). „Uvek visi" zato nije
+    opšte pravilo; kada `SetFocus` visi, a kada pukne pa ga `Resume Next` proguta,
+    nije izmereno. Ne oslanjaj se ni na jedno ni na drugo.
 - `modScrDokumenti.Scr_OtpTestSet` postoji samo za test i **tvrdo je gejtovan** —
   van test-režima ne radi ništa.
 
