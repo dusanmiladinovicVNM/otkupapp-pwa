@@ -33520,72 +33520,112 @@ CleanUp:
 End Sub
 
 ' ============================================================
-' 371. DVOKLIK VAN REDA MREZE NE UCITAVA RED (review 18.11.2026)
+' 371. DVOKLIK NA POCETNOM EKRANU: FORMA SE NE PUNI, F3 PAMTI ZBIRNU (18.11.2026)
 '
-' clsFlatBtn salje DblClick za SVAKI ozicen Label, a UiDblClick je posle
-' RowFromTag (koji za tag van mreze ne radi nista) ucitavao ZAOSTALI izabrani
-' red u formu. Od zahteva 18.11.2026 je i podloga kontekstnog polja ozicena
-' (tag strelice), pa bi dvoklik po ivici polja Kooperant prepisao broj
-' dokumenta brojem izabranog reda liste. Dvoklik na sam red mora i dalje da
-' ucitava.
+' Dvoklik na red pocetnog ekrana je do 18.11.2026 punio formu NOVOG dokumenta
+' brojem reda (LoadRowIntoForm) -- uklonjeno (pre-flight 18.11.2026,
+' INTENTIONALLY REMOVED). Ostaje jedino F3: dvoklik na zbirnu je pamti za
+' prijemnicu. Uz to gard iz review-a: dvoklik VAN reda ne radi nista, a od
+' 18.11.2026 je ozicena i podloga kontekstnog polja (tag strelice).
 '
-' Meri se BROJ, ne kilogrami: LoadRowIntoForm kg cita iz 4. kolone mreze, a u
-' listi F1 je to Vrsta (Broj, Datum, Partner, Vrsta...), pa CDbl pukne pod
-' Resume Next i kg se ne prepise ni bez garda. Prva verzija ovog testa je
-' merila kg i bila placebo -- dokaz.py je to javio kao NE OBARA NISTA.
-'
-' Mreza se puni kroz isti seam kao T_Otp_OpsegIOznake; red bira dvoklik na sam
-' red (UiEvent "rb0"), koji je ujedno i kontrola. Nalazi se tvrde POSLE
-' oslobadjanja forme.
+' Tri dela, tri tvrdnje (svaka sa svojom sabotazom):
+'   1. F1: dvoklik na red ne menja broj u formi;
+'   2. F3: dvoklik van reda uz izabran red ne pamti zbirnu (gard);
+'   3. F3: dvoklik na red zbirne -> prijemnica nasledi njen broj.
+' Zapamcena zbirna nema citaca, pa se meri ulaskom u F4 (ApplyAktivnaZbirna
+' puni prazno polje). Pamcenje je modulsko i prezivi test -- gasi se na
+' pocetku i pre tvrdnji. Mreza se puni kroz isti seam kao T_Otp_OpsegIOznake.
 ' ============================================================
 Private Sub T_Ljuska_DvoklikVanRedaNeUcitava()
     Dim f As frmOtkupUI, zf As Object, prev As String
-    Dim nRed As Long, brojPosleVan As String, brojPosleReda As String, brojReda As String
+    Dim nF1 As Long, brojF1 As String, posleF1 As String
+    Dim nF3 As Long, brojZ As String, vanReda As String, naRedu As String
+    Dim kRed As Long, i As Long, zid As String, rbTag As String
     Dim errNum As Long, errDesc As String
 
     prev = modOtkupUI.ActiveMode
     Set f = NewOtkupUIForm()
     Set zf = f.Controls("zForm")
     On Error GoTo EH
-    modOtkupUI.ActiveMode = "F1"
+    GasiZapamcenuZbirnuTest f
     modOtkupUI.GridRenderTest f, 1200, 600
-    ' Lista SVI i bez aktivne otpremnice: klik na red tu samo BIRA red (u listi
-    ' otpremnica bi aktivirao otpremnicu i prebacio listu). Lista je stanje
-    ' modula ekrana i prezivi tudji test, pa se postavlja izricito.
+    ' Lista SVI i bez aktivne otpremnice: klik na red tu samo BIRA red. Lista je
+    ' stanje modula ekrana i prezivi tudji test, pa se postavlja izricito.
     modScrDokumenti.Scr_OtpTestReset
+
+    ' 1) F1: dvoklik na red ne puni formu.
+    modOtkupUI.ActiveMode = "F1"
     modScrDokumenti.Scr_Event "lsSVI", "Click"
     modUiData.ResetCache
     modScrDokumenti.Scr_ResetCache
     modOtkupUI.GridTestLoad "DOKUMENTI"
-    nRed = modOtkupUI.GridBrojRedova()
-    If nRed > 0 Then
-        brojReda = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
-        ' kontrola: dvoklik na SAM red ucitava red. Ide PRVI: RowFromTag tu
-        ' deterministicki postavlja izabran red, pa sledeci korak ne zavisi od
-        ' toga sta je obican klik uradio (rezim oznacavanja, radnja ekrana).
-        SetPolje zf, "fgBrOtpr", "RUCNI-KONTROLA"
-        modOtkupUI.UiEvent "rb0", "DblClick", Empty
-        brojPosleReda = Trim$(Polje(zf, "fgBrOtpr"))
-        ' dvoklik po podlozi polja Kooperant (nosi tag strelice), uz izabran red
+    nF1 = modOtkupUI.GridBrojRedova()
+    If nF1 > 0 Then
+        brojF1 = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
         SetPolje zf, "fgBrOtpr", "RUCNI-371"
-        modOtkupUI.UiEvent "cbKupacD", "DblClick", Empty
-        brojPosleVan = Trim$(Polje(zf, "fgBrOtpr"))
+        modOtkupUI.UiEvent "rb0", "DblClick", Empty
+        posleF1 = Trim$(Polje(zf, "fgBrOtpr"))
     End If
 
+    ' 2) F3: dvoklik VAN reda uz izabran red ne pamti zbirnu. Red bira dvoklik
+    '    na sam red (RowFromTag ga postavlja deterministicki); pamcenje koje on
+    '    ostavi gasi se kao kod operatera -- prazan broj u F3.
+    '
+    '    Red NIJE nacrt: klik na nacrt otvara njegovu izmenu, a prefill broja
+    '    sam pamti zbirnu (UiChange fgBrOtprT) -- tada bi deo 3 bio zelen i bez
+    '    ZapamtiZbirnuReda. Trazi se na prvoj strani mreze (tag "rb" je red strane).
+    modOtkupUI.ActiveMode = "F3"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    nF3 = modOtkupUI.GridBrojRedova()
+    For i = 1 To nF3
+        If i > 10 Then Exit For
+        zid = Trim$(CStr(modOtkupUI.GridCell(i, modScrDokumenti.IdentKolonaIndeks("ZBIRNA"))))
+        If Len(zid) > 0 Then
+            If UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zid, _
+                    COL_TRACE_IZDATO_STATUS)))) <> UCase$(IZDATO_DRAFT) Then
+                kRed = i
+                Exit For
+            End If
+        End If
+    Next i
+    If kRed > 0 Then
+        rbTag = "rb" & CStr(kRed - 1)
+        brojZ = Trim$(CStr(modOtkupUI.GridCell(kRed, 1)))
+        modOtkupUI.UiEvent rbTag, "DblClick", Empty
+        SetPolje zf, "fgBrOtpr", ""
+        modOtkupUI.UiEvent "fgBrOtprT", "Change", Empty
+        modOtkupUI.UiEvent "cbKupacD", "DblClick", Empty
+        SetPolje zf, "fgBrZbir", ""
+        modOtkupUI.SelectMode f, "F4"
+        vanReda = Trim$(Polje(zf, "fgBrZbir"))
+
+        ' 3) F3: dvoklik na red zbirne -> prijemnica nasledi njen broj.
+        modOtkupUI.ActiveMode = "F3"
+        modOtkupUI.GridTestLoad "DOKUMENTI"
+        modOtkupUI.UiEvent rbTag, "DblClick", Empty
+        SetPolje zf, "fgBrZbir", ""
+        modOtkupUI.SelectMode f, "F4"
+        naRedu = Trim$(Polje(zf, "fgBrZbir"))
+    End If
+
+    GasiZapamcenuZbirnuTest f
     modOtkupUI.GridTestLoad ""
     ReleaseOtkupUIForm f
     modOtkupUI.GridOtkaciFormuTest
     modOtkupUI.ActiveMode = prev
     On Error GoTo 0
 
-    AssertEq (nRed > 0 And Len(brojReda) > 0 And brojReda <> "RUCNI-371" And _
-              brojReda <> "RUCNI-KONTROLA"), True, _
+    AssertEq (nF1 > 0 And Len(brojF1) > 0 And brojF1 <> "RUCNI-371"), True, _
              "371 preduslov: lista dokumenata F1 nije prazna i prvi red ima broj"
-    AssertEq brojPosleVan, "RUCNI-371", "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red"
-    AssertEq brojPosleReda, brojReda, "371 kontrola: dvoklik na red mreze i dalje ucitava red"
+    AssertEq posleF1, "RUCNI-371", "371 F1: dvoklik na red ne puni formu novog dokumenta"
+    AssertEq (kRed > 0 And Len(brojZ) > 0), True, _
+             "371 preduslov: lista F3 ima zbirnu koja nije nacrt, na prvoj strani"
+    AssertEq vanReda, "", "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red"
+    AssertEq naRedu, brojZ, "371 F3: dvoklik na zbirnu je pamti za prijemnicu"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
+    GasiZapamcenuZbirnuTest f
     modOtkupUI.GridTestLoad ""
     ReleaseOtkupUIForm f
     modOtkupUI.GridOtkaciFormuTest

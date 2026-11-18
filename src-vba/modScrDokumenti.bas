@@ -2620,7 +2620,6 @@ Public Function ModeIco(ByVal mode As String) As Long
     End Select
 End Function
 
-' dupli klik na red -> ucitaj dokument u polja iznad
 ' Rezimi koji NOSE vezu na zbirnu (imaju polje BROJ ZBIRNE).
 Public Function ModeVezujeZbirnu(ByVal mode As String) As Boolean
     Select Case mode

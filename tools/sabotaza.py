@@ -13861,14 +13861,33 @@ SABOTAZE = {
         "T_Zbirne_PickerOpisMestaKgAmb",
         "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj",
     ),
-    # 371 (review 18.11.2026): dvoklik po ozicenom Label-u van mreze opet ucita
-    # zaostali izabrani red -- podloga kontekstnog polja je to ucinila cestim.
+    # 371 (review 18.11.2026): dvoklik po ozicenom Label-u van mreze opet radi
+    # nad zaostalim izabranim redom -- u F3 zapamti tu zbirnu, na drugom ekranu
+    # salje "dbl:". Podloga kontekstnog polja je to ucinila cestim.
     "dvoklik-van-reda-ucitava": (
         "modOtkupUI.bas",
         "    If RowIndexFromTag(tag) < 0 Then Exit Sub   ' dvoklik van reda mreze ne ucitava red\n",
         "    ' SABOTAZA: dvoklik van reda mreze ucitava izabrani red\n",
         "T_Ljuska_DvoklikVanRedaNeUcitava",
         "371 dvoklik po podlozi kontekstnog polja ne ucitava izabrani red",
+    ),
+    # 371 (pre-flight 18.11.2026): dvoklik na red opet puni formu NOVOG dokumenta
+    # brojem reda -- uklonjen LoadRowIntoForm (INTENTIONALLY REMOVED).
+    "dvoklik-puni-formu": (
+        "modOtkupUI.bas",
+        '        If ActiveMode = "F3" Then ZapamtiZbirnuReda\n',
+        '        SetFld "fgBrOtpr", CStr(GridCell(mSelRow, 1))   \' SABOTAZA: dvoklik puni formu\n',
+        "T_Ljuska_DvoklikVanRedaNeUcitava",
+        "371 F1: dvoklik na red ne puni formu novog dokumenta",
+    ),
+    # 371: dvoklik na zbirnu u F3 vise ne pamti zbirnu -- prijemnica gubi jedini
+    # put iz liste zbirnih (zamena za legacy lstZbirne_Click).
+    "dvoklik-f3-ne-pamti": (
+        "modOtkupUI.bas",
+        '        If ActiveMode = "F3" Then ZapamtiZbirnuReda\n',
+        "        ' SABOTAZA: F3 dvoklik ne pamti zbirnu\n",
+        "T_Ljuska_DvoklikVanRedaNeUcitava",
+        "371 F3: dvoklik na zbirnu je pamti za prijemnicu",
     ),
 }
 

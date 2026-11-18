@@ -4000,22 +4000,14 @@ Private Sub SetAktivnaZbirna(ByVal broj As String)
     ShowToast Poruka("OTKUI_MSG_ZBIRNA_AKTIVNA") & " " & broj, False
 End Sub
 
-Private Sub LoadRowIntoForm()
-    Dim r As Long
+' Dvoklik na zbirnu u F3 je BIRA za prijemnicu: broj ide u zapamcenu zbirnu,
+' pa ga F4 nasledi pri ulasku (ApplyAktivnaZbirna). Zamena za legacy
+' lstZbirne_Click (broj zbirne u prijemnicu). Forma F3 se NE puni -- broj
+' izdate zbirne u polju broja bi sledece snimanje poslalo kao nov nacrt.
+Private Sub ZapamtiZbirnuReda()
     On Error Resume Next
     If mSelRow < 1 Or mSelRow > mViewN Then Exit Sub
-    r = mSelRow
-    SetFld "fgBrOtpr", CStr(mView(r, 1))
-    ' U rezimu Zbirne broj dokumenta JESTE broj zbirne - klik na red je isto
-    ' sto i lstZbirne_Click u staroj formi.
-    If ActiveMode = "F3" Then SetAktivnaZbirna CStr(mView(r, 1))
-    SetFld "fgKgI", FmtBroj(CDbl(mView(r, 4)), 0)
-    If CDbl(mView(r, 4)) > 0 Then
-        mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").text = _
-            FmtBroj(CDbl(mView(r, 5)) / CDbl(mView(r, 4)), 2)
-    End If
-    RecalcVrednost
-    ShowToast Poruka("OTKUI_MSG_UCITANO") & " " & CStr(mView(r, 1)), False
+    SetAktivnaZbirna CStr(mView(mSelRow, 1))
 End Sub
 
 '=====================================================================
@@ -5321,8 +5313,16 @@ Private Function OperaterText() As String
     OperaterText = s
 End Function
 
-' Dvoklik na red. Na unosnom ekranu ucitava red u formu -- kao i do sada. Na
-' ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem kao 'row:' i 'act:'.
+' Dvoklik na red. Na ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem
+' kao 'row:' i 'act:'. Na unosnom ekranu (DOKUMENTI) FORMU NE PUNI -- jedino
+' u F3 pamti zbirnu reda za prijemnicu (ZapamtiZbirnuReda).
+'
+' Do 18.11.2026 je ovde stajao LoadRowIntoForm: broj reda u polje broja NOVOG
+' dokumenta (u listi Otpremnice F1 -- broj tudjeg dokumenta), a kg i cenu iz
+' 4. i 5. kolone, koje su odavno Vrsta i Sorta, pa su tiho preskakane. Nije
+' bio legacy (frmDokumenta/frmOtkup takav dvoklik nisu imali), a postojeci
+' dokument se menja kroz Ispravku, ne prepisom u formu (pre-flight 18.11.2026,
+' INTENTIONALLY REMOVED, docs/UI_MIGRACIJA_KATALOG.md).
 '
 ' Zasto ekran ne moze da otvara detalj OBICNIM klikom: klik BIRA red, a radnje
 ' nad redom (zatvori paletu, storniraj, stampaj) rade bas nad izabranim. Da klik
@@ -5334,13 +5334,13 @@ End Function
 ' DVOKLIK RADI SAMO NAD REDOM MREZE (review 18.11.2026). clsFlatBtn salje
 ' DblClick za SVAKI ozicen Label -- strelicu, dugme, cip, red panela, a od
 ' zahteva 18.11.2026 i podlogu kontekstnog polja. Bez ovog reda bi dvoklik po
-' ivici polja Kooperant (uz izabran red liste) prepisao formu tim redom
-' (LoadRowIntoForm), a na drugom ekranu poslao "dbl:" za zaostali izbor.
+' ivici polja Kooperant (uz izabran red liste) u F3 zapamtio zaostalu zbirnu, a
+' na drugom ekranu poslao "dbl:" za zaostali izbor.
 Private Sub UiDblClick(ByVal tag As String)
     If RowIndexFromTag(tag) < 0 Then Exit Sub   ' dvoklik van reda mreze ne ucitava red
     RowFromTag tag
     If mScreen = SCR_POCETNI Then
-        LoadRowIntoForm
+        If ActiveMode = "F3" Then ZapamtiZbirnuReda
         Exit Sub
     End If
     If mSelRow <= 0 Then Exit Sub

@@ -203,7 +203,7 @@ zaključivati iz koda.
 | `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **IMA** (v6-ui-117, `FillOpenFakture` uz polje `fgFaktura`) |
 | `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B (živi prikaz; upis F4 ne zavisi od njega) |
 | `UpdateValidacija` (živi prikaz + kapija pri upisu zbirne) | poklapanje zbirne sa otpremnicama | **kapija IMA** (`ZbirnaValidiraj`, v6-ui-116), **živi prikaz NEMA** |
-| `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B (F3 klikom na red pamti aktivnu zbirnu, pa je F4 nasledi) |
+| `lstZbirne_Click` | izbor zbirne iz liste (F4) | **REPLACED** — izbor u samom polju BROJ ZBIRNE u F4 (panel nad poljem, `FillZbirneCombo`; od 18.11.2026 stavka uz broj nosi kg, amb i otkupna mesta izvora). Uz to dvoklik na zbirnu u F3 je pamti za prijemnicu (`ZapamtiZbirnuReda`, F4 je nasledi). Ranije je ovde stajalo „NEMA — Faza B“, iako je izbor u F4 već postojao |
 | `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **IMA** (v6-ui-117, u natpisu polja „ISPLATA IZ") |
 | `tglIzOMAvansa` | keš iz OM avansa vs virman firme (F5) | **IMA** (v6-ui-117, polje `fgAvans`) |
 | `btnUnosOtp_Click` | upis otpremnice (F2) | **IMA** (`modDokUnos`, v6-ui-115) |
@@ -9836,6 +9836,7 @@ ključ), redosled po datumu i izgled panela.
 | Grupisani pregled storniranih (`GetStorniraniGrupisano`) | §3.2: zamenjen čipom „Otkazane" nad svakim tipom |
 | Storno palete i prerade iz F8 | §3.2: pripada ekranu Palete |
 | Zbirna: bruto→neto i cena | §3.1: `tblZbirna` nema te kolone — nije gubitak nego nepostojeće polje |
+| Dvoklik na red početnog ekrana puni formu (`LoadRowIntoForm`) | pre-flight 18.11.2026, **INTENTIONALLY REMOVED**. Nije bio legacy: `frmDokumenta` i `frmOtkup` takav dvoklik nisu imali (`58a3213d^`). Punio je formu **novog** dokumenta brojem postojećeg (u listi Otpremnice u F1 — brojem tuđeg dokumenta, `docs/DOMEN/STORNO_U_LANCU.md`), a kg i cenu tiho preskakao, jer su 4. i 5. kolona mreže odavno Vrsta i Sorta. Postojeći dokument se menja kroz Ispravku. Ostaje samo F3: dvoklik na zbirnu je pamti za prijemnicu. Meri `T_Ljuska_DvoklikVanRedaNeUcitava` (371); sabotaže `dvoklik-puni-formu`, `dvoklik-f3-ne-pamti`, `dvoklik-van-reda-ucitava` |
 
 ### 28.3 Zamenjeno drugim oblikom — funkcija živi, stari kod je siroče
 
