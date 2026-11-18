@@ -1190,6 +1190,11 @@ EH:
     ExportOtkupiAll = False
 End Function
 
+' Indeks prijemnica za izvoz OtkupiAll (seam za test 366).
+Public Function PrijemniceZaIzvozPoZbirni() As Object
+    Set PrijemniceZaIzvozPoZbirni = BuildPrijemnicaIndexByBrojZbirne()
+End Function
+
 Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
     Const SOURCE As String = "BuildPrijemnicaIndexByBrojZbirne"
 

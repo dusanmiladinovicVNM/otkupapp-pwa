@@ -64,6 +64,10 @@ Option Explicit
 
 Public Const DOKUNOS_BUILD As String = "v6-ui-135"
 
+' TEST SEAM (S9-3, N18): tekst poslednjeg pitanja "dupla prijemnica" u test
+' rezimu (PotvrdiDuplaPrijemnicu). Gasi ga ResetSeamova.
+Private mPitanjeDuplePrijTest As String
+
 '--------------------------------------------------------------- ULAZ
 Public Function NoviOtpremnicaUnos() As Object
     Dim p As Object
@@ -1011,10 +1015,7 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         postojeca = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
                                    S(p, "brojZbirne"), COL_PRJ_BROJ)
     If Len(postojeca) > 0 Then
-        If MsgBox(Poruka("DOKUNOS_ASK_DUPLA_PRIJ_1") & " " & S(p, "brojZbirne") & " " & _
-                  Poruka("DOKUNOS_ASK_DUPLA_PRIJ_2") & " " & postojeca & "." & vbCrLf & vbCrLf & _
-                  Poruka("DOKUNOS_ASK_DUPLA_PRIJ_3"), _
-                  vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then
+        If Not PotvrdiDuplaPrijemnicu(S(p, "brojZbirne"), postojeca) Then
             fokus = "brojZbirne": PrijemnicaValidiraj = " ": Exit Function
         End If
     End If
@@ -1024,6 +1025,39 @@ EH:
     LogErr "modDokUnos.PrijemnicaValidiraj"
     PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_GRESKA_UNOS_PRIJ") & errDesc
 End Function
+
+' Pitanje "dupla prijemnica" (1 zbirna = 1 prijemnica, F4 pita i pusta).
+'
+' TEST SEAM, tvrdo gejtovan, isti obrazac kao modOtkupUnos.PotvrdiManjakAmbalaze
+' (.claude/rules/testovi.md S4): u test rezimu se pitanje BELEZI umesto da se
+' otvori, a odgovor je UVEK "Ne" -- seam samo posmatra i zabranjuje. MsgBox u
+' nevidljivom Excelu visi do timeout-a i ostavlja Excel u [break], pa test 368
+' bez ovoga ne bi mogao da udje u granu pitanja.
+Public Function PotvrdiDuplaPrijemnicu(ByVal brojZbirne As String, _
+                                       ByVal postojeca As String) As Boolean
+    Dim txt As String
+    txt = Poruka("DOKUNOS_ASK_DUPLA_PRIJ_1") & " " & brojZbirne & " " & _
+          Poruka("DOKUNOS_ASK_DUPLA_PRIJ_2") & " " & postojeca & "." & vbCrLf & vbCrLf & _
+          Poruka("DOKUNOS_ASK_DUPLA_PRIJ_3")
+    If IsTestMode() Then
+        mPitanjeDuplePrijTest = txt
+        Exit Function
+    End If
+    PotvrdiDuplaPrijemnicu = (MsgBox(txt, vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
+End Function
+
+' TEST SEAM: tekst poslednjeg pitanja "dupla prijemnica" ("" = nije postavljeno).
+' Tvrdo gejtovan.
+Public Function PitanjeDuplePrijemniceTest() As String
+    If Not IsTestMode() Then Exit Function
+    PitanjeDuplePrijemniceTest = mPitanjeDuplePrijTest
+End Function
+
+' TEST SEAM: brise zabelezeno pitanje -- test pre poteza, i ResetSeamova.
+Public Sub PitanjeDuplePrijemniceTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mPitanjeDuplePrijTest = ""
+End Sub
 
 ' KI-021: poruka uz polje tipa ambalaze prijemnice; "" kad je tip valjan ili ga ne
 ' treba. Pune gajbe (I i II) traze PRAZAN tip samo uz strogu validaciju, kao

@@ -9825,7 +9825,9 @@ End Function
 
 Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
                                       ByVal pendingKgKlI As Double, _
-                                      ByVal pendingKgKlII As Double) As Variant
+                                      ByVal pendingKgKlII As Double, _
+                                      Optional ByVal vozacID As String = "", _
+                                      Optional ByVal kupacID As String = "") As Variant
     Const SRC As String = "modDokumenta.CalculateManjakPreview"
     On Error GoTo EH
 
