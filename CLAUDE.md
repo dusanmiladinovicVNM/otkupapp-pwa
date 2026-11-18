@@ -113,8 +113,9 @@ Ako oblast nema svoj fajl, važi samo ovo ovde.
   U rezu: `python tools/dokaz.py --izbor --radnika 4 <prefiks>` — samo ono što je
   rez dodao ili dirao, a mutacija pušta **samo ciljani test** (oko 5 s po stavci
   umesto oko 3,5 min za `RunAllTests` i BFP). Izbor je prihvaćen merenjem (G1,
-  18.11.2026: 0 razlika prema celoj suiti nad 59 slučajnih sabotaža, najviše
-  5,0% uz 95%). Stavku koju izbor ne obori dokaz sam meri celom suite-om.
+  18.11.2026: 0 razlika prema celoj suiti nad 59 slučajnih sabotaža,
+  orijentaciono najviše 5,0% uz 95%). Stavku koju izbor ne obori dokaz sam meri
+  celom suite-om.
   Pušta se tek kad su `vba_check` i ciljana suite zeleni i kad je diff
   pročitan. Pun `python tools/dokaz.py` (cela suite) ide **pred release**, uz
   FULL prolaz.
