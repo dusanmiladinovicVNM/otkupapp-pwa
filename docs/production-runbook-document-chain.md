@@ -280,11 +280,7 @@ Pravila:
 
 `SaveZbirnaMulti_TX` / `SaveZbirna_TX` pravi zbirnu po klasi.
 
-Pre unosa treba validirati:
-
-```vb
-ValidateZbirnaPreUnosa(brojZbirne, inputKgKlI, inputKgKlII, inputAmb)
-```
+Provere pre unosa po broju zbirne više nema: `ValidateZbirnaPreUnosa` je obrisan u S9-2 (od S4-2c/2b-1 bez pozivaoca). Pripadnost otpremnica je zapis u `tblZbirnaIzvori`, a pokrivenost po klasi (kg i ambalaža) proverava izdavanje zbirne (`IzdajZbirnu_TX`), koje odbija zbirnu dok najava nije pokrivena.
 
 Posle unosa proveriti:
 
@@ -598,7 +594,7 @@ Postupak:
 Sistem ima zaštite:
 
 1. TX wrapper-i za multi-row dokumente: sve ili ništa.
-2. `ValidateZbirnaPreUnosa` i `ValidateZbirna` proveravaju kg/ambalažu oko zbirne.
+2. Izdavanje zbirne (`IzdajZbirnu_TX`) proverava kg/ambalažu po klasi prema vezanim otpremnicama (`tblZbirnaIzvori`); `ValidateZbirnaPreUnosa` je obrisan u S9-2, a `ValidateZbirna` ostaje kao provera integriteta A1.
 3. `CreateFaktura` pre-validira sve prijemnice pre append-a fakture.
 4. Faktura se računa iz `tblPrijemnica`, ne iz user-prosleđenih stavki.
 5. Dupla prijemnica u izboru fakture se blokira.
@@ -617,8 +613,8 @@ Operativno pravilo:
 Koristiti samo ako UI nije dovoljan ili ako tehnički owner radi incident.
 
 ```vb
-' Validacija zbirne pre unosa
-Debug.Print Join(ValidateZbirnaPreUnosa("ZBR-...", 1000, 200, 100), " | ")
+' Validacija zbirne pre unosa: ValidateZbirnaPreUnosa je obrisan u S9-2 (bez
+' pozivaoca). Pokrivenost po klasi proverava izdavanje zbirne (IzdajZbirnu_TX).
 
 ' Validacija postojeće zbirne
 Debug.Print Join(ValidateZbirna("ZBR-..."), " | ")

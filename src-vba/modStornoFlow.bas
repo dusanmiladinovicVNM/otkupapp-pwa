@@ -1997,56 +1997,6 @@ Public Function PrijemniceUObimuZbirne(ByVal broj As String, ByVal zbirnaID As S
     Set PrijemniceUObimuZbirne = res
 End Function
 
-' Oslobodi (razvezi) otkup blokove datih otpremnica ID-jeva: OtpremnicaID="" i
-' Veza Otkup.OtpremnicaID="" na AKTIVNIM otkup redovima -> vracaju se u pool
-' (za reveze). Labela BrojZbirne je otisla sa kolonom u S5-3b. Bez TX
-' (unutar otvorene transakcije). Otkup se NIKAD ne stornira (realne kupovine).
-Private Function FreeOtkupBloksInline(ByVal otpIDs As Collection, ByVal SRC As String) As Long
-    If otpIDs Is Nothing Then Exit Function
-    If otpIDs.count = 0 Then Exit Function
-    Dim idSet As Object: Set idSet = CreateObject("Scripting.Dictionary")
-    Dim x As Long
-    For x = 1 To otpIDs.count
-        idSet(CStr(otpIDs(x))) = True
-    Next x
-    Dim data As Variant: data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    Dim cOtp As Long, cSt As Long
-    cOtp = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    Dim i As Long, n As Long
-    For i = 1 To UBound(data, 1)
-        If idSet.Exists(Trim$(CStr(data(i, cOtp)))) Then
-            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-                RequireUpdateCell TBL_OTKUP, i, COL_OTK_OTPREMNICA_ID, "", SRC
-                SetOtkupBrojOtpremnice i, ""      ' Faza 7 korak 5: ocisti denorm kljuc (unbind)
-                n = n + 1
-            End If
-        End If
-    Next i
-    FreeOtkupBloksInline = n
-End Function
-
-' TX wrapper za oslobadjanje blokova (DUPLI / deljena zbirna).
-Private Function FreeOtkupBloksByOtpIDs_TX(ByVal otpIDs As Collection) As Long
-    Const SRC As String = MOD_NAME & ".FreeOtkupBloksByOtpIDs_TX"
-    Dim tx As clsTransaction
-    On Error GoTo EH
-    If otpIDs Is Nothing Then Exit Function
-    If otpIDs.count = 0 Then Exit Function
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    Dim n As Long: n = FreeOtkupBloksInline(otpIDs, SRC)
-    tx.CommitTx
-    Set tx = Nothing
-    FreeOtkupBloksByOtpIDs_TX = n
-    Exit Function
-EH:
-    If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
-End Function
-
 ' PONISTENJE kaskada. ownsChain = da li prijemnica/palete pripadaju zbirni
 ' (hladnjaca kupac / malina); eksterni kupac -> prijemnica/palete se NE diraju.
 ' JEDNA TX (S6 korak 4): prijemnice (subjekat ili ceo lanac) -> otpremnice
@@ -2234,11 +2184,11 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     Dim k As Long
     ' BLOKOVI SE BROJE PRE STORNA (review #384).
     '
-    ' FreeOtkupBloksInline broji samo staru vezu Otkup.OtpremnicaID, koju
-    ' kanonski pisac ne pise -- pa je poruka javljala "blokovi oslobodjeni: 0"
-    ' i za otpremnicu koja ih je imala. Sami blokovi JESU oslobodjeni:
-    ' StornoOtpremnica to radi kroz clanstvo. Lagao je samo broj, a broj koji
-    ' operater cita posle nepovratne radnje ne sme da laze.
+    ' Blokove oslobadja StornoOtpremnica kroz clanstvo, pa se broj uzima iz
+    ' kanona PRE storna. Do S9-2 je ovde stajao i FreeOtkupBloksInline, koji je
+    ' brisao staru vezu Otkup.OtpremnicaID -- kolonu koju kanonski pisac ne
+    ' pise, pa je na kanonskim podacima bio no-op (plan 14.64, N2c). Obrisan je
+    ' sa SetOtkupBrojOtpremnice; modStornoFlow time vise ne pise tblOtkup.
     Dim blokKanon As Long
     For k = 1 To otpIDs.count
         blokKanon = blokKanon + modDokumenta.IzvoriOtpremnice(CStr(otpIDs(k))).count
@@ -2290,7 +2240,7 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
             Err.Raise ERR_STORNO_FW_BASE + 51, SRC, "StornoOtpremnica (ponistenje) nije uspeo: " & CStr(otpIDs(k))
     Next k
     res("otp") = otpIDs.count
-    res("blok") = FreeOtkupBloksInline(otpIDs, SRC) + blokKanon
+    res("blok") = blokKanon
     res("pals") = palUkupno
     tx.CommitTx
     Set tx = Nothing
@@ -2327,68 +2277,6 @@ Private Function RedJeGeneracije(ByRef data As Variant, ByVal i As Long, _
                   COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
     End If
     RedJeGeneracije = (Trim$(NzToText(data(i, cGen))) = Trim$(gen))
-End Function
-
-' Distinktni AKTIVNI OtkupID-jevi vezani (OtpremnicaID) za dati skup otp ID-jeva.
-' strict: v. GetStornoBlockRows. Prazan spisak sme da znaci samo "proverio sam i
-' nema blokova", nikad "ne umem da proverim" -- inace uvid tvrdi da nema
-' pogodjenih blokova nad odlukom koja blokove stornira.
-Private Function GetBlokOtkupIDs(ByVal otpIDs As Collection, _
-                                 Optional ByVal strict As Boolean = False) As Collection
-    Dim result As New Collection
-    Set GetBlokOtkupIDs = result
-    On Error GoTo EH
-    If otpIDs Is Nothing Then Exit Function
-    If otpIDs.count = 0 Then Exit Function
-
-    Dim idSet As Object: Set idSet = CreateObject("Scripting.Dictionary")
-    Dim x As Long
-    For x = 1 To otpIDs.count
-        idSet(CStr(otpIDs(x))) = True
-    Next x
-
-    Dim data As Variant: data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then
-        If strict Then
-            If Not modUiData.TabelaCitljiva(TBL_OTKUP) Then
-                Err.Raise ERR_UI_BASE + 34, MOD_NAME & ".GetBlokOtkupIDs", _
-                          "Tabela " & TBL_OTKUP & " nije nadjena."
-            End If
-        End If
-        Exit Function
-    End If
-    Dim cOtp As Long, cId As Long, cSt As Long
-    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
-    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    If cOtp = 0 Or cId = 0 Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 35, MOD_NAME & ".GetBlokOtkupIDs", _
-                      "Kolona " & COL_OTK_OTPREMNICA_ID & " ili " & COL_OTK_ID & _
-                      " ne postoji u " & TBL_OTKUP & "."
-        End If
-        Exit Function
-    End If
-
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    Dim i As Long, oid As String
-    For i = 1 To UBound(data, 1)
-        If idSet.Exists(Trim$(CStr(data(i, cOtp)))) Then
-            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-                oid = Trim$(CStr(data(i, cId)))
-                If Len(oid) > 0 And Not seen.Exists(oid) Then
-                    seen(oid) = True
-                    result.Add oid
-                End If
-            End If
-        End If
-    Next i
-    Exit Function
-EH:
-    Dim errNum As Long, errDesc As String
-    errNum = Err.Number: errDesc = Err.description
-    LogErr MOD_NAME & ".GetBlokOtkupIDs"
-    If strict Then Err.Raise errNum, MOD_NAME & ".GetBlokOtkupIDs", errDesc
 End Function
 
 ' ============================================================

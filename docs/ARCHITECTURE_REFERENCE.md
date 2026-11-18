@@ -952,7 +952,7 @@ Current rules:
 - Klasa II transport rows are stored separately and carry their **own** ambalaža (`kolAmbII`, the Klasa II row's `KolicinaAmbalaze`), not shared with Klasa I; class-level aggregation rolls up through the shared business context. Only-Klasa-II otpremnica is valid (Klasa I optional, mirroring otkup).
 - In bruto mode the otpremnica subtracts packaging and stores **neto**, freezing the gross in `tblOtpremnica.BrutoKg` (empty = neto), so the otkupni-blok panel compares neto-against-neto across the chain.
 - `SaveOtpremnica` preserves error context and fails if `GetNextID` does not return an `OtpremnicaID`.
-- Active reads/report caches, including `GetVozacDokumenta` and `BuildZbirnaVrstaCache`, exclude stornirano otpremnica rows.
+- Active reads, including `GetVozacDokumenta`, exclude stornirano otpremnica rows. `BuildZbirnaVrstaCache` (since S9-2) takes `VrstaVoca` from the header of each non-stornirano **zbirna**, keyed by `BrojZbirne`; it no longer reads `Otpremnica.BrojZbirne`, which has no writer. Two active zbirne with the same number and a different vrsta give an empty vrsta ("(Nepoznato)") instead of a guess.
 - Otpremnica storno is explicit and does not auto-delete downstream documents.
 
 Monitoring boundary:
@@ -1080,7 +1080,7 @@ Current rules:
 Current reconciliation helpers:
 
 - `ValidateZbirna(brojZbirne)` compares summed otpremnice kg/ambalaža against saved zbirna rows.
-- `ValidateZbirnaPreUnosa(brojZbirne, inputKgKlI, inputKgKlII, inputAmb)` validates pending desktop input by class while keeping ambalaža aggregated.
+- `ValidateZbirnaPreUnosa` was deleted in S9-2: zbirna entry stopped comparing input with sources in S4-2c/2b-1, so it had no caller. Per-class coverage (kg and ambalaža, in both directions) is enforced when the zbirna is issued (`IzdajZbirnu_TX`), over its members in `tblZbirnaIzvori`.
 - `CalculateManjak(brojZbirne)` returns saved shortage totals.
 - `CalculateManjakPreview(...)` includes unsaved pending prijemnica quantities for UI warning before save.
 - `CalculateManjakByOtpremnica(brojZbirne)` allocates shortage proportionally by otpremnica share.

@@ -103,7 +103,7 @@ centralni `modNovac.GetOpenFakture`; `SaveZbirna` na column-mapped `BuildZbirnaR
 prefill generacije rešen **eksplicitnom `GeneracijaID` kolonom** (schema — `EnsureSledljivostSchema`)
 umesto heuristike po datumu/ID-u, sa anchor-om na `OldDocID` iz correction context-a;
 `RequireJedanVlasnikPoBroju` guard protiv storna po nejedinstvenom broju (AUD-052).
-Test seam: `ZbirnaIzvorImaKlasuII`, `PickPrefillRows`, `SaveOMUlaz_TX` → `modDokumenta`.
+Test seam: `ZbirnaIzvorImaKlasuII`, `PickPrefillRows`, `SaveOMUlaz_TX` → `modDokumenta` (`ZbirnaIzvorImaKlasuII` obrisan u S9-2, bez pozivaoca).
 **Ostaje za RF-06+:** pun identitetski storno (`OldDocID → GeneracijaID → redovi generacije`
 kroz `Scan*`/`Run*Correction`) — vidi AUD-052 u `KNOWN_ISSUES.md`.
 

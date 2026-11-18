@@ -334,10 +334,16 @@ Private Function FillOtpremnicaSablon(ByVal otpID As String) As Worksheet
     End If
     h("objekat") = objLine
     h("brDok") = CStr(OtpC(d, fr, COL_OTP_BROJ))
-    ' Sledljivost (Faza 7): ako je otpremnica ispravka drugog dok. -> u naslov (guarded).
-    Dim ispOd As String: ispOd = ""
-    Dim cIsp As Long: cIsp = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_ISPRAVKA_OD)
-    If cIsp > 0 Then ispOd = Trim$(CStr(d(fr, cIsp)))
+    ' Sledljivost: ako je otpremnica ispravka drugog dok. -> broj STARE u naslov.
+    ' S9-2 (SLED-ODL-08): trag je ID-oblik (IspravkaOdID, pise ga OtpIspravi);
+    ' broj-oblik Otpremnica.IspravkaOd nema pisca, pa naslov do S9-2 ispravku
+    ' nikad nije pokazivao. Kad ID nema broj, pise se sam ID -- trag se ne gubi.
+    Dim ispOd As String, ispOdID As String
+    ispOdID = Trim$(NzToText(OtpC(d, fr, COL_TRACE_ISPRAVKA_OD_ID)))
+    If Len(ispOdID) > 0 Then
+        ispOd = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, ispOdID, COL_OTP_BROJ)))
+        If Len(ispOd) = 0 Then ispOd = ispOdID
+    End If
     Dim datV As Variant: datV = OtpC(d, fr, COL_OTP_DATUM)
     If IsDate(datV) Then h("datum") = Format$(CDate(datV), "dd.mm.yyyy") Else h("datum") = CStr(datV)
     Dim stanicaNaziv As String: stanicaNaziv = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", stID, "Naziv")))

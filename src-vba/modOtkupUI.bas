@@ -3137,6 +3137,11 @@ Private Sub PaintPill(lbl As Object, ByVal code As Long)
         Case 1
             cap = Poruka("OTKUI_STAT_POSLATO")
             lbl.BackColor = C_PILL_SND_BG: lbl.ForeColor = C_PILL_SND_FG
+        Case 3
+            ' S92-ODL-01: citac clanstva je odbio tabelu -- status se ne zna.
+            ' Boja greske, jer to jeste kvar podataka, ne stanje dokumenta.
+            cap = Poruka("OTKUI_STAT_NEPOZNATO")
+            lbl.BackColor = C_PILL_ERR_BG: lbl.ForeColor = C_PILL_ERR_FG
         Case Else
             ' dokument bez zbirne je NACRT - neutralno stanje, ne uspeh;
             ' zelena je rezervisana za zavrsen tok (placeno / fakturisano)
@@ -3580,7 +3585,9 @@ Private Sub RenderChipCounts(z As Object)
     On Error Resume Next
     If mScrChipN > 0 Then Exit Sub
     z.Controls("chipOtkazaneC").caption = Poruka("OTKUI_CHIP_OTKAZANE") & "  " & mCntOtkaz
-    z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & mCntBezZb
+    ' -1 = veza nepoznata (S92-ODL-01, KI-081): broj se ne zna, pa se i ne pise.
+    z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & _
+        IIf(mCntBezZb < 0, "?", CStr(mCntBezZb))
     z.Controls("chipNefaktC").caption = Poruka("OTKUI_CHIP_NEFAKT") & "  " & mCntNefakt
     z.Controls("chipOtvoreneC").caption = Poruka("OTKUI_CHIP_OTVORENE") & "  " & mCntOtvor
 End Sub

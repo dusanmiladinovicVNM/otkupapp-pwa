@@ -139,8 +139,7 @@
     "row_owner": [
       "modDokumenta",
       "modMasterSync",
-      "modOtkup",
-      "modStornoFlow"
+      "modOtkup"
     ],
     "schema_owner": [],
     "cilj": [

@@ -78,6 +78,7 @@ Public Sub RunIzvestajTests()
         tx.BeginTx
         tx.AddTableSnapshot TBL_ZBIRNA
         tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+        tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
         tx.AddTableSnapshot TBL_OTPREMNICA
@@ -488,10 +489,10 @@ Private Sub T_E2E_RobaOMDvaVlasnikaIstiBroj()
     On Error GoTo EH
 
     ' Zbirne/prijemnice je vec zasejao prethodni test (ista transakcija).
-    IzvSeedOtpremnica "IZVT-OTP-A", IZVT_STANICA, IZVT_VOZAC_A, IZVT_BROJ
+    IzvSeedOtpremnica "IZVT-OTP-A", IZVT_STANICA, IZVT_VOZAC_A, "IZVT-ZBR-A"
     IzvSeedOtpStavka "IZVT-OTP-A", 1, "I", 1000#
 
-    IzvSeedOtpremnica "IZVT-OTP-B", IZVT_STANICA, IZVT_VOZAC_B, IZVT_BROJ
+    IzvSeedOtpremnica "IZVT-OTP-B", IZVT_STANICA, IZVT_VOZAC_B, "IZVT-ZBR-B"
     IzvSeedOtpStavka "IZVT-OTP-B", 1, "I", 2000#
 
     Dim d As Date: d = IZVT_DATUM
@@ -555,7 +556,10 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
         Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup)
     IzvSeedPrijemnicaStavka "IZVT-PRJ-K2", KLASA_II, 150#, 0#
 
-    IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, brDok
+    ' Zaglavlje zbirne je ovde po klasi (dva reda istog broja), a otpremnica sme
+    ' biti clan samo JEDNE aktivne zbirne (strog citac dize 1260): clanstvo ide
+    ' na K1. Prijem po klasi i dalje spaja broj (BuildManjakDict, S9-3).
+    IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, "IZVT-ZBR-K1"
     IzvSeedOtpStavka "IZVT-OTP-K", 1, KLASA_I, 1000#
     IzvSeedOtpStavka "IZVT-OTP-K", 2, KLASA_II, 200#
 
@@ -700,15 +704,23 @@ Private Function IzvFindRowBrojKlasa(ByRef arr As Variant, ByVal broj As String,
 End Function
 
 ' Otpremnica u NOVOM obliku (S3b-1): zaglavlje bez linijskih polja + stavke.
-' BrojZbirne je jos veza starog modela -- manjak se po njoj razresava do S4.
 ' IZDATA je (review #362): izvestaj "Otkupljena roba (OM)" broji samo izdate
 ' otpremnice. Izvori joj nisu potrebni -- ovaj izvestaj ne racuna vrednost.
+'
+' S9-2 (SLED-INV-03): zbirnu otpremnice daje CLANSTVO (tblZbirnaIzvori), ne
+' Otpremnica.BrojZbirne -- ta kolona nema pisca, pa ju je seme jedino i punilo
+' (obrazac N3). Broj zbirne izvestaj cita iz zaglavlja zbirne po ID-u.
 Private Sub IzvSeedOtpremnica(ByVal otpID As String, ByVal stanica As String, _
-                              ByVal vozac As String, ByVal brojZbirne As String)
+                              ByVal vozac As String, ByVal zbirnaID As String)
     IzvSeed TBL_OTPREMNICA, _
         Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
-              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_TRACE_IZDATO_STATUS), _
-        Array(otpID, otpID, IZVT_DATUM, stanica, vozac, brojZbirne, "Malina", IZDATO_IZDATO)
+              COL_OTP_VRSTA, COL_TRACE_IZDATO_STATUS), _
+        Array(otpID, otpID, IZVT_DATUM, stanica, vozac, "Malina", IZDATO_IZDATO)
+    If Len(zbirnaID) > 0 Then
+        IzvSeed TBL_ZBIRNA_IZVORI, _
+            Array(COL_ZBI_ID, COL_ZBI_ZBIRNA_ID, COL_ZBI_OTPREMNICA_ID), _
+            Array("ZBI-" & otpID, zbirnaID, otpID)
+    End If
 End Sub
 
 Private Sub IzvSeedOtpStavka(ByVal otpID As String, ByVal rb As Long, _

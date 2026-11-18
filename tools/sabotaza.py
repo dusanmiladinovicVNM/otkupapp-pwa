@@ -13607,6 +13607,125 @@ SABOTAZE = {
         "T_Sled_StaraVerzijaNijeUGrafu",
         "361 verzije: unapred od otkupa ide samo aktivna verzija zbirne, do njene prijemnice",
     ),
+    # ------------------------------------------------------------------
+    # S9-2 (plan 14.66): citaoci kolona bez pisca prelaze na kanon. Svaka
+    # sabotaza vraca jedan citalac na kolonu bez pisca (ili na pogadjanje kad
+    # citac clanstva odbije tabelu); test seje lanac kroz kanonske pisce, a
+    # MAMAC u koloni pokazuje na drugi lanac, pa sabotaza pada po imenu.
+    "s92-detalj-cita-otkup-otpremnicaid": (
+        "modScrIzvestaji.bas",
+        "    outBlokova = modDokumenta.IzvoriOtpremnice(Trim$(otpID)).count\n",
+        "    outBlokova = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, Trim$(otpID)).count"
+        "   ' SABOTAZA: detalj broji blokove po Otkup.OtpremnicaID\n",
+        "T_Izv_DetaljICipKontekst",
+        "132 S9-2: detalj otpremnice broji blokove iz clanstva (E2), ne iz Otkup.OtpremnicaID",
+    ),
+    "s92-detalj-otkupa-cita-kolone": (
+        "modScrIzvestaji.bas",
+        "    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb)\n",
+        "    vozId = NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC)): "
+        "brZb = NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE))"
+        "   ' SABOTAZA: detalj otkupa cita kolone bez pisca\n",
+        "T_Izv_DetaljICipKontekst",
+        "132 S9-2: detalj otkupa imenuje vozaca i zbirnu tekuce predaje, ne kolone otkupa",
+    ),
+    "s92-status-cita-otp-brojzbirne": (
+        "modScrDokumenti.bas",
+        "                zbrID = ZbirnaReda(mk, CellS(src, r, iStavID), clOtp, clZbr)\n",
+        "                zbrID = CellS(src, r, ColIdx(tblName, COL_OTP_BROJ_ZBIRNE))"
+        "   ' SABOTAZA: status cita Otpremnica.BrojZbirne\n",
+        "T_S92_StatusZbirneIzClanstva",
+        "362 F2: izdata otpremnica u aktivnoj zbirnoj nije bez zbirne",
+    ),
+    "s92-status-otkup-preskace-otpremnicu": (
+        "modScrDokumenti.bas",
+        "        otpID = CStr(clOtp(k))\n",
+        "        otpID = Trim$(docID)   ' SABOTAZA: otkup se trazi u E3 kao da je otpremnica\n",
+        "T_S92_StatusZbirneIzClanstva",
+        "362 F1: blok u otpremnici aktivne zbirne nije bez zbirne",
+    ),
+    "s92-nepoznata-veza-postaje-bez-zbirne": (
+        "modScrDokumenti.bas",
+        "                nepoznato = True\n"
+        "                bezZbirne = False\n",
+        "                nepoznato = False   ' SABOTAZA: nepoznata veza postaje bez zbirne\n"
+        "                bezZbirne = True\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 KI-081: kad citac clanstva odbije tabelu, status je veza nepoznata, ne bez zbirne",
+    ),
+    "s92-brojac-nepoznate-veze-je-broj": (
+        "modScrDokumenti.bas",
+        "    If Len(clRazlog) > 0 Or nNepoznatih > 0 Then cBez = -1\n",
+        "    ' SABOTAZA: brojac uz nepoznatu vezu ostaje broj\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 KI-081: brojac cipa Bez zbirne je nepoznat, ne broj",
+    ),
+    # S92-REV-01: clanstvo na zbirnu koje nema u zaglavljima (citac E3 postojanje
+    # ne proverava) mora dati "veza nepoznata" bas tom redu, ne "Poslato".
+    "s92-zbirna-koje-nema-je-poslato": (
+        "modScrDokumenti.bas",
+        "                        nepoznato = True: If Not isStorno Then nNepoznatih = nNepoznatih + 1\n",
+        "                        ' SABOTAZA: clanstvo na zbirnu koje nema ostaje Poslato\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni",
+    ),
+    "s92-detalj-zbirna-koje-nema-cuti": (
+        "modScrIzvestaji.bas",
+        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: detalj cuti o zbirnoj koje nema\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 REV-01: detalj otpremnice imenuje zbirnu koje nema, ne cuti",
+    ),
+    "s92-otk-red-cita-otkup-vozacid": (
+        "modStanicaLock.bas",
+        "            Case \"VozacID\": v = predVoz\n",
+        "            Case \"VozacID\": v = CStr(nz(OtkCelija(lo, rowIdx, COL_OTK_VOZAC), \"\"))"
+        "   ' SABOTAZA: OTK red cita Otkup.VozacID\n",
+        "T_S92_OtkRedVozacTekucePredaje",
+        "364 OTK red za PWA: VozacID je vozac tekuce predaje, ne Otkup.VozacID",
+    ),
+    "s92-roba-om-cita-otp-brojzbirne": (
+        "modIzvestaj.bas",
+        "        thisBrZbirne = BrojAktivneZbirneOtp(thisOtpID, zbrPoOtp, brojPoZbr)\n",
+        "        thisBrZbirne = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, thisOtpID, "
+        "COL_OTP_BROJ_ZBIRNE)))   ' SABOTAZA: ROBA OM cita Otpremnica.BrojZbirne\n",
+        "T_S92_IzvestajiPoClanstvu",
+        "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, "
+        "ne po Otpremnica.BrojZbirne",
+    ),
+    "s92-vrsta-kes-prazan": (
+        "modDokumenta.bas",
+        "        If Len(brz) > 0 And Len(vrsta) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: vrsta se ne cita iz zaglavlja zbirne (simptom N2)\n",
+        "T_S92_IzvestajiPoClanstvu",
+        "365 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne, ne (Nepoznato)",
+    ),
+    "s92-prefill-otkup-cita-brojzbirne": (
+        "modStornoDok.bas",
+        "        Case STIP_PRIJEMNICA: ColBrojZbirneZaPrefill = COL_PRJ_BROJ_ZBIRNE\n",
+        "        Case STIP_PRIJEMNICA: ColBrojZbirneZaPrefill = COL_PRJ_BROJ_ZBIRNE\n"
+        "        Case STIP_OTKUP:      ColBrojZbirneZaPrefill = COL_OTK_BROJ_ZBIRNE"
+        "   ' SABOTAZA: prefill otkupa cita Otkup.BrojZbirne\n",
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "otkup ne nosi broj zbirne: Otkup.BrojZbirne nema pisca (S9-2)",
+    ),
+    "s92-prefill-otkup-cita-vozaca": (
+        "modStornoDok.bas",
+        "        Case STIP_OTPREMNICA: ColVozacZaPrefill = COL_OTP_VOZAC\n",
+        "        Case STIP_OTKUP:      ColVozacZaPrefill = COL_OTK_VOZAC   ' SABOTAZA: prefill otkupa cita Otkup.VozacID\n"
+        "        Case STIP_OTPREMNICA: ColVozacZaPrefill = COL_OTP_VOZAC\n",
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "otkup ne nosi vozaca: Otkup.VozacID nema pisca (S9-2)",
+    ),
+    "s92-prefill-otp-cita-brojzbirne": (
+        "modStornoDok.bas",
+        "        Case STIP_PRIJEMNICA: ColBrojZbirneZaPrefill = COL_PRJ_BROJ_ZBIRNE\n",
+        "        Case STIP_PRIJEMNICA: ColBrojZbirneZaPrefill = COL_PRJ_BROJ_ZBIRNE\n"
+        "        Case STIP_OTPREMNICA: ColBrojZbirneZaPrefill = COL_OTP_BROJ_ZBIRNE"
+        "   ' SABOTAZA: prefill otpremnice cita Otpremnica.BrojZbirne\n",
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "otpremnica ne nosi broj zbirne: Otpremnica.BrojZbirne nema pisca (S9-2)",
+    ),
 }
 
 

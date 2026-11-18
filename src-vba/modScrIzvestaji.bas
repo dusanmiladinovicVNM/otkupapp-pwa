@@ -2216,27 +2216,22 @@ End Function
 Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cVr As Long
-    Dim cVoz As Long, cZb As Long
     Dim nasao As Boolean, vrsta As String, vozId As String, brZb As String
     Dim linije As Collection, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
-    Dim st As Variant
+    Dim st As Variant, kvarVeze As String
     On Error GoTo EH
 
     d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Function
     cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    cVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
-    cZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
 
-    ' Zaglavlje izabranog dokumenta: vrsta, vozac i zbirna su dokumentski.
+    ' Zaglavlje izabranog dokumenta: vrsta je dokumentska.
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then
             nasao = True
             vrsta = NzS(d(i, cVr))
-            vozId = NzS(d(i, cVoz))
-            brZb = NzS(d(i, cZb))
             Exit For
         End If
     Next i
@@ -2267,9 +2262,13 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
                    ChrW(183) & "  " & Format$(totVr, "#,##0.00")
     End If
 
-    ' Sledljivost dokumenta (smoke krug 5): vozac i zbirna sa lista, pa
+    ' Sledljivost dokumenta (smoke krug 5): vozac i zbirna TEKUCE PREDAJE, pa
     ' prijemnice te zbirne SA KUPCEM -- red kartice/liste nista od ovoga ne
     ' pokazuje. Prazan deo se preskace (nema = nema, ne izmislja se).
+    ' S9-2: vozac i zbirna nisu kolone otkupa (Otkup.VozacID / BrojZbirne nemaju
+    ' pisca) nego clanstvo -- isti seam kao izvoz OtkupiAll.
+    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb)
+    If Len(kvarVeze) > 0 Then linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & kvarVeze
     Dim ctx As String
     If Len(vozId) > 0 Then
         ctx = Poruka("OTKUI_IZ_DET_VOZAC") & " " & EntitetNaziv("Vozac", vozId, False)
@@ -2300,12 +2299,16 @@ End Function
 ' ReportOtkupRobaOM prvom koraku: isti BrojZbirne, pa suzenje po vozacu ako
 ' broj dele dve zbirne; detalj je pregled pa sme fail-open (pokazuje sve
 ' kandidate), racun manjka i dalje radi samo fail-closed put.
+'
+' S9-2 (SLED-INV-03): blokovi i zbirna su CLANSTVO -- E2 (IzvoriOtpremnice) i
+' aktivno E3 (AktivnaZbirnaZaOtpremnicu). Otkup.OtpremnicaID i
+' Otpremnica.BrojZbirne nemaju pisca, pa je detalj do S9-2 za svaku
+' otpremnicu govorio "0 blokova" i bez zbirne (plan 14.64, N2).
 Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     Dim d As Variant, i As Long
-    Dim cId As Long, cBr As Long, cVoz As Long, cZb As Long
-    Dim cOtkOtp As Long, cStorno As Long
+    Dim cId As Long, cBr As Long, cVoz As Long
     Dim brOtp As String, vozac As String, vozId As String, brZb As String
-    Dim blokova As Long
+    Dim blokova As Long, kvarVeze As String
     Dim linije As Collection
     On Error GoTo EH
 
@@ -2314,34 +2317,25 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
     cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
-    cZb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(otpID) Then
             brOtp = NzS(d(i, cBr))
             vozId = NzS(d(i, cVoz))
             vozac = EntitetNaziv("Vozac", vozId, False)
-            brZb = NzS(d(i, cZb))
             Exit For
         End If
     Next i
     If Len(brOtp) = 0 Then Exit Function
 
-    d = GetTableData(TBL_OTKUP)
-    If IsArray(d) Then
-        cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-        cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-        For i = 1 To UBound(d, 1)
-            If Trim$(CStr(d(i, cOtkOtp))) = Trim$(otpID) Then
-                If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
-                    blokova = blokova + 1
-                End If
-            End If
-        Next i
-    End If
+    kvarVeze = ClanstvoOtpremniceZaDetalj(otpID, blokova, brZb)
 
     Set linije = New Collection
     linije.Add Poruka("OTKUI_IZ_DET_VOZAC") & " " & vozac
-    linije.Add Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova)
+    If Len(kvarVeze) > 0 Then
+        linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & kvarVeze
+    Else
+        linije.Add Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova)
+    End If
     If Len(brZb) > 0 Then
         linije.Add Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
         DodajPrijemniceZbirne linije, brZb, vozId
@@ -2355,6 +2349,49 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     IzDetaljOtpremnice = res
     Exit Function
 EH:
+End Function
+
+' S9-2 (S92-ODL-01): vozac i broj zbirne TEKUCE PREDAJE otkupa (E2 -> E3).
+' Strogi citac clanstva je globalan (KI-081): kad odbije tabelu, detalj ne
+' pogadja i ne nestaje -- vraca se razlog citaca (imenuje dokument), a vozac
+' i zbirna ostaju prazni. Stavke otkupa od clanstva ne zavise i ostaju.
+Private Function TekucaPredajaZaDetalj(ByVal otkupID As String, ByRef outVozId As String, _
+                                       ByRef outBrZb As String) As String
+    Dim otpID As String, predajaID As String
+    On Error GoTo EH
+    modStammdatenSync.TekucaPredajaOtkupa Trim$(otkupID), otpID, outVozId, predajaID, outBrZb
+    Exit Function
+EH:
+    outVozId = ""
+    outBrZb = ""
+    TekucaPredajaZaDetalj = Err.description
+End Function
+
+' S9-2 (S92-ODL-01): broj blokova (E2) i broj aktivne zbirne (E3) otpremnice.
+' Isti dogovor kao TekucaPredajaZaDetalj: kvar citaca je razlog, ne nula.
+Private Function ClanstvoOtpremniceZaDetalj(ByVal otpID As String, ByRef outBlokova As Long, _
+                                            ByRef outBrZb As String) As String
+    Dim zbrID As String
+    On Error GoTo EH
+    outBlokova = modDokumenta.IzvoriOtpremnice(Trim$(otpID)).count
+    zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(Trim$(otpID))
+    If Len(zbrID) > 0 Then
+        ' S92-REV-01: citac E3 postojanje zbirne ne proverava -- clanstvo na
+        ' zbirnu koje nema je razlog, ne prazan red zbirne. Postojanje se meri
+        ' po ID-u, ne po broju (nacrt zbirne sme da nema broj).
+        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then
+            outBlokova = 0
+            ClanstvoOtpremniceZaDetalj = "Clanstvo otpremnice " & Trim$(otpID) & _
+                                         " pokazuje na zbirnu koje nema: " & zbrID
+            Exit Function
+        End If
+        outBrZb = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    End If
+    Exit Function
+EH:
+    outBlokova = 0
+    outBrZb = ""
+    ClanstvoOtpremniceZaDetalj = Err.description
 End Function
 
 ' Prijemnice date zbirne u detalj: prvo po (BrojZbirne, VozacID); ako se

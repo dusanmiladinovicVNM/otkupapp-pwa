@@ -619,6 +619,9 @@ Public Sub RunAllTests()
     RunOne 129
     RunOne 130
     RunOne 131
+    ' 132 (detalj izvestaja) od S9-2 seje svoj lanac kroz kanonske pisce i vraca
+    ' ga rollback-om (SledKraj tvrdi broj redova) -- nije vise cisto citanje,
+    ' ali ne ostavlja trag, pa mesto u redosledu ostaje.
     RunOne 132
     RunOne 133
     RunOne 134
@@ -712,6 +715,13 @@ Public Sub RunAllTests()
     RunOne 359
     RunOne 360
     RunOne 361
+
+    ' S9-2: citaoci kolona bez pisca na kanonu. Isti obrazac kao S9-1 -- svaki
+    ' seje i vraca svoj lanac, pa redosled nije nosec.
+    RunOne 362
+    RunOne 363
+    RunOne 364
+    RunOne 365
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1308,6 +1318,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 359: TestName = "T_Sled_NerazresenaIvicaSeOznacava"
         Case 360: TestName = "T_Sled_GpLanac"
         Case 361: TestName = "T_Sled_StaraVerzijaNijeUGrafu"
+        Case 362: TestName = "T_S92_StatusZbirneIzClanstva"
+        Case 363: TestName = "T_S92_StatusVezaNepoznata"
+        Case 364: TestName = "T_S92_OtkRedVozacTekucePredaje"
+        Case 365: TestName = "T_S92_IzvestajiPoClanstvu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1677,6 +1691,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 359: T_Sled_NerazresenaIvicaSeOznacava
         Case 360: T_Sled_GpLanac
         Case 361: T_Sled_StaraVerzijaNijeUGrafu
+        Case 362: T_S92_StatusZbirneIzClanstva
+        Case 363: T_S92_StatusVezaNepoznata
+        Case 364: T_S92_OtkRedVozacTekucePredaje
+        Case 365: T_S92_IzvestajiPoClanstvu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3279,7 +3297,13 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "partnerid"), FX_KOOPERANT, "partner otkupa je kooperant"
     AssertEq SpecVal(s, "omid"), FX_STANICA, "otkup nosi otkupno mesto"
     AssertEq SpecVal(s, "parcela"), FX_PARCELA, "parcelu ima SAMO otkup"
-    AssertEq SpecVal(s, "brzbirne"), FX_ZBIRNA, "otkup nosi broj zbirne"
+    ' S9-2 (SLED-INV-03): Otkup.BrojZbirne i Otkup.VozacID nemaju pisca, a pisac
+    ' otkupa ta polja ni ne prima (modOtkupUnos, A2 i S4.1c). Do S9-2 je ovde
+    ' stajalo FX_ZBIRNA -- vrednost koju je samo fixture upisao u kolonu.
+    AssertEq SpecVal(s, "brzbirne"), "", _
+             "otkup ne nosi broj zbirne: Otkup.BrojZbirne nema pisca (S9-2)"
+    AssertEq SpecVal(s, "vozacid"), "", _
+             "otkup ne nosi vozaca: Otkup.VozacID nema pisca (S9-2)"
     AssertEq SpecVal(s, "dveklase"), "1", "jednoklasni dokument"
     ' Datum iz storniranog, ne danasnji.
     AssertEq SpecVal(s, "datum"), "15.03.2026", "datum se preuzima iz storniranog"
@@ -3301,6 +3325,8 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "omid"), FX_STANICA, "otpremnica nosi otkupno mesto"
     AssertEq SpecVal(s, "parcela"), "", "otpremnica nema parcelu"
     AssertEq SpecVal(s, "partnerid"), "", "otpremnica nema partnera (njen je stanica)"
+    AssertEq SpecVal(s, "brzbirne"), "", _
+             "otpremnica ne nosi broj zbirne: Otpremnica.BrojZbirne nema pisca (S9-2)"
 
     ' --- ZBIRNA: kolicina i gajbe sa STAVKE (S4-1), bez cene i bez zbirne ---
     '
@@ -23908,22 +23934,102 @@ Private Sub T_KesGeneracija_UpisInvalidira()
 End Sub
 
 ' ============================================================
-' 143. Izvestaji: detalj reda (drill-down) + kontekstni cipovi + poslovni
+' 132. Izvestaji: detalj reda (drill-down) + kontekstni cipovi + poslovni
 ' broj dokumenta u pregledu ambalaze (smoke krug 3)
+'
+' S9-2 (plan 14.64 N3, 14.66): detalj vise ne meri fixture redove starog
+' oblika. Do S9-2 je ocekivani broj blokova racunat ISTOM kolonom bez pisca
+' koju je citao i detalj (Otkup.OtpremnicaID), pa je test bio zelen i nad
+' podacima u kojima produkcija tu kolonu nikad ne puni (C002: 0 od 1719).
+' Lanac se zato seje kroz kanonske pisce, posle pocetka spoljne transakcije,
+' a MAMAC u kolonama bez pisca pokazuje na drugi lanac. Lanac ide PRVI: nad
+' starim kodom test pada na tvrdnji o clanstvu, ne na tudjoj.
+' SABOTAZE: s92-detalj-cita-otkup-otpremnicaid, s92-detalj-otkupa-cita-kolone,
+' izvestaji-detalj-bez-stavki, izvestaji-cip-na-nedostupnoj,
+' izvestaji-amb-broj-ostaje-id.
 ' ============================================================
 Private Sub T_Izv_DetaljICipKontekst()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, c As Collection, spoj As String
+    Dim b1 As String, b2 As String, otpX As String, zbrX As String, prjX As String
+    Dim bY As String, otpY As String, zbrY As String
     Dim det As Variant, i As Long, n As Long
     Dim otk As Variant, cBr As Long, cSt As Long, cStorno As Long
     Dim nzStavki As Long
     Dim ap As Variant, ocekBroj As String, nasao As Boolean
 
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    ' (0) Lanac X kroz kanonske pisce: dva bloka -> izdata otpremnica -> izdata
+    ' zbirna -> prijemnica. Lanac Y je drugi vozac i drugi kupac.
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    b1 = SledBlok("IZD1", FX_STANICA, 50, 0)
+    b2 = SledBlok("IZD2", FX_STANICA, 30, 0)
+    Set c = New Collection
+    c.Add b1
+    c.Add b2
+    otpX = SledOtpremnica(c, FX_VOZAC)
+    Set c = New Collection
+    c.Add otpX
+    zbrX = SledZbirna("ZB-IZVD-" & t, c, FX_VOZAC, FX_KUPAC, 80, 0)
+    prjX = SledPrijemnica("PR-IZVD-" & t, "ZB-IZVD-" & t, FX_VOZAC, FX_KUPAC, 80, 0)
+    SledLanacDoZbirne "IZDY", "ZB-IZVDY-" & t, FX_VOZAC2, FX_KUPAC2, 40, bY, otpY, zbrY
+
+    ' MAMAC (synthetic anomaly): kolone bez pisca na lancu X pokazuju na lanac Y.
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, b1, COL_OTK_VOZAC, FX_VOZAC2
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, b1, COL_OTK_BROJ_ZBIRNE, "ZB-IZVDY-" & t
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, bY, COL_OTK_OTPREMNICA_ID, otpX
+    PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_OTP_BROJ_ZBIRNE, "ZB-IZVDY-" & t
+
+    ' Detalj otpremnice: broj blokova iz clanstva (E2), zbirna iz aktivnog
+    ' clanstva (E3), prijemnica te zbirne sa kupcem. Ocekivanje je iz SETVE.
+    det = modScrIzvestaji.IzDetaljOtpremnice(otpX)
+    AssertEq IsArray(det), True, "132 preduslov: detalj otpremnice kanonskog lanca postoji"
+    AssertEq S92Linija(det, 1), Poruka("OTKUI_IZ_DET_BLOKOVA") & " 2", _
+             "132 S9-2: detalj otpremnice broji blokove iz clanstva (E2), ne iz Otkup.OtpremnicaID"
+    AssertEq S92Linija(det, 2), Poruka("OTKUI_IZ_DET_ZBIRNA") & " ZB-IZVD-" & t, _
+             "132 S9-2: detalj otpremnice imenuje aktivnu zbirnu (E3), ne Otpremnica.BrojZbirne"
+    spoj = IzvDetSpoj(det)
+    AssertEq (InStr(1, spoj, "PR-IZVD-" & t, vbTextCompare) > 0 And _
+              InStr(1, spoj, FX_KUPAC, vbTextCompare) > 0), True, _
+             "prijemnica-linija imenuje kupca koji ju je izdao"
+
+    ' Detalj otkupa: vozac i zbirna TEKUCE PREDAJE, ne kolone otkupa (mamac).
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtkupLista(b1))
+    AssertEq (InStr(1, spoj, "(" & FX_VOZAC & ")", vbTextCompare) > 0) & "|" & _
+             (InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA") & " ZB-IZVD-" & t, vbTextCompare) > 0) & "|" & _
+             (InStr(1, spoj, "ZB-IZVDY-", vbTextCompare) > 0) & "|" & _
+             (InStr(1, spoj, "(" & FX_VOZAC2 & ")", vbTextCompare) > 0), _
+             CStr(True) & "|" & CStr(True) & "|" & CStr(False) & "|" & CStr(False), _
+             "132 S9-2: detalj otkupa imenuje vozaca i zbirnu tekuce predaje, ne kolone otkupa"
+
+    ' Negativ: otpremnica bez aktivne zbirne nema red zbirne, a blok te
+    ' otpremnice ima vozaca, ali ne i zbirnu.
+    ' Prisustvo se meri uz odsustvo: prazan detalj (Empty) ne sme da prodje
+    ' kao "nema zbirne".
+    AssertEq modStorno.StornoZbirna_TX(zbrY), True, "132 preduslov: zbirna Y je stornirana"
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtpremnice(otpY))
+    AssertEq (InStr(1, spoj, Poruka("OTKUI_IZ_DET_BLOKOVA") & " 1", vbTextCompare) > 0) & "|" & _
+             (InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA"), vbTextCompare) > 0), _
+             CStr(True) & "|" & CStr(False), _
+             "132 S9-2 negativ: posle storna zbirne otpremnica ima svoj blok, a nema zbirnu"
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtkupLista(bY))
+    AssertEq (InStr(1, spoj, "(" & FX_VOZAC2 & ")", vbTextCompare) > 0) & "|" & _
+             (InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA"), vbTextCompare) > 0), _
+             CStr(True) & "|" & CStr(False), _
+             "132 S9-2 negativ: blok otpremnice bez zbirne ima vozaca, a nema zbirnu"
+
     ' (1) Detalj otkupnog lista nosi STAVKE IZABRANOG dokumenta (po OtkupID), sa
-    ' CENOM, i vozaca/zbirnu kao kontekst. Vozilo: BLK-BIM-3 su TRI zaglavlja
-    ' istog broja i stanice -- u modelu zaglavlje + stavke to su TRI dokumenta
-    ' (broj je labela, REFAKTOR S4), pa detalj jednog NE SME da nosi linije
-    ' druga dva. Vise stavki i UKUPNO meri
-    ' modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke nad pravim dvoklasnim
-    ' dokumentom (fixture izvodi jednu stavku po zaglavlju).
+    ' CENOM. Vozilo: BLK-BIM-3 su TRI zaglavlja istog broja i stanice -- u
+    ' modelu zaglavlje + stavke to su TRI dokumenta (broj je labela, REFAKTOR
+    ' S4), pa detalj jednog NE SME da nosi linije druga dva. Vise stavki i
+    ' UKUPNO meri modBusinessFlowProTests.Test_OTK_CitaociCitajuStavke nad
+    ' pravim dvoklasnim dokumentom (fixture izvodi jednu stavku po zaglavlju).
     det = modScrIzvestaji.IzDetaljOtkupLista("OTK-BIM-3A")
     AssertEq IsArray(det), True, "detalj bloka postoji"
     otk = GetTableData(TBL_OTKUP)
@@ -23937,54 +24043,26 @@ Private Sub T_Izv_DetaljICipKontekst()
            CStr(otk(i, cStorno)) <> "Da" Then nzStavki = nzStavki + 1
     Next i
     AssertEq (nzStavki >= 3), True, "vozilo: tri zaglavlja istog broja i stanice"
-    ' stavke OTK-BIM-3A (rucno iz tblOtkupStavke) + kontekst linija (vozac)
-    AssertEq UBound(det) - LBound(det) + 1, IzvBrojStavki("OTK-BIM-3A") + 1, _
+    ' Broje se STAVKA-linije (" x "), ne sve linije: kontekst linija (vozac,
+    ' zbirna) zavisi od clanstva, a ovaj blok fixture-a ni u jednoj otpremnici
+    ' nije. Do S9-2 je ovde stajalo "+ 1" za vozaca iz Otkup.VozacID.
+    n = 0
+    For i = LBound(det) To UBound(det)
+        If InStr(1, CStr(det(i)), " x ", vbTextCompare) > 0 Then n = n + 1
+    Next i
+    AssertEq n, IzvBrojStavki("OTK-BIM-3A"), _
              "detalj nosi stavke SAMO izabranog dokumenta, ne svih zaglavlja istog broja"
     AssertEq (InStr(1, CStr(det(LBound(det))), " x ", vbTextCompare) > 0), _
              True, "prva linija detalja je stavka sa cenom"
-    AssertEq (InStr(1, IzvDetSpoj(det), "Voza", vbTextCompare) > 0), _
-             True, "detalj otkupa imenuje vozaca (smoke krug 5)"
-    ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto):
-    ' stavka + kontekst linija, bez UKUPNO.
+    ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto).
     det = modScrIzvestaji.IzDetaljOtkupLista("OTK-IZV-1")
     AssertEq IsArray(det), True, "detalj jednolinijskog lista postoji"
     AssertEq (InStr(1, IzvDetSpoj(det), "UKUPNO", vbTextCompare) = 0), True, _
              "jednolinijski detalj nema UKUPNO -- ne duplira red"
-    ' Otkup vezan za otpremnicu nosi ZBIRNU u kontekst liniji.
-    det = modScrIzvestaji.IzDetaljOtkupLista("OTK-TEST-1")
-    AssertEq (InStr(1, IzvDetSpoj(det), "ZB-TEST-1", vbTextCompare) > 0), True, _
-             "detalj otkupa imenuje zbirnu sa lista"
 
-    ' (2) Detalj otpremnice: samo sto red ne kaze -- vozac, BROJ vezanih
-    ' blokova (rucni prolaz) i broj zbirne; otpremljene kg ne ponavlja.
-    det = modScrIzvestaji.IzDetaljOtpremnice("OTP-TEST-1")
-    AssertEq IsArray(det), True, "detalj otpremnice postoji"
-    n = 0
-    Dim cOtp As Long
-    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-    For i = 1 To UBound(otk, 1)
-        If Trim$(CStr(otk(i, cOtp))) = "OTP-TEST-1" And _
-           CStr(otk(i, cStorno)) <> "Da" Then n = n + 1
-    Next i
-    AssertEq (InStr(1, CStr(det(LBound(det) + 1)), CStr(n), vbTextCompare) > 0), True, _
-             "detalj otpremnice broji vezane blokove kao rucni prolaz"
-    Dim zbOcek As String
-    zbOcek = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, "OTP-TEST-1", _
-                                    COL_OTP_BROJ_ZBIRNE)))
-    AssertEq (Len(zbOcek) > 0), True, "vozilo: otpremnica nosi zbirnu"
-    AssertEq (InStr(1, CStr(det(LBound(det) + 2)), zbOcek, vbTextCompare) > 0), True, _
-             "detalj otpremnice imenuje zbirnu"
-    ' Prijemnica-linija nosi broj, kg i KUPCA (smoke krug 5) -- vozilo je
-    ' OTP-IZV-Z, jedina otpremnica cija zbirna ima nestornirane prijemnice.
-    det = modScrIzvestaji.IzDetaljOtpremnice("OTP-IZV-Z")
-    AssertEq IsArray(det), True, "detalj otpremnice sa zivim prijemnicama postoji"
-    AssertEq (InStr(1, IzvDetSpoj(det), "22/150326", vbTextCompare) > 0), True, _
-             "detalj otpremnice nabraja prijemnice zbirne"
-    ' Fixture NAMERNO nema red u tblKupci (kupac zivi samo kao ID) --
-    ' EntitetNaziv tada pada na ID, pa se kupac u liniji meri po ID-u; na
-    ' pravoj svesci ista linija nosi naziv firme.
-    AssertEq (InStr(1, IzvDetSpoj(det), FX_KUPAC, vbTextCompare) > 0), True, _
-             "prijemnica-linija imenuje kupca koji ju je izdao"
+    ' (2) Detalj otpremnice (blokovi, zbirna, prijemnice sa kupcem) meri lanac
+    ' iz (0). Do S9-2 su ovde stajali OTP-TEST-1 i OTP-IZV-Z iz fixture-a, cija
+    ' je zbirna postojala samo u koloni bez pisca.
 
     ' (3) Cipovi su KONTEKSTNI: nedostupna kombinacija nema ni cipove.
     AssertEq modScrIzvestaji.IzCipoviZaKontekst("MANJAK", "Kooperant", False), "", _
@@ -24006,7 +24084,22 @@ Private Sub T_Izv_DetaljICipKontekst()
     Next i
     AssertEq nasao, True, _
              "ambalaza pokazuje poslovni broj dokumenta, ne interni ID"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Izv_DetaljICipKontekst", _
+             "132: rollback je vratio redove svih tabela lanca"
 End Sub
+
+' S9-2: k-ta linija detalja (od nule) ili "" kad je nema -- pozicionu tvrdnju
+' ne obara runtime 9 nego tekst koji imenuje sta fali.
+Private Function S92Linija(ByVal det As Variant, ByVal k As Long) As String
+    If Not IsArray(det) Then Exit Function
+    If LBound(det) + k > UBound(det) Then Exit Function
+    S92Linija = CStr(det(LBound(det) + k))
+End Function
 
 ' ============================================================
 ' 144. Izvestaji krug 5 (smoke krug 4): kontekstni TABOVI lista, ROBA za
@@ -32539,4 +32632,365 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_Sled_StaraVerzijaNijeUGrafu", _
              "361: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' ============================================================
+' S9-2 (plan 14.66): citaoci kolona bez pisca prelaze na kanon. Svaki test
+' seje svoj lanac kroz kanonske pisce, posle pocetka spoljne transakcije, i
+' tvrdi da je rollback vratio redove. MAMAC u kolonama bez pisca pokazuje na
+' drugi lanac ili na dokument koji vezu nema.
+' ============================================================
+
+' Red mreze F1/F2 sa datim ID-em (nevidljiva kolona identiteta) -- isti poziv
+' koji crta ekran (RedoviZaTip). Red se trazi po ID-u, ne po broju: pretraga
+' je podniz, a prva otpremnica dana ("1/171126") je podniz druge
+' ("1/171126-2"). Vraca pilulu reda; -1 kad reda nema posle filtera i pretrage.
+Private Function S92Pilula(ByVal tip As String, ByVal id As String, _
+                           Optional ByVal filter As String = "", _
+                           Optional ByVal q As String = "") As Long
+    Dim d As Variant, cols As Variant, redovi As Variant, c As Long
+    Dim i As Long, k As Long, iPill As Long
+    S92Pilula = -1
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip(tip, filter, q, True)
+    If Not IsArray(d) Then Exit Function
+    cols = d(0)
+    redovi = d(1)
+    k = UBound(cols) + 1
+    For c = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(c)), 2) = "pill" Then iPill = c + 1
+    Next c
+    If iPill = 0 Then Exit Function
+    For i = 1 To CLng(d(2))
+        If Trim$(CStr(redovi(i, k))) = id Then
+            S92Pilula = CLng(redovi(i, iPill))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Brojac cipa "Bez zbirne" za tip (cela tabela); -99 kad lista nije niz.
+Private Function S92BrojacBez(ByVal tip As String) As Long
+    Dim d As Variant, br As Variant
+    S92BrojacBez = -99
+    modUiData.ResetCache
+    d = modScrDokumenti.RedoviZaTip(tip, "", "")
+    If Not IsArray(d) Then Exit Function
+    br = d(5)
+    S92BrojacBez = CLng(br(1))
+End Function
+
+' Kilaza kao broj; -1 kad celija nije broj (prazno = "nema prijema").
+Private Function S92Kg(ByVal v As Variant) As Double
+    S92Kg = -1
+    If IsNumeric(v) Then
+        If Len(CStr(v)) > 0 Then S92Kg = CDbl(v)
+    End If
+End Function
+
+' Kilaza reda date vrste u prosecnoj ceni kupca (0 kad reda nema).
+Private Function S92KgProsekKupca(ByVal kupacID As String, ByVal vrsta As String) As Double
+    Dim r As Variant, i As Long
+    r = modIzvestaj.ReportProsecnaCena("Kupac", kupacID, IzvOdD(), IzvDoD())
+    If Not IsArray(r) Then Exit Function
+    For i = 1 To UBound(r, 1)
+        If Trim$(NzToText(r(i, 1))) = vrsta Then S92KgProsekKupca = S92KgProsekKupca + CDbl(r(i, 2))
+    Next i
+End Function
+
+' VozacID iz OTK reda za PWA (BuildOTKSheetRowForOtkup), po imenu kolone
+' ugovora. Red koji graditelj ne vrati (Empty) je greska, ne prazan vozac.
+Private Function S92OtkRedVozac(ByVal otkupID As String) As String
+    Dim lo As ListObject, iID As Long, r As Long, redOtk As Variant, zk As Variant, k As Long
+    Set lo = GetTable(TBL_OTKUP)
+    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    For r = 1 To lo.DataBodyRange.rows.count
+        If CStr(lo.DataBodyRange.cells(r, iID).value) = otkupID Then Exit For
+    Next r
+    If r > lo.DataBodyRange.rows.count Then Err.Raise ERR_ASSERT, "modTest.S92OtkRedVozac", _
+                                                     "otkup " & otkupID & " nije u tblOtkup"
+    redOtk = modStanicaLock.BuildOTKSheetRowForOtkup(otkupID, FX_STANICA, lo, r, iID, 1)
+    If Not IsArray(redOtk) Then Err.Raise ERR_ASSERT, "modTest.S92OtkRedVozac", _
+                                          "graditelj OTK reda vratio Empty za " & otkupID
+    zk = modMasterSync.OtkZaglavljeKolone()
+    For k = LBound(zk) To UBound(zk)
+        If CStr(zk(k)) = "VozacID" Then
+            S92OtkRedVozac = CStr(redOtk(LBound(redOtk) + k - LBound(zk)))
+            Exit Function
+        End If
+    Next k
+    Err.Raise ERR_ASSERT, "modTest.S92OtkRedVozac", "OTK zaglavlje nema kolonu VozacID"
+End Function
+
+' 362 -- S9-2 (N2a'): status F1/F2 "bez zbirne" je CLANSTVO, ne kolona.
+'
+' Otkup.BrojZbirne i Otpremnica.BrojZbirne nemaju pisca (C002: 0 od 1719 i 0
+' od 921), pa je do S9-2 svaki aktivan dokument bio "bez zbirne": pilula
+' "Sacuvana", cip ga nudio, brojac ga brojao. Lanac X ide do izdate zbirne;
+' otpremnica Y i blok Z zbirnu nemaju, a MAMAC u njihovoj koloni nosi broj
+' zbirne X. Posle storna zbirne X i ona je opet "bez zbirne".
+' SABOTAZE: s92-status-cita-otp-brojzbirne, s92-status-otkup-preskace-otpremnicu.
+Private Sub T_S92_StatusZbirneIzClanstva()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, c As Collection, brZ As String
+    Dim bX As String, otpX As String, zbrX As String
+    Dim bY As String, otpY As String, bZ As String
+    Dim bezOtp0 As Long, bezOtk0 As Long
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    ' Brojac cipa broji celu tabelu, pa se meri PRIRAST preko setve.
+    bezOtp0 = S92BrojacBez("OTPREMNICA")
+    bezOtk0 = S92BrojacBez("OTKUP")
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    brZ = "ZB-S92X-" & t
+    SledLanacDoZbirne "S92X", brZ, FX_VOZAC, FX_KUPAC, 40, bX, otpX, zbrX
+    bY = SledBlok("S92Y", FX_STANICA, 30, 0)
+    Set c = New Collection
+    c.Add bY
+    otpY = SledOtpremnica(c, FX_VOZAC)
+    bZ = SledBlok("S92Z", FX_STANICA, 20, 0)
+
+    ' MAMAC: kolone bez pisca dokumenata BEZ zbirne nose broj zbirne X.
+    PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpY, COL_OTP_BROJ_ZBIRNE, brZ
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, bY, COL_OTK_BROJ_ZBIRNE, brZ
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, bZ, COL_OTK_BROJ_ZBIRNE, brZ
+
+    AssertEq S92Pilula("OTPREMNICA", otpX), 1, _
+             "362 F2: izdata otpremnica u aktivnoj zbirnoj nije bez zbirne"
+    AssertEq S92Pilula("OTKUP", bX), 1, _
+             "362 F1: blok u otpremnici aktivne zbirne nije bez zbirne"
+    AssertEq S92Pilula("OTPREMNICA", otpY) & "|" & S92Pilula("OTKUP", bY) & "|" & _
+             S92Pilula("OTKUP", bZ), "0|0|0", _
+             "362 negativ: otpremnica i blok bez aktivne zbirne ostaju bez zbirne (mamac se ne prati)"
+    ' Cip "Bez zbirne" (filter) i pretraga po broju zbirne: red je tu (>= 0)
+    ' ili ga nema (-1).
+    AssertEq (S92Pilula("OTPREMNICA", otpX, "bezzbirne") >= 0) & "|" & _
+             (S92Pilula("OTPREMNICA", otpY, "bezzbirne") >= 0), _
+             CStr(False) & "|" & CStr(True), _
+             "362 cip Bez zbirne nudi otpremnicu bez zbirne, ne onu u zbirnoj"
+    AssertEq (S92Pilula("OTPREMNICA", otpX, "", brZ) >= 0) & "|" & _
+             (S92Pilula("OTPREMNICA", otpY, "", brZ) >= 0), _
+             CStr(True) & "|" & CStr(False), _
+             "362 pretraga po broju zbirne nalazi njenu clanicu, ne mamac"
+    ' Brojac: F2 +1 (otpremnica Y), F1 +2 (blokovi Y i Z); X nije "bez zbirne".
+    AssertEq (S92BrojacBez("OTPREMNICA") - bezOtp0) & "|" & (S92BrojacBez("OTKUP") - bezOtk0), "1|2", _
+             "362 brojac cipa Bez zbirne broji samo dokumente bez aktivne zbirne"
+
+    AssertEq modStorno.StornoZbirna_TX(zbrX), True, "362 preduslov: zbirna X je stornirana"
+    AssertEq S92Pilula("OTPREMNICA", otpX) & "|" & S92Pilula("OTKUP", bX), "0|0", _
+             "362 storno zbirne vraca otpremnicu i njen blok u bez zbirne"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modUiData.ResetCache
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S92_StatusZbirneIzClanstva", _
+             "362: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 363 -- S9-2, S92-ODL-01 (KI-081): pokvaren red clanstva ne pravi laz.
+'
+' Strogi citac clanstva je globalan: jedan pokvaren red odbija celu tabelu.
+' Lista se tada ucita, a status je "veza nepoznata" (StatusCode 3), ne "bez
+' zbirne"; brojac cipa je nepoznat (-1); cip "Bez zbirne" ne pada (pad bi
+' ostavio upaljen filter) nego nudi redove oznacene kao nepoznate. Detalj
+' zadrzava stavke i kaze razlog umesto vozaca, blokova i zbirne. ROBA (OM)
+' pada sa razlogom, a OTK red za PWA se ne gradi. Kvar se zatim popravi i
+' status se vraca (A -> B -> A).
+' SABOTAZE: s92-nepoznata-veza-postaje-bez-zbirne, s92-brojac-nepoznate-veze-je-broj.
+Private Sub T_S92_StatusVezaNepoznata()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, pad As String, spoj As String, r As Variant, det As Variant
+    Dim bX As String, otpX As String, zbrX As String
+    Dim bY As String, otpY As String, zbrY As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    SledLanacDoZbirne "S92NX", "ZB-S92NX-" & t, FX_VOZAC, FX_KUPAC, 40, bX, otpX, zbrX
+    SledLanacDoZbirne "S92NY", "ZB-S92NY-" & t, FX_VOZAC, FX_KUPAC, 30, bY, otpY, zbrY
+
+    ' KVAR: clanstvo zbirne Y tvrdi otpremnicu X -- otpremnica X je u dve
+    ' aktivne zbirne, pa citac E3 odbija celu tabelu (1260).
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpX
+
+    AssertEq S92Pilula("OTPREMNICA", otpX) & "|" & S92Pilula("OTKUP", bX), "3|3", _
+             "363 KI-081: kad citac clanstva odbije tabelu, status je veza nepoznata, ne bez zbirne"
+    AssertEq S92BrojacBez("OTPREMNICA"), -1, _
+             "363 KI-081: brojac cipa Bez zbirne je nepoznat, ne broj"
+    AssertEq S92Pilula("OTPREMNICA", otpX, "bezzbirne") & "|" & S92Pilula("OTKUP", bX, "bezzbirne"), _
+             "3|3", "363 KI-081: cip Bez zbirne ne pada; nudi red oznacen kao veza nepoznata"
+
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtpremnice(otpX))
+    AssertEq (InStr(1, spoj, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
+              InStr(1, spoj, otpX, vbTextCompare) > 0 And _
+              InStr(1, spoj, Poruka("OTKUI_IZ_DET_BLOKOVA"), vbTextCompare) = 0 And _
+              InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA"), vbTextCompare) = 0), True, _
+             "363 KI-081: detalj otpremnice kaze razlog, ne pogadja blokove ni zbirnu"
+    det = modScrIzvestaji.IzDetaljOtkupLista(bX)
+    AssertEq (InStr(1, S92Linija(det, 0), " x ", vbTextCompare) > 0 And _
+              InStr(1, IzvDetSpoj(det), Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
+              InStr(1, IzvDetSpoj(det), "(" & FX_VOZAC & ")", vbTextCompare) = 0), True, _
+             "363 KI-081: detalj otkupa zadrzava stavke i kaze razlog umesto vozaca i zbirne"
+
+    ' ROBA (OM) pada sa razlogom (fail-closed); OTK red se ne gradi (Empty).
+    On Error Resume Next
+    r = modIzvestaj.ReportOtkupRoba("OM", FX_STANICA, Date, Date)
+    pad = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+    AssertEq (InStr(1, pad, otpX, vbTextCompare) > 0), True, _
+             "363 KI-081: ROBA (OM) pada sa razlogom koji imenuje dokument"
+    On Error Resume Next
+    pad = S92OtkRedVozac(bX)
+    pad = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+    AssertEq (InStr(1, pad, "vratio Empty", vbTextCompare) > 0), True, _
+             "363 KI-081: OTK red za PWA se ne gradi, pa se ne salje sa pogodjenim vozacem"
+
+    ' Popravka: clanstvo zbirne Y opet tvrdi svoju otpremnicu.
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpY
+    AssertEq S92Pilula("OTPREMNICA", otpX) & "|" & S92Pilula("OTKUP", bX), "1|1", _
+             "363 posle popravke clanstva status je opet tacan"
+
+    ' S92-REV-01: clanstvo pokazuje na zbirnu koje NEMA u tblZbirna. Citac E3
+    ' postojanje ne proverava, pa je red bio "Poslato" bez labele. To je kvar
+    ' podataka bas tog reda: veza nepoznata i brojac "?", a ostali redovi tacni.
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_ZBIRNA_ID, "ZBR-NEMA-" & t
+    AssertEq S92Pilula("OTPREMNICA", otpY) & "|" & S92Pilula("OTKUP", bY) & "|" & _
+             S92Pilula("OTPREMNICA", otpX) & "|" & S92BrojacBez("OTPREMNICA"), "3|3|1|-1", _
+             "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni"
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtpremnice(otpY))
+    AssertEq (InStr(1, spoj, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
+              InStr(1, spoj, "ZBR-NEMA-" & t, vbTextCompare) > 0 And _
+              InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA"), vbTextCompare) = 0), True, _
+             "363 REV-01: detalj otpremnice imenuje zbirnu koje nema, ne cuti"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modUiData.ResetCache
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S92_StatusVezaNepoznata", _
+             "363: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 364 -- S9-2: OTK red za PWA nosi vozaca TEKUCE PREDAJE (plan 14.64 DOWNSTREAM).
+'
+' Otkup.VozacID nema pisca; vozac pripada otpremnici (DOCUMENT_HEADER_LINES
+' 4.1c). Graditelj reda zove isti seam kao izvoz OtkupiAll
+' (TekucaPredajaOtkupa). MAMAC u Otkup.VozacID nosi drugog vozaca. Blok bez
+' otpremnice nema vozaca, a posle storna otpremnice red nosi prazno. Ugovor
+' kolona GAS/PWA je isti.
+' SABOTAZA: s92-otk-red-cita-otkup-vozacid.
+Private Sub T_S92_OtkRedVozacTekucePredaje()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim c As Collection, blok As String, otp As String, bZ As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    blok = SledBlok("S92O", FX_STANICA, 25, 0)
+    Set c = New Collection
+    c.Add blok
+    otp = SledOtpremnica(c, FX_VOZAC)
+    bZ = SledBlok("S92OZ", FX_STANICA, 15, 0)
+
+    ' MAMAC: kolona bez pisca nosi drugog vozaca.
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, blok, COL_OTK_VOZAC, FX_VOZAC2
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, bZ, COL_OTK_VOZAC, FX_VOZAC2
+
+    AssertEq S92OtkRedVozac(blok), FX_VOZAC, _
+             "364 OTK red za PWA: VozacID je vozac tekuce predaje, ne Otkup.VozacID"
+    AssertEq S92OtkRedVozac(bZ), "", _
+             "364 OTK red za PWA: blok bez otpremnice nema vozaca"
+    AssertEq modStorno.StornoOtpremnica_TX(otp), True, "364 preduslov: otpremnica je stornirana"
+    AssertEq S92OtkRedVozac(blok), "", _
+             "364 OTK red za PWA: posle storna otpremnice VozacID je prazan"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S92_OtkRedVozacTekucePredaje", _
+             "364: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 365 -- S9-2: ROBA (OM) i vrsta u prosecnoj ceni kupca ne citaju
+' Otpremnica.BrojZbirne.
+'
+' Do S9-2 je svaki red ROBA (OM) bio "nema prijema" (broj zbirne prazan), a
+' svaka prijemnica u prosecnoj ceni i zbirnom izvestaju kupca "(Nepoznato)".
+' ROBA (OM) sada uzima zbirnu otpremnice iz clanstva (E3), a vrsta je
+' cinjenica zaglavlja zbirne. Lanac X ide do prijemnice; lanac Y je drugi
+' vozac i kupac sa SVOJOM prijemnicom, a MAMAC u Otpremnica.BrojZbirne
+' otpremnice X nosi broj zbirne Y. Spoj sa prijemom je i dalje po broju (S9-3).
+' SABOTAZE: s92-roba-om-cita-otp-brojzbirne, s92-vrsta-kes-prazan.
+Private Sub T_S92_IzvestajiPoClanstvu()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, r As Variant, i As Long, redOtp As Long
+    Dim bX As String, otpX As String, zbrX As String, prjX As String
+    Dim bY As String, otpY As String, zbrY As String, prjY As String
+    Dim vrPre As Double, nepPre As Double
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    vrPre = S92KgProsekKupca(FX_KUPAC2, FX_VRSTA)
+    nepPre = S92KgProsekKupca(FX_KUPAC2, "(Nepoznato)")
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    SledLanacDoZbirne "S92RX", "ZB-S92RX-" & t, FX_VOZAC2, FX_KUPAC2, 80, bX, otpX, zbrX
+    prjX = SledPrijemnica("PR-S92RX-" & t, "ZB-S92RX-" & t, FX_VOZAC2, FX_KUPAC2, 75, 0)
+    SledLanacDoZbirne "S92RY", "ZB-S92RY-" & t, FX_VOZAC, FX_KUPAC, 50, bY, otpY, zbrY
+    prjY = SledPrijemnica("PR-S92RY-" & t, "ZB-S92RY-" & t, FX_VOZAC, FX_KUPAC, 30, 0)
+
+    ' MAMAC: kolona bez pisca otpremnice X nosi broj zbirne Y.
+    PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_OTP_BROJ_ZBIRNE, "ZB-S92RY-" & t
+
+    ' Opseg je dan otpremnice (blok nosi danasnji datum), ne kalendarska godina
+    ' fixture-a -- inace test pada na preduslovu cim godina prodje.
+    Dim datOtp As Date
+    datOtp = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpX, COL_OTP_DATUM))
+    r = modIzvestaj.ReportOtkupRoba("OM", FX_STANICA, datOtp, datOtp)
+    AssertEq IsArray(r), True, "365 preduslov: ROBA (OM) postoji"
+    For i = 1 To UBound(r, 1)
+        If CStr(r(i, 12)) = "OTP|" & otpX Then redOtp = i
+    Next i
+    AssertEq (redOtp > 0), True, "365 preduslov: ROBA (OM) ima red otpremnice X"
+    AssertEq S92Kg(r(redOtp, 9)), 75#, _
+             "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, ne po Otpremnica.BrojZbirne"
+
+    AssertEq (S92KgProsekKupca(FX_KUPAC2, FX_VRSTA) - vrPre) & "|" & _
+             (S92KgProsekKupca(FX_KUPAC2, "(Nepoznato)") - nepPre), "75|0", _
+             "365 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne, ne (Nepoznato)"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S92_IzvestajiPoClanstvu", _
+             "365: rollback je vratio redove svih tabela lanca"
 End Sub

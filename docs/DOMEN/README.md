@@ -16,8 +16,13 @@ Otkupni blok  ->  Otpremnica  ->  Zbirna  ->  Prijemnica  ->  Faktura
 ```
 
 - **Otkupni blok** — jedan otkup od jednog kooperanta, na jednom otkupnom mestu,
-  jednog dana. Nosi `BrojDokumenta`, veže se na otpremnicu preko `OtpremnicaID` /
-  `BrojOtpremnice`, i nasleđuje `BrojZbirne`.
+  jednog dana. Nosi `BrojDokumenta`. Pripadnost nije kolona bloka nego zapis:
+  otpremnici u `tblOtpremnicaIzvori`, a zbirnoj preko te otpremnice u
+  `tblZbirnaIzvori`; vozač bloka je vozač njegove tekuće otpremnice
+  (`modStammdatenSync.TekucaPredajaOtkupa`). Kolone `Otkup.OtpremnicaID`,
+  `BrojOtpremnice`, `BrojZbirne` i `VozacID` nemaju pisca; od S9-2 ih čitaju još
+  samo integritet, provera zdravlja i self-heal šeme (ti čitaoci odlaze u S9-5 i
+  S9-6, a kolone sa kanonom u S9-6).
 - **Otpremnica** — roba koja fizički ide sa otkupnog mesta. Više blokova → jedna
   otpremnica.
 - **Zbirna** — agregat više otpremnica koje idu istom kupcu/hladnjači. U kanonu je

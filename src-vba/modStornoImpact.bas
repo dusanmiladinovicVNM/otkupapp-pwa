@@ -128,17 +128,6 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     h("tip") = docType: h("broj") = broj
     h("partnerID") = "": h("partner") = "": h("datum") = "": h("kolicina") = ""
     h("ispravkaOd") = "": h("zamenjenSa") = ""
-    Dim tTbl As String, tCol As String: tTbl = "": tCol = ""
-    Select Case docType
-        ' kolicina = SUMA aktivnih redova broja (Klasa I + II dele broj; HL bi vratio
-        ' samo prvu klasu -> potceni dvoklasni dokument u uvidu). partner/datum su
-        ' isti po klasama pa im je dovoljan jedan red -- ali BAS njegov, pa idu
-        ' kroz HLI, koji uz broj postuje i identitet.
-        Case FLOW_DOC_ZBIRNA
-            tTbl = TBL_ZBIRNA: tCol = COL_ZBR_BROJ
-        Case FLOW_DOC_PRIJEMNICA
-            tTbl = TBL_PRIJEMNICA: tCol = COL_PRJ_BROJ
-    End Select
     Select Case docType
         Case FLOW_DOC_ZBIRNA
             ' Identitet zbirne je ZbirnaID (S4-2), pa se red bira njime -- ne
@@ -164,18 +153,14 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
-    ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
-    If Len(tTbl) > 0 Then
-        If docType = FLOW_DOC_ZBIRNA Then
-            h("ispravkaOd") = HLZ(COL_TRACE_ISPRAVKA_OD, zbrUvid, strict)
-            h("zamenjenSa") = HLZ(COL_TRACE_ZAMENJEN_SA, zbrUvid, strict)
-        ElseIf docType = FLOW_DOC_PRIJEMNICA Then
-            h("ispravkaOd") = HLP(COL_TRACE_ISPRAVKA_OD, prjUvid)
-            h("zamenjenSa") = HLP(COL_TRACE_ZAMENJEN_SA, prjUvid)
-        Else
-            h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
-            h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
-        End If
+    ' Sledljivost: da li je ovaj dokument ispravka drugog / zamenjen drugim.
+    ' S9-2 (SLED-ODL-08): broj-oblik traga ima pisca samo na prijemnici
+    ' (StampIspravkaTrace). Na zbirni ga niko ne pise (njen trag je ID-oblik),
+    ' pa se vise ne cita; grana HLI je bila mrtva (uvid gradi samo zbirnu i
+    ' prijemnicu) i obrisana je zajedno sa HLI i HL.
+    If docType = FLOW_DOC_PRIJEMNICA Then
+        h("ispravkaOd") = HLP(COL_TRACE_ISPRAVKA_OD, prjUvid)
+        h("zamenjenSa") = HLP(COL_TRACE_ZAMENJEN_SA, prjUvid)
     End If
     Exit Function
 EH:
@@ -215,7 +200,7 @@ End Function
 '               logicki dokument ima VISE redova (Klasa I i II dele generaciju,
 '               a imaju razlicit PrijemnicaID), pa se salje SKUP ID-jeva.
 '   OTPREMNICA  stavke ne nose otpremnicu nego BrojZbirne; identitet se ipak
-'               koristi da se nadje zbirna BAS te otpremnice (HLI, ne HL).
+'               koristi da se nadje zbirna BAS te otpremnice (HLI i HL su obrisani u S9-2).
 '   ZBIRNA      stavke nose BrojZbirne, ne ZbirnaID -- suzavanje po identitetu
 '               nije moguce. Ista granica sheme kao kod FLOW_DOC_ZBIRNA u
 '               ActiveBlocksForFlow (tblOtkup nosi denormalizovan BrojZbirne).
@@ -367,79 +352,6 @@ Private Function ImpactSummary(ByVal d As Object) As Object
     End If
 End Function
 
-' Safe lookup -> Trim$ string ("" na gresku/prazno).
-Private Function HL(ByVal tbl As String, ByVal keyCol As String, _
-                    ByVal keyVal As String, ByVal valCol As String) As String
-    On Error Resume Next
-    HL = Trim$(CStr(LookupValue(tbl, keyCol, keyVal, valCol)))
-End Function
-
-' Isto, ali uz IDENTITET. Prazan docID -> obican lookup po broju (zatecen zapis
-' bez generacije). Neprazan docID -> red koji ima i taj broj i tu generaciju;
-' ako ga nema, vraca prazno umesto tudje vrednosti.
-'
-' LookupValue vraca PRVI red po broju, pa je pod kolizijom umeo da prikaze
-' partnera i datum drugog dokumenta -- zaglavlje uvida bi opisivalo dokument
-' koji se ne stornira.
-Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
-                     ByVal keyVal As String, ByVal valCol As String, _
-                     ByVal docID As String, _
-                     Optional ByVal strict As Boolean = False) As String
-    If Len(Trim$(docID)) = 0 Then
-        ' Bez identiteta se cita po broju -- ali u strict rezimu i to mora da
-        ' bude POUZDANO citanje. HL ima svoj "On Error Resume Next", pa bi
-        ' schema drift prosao kao "vrednost je prazna" i uvid bi ostao valid.
-        If strict Then
-            If GetColumnIndex(tbl, keyCol) = 0 Or GetColumnIndex(tbl, valCol) = 0 Then
-                Err.Raise ERR_UI_BASE + 40, MOD_NAME & ".HLI", _
-                          "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
-            End If
-        End If
-        HLI = HL(tbl, keyCol, keyVal, valCol)
-        Exit Function
-    End If
-    Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 29, MOD_NAME & ".HLI", _
-                      "Tabela " & tbl & " nije citljiva."
-        End If
-        Exit Function
-    End If
-    Dim cKey As Long, cVal As Long, cGen As Long
-    cKey = GetColumnIndex(tbl, keyCol)
-    cVal = GetColumnIndex(tbl, valCol)
-    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
-    If cKey = 0 Or cVal = 0 Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 28, MOD_NAME & ".HLI", _
-                      "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
-        End If
-        Exit Function
-    End If
-    ' Tabela bez kolone generacije, a identitet JE zadat -> ne moze da se sazna
-    ' o kom je dokumentu rec. Povratak na broj bi ovde bio tiha degradacija
-    ' unutar modela koji se posle oznacava kao valid, pa se umesto toga dize
-    ' greska i ceo uvid pada.
-    If cGen = 0 Then
-        If strict Then
-            Err.Raise ERR_UI_BASE + 27, MOD_NAME & ".HLI", _
-                      "Tabela " & tbl & " nema kolonu " & COL_GENERACIJA_ID & "."
-        End If
-        HLI = HL(tbl, keyCol, keyVal, valCol)
-        Exit Function
-    End If
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
-            If Trim$(CStr(data(i, cGen))) = Trim$(docID) Then
-                HLI = Trim$(CStr(data(i, cVal)))
-                Exit Function
-            End If
-        End If
-    Next i
-End Function
-
 ' Kilaza zbirne u uvidu dolazi sa STAVKI (S4-1).
 '
 ' Zaglavlje je od PR3 prazno, pa bi SumActiveNum nad UkupnoKolicina za svaki
@@ -535,8 +447,8 @@ End Function
 
 ' Vrednost kolone zbirne po ZbirnaID-u (S4-2).
 '
-' HLI bira red po paru (broj, generacija) i tako mora da ostane za prijemnicu,
-' koja je do S6 na starom modelu. Zbirna od S4-2 ima identitet, pa joj se red
+' Prijemnica bira red kroz HLP (po PrijemnicaID); HLI, koji je birao po paru
+' (broj, generacija), obrisan je u S9-2. Zbirna od S4-2 ima identitet, pa joj se red
 ' bira njime -- kanonski dokument generaciju uopste nema, a broj nije identitet.
 Private Function HLZ(ByVal valCol As String, ByVal zbirnaID As String, _
                      ByVal strict As Boolean) As String

@@ -11,6 +11,11 @@
 > čitaju se kroz proširene `modUtovar.UtovarenoPoPreradi` i `AktivnihFstZaUtovar`. E7 i E8 dodaje
 > S9-7, pa GP lanac (prerada → utovar → GP faktura) do tada nije spojen sa lancem otkupa.
 >
+> **Od S9-2 (plan §14.66, stavka 333)** kolone bez pisca više ne čita nijedan ekran, izveštaj, izvoz,
+> prefill ni papir: detalj izveštaja, status F1/F2, ROBA (OM), OTK red za PWA, prefill storna, keš vrste
+> zbirne i naslov ispravke idu kroz članstvo (E2, E3) ili zaglavlje zbirne. Kad strogi čitač članstva
+> odbije tabelu (`KI-081`), ekran ne pogađa: status je „Veza nepoznata" (`S92-ODL-01`).
+>
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
 > trajao) je ovde ponovo izmeren i zamenjen. Odluke iz njega važe.
 >
@@ -61,10 +66,13 @@ zapisan ID drugog čvora. Broj, datum i naziv su osobine čvora, nikad ivica.
 
 **Postojeći hodovi po ID-u kroz više karika:**
 - `modStammdatenSync.TekucaPredajaOtkupa:1006`: otkup → otpremnica → zbirna;
-- `modPrint.SpecifikacijaBlokovaRedovi:3250`: otpremnica → otkupi → kooperant.
+- `modPrint.SpecifikacijaBlokovaRedovi:3250`: otpremnica → otkupi → kooperant;
+- od S9-2: detalj izveštaja (`IzDetaljOtkupLista` kroz `TekucaPredajaOtkupa`, `IzDetaljOtpremnice` kroz
+  E2 i E3), status F1/F2 (`RedoviZaTip`, mape E2 → E3 jednom po listi), ROBA (OM) (E3) i OTK red za PWA
+  (`BuildOTKSheetRowForOtkup` kroz `TekucaPredajaOtkupa`).
 
-Sve ostalo što danas hoda lancem ide bar jednu kariku po broju ili po koloni bez pisca (plan
-§14.64, N2 i N4).
+Sve ostalo što danas hoda lancem ide bar jednu kariku po broju (plan §14.64, N4; S9-3). Po koloni bez
+pisca posle S9-2 hoda samo revizija (integritet i health, S9-5).
 
 ## 3) Identitet
 
@@ -120,6 +128,10 @@ nestane, u istom slajsu nestaje i čitalac. Ako to ne može u istom slajsu, čit
 nego što kolona izađe iz kanona. S3–S6 su ovo ostavili otvorenim: brisanje kolona otkupa,
 otpremnice i zbirne je odloženo „u svoj rez" i nikad nije došlo. **Vlasnik posle S9:** rez
 S9-6 (kanon i self-heal), kapija `popis_citalaca.py --check` (prag 0 po grupi).
+- **Posle S9-2 (plan §14.66):** UI, izveštaji, PWA, prefill i papir su zatvoreni. Živi čitaoci kolona
+  bez pisca ostali su samo u reviziji (`modIntegritet`, health 7 i 13; S9-5) i u self-heal-u
+  (`EnsureSledljivostSchema`, `EnsureDoradeSchema`; S9-6). Pragovi popisa: `otk_veza_otp` 2,
+  `otk_brojzbirne` 2, `otp_brojzbirne` 8, `x_trace` 12.
 
 ## 5) Odluke — DONETE (operater: 01–08 04.11.2026, 09 11.11.2026)
 
