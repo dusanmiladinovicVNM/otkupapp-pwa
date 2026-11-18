@@ -2045,8 +2045,10 @@ def main(argv: list) -> int:
     # koja se tvrdi jednom po suite-u. Baze idu SERIJSKI, pre radnika: pisu
     # marker zelenog (vba_gate), a on nije za istovremene upise.
     if cela_suite and not stop:
-        print("MERI SE CELOM SUITE-OM: %d (ciljani test sam ne prolazi, ili izbor "
-              "nije oborio tvrdnju -- v. --izolacija)" % len(cela_suite), flush=True)
+        print(("MERI SE CELOM SUITE-OM: %d (prijem: svaka stavka ide i celom "
+               "suite-om; razlog uz ime je verdikt izbora)" if args.prijem else
+               "MERI SE CELOM SUITE-OM: %d (ciljani test sam ne prolazi, ili izbor "
+               "nije oborio tvrdnju -- v. --izolacija)") % len(cela_suite), flush=True)
         for s, razlog in cela_suite:
             print("  %-46s <- %s" % (s["ime"], razlog), flush=True)
         potrebne_3 = {s["suite"] for s, _r in cela_suite}
@@ -2156,7 +2158,10 @@ def main(argv: list) -> int:
         print("radnika: %d; ponovljenih poziva: %d (FATAL pre ijedne suite -- "
               "Excel ili uvoz nisu prosli; meri se drugi pokusaj)"
               % (args.radnika, _START["ponovljeno"]))
-    if izbor:
+    if izbor and args.prijem:
+        print("izbor: baza i mutacija nad istim spiskom testova; prijem meri "
+              "celom suite-om svih %d" % len(cela_suite))
+    elif izbor:
         print("izbor: baza i mutacija nad istim spiskom testova; celom suite-om "
               "mereno %d (test sam ne prolazi, ili izbor nije oborio tvrdnju)"
               % len(cela_suite))
@@ -2174,6 +2179,12 @@ def main(argv: list) -> int:
         print(" PROBLEM: %s -> %s" % (ime, sta))
     ok = (not lose and not stop and pre == posle
           and crvenih >= len(stavke) - len(pokriveni))
+    if args.prijem:
+        # Red ispod je uzgredni verdikt OBICNOG dokaza nad uzorkom (cela suite);
+        # bez ove napomene "NIJE DOKAZANO" uz "G1 PRIJEM: PROSAO" izgleda kao
+        # protivrecnost (operater, 18.11.2026).
+        print("(red ispod je verdikt obicnog dokaza nad uzorkom; za G1 vazi "
+              "samo red G1 PRIJEM)")
     print("=== %s ===" % _verdikt(ok, grupno_priznatih, izborom_priznatih,
                                  pre if koren_menjan else ""))
     rc_g1 = None
