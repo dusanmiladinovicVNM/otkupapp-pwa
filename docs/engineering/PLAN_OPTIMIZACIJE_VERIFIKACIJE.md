@@ -833,7 +833,9 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
    **Ishod (18.11.2026, Windows operatera, `--radnika 4`, nad `main`
    `aa6c03f1`, otisak uzorka `3ff4e52a91839e23`) — G1 PROŠAO, rc 0 `[M]`:**
    - presuđeno izborom **59** slučajnih (RAT 35, BFP 24), **0 razlika**; van
-     ciljanih najviše **5,0%** uz 95%;
+     ciljanih orijentaciono najviše **5,0%** uz 95% (pretpostavka
+     reprezentativnog uzorka; uzorak je stratifikovan, pa to nije garancija za
+     ceo katalog);
    - OPASNA 0, STROZA 0, NEJASNO 0; ISTO 98 (59 slučajnih + 39 ciljanih, među
      njima svih 28 sabotaža S-4a, bez ijedne S-4a regresije);
    - **SKUPA slučajni 0/60:** nijedna slučajna stavka nije morala na celu
@@ -849,6 +851,13 @@ puštala pun `vba_check`. Merenje sa N=4 i N=5 posle baze na zahtev je otvoreno
 
    Sledi zaseban process PR: izbor (`--izbor --radnika 4`) kao podrazumevan
    put dokaza u rezu, u `CLAUDE.md` §5 i `.claude/rules/testovi.md`.
+
+   Nezavisni review (18.11.2026): #487 CONDITIONAL GO, #488 GO posle #487.
+   Uslov G1-REV-01 (ciljani test koji sam ne prolazi obara prijem) je zatvoren
+   u #487 kao pravilo presude; Windows prijem se zbog toga ne ponavlja, jer je
+   izmereno `baza izbora crvena 0`. **Otvoreno pre V2 (O-1):** alat danas
+   programski traži najmanje 50 presuđenih; za V2 prag od 100 mora postati
+   izvršna kapija (rc), ne samo broj koji se čita iz reda.
 4. **D-5** (`--od <ref>`), **D-3** (placebo u svakom pozivu), **R-1** (2 s
    fiksnog čekanja pri gašenju), **F-8** (keš hook-a).
 5. **Kolosek K:** podela kataloga i test modula, po roku iz §7 (faza 6) i stopi

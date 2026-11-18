@@ -1064,10 +1064,16 @@ ulazi ni u imenilac ni u granicu, ali obara presudu.
   - snimak pre/posle se razlikuje;
   - bilo koja `NEJASNO` stavka;
   - ciljana `NEUPOREDIVO`;
+  - ciljani test koji sam ne prolazi (`SKUPA/baza izbora crvena` u ciljanom
+    sloju — S-4a regresija, G1-REV-01); pad Excel-a u bazi (`baza izbora infra`)
+    to nije;
   - manje od 50 presuđenih slučajnih, ili manje od 15 u RAT ili u BFP;
   - svaki poziv sa filterom.
 - **rc 0, PROSAO:** sve ostalo. Red tada nosi gornju granicu razlike van
   ciljanih: `1 - 0,05^(1/M)`, uz 95%. Za M = 50 to je 5,8%, za M = 60 4,9%.
+  Granica je **orijentaciona**: binomna formula pretpostavlja reprezentativan
+  uzorak, a ovaj je stratifikovan (po fajlu, jedan mutant po testu, bez poznatih
+  nalaza). Nije garancija za ceo katalog.
 
 Udeo `SKUPA` se ispisuje **po sloju** (`SKUPA slucajni x/60, ciljani y/43`) i ne
 obara presudu. Trošak podrazumevanog izbora (`[?]` iz D-2) procenjuje samo
