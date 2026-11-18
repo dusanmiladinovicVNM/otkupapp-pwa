@@ -12093,6 +12093,106 @@ zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragov
   ne može da obori test 20, jer test prefill prijemnice ne zove; postoji i na `57ab47ed`. Nije KI dok se ne
   dokaže `dokaz.py`-om.
 
+### 14.67) S9-3 — broj zbirne nije veza (18.11.2026)
+
+> Grana `claude/s9-3-broj-zbirne-labela`, od `main` = `aa6c03f1` (posle `#486`, S9-2). Obim je iz §14.64
+> („Rezovi S9", N4, N5, N18, `KI-032`, `SLED-ODL-07/08`) i §14.66 (`S92-REV-02`, ćutanje
+> `TekucaPredajaOtkupa` o zbirnoj koje nema). Stanje: `docs/STANJE_REFAKTORA.md`, stavka 334. Linije u
+> ovom odeljku važe za `aa6c03f1`.
+
+#### Merenje pre koda (`popis_citalaca --json` nad `aa6c03f1`, PROD)
+
+`prj_brojzbirne`: **36 mesta, 35 živih** (prag 35, `--check` zelen). Podela po ulozi (čitanje svakog mesta):
+
+| Uloga | Broj | Mesta |
+|---|---|---|
+| labela — pisci | 5 | `SavePrijemnicaDokument:9028`, `BuildPrijemnicaRowData:9177`, `ReassignPrijemnicaToZbirna_TX:10714`, `:10803`, `LncPreveziPrijemnicu:5194` |
+| labela — prikaz, papir, pretraga, prefill, generator | 6 | `AktivniBrojeviZbirne:699`, `GetPrijemniceZaFakturisanjeForGrid:1373`, `ReportPrijemniceKupca:2710`, `FillPrijemnicaSablon:1543`, `ColBrojZbirne:2891`, `ColBrojZbirneZaPrefill:1106` |
+| detektor starog oblika (potez **odbija**) | 3 | `LncPrijemnicaCekaIspravku:4342`, `:4356`, `LncPrijemniceZbirne:5152` (N15, N17) |
+| **spoj po broju — S9-3** | **15** | v. tabelu ispod |
+| spoj po broju — integritet, S9-5 | 6 | `Chk_B4:704`, `Chk_B5:720`, `Chk_B6:1014`, `ZbirStavkiPoBroju:1519`, `PrijemnicaZbirnaMap:1811`, `GetVerwaistePrijemnice:10080` (→ B1b) |
+| mrtvo | 1 | `ActiveBlocksForFlow:957` (javna, bez pozivaoca) |
+
+Zbir 14 + 15 + 6 + 1 = 36 (§14.64: „14 labela/detektora, 21 spoj, 1 mrtav" — 21 = 15 + 6; bez promene).
+
+**Obrazac `fak_broj_prj` bi video 4 od 15 spojeva** (`LookupActiveID` u F4, `LookupValue` u poruci posle
+storna, `CountActive` u `ScanZbirna`, `SvaAktivnaDecaNoseZbirnaID`). Ostalih 11 su spojevi kroz rečnik
+ključan brojem (`dict(data(i, colBrZbr))`) i petlje sa `= brojZbirne`, koje regex nad jednom linijom ne
+razlikuje od labele. Kapija po tom obrascu bi zato branila manjinski oblik, a dominantni puštala — v. „Popis" dole.
+
+#### Spojevi i čime se zamenjuju
+
+Čitač je javni E4 iz S9-1 (`modAutoHladnjaca.AktivnePrijemniceZbirnih`: `UCase(ZbirnaID)` → sve aktivne
+prijemnice; `outKvar`: zbirna čiji se skup ne zna). Za smer prijemnica → zbirna isti prolaz puni i obrnutu mapu
+(`ZbirneAktivnihPrijemnica`), pa „aktivna prijemnica zbirne" ima jednu definiciju.
+
+| # | Mesto | Danas | Posle S9-3 |
+|---|---|---|---|
+| 1 | `ReportZbirniVozac:4549` (`KI-032`) | prijem i vraćene gajbe sabrani po broju zbirne | po `ZbirnaID` zbirne iz izveštaja (E4); kvar E4 te zbirne obara izveštaj sa razlogom |
+| 2 | `ReportZbirniKupac:4443` | vrsta prijemnice iz keša vrste po broju | vrsta zaglavlja **njene** zbirne po ID-u; `BuildZbirnaVrstaCache` / `GetVrstaFromCache` se brišu (`S92-REV-02` zatvoren: ključ više nije broj) |
+| 3 | `ReportProsecnaCena:3947` | isto kao 2 | isto kao 2 |
+| 4 | `CalculateManjakPreview:9813` | obe strane po broju: zbirne svih vlasnika tog broja i prijemnice sa tom labelom | broj iz F4 se razrešava **jednom** u ID (`ZbirnaIdentResolve` sa vozačem i kupcem F4, `SLED-IDENT-01`), pa stavke te zbirne i njene prijemnice po E4; nejednoznačan broj nema liniju |
+| 5 | `BuildManjakDict:437` | prijemnica se pripisuje vlasniku po **svojim** (broj, vozač, kupac) | prijemnica se pripisuje vlasniku **svoje zbirne** po E4; `#N` = zbirna čiji skup prijemnica E4 ne zna |
+| 6 | `DodajPrijemniceZbirne:2409` | po broju, pa po vozaču, pa svi kandidati broja (fail-open) | po `ZbirnaID` (tekuća predaja otkupa, aktivna zbirna otpremnice); kvar E4 je red „Veza nepoznata" |
+| 7 | `BuildPrijemnicaIndexByBrojZbirne:1221` (N5) | indeks po broju, „prva je dovoljna" | indeks po `ZbirnaID`; više prijemnica → **najranija po datumu**, isti datum → prva po tabeli (`SLED-ODL-07`) |
+| 8 | `GetActiveDocumentsForStorno:1210` | otkupna mesta reda po broju zbirne | mesta po `ZbirnaID` (red zbirne: svoj ID, prijemnica: E4, otpremnica: članstvo); broj ostaje labela kolone |
+| 9 | `ZbirnaScopeRazlog:1810` | scope samo kad **sva** deca tog broja nose `ZbirnaRoditeljID` | uslov otpada: prijemnice se biraju po ID-u, pa je postao tautologija (isti put kao otpremnice u S5-3b) |
+| 10 | `ActivePrijIDsByZbirna:1935` | kandidati po broju, sužavanje po ID-u kad ga svi nose | prijemnice zbirne po E4; kvar E4 = greška (skup koji kaskada stornira se ne pogađa) |
+| 11 | `ScanZbirna:2352` | `CountActive` po broju, sužen scope-om | broj prijemnica po E4 |
+| 12 | `ScanPrijemnica:884` | broj zbirne sa prijemnice, pa otpremnice i blokovi **po broju** | zbirna je `ZbirnaRoditeljID` izabrane prijemnice; otpremnice i blokovi po ID-u |
+| 13 | `StornoIzvrsi:413` | prva prijemnica sa tim brojem zbirne | prijemnice stornirane zbirne po E4 (sve, ne prvi pogodak) |
+| 14 | `PrijemnicaValidiraj:1011` (N18) | „dupla prijemnica?" kad **bilo koja** prijemnica nosi taj broj | kad **razrešena** zbirna (`rodID`) već ima aktivnu prijemnicu po E4; pitanje ide kroz seam (test režim beleži i odgovara „Ne", `.claude/rules/testovi.md` §4) |
+| 15 | `GetOsirocenePrijemnice:10480` (Oporavak) | siroče = nijedna aktivna zbirna ne nosi taj broj | siroče = `ZbirnaRoditeljID` ne pokazuje na aktivnu zbirnu (stornirana, nema je, prazan ID) |
+
+Uz to:
+- **`TekucaPredajaOtkupa` više ne ćuti** (§14.66, uz `S92-REV-01`): članstvo koje pokazuje na zbirnu koje nema diže
+  grešku sa razlogom. Detalj otkupa ga pokazuje kao „Veza nepoznata", OTK red se ne šalje (`S92-ODL-01`), a izvoz
+  `OtkupiAll` pada sa razlogom umesto da red izveze bez zbirne. Seam vraća i `ZbirnaID` (opcioni izlaz).
+- **Brišu se** (bez pozivaoca posle reza): `ActiveBlocksForFlow`, `SvaAktivnaDecaNoseZbirnaID`,
+  `BuildZbirnaVrstaCache`, `GetVrstaFromCache`.
+
+#### Popis — podela grupe (`NEMA_BROJA_KAO_FK`)
+
+- `prj_brojzbirne` ostaje merenje **svih** pominjanja, **bez praga** (`SLED-ODL-08`: broj je labela za papir i pretragu).
+- Nova izvedena grupa **`prj_broj_spoj`, prag 0**: pominjanje `COL_PRJ_BROJ_ZBIRNE` u proceduri koja **nije**
+  imenovana kao labela/detektor (spisak `PRJ_BROJZBIRNE_LABELA`) ni kao integritet sa vlasnikom S9-5
+  (`PRJ_BROJZBIRNE_S95`). Nova procedura koja dodirne kolonu je spoj dok je neko ne upiše u spisak — upis je pregledan
+  diff u alatu, i tada se pita „labela ili spoj". Unos spiska bez živog mesta obara `--check` (spisak ne sme da istruli).
+- Odstupanje od obrasca `fak_broj_prj` je izmereno (gore: 4 od 15). Granica: spoj unutar procedure koja je već na
+  spisku labela kapija ne vidi; to meri test G2.
+- Detektori starog oblika (N15, N17) **ostaju**: samo odbijaju potez, a red bez `ZbirnaRoditeljID` postoji (C002: 6,
+  N14). Isto važi za dva poređenja iste kapije koja popis ne vidi (`ParentBroj`, `LncKontekstPogadja`).
+- Dokaz u oba smera: vraćen spoj → `PAO` po imenu procedure; zastareo unos spiska → `PAO`; čisto → `ok`.
+
+#### ACCEPTANCE CONTRACT — S9-3
+
+- **Važi:** posle reza nijedan čitalac van integriteta ne bira prijemnicu po broju zbirne. Gde operater ukuca broj
+  (F4), broj se razrešava jednom u ID; od tada putuje samo ID (`SLED-IDENT-01`). Prijemnica bez `ZbirnaRoditeljID`
+  nije dete nijedne zbirne: izveštaji je ne sabiraju, storno je ne kaskadira, a Oporavak je pokazuje kao siroče.
+- **Scenario testova:** dve **aktivne** zbirne istog broja, dva vozača i dva kupca, svaka sa svojom prijemnicom
+  (kroz kanonske pisce, posle početka spoljne transakcije, uz tvrdnju o rollback-u). Lanac B nastaje prvi, pa prvi
+  pogodak po broju iz lanca A završi u lancu B; isti broj nastaje prepisom labele posle zasejavanja (obrazac 356).
+  Gde stari kod razdvaja vlasnika atributom (manjak, scope storna), mamac je atribut ili prijemnica starog oblika
+  (labela bez `ZbirnaRoditeljID`).
+- **Testovi (od 366), svi crveni nad starim kodom po imenu, pa zeleni:**
+  - **366 `T_G2_BrojNijeIdentitet`** — izveštaji 1–3, manjak 4–5, detalj 6, izvoz 7;
+  - **367 `T_S93_StornoPoID`** — 8–13;
+  - **368 `T_S93_F4IOporavakPoID`** — 14–15;
+  - **369 `T_S93_TekucaPredajaBezZbirne`** — `TekucaPredajaOtkupa` imenuje zbirnu koje nema (detalj i seam).
+- **Sabotaže** (`s93-*`): po jedna za svaku tvrdnju koja meri prevedeno mesto; svaka obara svoju tvrdnju po imenu
+  (`dokaz.py s93- --izbor`).
+- **Ne dira:** integritet (S9-5: šest mesta iz tabele gore), generaciju i `ReassignPrijemnicaToZbirna_TX` (S9-4),
+  kanon i fixture (S9-6), pisce, ugovor kolona GAS/PWA.
+- **Imenovano, ne urađeno:** `SLED-ODL-07` traži i **broj prijemnica** uz najraniju; ugovor kolona `OtkupiAll` ga ne
+  nosi (`Napomena` je broj dokumenta), a promena ugovora je van reza — broj se ne izvozi. Zbirna strana po broju
+  (`CalculateProsekGajbeByZbirna`) nije `prj_brojzbirne` i ostaje.
+- **Kapije:** `vba_check`, `who_writes --check` i `--check-ownership`, `gen_schema_module --check`, `vba_gate --popis`,
+  `popis_citalaca --check` (sa novom grupom), `sabotaza.py --self-test`; pune suite `RunAllTests` (365 → 369), BFP,
+  Storno, Palete, `RunIzvestajTests`, StornoCentar. Ručni Compile je kapija operatera.
+- **Ručna provera** (uz ostatak iz S9-2): status i čip „Bez zbirne" u F1/F2, detalj izveštaja (otkup i otpremnica,
+  prijemnica sa kupcem), ROBA (OM), naslov ispravke na papiru otpremnice; iz S9-3 F4 „dupla prijemnica" i
+  linija manjka nad zbirnom sa prijemnicom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
