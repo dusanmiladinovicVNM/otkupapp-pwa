@@ -10074,7 +10074,10 @@ Private Sub SetManjakLine()
                 kgII = NetoPrikaz(ParseNum(FldText("fgKgII")), _
                                   ParseNum(FldText("fgKolAmbII")), tip)
             End If
-            m = modDokumenta.CalculateManjakPreview(broj, kgI, kgII)
+            ' S9-3: broj se razresava u zbirnu sa vozacem i kupcem F4 -- isti
+            ' razresivac kao kapija upisa, pa linija i upis gledaju isti dokument.
+            m = modDokumenta.CalculateManjakPreview(broj, kgI, kgII, _
+                    GetComboID(mFrm.Controls("zCtx").Controls("cbVozac")), PartnerID(mFrm))
             If IsArray(m) Then
                 If UBound(m) >= 3 Then
                     L.caption = ManjakLinija(CDbl(m(0)), CDbl(m(1)), CDbl(m(2)), CDbl(m(3)))

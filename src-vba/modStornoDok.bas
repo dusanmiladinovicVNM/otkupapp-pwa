@@ -410,7 +410,9 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             End If
             ok = StornoZbirna_TX(Trim$(docID))
             If ok Then
-                vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
+                ' Prijemnice OVE zbirne po ivici E4 (S9-3), sve -- ne prva sa tim
+                ' brojem zbirne, koja je mogla biti prijemnica druge zbirne.
+                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))
                 ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",
                 ' a VBA je case-insensitive -- pa nekvalifikovan poziv te funkcije
                 ' unutar ove procedure nije poziv funkcije nego indeksiranje tog

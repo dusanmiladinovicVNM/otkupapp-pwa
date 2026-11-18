@@ -124,6 +124,82 @@ GRUPE = collections.OrderedDict([
                                 r"|CheckDuplicate|RequireTacnoJedan)\s*\(?\s*TBL_FAKTURA_STAVKE\s*,\s*"
                                 r"(COL_FS_BROJ_PRIJEMNICE\b|\"BrojPrijemnice\")")),
 ])
+# S9-3 (plan 14.67), kapija NEMA_BROJA_KAO_FK: Prijemnica.BrojZbirne je LABELA
+# (SLED-ODL-08) -- papir, prikaz, pretraga, prefill, pisci labele i detektori
+# starog oblika koji potez ODBIJAJU. Te procedure su imenovane ovde. Svako drugo
+# zivo PROD pominjanje kolone je SPOJ po broju i ulazi u izvedenu grupu
+# prj_broj_spoj (prag 0).
+#
+# Zasto spisak procedura, a ne obrazac fak_broj_prj: regex nad jednom linijom
+# (LookupValue/CountActive... TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE) je pre S9-3
+# video 4 od 15 spojeva. Ostalih 11 su recnici kljucani brojem i petlje sa
+# "= brojZbirne", koje se po liniji ne razlikuju od labele. Nova procedura koja
+# dodirne kolonu je spoj dok je neko ne upise ovde -- a taj upis je pregledan
+# diff u alatu, pa se tada pita "labela ili spoj".
+#
+# Granica: spoj UNUTAR procedure sa spiska kapija ne vidi; to meri test G2
+# (T_G2_BrojNijeIdentitet). Unos bez zivog mesta obara --check (spisak ne sme
+# da istruli -- isto pravilo kao MRTAV_UNOS u vba_hard_census).
+PRJ_BROJZBIRNE_LABELA = frozenset([
+    # pisci labele (ZbirnaRoditeljID se pise u istom koraku)
+    ("modDokumenta", "SavePrijemnicaDokument"),
+    ("modDokumenta", "BuildPrijemnicaRowData"),
+    ("modDokumenta", "LncPreveziPrijemnicu"),
+    ("modDokumenta", "ReassignPrijemnicaToZbirna_TX"),     # S9-4 (N7)
+    # prikaz, papir, pretraga, prefill, generator broja
+    ("modDokumenta", "AktivniBrojeviZbirne"),
+    ("modDokumenta", "GetOsirocenePrijemnice"),            # 6. kolona; siroce po ID-u
+    ("modFaktura", "GetPrijemniceZaFakturisanjeForGrid"),
+    ("modIzvestaj", "ReportPrijemniceKupca"),
+    ("modPrint", "FillPrijemnicaSablon"),
+    ("modScrDokumenti", "ColBrojZbirne"),
+    ("modStornoDok", "ColBrojZbirneZaPrefill"),
+    ("modStornoFlow", "GetActiveDocumentsForStorno"),      # kolona liste; mesta po ID-u
+    # detektori starog oblika (N15, N17): red bez ZbirnaRoditeljID -> potez staje
+    ("modDokumenta", "LncPrijemnicaCekaIspravku"),
+    ("modDokumenta", "LncPrijemniceZbirne"),
+])
+# Integritet: spoj po broju koji brise S9-5 (sa svojim unosom ovde).
+PRJ_BROJZBIRNE_S95 = frozenset([
+    ("modIntegritet", "Chk_B4_DanglingBrojZbirne"),
+    ("modIntegritet", "Chk_B5_PrijemnicaBezZbirne"),
+    ("modIntegritet", "Chk_B6_ZbirnaCaseMismatch"),
+    ("modIntegritet", "ZbirStavkiPoBroju"),
+    ("modIntegritet", "PrijemnicaZbirnaMap"),
+    ("modDokumenta", "GetVerwaistePrijemnice"),            # -> B1b
+])
+PRJ_BROJZBIRNE_SPISKOVI = (("PRJ_BROJZBIRNE_LABELA", PRJ_BROJZBIRNE_LABELA),
+                           ("PRJ_BROJZBIRNE_S95", PRJ_BROJZBIRNE_S95))
+
+
+def prj_broj_spoj(spisak):
+    """Izvedena grupa: zivo PROD mesto prj_brojzbirne van imenovanih procedura."""
+    poznato = PRJ_BROJZBIRNE_LABELA | PRJ_BROJZBIRNE_S95
+    out = []
+    for r in spisak:
+        if r["grupa"] != "prj_brojzbirne" or r["tip"] != "PROD":
+            continue
+        if (r["modul"], r["procedura"]) in poznato:
+            continue
+        k = dict(r)
+        k["grupa"] = "prj_broj_spoj"
+        out.append(k)
+    return out
+
+
+def prj_broj_zastareli_unosi(spisak):
+    """Unos spiska koji vise nema nijedno zivo PROD mesto u prj_brojzbirne."""
+    zivi = {(r["modul"], r["procedura"]) for r in spisak
+            if r["grupa"] == "prj_brojzbirne" and r["tip"] == "PROD"
+            and r["status_mesta"].startswith("ZIV")}
+    out = []
+    for ime, sp in PRJ_BROJZBIRNE_SPISKOVI:
+        for unos in sorted(sp):
+            if unos not in zivi:
+                out.append((ime, unos))
+    return out
+
+
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
 GRUPE_X = collections.OrderedDict([
     ("x_saveotkup", re.compile(r"\bSaveOtkup(_TX)?\b")),
@@ -267,7 +343,11 @@ PRAGOVI = collections.OrderedDict([
     # LNC-ODL-37 (LncPrijemnicaCekaIspravku), i nijedno nije spoj po broju: jedno
     # trazi da kolona postoji, drugo broj koristi samo da prepozna storniranu
     # prijemnicu bez ZbirnaRoditeljID (stari oblik, KI95-ODL-02) i potez ODBIJE.
-    ("prj_brojzbirne", 35),
+    # S9-3 (plan 14.67): prj_brojzbirne je od sada MERENJE labele, bez praga
+    # (SLED-ODL-08: broj ostaje za papir i pretragu). Kapija je izvedena grupa
+    # prj_broj_spoj ispod: 15 spojeva je preslo na E4 (ZbirnaRoditeljID), pa je
+    # prag 0. Integritet (S9-5) i labele su imenovani u PRJ_BROJZBIRNE_*.
+    ("prj_broj_spoj", 0),
     ("fak_broj_prj", 0),
     ("pal_broj", 0),
     # S9-2 (plan 14.66): broj-oblik traga ispravke (IspravkaOd / ZamenjenSa) vise
@@ -1035,6 +1115,7 @@ def napravi(commit=None):
         r["status_procedure"] = s
         r["status_mesta"] = "PAUZIRAN" if (kap_m and s.startswith("ZIV")) else s
         r["kapija"] = kap_m or kap
+    spisak += prj_broj_spoj(spisak)
     return moduli, graf, st, spisak, upozorenja
 
 
@@ -1056,7 +1137,7 @@ def sazetak(moduli, graf, st, spisak, upozorenja, commit):
     print("ulazne tacke: " + ", ".join("%s=%d" % kv for kv in sorted(kor.items())))
     print("kapije: " + (", ".join("%s (%s:%d)" % (k, v[0], v[1]) for k, v in graf.kapije.items()) or "nema"))
     print()
-    grupe = list(GRUPE) + list(GRUPE_X) + ["x_literal", "x_indeks"]
+    grupe = list(GRUPE) + ["prj_broj_spoj"] + list(GRUPE_X) + ["x_literal", "x_indeks"]
     print("%-16s %5s %5s | %s" % ("grupa", "PROD", "TEST", "PROD po statusu mesta"))
     for g in grupe:
         rows = [r for r in spisak if r["grupa"] == g]
@@ -1103,6 +1184,10 @@ def provera(spisak):
             print("  %-16s %3d < prag %d  PRAG ZASTAREO -- spusti ga u PRAGOVI" % (g, n, prag))
         else:
             print("  %-16s %3d = prag %d  ok" % (g, n, prag))
+    for ime, unos in prj_broj_zastareli_unosi(spisak):
+        pao = True
+        print("  %-16s ZASTAREO UNOS %s.%s -- nema zivog mesta, skini ga sa spiska"
+              % (ime, unos[0], unos[1]))
     if pao:
         print("\nPrag se SPUSTA kad slajs skine citaoce; nikad se ne podize bez odluke u planu.")
         return 1

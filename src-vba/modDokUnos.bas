@@ -1010,10 +1010,12 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
     ' 1 zbirna = 1 prijemnica. Ako zbirna vec ima AKTIVNU prijemnicu, ovo je
     ' verovatno dupli unos -> pitanje, ne greska. Uz ispravku se preskace
     ' (isti izuzetak ima i legacy btnUnosPrij_Click).
+    ' S9-3 (N18): "zbirna" je RAZRESENA zbirna (rodID, kapija PRJ-ZBR-01 iznad),
+    ' a njene prijemnice su ivica E4 -- ne bilo koja prijemnica sa tom labelom
+    ' broja (DOCUMENT_HEADER_LINES.md 3.1: po zbirni).
     postojeca = ""
     If Len(S(p, "ispravkaID")) = 0 Then _
-        postojeca = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
-                                   S(p, "brojZbirne"), COL_PRJ_BROJ)
+        postojeca = modDokumenta.BrojeviPrijemnicaZbirne(rodID)
     If Len(postojeca) > 0 Then
         If Not PotvrdiDuplaPrijemnicu(S(p, "brojZbirne"), postojeca) Then
             fokus = "brojZbirne": PrijemnicaValidiraj = " ": Exit Function

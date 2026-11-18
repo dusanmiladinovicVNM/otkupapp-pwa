@@ -202,9 +202,7 @@ End Function
 '   OTPREMNICA  stavke ne nose otpremnicu nego BrojZbirne; identitet se ipak
 '               koristi da se nadje zbirna BAS te otpremnice (HLI i HL su obrisani u S9-2).
 '   ZBIRNA      stavke nose BrojZbirne, ne ZbirnaID -- suzavanje po identitetu
-'               nije moguce. Ista granica sheme kao kod FLOW_DOC_ZBIRNA u
-'               ActiveBlocksForFlow (tblOtkup nosi denormalizovan BrojZbirne).
-'               Prijavljuje se kao granica, ne krpi se pogadjanjem.
+'               nije moguce. Prijavljuje se kao granica, ne krpi se pogadjanjem.
 ' ------------------------------------------------------------
 Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
                               Optional ByVal docID As String = "", _

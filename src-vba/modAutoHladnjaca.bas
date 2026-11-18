@@ -569,10 +569,13 @@ End Function
 '   outBezID -- UCase(ZbirnaRoditeljID) -> razlog, samo za aktivnu prijemnicu bez
 '               PrijemnicaID-a. To jeste kvar i za graf: skup prijemnica zbirne
 '               se tada ne zna.
+'   outRod   -- UCase(PrijemnicaID) -> ZbirnaRoditeljID, ista ivica u smeru
+'               prijemnica -> zbirna (S9-3; javni ulaz ZbirneAktivnihPrijemnica).
 ' Lanac i dalje cita mapu i outKvar, nepromenjene.
 Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
                                            Optional ByRef outSve As Object, _
-                                           Optional ByRef outBezID As Object) As Object
+                                           Optional ByRef outBezID As Object, _
+                                           Optional ByRef outRod As Object) As Object
     Const SRC As String = "AktivnePrijemnicePoZbirni"
     Dim mapa As Object, d As Variant, i As Long, rod As String, pid As String
     Dim cId As Long, cRod As Long, cSto As Long, lista As Collection
@@ -581,6 +584,7 @@ Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
     Set outKvar = CreateObject("Scripting.Dictionary")
     Set outSve = CreateObject("Scripting.Dictionary")
     Set outBezID = CreateObject("Scripting.Dictionary")
+    Set outRod = CreateObject("Scripting.Dictionary")
     Set AktivnePrijemnicePoZbirni = mapa
 
     d = GetTableData(TBL_PRIJEMNICA)
@@ -610,6 +614,7 @@ Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
                         outSve.Add rod, lista
                     End If
                     lista.Add pid
+                    If Not outRod.Exists(UCase$(pid)) Then outRod.Add UCase$(pid), Trim$(NzToText(d(i, cRod)))
 
                     If Not mapa.Exists(rod) Then
                         mapa.Add rod, pid
@@ -635,6 +640,17 @@ Public Function AktivnePrijemniceZbirnih(ByRef outKvar As Object) As Object
     Dim kvarLanca As Object, sve As Object
     AktivnePrijemnicePoZbirni kvarLanca, sve, outKvar
     Set AktivnePrijemniceZbirnih = sve
+End Function
+
+' IVICA E4 U SMERU PRIJEMNICA -> ZBIRNA (S9-3): UCase(PrijemnicaID) ->
+' ZbirnaRoditeljID, za svaku AKTIVNU prijemnicu sa roditeljem. Isti prolaz kao
+' AktivnePrijemniceZbirnih, pa "aktivna prijemnica zbirne" ima jednu definiciju u
+' oba smera. Prijemnica bez ZbirnaRoditeljID nije dete nijedne zbirne i ovde je
+' nema. outKvar: isti kvar po zbirni (aktivna prijemnica bez PrijemnicaID-a).
+Public Function ZbirneAktivnihPrijemnica(ByRef outKvar As Object) As Object
+    Dim kvarLanca As Object, sve As Object, rod As Object
+    AktivnePrijemnicePoZbirni kvarLanca, sve, outKvar, rod
+    Set ZbirneAktivnihPrijemnica = rod
 End Function
 
 ' Izvestaj o koraku koji nije uspeo: koji korak, zasto, i sta je VEC napravljeno

@@ -301,6 +301,12 @@ Public Function BuildManjakDict() As Object
     ' Brojaci "#C" i vals(2) broje STAVKE prijemnice -- isto sto su ranije brojali
     ' redove klase (jedna stavka po klasi po dokumentu).
     '
+    ' S9-3 (SLED-IDENT-01): prijemnica se pripisuje vlasniku SVOJE zbirne po ivici
+    ' E4 (ZbirnaRoditeljID), ne vlasniku koga sastave njen BrojZbirne, VozacID i
+    ' KupacID. Atributi prijemnice su labele: vozac i kupac na njoj nisu dokaz
+    ' kojoj zbirnoj pripada. Prijemnica bez roditelja (stari oblik) ili cija je
+    ' zbirna stornirana ne ulazi -- to je siroce za Oporavak i integritet (S9-5).
+    '
     ' Returns: Dictionary sa dve vrste kljuceva
     '   <stavkaKljuc>               -> Array(ZbirnaKg, PrijemnicaKg, CntPrijem)
     '                                  stavkaKljuc = broj|vozac|kupac|klasa
@@ -311,9 +317,9 @@ Public Function BuildManjakDict() As Object
     '   "#1|" & broj                -> vlasnikKljuc (samo kad je vlasnik jedinstven)
     '   "#O|" & broj & "|" & vozac  -> vlasnikKljuc (samo kad je po tom vozacu
     '                                  razresenje jednoznacno)
-    '   "#N|" & broj                -> Long: prijemnice tog broja koje NEMAJU
-    '                                  kompletnog vlasnika (prazan vozac ili kupac,
-    '                                  ili kolona ne postoji) -> fail-closed signal
+    '   "#N|" & broj                -> Long: zbirne tog broja ciji se skup
+    '                                  prijemnica ne zna (aktivna prijemnica bez
+    '                                  PrijemnicaID-a, kvar E4) -> fail-closed signal
     '   "#C|" & broj & "|" & klasa  -> Long/Double: prijem agregiran po (broj, klasa)
     '   "#K|" & broj & "|" & klasa     BEZ vlasnika. Sme se koristiti iskljucivo kad
     '                                  je "#V|" = 1, tj. kad je dokazano da broj ima
@@ -354,6 +360,10 @@ Public Function BuildManjakDict() As Object
     ' (bez klase!) i za razresenje po vozacu (otpremnica nema KupacID).
     Dim vlasniciPoBroju As Object
     Set vlasniciPoBroju = CreateObject("Scripting.Dictionary")
+    ' UCase(ZbirnaID) -> vlasnikKljuc i broj, za pripis prijemnice po E4.
+    Dim vkPoZbr As Object, brPoZbr As Object
+    Set vkPoZbr = CreateObject("Scripting.Dictionary")
+    Set brPoZbr = CreateObject("Scripting.Dictionary")
 
     Dim z As Long
     For z = 1 To UBound(zbrData, 1)
@@ -368,6 +378,8 @@ Public Function BuildManjakDict() As Object
 
         Dim vk As String
         vk = ZbirnaVlasnikKljuc(brZbr, zVoz, zKup)
+        vkPoZbr(UCase$(Trim$(NzToText(zbrData(z, colZbrID))))) = vk
+        brPoZbr(UCase$(Trim$(NzToText(zbrData(z, colZbrID))))) = brZbr
 
         Dim sk As String, vals As Variant, zs As Variant
         For Each zs In modDokumenta.StavkeZaZbirnu(stavkeZbr, _
@@ -433,27 +445,31 @@ Public Function BuildManjakDict() As Object
         Exit Function
     End If
 
-    Dim colPBrZbr As Long, colPVoz As Long, colPKup As Long, colPID As Long
-    colPBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    colPVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
-    colPKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    Dim colPID As Long
     colPID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
 
     Dim stavkePrj As Object
     Set stavkePrj = modDokumenta.StavkePrijemnicePoDokumentu()
 
+    ' Ivica E4 u smeru prijemnica -> zbirna, i kvar po zbirni.
+    Dim rodPrj As Object, e4Kvar As Object, kz As Variant
+    Set rodPrj = modAutoHladnjaca.ZbirneAktivnihPrijemnica(e4Kvar)
+    For Each kz In e4Kvar.keys
+        If brPoZbr.Exists(CStr(kz)) Then
+            If Not dict.Exists("#N|" & brPoZbr(CStr(kz))) Then dict.Add "#N|" & brPoZbr(CStr(kz)), 0&
+            dict("#N|" & brPoZbr(CStr(kz))) = CLng(dict("#N|" & brPoZbr(CStr(kz)))) + 1
+        End If
+    Next kz
+
     Dim p As Long
     For p = 1 To UBound(prijData, 1)
-        Dim pZbr As String
-        pZbr = Trim$(NzToText(prijData(p, colPBrZbr)))
-        If Len(pZbr) = 0 Then GoTo NextPrijem
-        If Not vlasniciPoBroju.Exists(pZbr) Then GoTo NextPrijem
-
-        Dim pVoz As String, pKup As String, pKla As String
-        pVoz = ""
-        pKup = ""
-        If colPVoz > 0 Then pVoz = Trim$(NzToText(prijData(p, colPVoz)))
-        If colPKup > 0 Then pKup = Trim$(NzToText(prijData(p, colPKup)))
+        Dim pZbr As String, pRod As String, pVk As String, pKla As String
+        pRod = ""
+        If rodPrj.Exists(UCase$(Trim$(NzToText(prijData(p, colPID))))) Then _
+            pRod = UCase$(CStr(rodPrj(UCase$(Trim$(NzToText(prijData(p, colPID)))))))
+        If Not vkPoZbr.Exists(pRod) Then GoTo NextPrijem
+        pZbr = CStr(brPoZbr(pRod))
+        pVk = CStr(vkPoZbr(pRod))
 
         Dim pKg As Double, ps As Variant, bkKey As String, psk As String
         For Each ps In modDokumenta.StavkeZaPrijemnicu(stavkePrj, _
@@ -470,15 +486,7 @@ Public Function BuildManjakDict() As Object
             If Not dict.Exists("#K|" & bkKey) Then dict.Add "#K|" & bkKey, 0#
             dict("#K|" & bkKey) = CDbl(dict("#K|" & bkKey)) + pKg
 
-            ' Prijemnica bez kompletnog vlasnika se NE sme pripisati nijednoj
-            ' zbirnoj kad broj nosi vise vlasnika -- broji se posebno kao
-            ' fail-closed signal.
-            If Len(pVoz) = 0 Or Len(pKup) = 0 Then
-                If Not dict.Exists("#N|" & pZbr) Then dict.Add "#N|" & pZbr, 0&
-                dict("#N|" & pZbr) = CLng(dict("#N|" & pZbr)) + 1
-            End If
-
-            psk = ZbirnaStavkaKljuc(ZbirnaVlasnikKljuc(pZbr, pVoz, pKup), pKla)
+            psk = ZbirnaStavkaKljuc(pVk, pKla)
             If dict.Exists(psk) Then
                 vals = dict(psk)
                 vals(1) = vals(1) + pKg
