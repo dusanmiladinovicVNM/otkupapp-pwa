@@ -9155,6 +9155,10 @@ Private Sub OnStanicaChanged()
         ' (legacy cmbOtkupnoMesto_Change: txtBrojDokumenta / txtBrojOtp = "")
         If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
         SetFld "fgBrOtpr", ""
+        ' Bez mesta predlog cene racunaju samo GLOBALNE cene (prazna stanica
+        ' upita). Kad globalne nema, polje ostaje kakvo jeste (AutoFillCena).
+        ' F3/F4: mesto ne ulazi u cenu, pa se predlog ne menja (v. kraj).
+        If CenaPoStanici(ActiveMode) Then AutoFillCena False
         Exit Sub
     End If
 
@@ -9194,6 +9198,16 @@ Private Sub OnStanicaChanged()
     ' dobija broj koji na serveru vec postoji.
     RefreshBrojPredlog True
     RefreshStatusBar mFrm
+
+    ' PREDLOG CENE PRATI OTKUPNO MESTO (odluka vlasnika): istog dana posebna
+    ' cena mesta pobedjuje globalnu (CEN-05). Samo gde mesto ulazi u cenu
+    ' (F1/F2, CenaPoStanici) -- u F3/F4 bi poziv samo ponovo upisao istu
+    ' globalnu cenu preko rucno unete. Ide POSLEDNJE: kad NapustiOtpremnicu iznad
+    ' napusti otpremnicu, vraca datum na danas i moze da postavi podrazumevanu
+    ' robu (ApplyDefaultRoba -> Change na cbVrsta -> AutoFillCena), pa ovaj
+    ' poziv vidi konacan datum i robu; dupli poziv je idempotentan. AutoFillCena
+    ' ne pise ni cbOM ni datum, pa se u ovu proceduru ne vraca.
+    If CenaPoStanici(ActiveMode) Then AutoFillCena False
 End Sub
 
 ' Da li je partner dokumenta kooperant (pa ga stanica filtrira i brise).
@@ -9266,6 +9280,11 @@ Private Sub OnDatumChanged()
     ' checkRemote=True kao legacy txtDatum_AfterUpdate: drugi dan = drugi niz,
     ' pa se pita i Google da broj ne bude vec zauzet
     RefreshBrojPredlog True
+    ' PREDLOG CENE PRATI DATUM (odluka vlasnika): vazeca cena je ona NA DAN
+    ' dokumenta, pa drugi dan moze imati drugu cenu (CEN-05). Tek posle gardova
+    ' i samo uz procitan datum -- necitljiv datum dok operater kuca ne menja
+    ' predlog; prefill i ciscenje forme (mLoading) ga ne okidaju.
+    AutoFillCena False
 End Sub
 
 ' Datum iz polja; danas kad polje jos nije citljivo.
@@ -9387,13 +9406,33 @@ End Sub
 ' robu i klasu (tblCenovnik, append-only istorija), a tip ambalaze pripada
 ' kulturi - operater ih ne kuca nego ispravlja kad treba.
 '
-' Postavlja se SAMO ako postoji vrednost: prazan cenovnik ne sme da obrise ono
-' sto je operater vec upisao, niti ono sto je prepisano sa otpremnice. Zato
-' prefill sa otpremnice ide POSLE ovoga (ista relacija kao u legacy: cenovnik
-' je podrazumevano, otpremnica ima poslednju rec).
-Private Sub AutoFillCena()
+' ULAZ PREDLOGA (modCenovnik.TryVazecaCena, CEN-05..07): roba i klasa, DATUM
+' DOKUMENTA i OTKUPNO MESTO. Vazeca cena je ona koja vazi NA DAN dokumenta
+' (buduca cena ne vazi pre svog dana), a istog dana posebna cena stanice
+' pobedjuje globalnu -- pa je predlog tacan tek uz oba podatka. Datum je
+' DatumIzPolja (danas dok polje jos nije citljivo). Zato predlog osvezava i
+' promena datuma (OnDatumChanged) i otkupnog mesta (OnStanicaChanged), ne samo
+' robe i klase (odluka vlasnika).
+'
+' Stanica ulazi u upit SAMO u rezimima ciji dokument NOSI StanicaID (v.
+' CenaPoStanici): otkup F1 i otpremnica F2 (tblOtkup / tblOtpremnica,
+' schema/schema.json). Zbirna F3 i prijemnica F4 tu kolonu nemaju -- cbOM tamo
+' nije podatak dokumenta, pa bi posebna cena izabranog mesta bila cena mesta za
+' koje dokument ne zna. Tamo se upit salje bez stanice, a prazna stanica upita
+' vidi samo globalne cene.
+'
+' Postavlja se SAMO kad cena postoji (TryVazecaCena = True): prazan cenovnik ne
+' sme da obrise ono sto je operater vec upisao, niti ono sto je prepisano sa
+' otpremnice. Zato prefill sa otpremnice ide POSLE ovoga (ista relacija kao u
+' legacy: cenovnik je podrazumevano, otpremnica ima poslednju rec).
+'
+' saAmbalazom = False: samo cena. Tako zovu okidaci datuma i otkupnog mesta --
+' tip ambalaze zavisi samo od kulture, koja se tada nije promenila, a ponovni
+' upis bi pregazio tip koji je operater ispravio rucno.
+Private Sub AutoFillCena(Optional ByVal saAmbalazom As Boolean = True)
     Dim ctx As Object, zf As Object, vrsta As String, sorta As String
     Dim cI As Double, cII As Double, ta As String
+    Dim stID As String, dat As Date, imaI As Boolean, imaII As Boolean
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If mBuilding Then Exit Sub
@@ -9406,19 +9445,35 @@ Private Sub AutoFillCena()
     sorta = Trim$(CStr(ctx.Controls("cbSorta").value))
     If Len(vrsta) = 0 Then Exit Sub
 
-    cI = GetVazecaCena(vrsta, sorta, KLASA_I)
-    If cI > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = Format$(cI, "0.######")
+    dat = DatumIzPolja()
+    If CenaPoStanici(ActiveMode) Then stID = SelectedStanicaID(mFrm)
+
+    ' Ishod ide u promenljivu: greska u uslovu If pod Resume Next bi usla u telo.
+    imaI = modCenovnik.TryVazecaCena(vrsta, sorta, KLASA_I, stID, dat, cI)
+    If imaI Then zf.Controls("fgCena").Controls("fgCena1T").text = Format$(cI, "0.######")
     If mKlasa = 2 Then
-        cII = GetVazecaCena(vrsta, sorta, KLASA_II)
-        If cII > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = Format$(cII, "0.######")
+        imaII = modCenovnik.TryVazecaCena(vrsta, sorta, KLASA_II, stID, dat, cII)
+        If imaII Then zf.Controls("fgCena").Controls("fgCena2T").text = Format$(cII, "0.######")
     End If
 
-    ta = GetKulturaTipAmbalaze(vrsta, sorta)
-    If Len(ta) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = ta
+    If saAmbalazom Then
+        ta = GetKulturaTipAmbalaze(vrsta, sorta)
+        If Len(ta) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = ta
+    End If
 
     RefreshPaletaInfo
     RecalcVrednost
 End Sub
+
+' Da li izabrano otkupno mesto ulazi u predlog cene: samo kad dokument rezima
+' NOSI StanicaID (tblOtkup, tblOtpremnica). Jedno mesto za to pravilo -- citaju
+' ga AutoFillCena (koja stanica ide u upit) i OnStanicaChanged (da li promena
+' mesta uopste menja predlog).
+Private Function CenaPoStanici(ByVal mode As String) As Boolean
+    Select Case modeKey(mode)
+        Case "OTKUP", "OTPREMNICA": CenaPoStanici = True
+    End Select
+End Function
 
 ' "Paleta br. 186/2026: jos 23 gajbi do zatvaranja (217/240)" - za izabranu
 ' robu i klasu. Racun radi postojeci GajbeDoZatvaranjaPaleteInfo; kad je

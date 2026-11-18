@@ -346,12 +346,17 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_PRAG_BLOK|" & COL_KUL_PRAG_PROSEK_BLOK & "|txt|92|3", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
         Case "CENOVNIK"
+            ' Stanica je deo znacenja reda (docs/DOMEN/CENOVNIK.md, CEN-01):
+            ' prazna = GLOBALNA cena za celu firmu, naziv = POSEBNA cena te
+            ' stanice. Izvedena "@stanica" daje naziv (NazivStanice), prazno
+            ' ostaje prazno. Kolona 1 i dalje nosi CenaID (identitet reda).
             MatKolone = Array( _
                 "OTKUI_HDM_ID|" & COL_CEN_ID & "|txt|84|1", _
                 "OTKUI_HDM_DATUM|" & COL_CEN_DATUM & "|date|72|1", _
                 "OTKUI_HDM_VRSTA|" & COL_CEN_VRSTA & "|txt|110|1", _
                 "OTKUI_HDM_SORTA|" & COL_CEN_SORTA & "|part|0|1", _
                 "OTKUI_HDM_KLASA|" & COL_CEN_KLASA & "|txt|72|1", _
+                "OTKUI_HDM_STANICA|@stanica|txt|100|1", _
                 "OTKUI_HDM_CENA|" & COL_CEN_CENA & "|dec|84|1")
         Case "VRSTAGP"
             MatKolone = Array( _
@@ -467,10 +472,15 @@ Public Function MatPolja(ByVal kljuc As String) As Variant
                 "pragupoz|OTKUI_HDM_PRAG_UPOZ|num|0|" & COL_KUL_PRAG_PROSEK_UPOZ & "|", _
                 "pragblok|OTKUI_HDM_PRAG_BLOK|num|0|" & COL_KUL_PRAG_PROSEK_BLOK & "|")
         Case "CENOVNIK"
+            ' Stanica je NEOBAVEZNA: prazno = GLOBALNA cena, izabrana = POSEBNA
+            ' cena te stanice (CEN-01, CEN-05). Combo nudi prikaz "Naziv (ST-xxx)";
+            ' u pisca ide ID (modMaticniUnos.IdZaCombo), kao kod svakog combo-a
+            ' stranog kljuca.
             MatPolja = Array( _
                 "vrsta|OTKUI_HDM_VRSTA|cmb|1|" & COL_CEN_VRSTA & "|@vrste", _
                 "sorta|OTKUI_HDM_SORTA|cmb|0|" & COL_CEN_SORTA & "|@sorte", _
                 "klasa|OTKUI_HDM_KLASA|cmb|1|" & COL_CEN_KLASA & "|@klase", _
+                "stanica|OTKUI_HDM_STANICA|cmb|0|" & COL_CEN_STANICA & "|@stanice", _
                 "datum|OTKUI_HDM_DATUM|date|0|" & COL_CEN_DATUM & "|", _
                 "cena|OTKUI_HDM_CENA|num|1|" & COL_CEN_CENA & "|")
         Case "VRSTAGP"
@@ -728,9 +738,10 @@ End Function
 ' Racuna se iz opisa kolona, pa dodavanje sekcije ne trazi jos jedan spisak koji
 ' bi se razisao sa prvim.
 '
-' CENOVNIK je jedini izuzetak i to je poslovno pravilo, ne ukus: cenovnik je
-' append-only i vazeca cena je POSLEDNJA, pa se otvara po datumu opadajuce --
-' isto sto legacy forma vec radi svojim sortom.
+' CENOVNIK je jedini izuzetak: istorija cena se otvara po datumu opadajuce, pa
+' je najnovija odluka gore -- isto sto legacy forma vec radi svojim sortom. Ovo
+' je PRIKAZ; vazecu cenu racuna modCenovnik.CenVazeciRed (CEN-05..07), ne
+' redosled mreze.
 Public Function MatSort(ByVal kljuc As String) As String
     Dim cols As Variant, i As Long, dat As Long
     If kljuc = "CENOVNIK" Then
@@ -841,9 +852,9 @@ Private Function MatRedoviCore(ByVal kljuc As String, ByVal filter As String, _
     nCol = UBound(cols) - LBound(cols) + 1
 
     data = GetTableData(tbl)
-    ' Cenovnik je append-only i cita se ISTIM redosledom kao u legacy formi:
-    ' stornirano napolje, pa datum opadajuce sa tie-break-om po CenaID (kasniji
-    ' unos gore). Bez toga bi vazeca cena zavisila od redosleda upisa u tabelu.
+    ' Cenovnik se cita ISTIM redosledom kao u legacy formi: stornirano napolje
+    ' (storno i ispravka, CEN-11..13), pa datum opadajuce sa tie-break-om po
+    ' CenaID (kasniji unos gore). Samo prikaz -- vazecu cenu bira modCenovnik.
     If kljuc = "CENOVNIK" And Not IsEmpty(data) Then data = CenovnikPoredak(data)
     If IsEmpty(data) Then
         MatRedoviCore = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
@@ -917,8 +928,8 @@ EH:
     Err.Raise Err.Number, "modMaticniIzvor.MatRedovi[" & kljuc & "]", Err.description
 End Function
 
-' Poredak cenovnika, izdvojen zato sto je poslovno pravilo a ne prikaz:
-' stornirano napolje, pa datum opadajuce (tie-break CenaID).
+' Poredak cenovnika u mrezi: stornirano napolje, pa datum opadajuce
+' (tie-break CenaID). Pravilo vazece cene NIJE ovde nego u modCenovnik.
 Private Function CenovnikPoredak(ByRef data As Variant) As Variant
     Dim cen As Variant, sortCol As Long, idCol As Long
     cen = ExcludeStornirano(data, TBL_CENOVNIK)

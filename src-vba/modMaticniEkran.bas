@@ -83,6 +83,14 @@ Private Const MAT_GEO_H As Single = MAT_ZONA_H + 18 + MAT_RED_H + 38
 ' pa zona raste za po ovoliko po prelomljenom redu.
 Private Const GEO_RED_H As Single = 32
 
+' TEST SEAM pitanja cenovnika (docs/DOMEN/CENOVNIK.md): razlog storna, razlog
+' ispravke i potvrda prekida posebnih cena. U test rezimu se SVAKO pitanje
+' DOPISUJE ovde (spojeno vbCrLf) i odgovara se odbijanjem ("" / Ne), pa se
+' nista ne upisuje -- MsgBox/InputBox u nevidljivom Excelu visi do timeout-a.
+' Seam samo posmatra i zabranjuje. Cita ga CenPitanjeTest, gasi
+' CenPitanjeTestReset (i modTest.ResetSeamova).
+Private mCenPitanjeTest As String
+
 '--------------------------------------------------------------- ZONA
 Public Sub ZonaGradi(ByVal z As Object)
     Dim i As Long
@@ -448,9 +456,13 @@ Private Sub OsveziZonu(ByVal ekran As String, ByVal lista As String)
     End If
 End Sub
 
-' Napomena u zoni. Za prava kaze cija su, za ostalo gde je unos.
+' Napomena u zoni. Za prava kaze cija su, za cenovnik kako se cena cita (prazna
+' stanica = globalna, istog dana posebna pobedjuje) i sta radi dvoklik -- jer
+' "Izmeni" tamo ne postoji. Za ostalo gde je unos.
 Private Function Napomena(ByVal lista As String) As String
-    If lista <> "PRAVA" Then
+    If lista = "CENOVNIK" Then
+        Napomena = Poruka("CEN_MSG_NAPOMENA")
+    ElseIf lista <> "PRAVA" Then
         Napomena = Poruka("OTKUI_MAT_UNOS_LEGACY")
     ElseIf Len(mKorisnikID) = 0 Then
         Napomena = Poruka("OTKUI_KOR_BEZ_IZBORA")
@@ -497,9 +509,13 @@ End Function
 '------------------------------------------------------------- RADNJE
 ' Radnje nad redom za AKTIVNU listu.
 '
-' Cenovnik nema "Izmeni": append-only, nova cena je nov red -- isto pravilo po
-' kom legacy forma za Cenovnik krije to dugme. "Deaktiviraj" postoji samo tamo
-' gde sekcija STVARNO ima kolonu statusa; inace bi dugme tiho ne radilo nista.
+' Cenovnik nema "Izmeni": red se posle unosa ne menja (CEN-02), pa se ni ne
+' nudi -- isto pravilo po kom je legacy forma krila to dugme. Umesto izmene ima
+' ISPRAVKU (storno starog + nov red u jednoj transakciji, veza u oba smera,
+' CEN-13) i STORNO (razlog obavezan, jednokratan i konacan, CEN-11/12) --
+' docs/DOMEN/CENOVNIK.md. Obe idu kroz modMaticniUnos.MatIspraviCenu /
+' MatStornirajCenu, nikad kroz MatIzmeni. "Deaktiviraj" postoji samo tamo gde
+' sekcija STVARNO ima kolonu statusa; inace bi dugme tiho ne radilo nista.
 Public Function Radnje(ByVal lista As String) As String
     Dim s As String
     If Len(lista) = 0 Then Exit Function
@@ -510,6 +526,10 @@ Public Function Radnje(ByVal lista As String) As String
         Radnje = "pravo:OTKUI_BTN_KOR_PRAVO:150:soft:1"
         Exit Function
     End If
+    ' Cenovnik ide PRE opste grane izmene, a opsta grana ga i dalje izricito
+    ' preskace: "izmeni" se za cenovnik NIKAD ne dodaje.
+    If lista = "CENOVNIK" Then s = "ispravi:OTKUI_BTN_MAT_ISPRAVI:92:soft:1|" & _
+                                   "storno:OTKUI_BTN_MAT_STORNO:110:danger:1"
     If lista <> "CENOVNIK" Then s = "izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1"
     If Len(modMaticniIzvor.MatStatusKolona(lista)) > 0 Then
         If Len(s) > 0 Then s = s & "|"
@@ -724,11 +744,29 @@ Private Function Akcija(ByVal tag As String, ByVal lista As String) As Boolean
         Case "status": Akcija = PromeniStatus(lista)
         Case "geo":    OtvoriGeo
         Case "pravo":  Akcija = PromeniPravo()
+        ' Radnje cenovnika (CEN-11..13). Prijavljuje ih samo Radnje("CENOVNIK"),
+        ' pa na drugoj listi znace isto sto i nepoznata radnja.
+        Case "ispravi"
+            If lista = "CENOVNIK" Then
+                OtvoriIzmenu lista, True
+            Else
+                NepoznataRadnja p(0)
+            End If
+        Case "storno"
+            If lista = "CENOVNIK" Then
+                Akcija = StornirajCenuKlik()
+            Else
+                NepoznataRadnja p(0)
+            End If
         Case Else
-            LogWarn "modMaticniEkran.Akcija", "Nepoznata radnja '" & p(0) & "'."
-            modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
+            NepoznataRadnja p(0)
     End Select
 End Function
+
+Private Sub NepoznataRadnja(ByVal radnja As String)
+    LogWarn "modMaticniEkran.Akcija", "Nepoznata radnja '" & radnja & "'."
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & radnja, True
+End Sub
 
 '------------------------------------------------------------- EDITOR
 Private Sub OtvoriNov(ByVal lista As String)
@@ -743,13 +781,17 @@ End Sub
 ' Ne vraca nista: otvaranje editora ne menja podatke, pa mreza nema sta da
 ' procita ponovo. Raspored zone trazi omotnica Dogadjaj, po promeni stanja.
 '
-' CENOVNIK je poseban: istorija cena se ne menja, pa se otvara NOV unos sa
-' vrednostima izabranog reda (proizvod ostaje, cena se unosi nova). To je ono
-' sto operater i hoce kad klikne na staru cenu -- a legacy forma je za isto
-' krila dugme "Izmeni" i trazila da se sve otkuca ponovo.
-Private Sub OtvoriIzmenu(ByVal lista As String)
+' CENOVNIK je poseban, jer se red posle unosa ne menja (CEN-02):
+'   - dvoklik otvara NOV unos sa vrednostima izabranog reda (proizvod i
+'     stanica ostaju, cena se unosi nova). To je ono sto operater i hoce kad
+'     klikne na staru cenu -- a legacy forma je za isto krila dugme "Izmeni" i
+'     trazila da se sve otkuca ponovo;
+'   - radnja "ispravi" (ispravkaCene) otvara ISPRAVKU tog reda: mEditID =
+'     CenaID, sva polja popunjena, i cena i datum. "Sacuvaj" tada ide kroz
+'     MatIspraviCenu (storno starog + nov red, CEN-13), nikad kroz MatIzmeni.
+Private Sub OtvoriIzmenu(ByVal lista As String, Optional ByVal ispravkaCene As Boolean = False)
     Dim red As Long, v As Object, a As Variant, r As Variant, nm As String
-    Dim jeCenovnik As Boolean
+    Dim jeCenovnik As Boolean, novUnos As Boolean
 
     If Len(lista) = 0 Then Exit Sub
     If Len(mIzabranID) = 0 Then
@@ -764,11 +806,13 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
     End If
 
     jeCenovnik = (lista = "CENOVNIK")
+    novUnos = jeCenovnik And Not ispravkaCene
     mGeoID = ""                      ' jedna stvar u zoni u isto vreme
     mEditKljuc = lista
     mEditEkran = mZonaEkran
-    ' Prazan mEditID znaci UNOS -- otud cenovnik uvek dodaje nov red.
-    mEditID = IIf(jeCenovnik, "", mIzabranID)
+    ' Prazan mEditID znaci UNOS -- otud dvoklik na cenovnik dodaje nov red.
+    ' Ispravka cene nosi CenaID starog reda, kao izmena svake druge sekcije.
+    mEditID = IIf(novUnos, "", mIzabranID)
     OcistiPolja lista
 
     Set v = modMaticniUnos.MatVrednostiReda(lista, red)
@@ -784,11 +828,15 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
     ' vrednost, pa je spisak bio prazan (sorte zavise od izabrane vrste).
     OsveziZavisne lista, ""
 
-    If jeCenovnik Then
+    If novUnos Then
         ' Cena se unosi NOVA; datum ostaje prazan pa pisac uzima danasnji.
         PostaviPolje lista, "cena", ""
         PostaviPolje lista, "datum", ""
         modOtkupUI.ShowToast Poruka("MATU_ERR_CENOVNIK_APPEND"), False
+    ElseIf jeCenovnik Then
+        ' Ispravka: cena i datum ostaju iz reda (datum kao dd.mm.yyyy, cena
+        ' kao i svaki broj u editoru -- MatVrednostiReda), pa se cita nazad.
+        modOtkupUI.ShowToast Poruka("CEN_MSG_ISPRAVKA_OTVORENA"), False
     End If
 End Sub
 
@@ -865,6 +913,17 @@ Private Function Sacuvaj(ByVal lista As String) As Boolean
     End If
     Set polja = PokupiPolja(mEditKljuc)
 
+    ' CENOVNIK nikad ne ide kroz MatIzmeni (CEN-02). Ispravka (mEditID = CenaID)
+    ' ima svoj tok; unos prvo pita sme li (provera, pa pregled prekida posebnih
+    ' cena), pa ide istim putem MatDodaj kao i do sada.
+    If mEditKljuc = "CENOVNIK" Then
+        If Len(mEditID) > 0 Then
+            Sacuvaj = SacuvajIspravkuCene(polja)
+            Exit Function
+        End If
+        If Not CenaSmeNaUnos(polja) Then Exit Function
+    End If
+
     If Len(mEditID) = 0 Then
         odgovor = modMaticniUnos.MatDodaj(mEditKljuc, polja, noviID)
     Else
@@ -889,6 +948,129 @@ Private Function Sacuvaj(ByVal lista As String) As Boolean
     End If
     Sacuvaj = True
 End Function
+
+'------------------------------------------------------------ CENOVNIK
+' Unos, ispravka i storno cene (docs/DOMEN/CENOVNIK.md, CEN-01..13). Pravila i
+' upis su u modCenovnik, a prevod polja u modMaticniUnos; ovde su samo pitanja
+' operateru i ishod u zoni. Svako "ne" i svaka greska ostavljaju editor
+' otvoren -- otkucano se ne gubi.
+
+' Sme li nova cena na upis: provera (uz fokus na polje), pa pregled. Nova
+' GLOBALNA cena koja od tog dana prekida raniju POSEBNU cenu neke stanice trazi
+' potvrdu operatera (odluka vlasnika).
+Private Function CenaSmeNaUnos(ByVal polja As Object) As Boolean
+    Dim odgovor As String
+    odgovor = modMaticniUnos.MatCenaProblem(polja)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        FokusNaPolje polja
+        Exit Function
+    End If
+    CenaSmeNaUnos = PotvrdiPregled(modMaticniUnos.MatCenaPregled(polja))
+End Function
+
+' Ispravka reda mEditID (CEN-13): provera, razlog (obavezan), pregled, pa pisac
+' (storno starog + nov red u jednoj transakciji). Uspeh zatvara editor -- stari
+' red vise nije vazeci i nestaje iz mreze.
+Private Function SacuvajIspravkuCene(ByVal polja As Object) As Boolean
+    Dim odgovor As String, razlog As String, staraID As String, noviID As String
+    staraID = mEditID
+    odgovor = modMaticniUnos.MatIspravkaCeneProblem(staraID, polja)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        FokusNaPolje polja
+        Exit Function
+    End If
+    razlog = PitajRazlogCene(Poruka("CEN_ASK_RAZLOG_ISPRAVKE"))
+    If RazlogPrazan(razlog) Then
+        modOtkupUI.ShowToast Poruka("CEN_MSG_OTKAZANO"), False
+        Exit Function
+    End If
+    If Not PotvrdiPregled(modMaticniUnos.MatCenaPregled(polja, staraID)) Then Exit Function
+    odgovor = modMaticniUnos.MatIspraviCenu(staraID, polja, razlog, noviID)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        Exit Function
+    End If
+    modOtkupUI.ShowToast Poruka("CEN_OK_ISPRAVLJENO") & " " & noviID, False
+    ZatvoriEditor
+    SacuvajIspravkuCene = True
+End Function
+
+' Storno izabranog reda (CEN-11, CEN-12). Razlog je obavezan; prazan razlog
+' (Cancel ili same beline) je odustajanje, ne greska. Storniran red nestaje iz
+' mreze (ExcludeStornirano), pa uspeh trazi novo citanje (True).
+Private Function StornirajCenuKlik() As Boolean
+    Dim id As String, razlog As String, odgovor As String
+    If Len(mIzabranID) = 0 Then
+        modOtkupUI.ShowToast Poruka("MATU_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    id = mIzabranID
+    razlog = PitajRazlogCene(Poruka("CEN_ASK_RAZLOG_STORNO") & vbCrLf & vbCrLf & id)
+    If RazlogPrazan(razlog) Then
+        modOtkupUI.ShowToast Poruka("CEN_MSG_OTKAZANO"), False
+        Exit Function
+    End If
+    odgovor = modMaticniUnos.MatStornirajCenu(id, razlog)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        Exit Function
+    End If
+    ' Otvorena ispravka bas ovog reda vise nema sta da ispravi.
+    If mEditKljuc = "CENOVNIK" And StrComp(mEditID, id, vbTextCompare) = 0 Then ZatvoriEditor
+    modOtkupUI.ShowToast Poruka("CEN_OK_STORNIRANO") & " " & id, False
+    StornirajCenuKlik = True
+End Function
+
+' True kad pregled nema sta da kaze ili je operater potvrdio; inace toast
+' "otkazano" i False.
+Private Function PotvrdiPregled(ByVal spisak As String) As Boolean
+    If Len(spisak) = 0 Then
+        PotvrdiPregled = True
+    ElseIf PotvrdiPrekidPosebnih(spisak) Then
+        PotvrdiPregled = True
+    Else
+        modOtkupUI.ShowToast Poruka("CEN_MSG_OTKAZANO"), False
+    End If
+End Function
+
+' Prazan razlog = odustajanje (InputBox na Cancel daje ""). Beline su isti
+' skup koji pisac skida (razmak, tab, CR, LF, NBSP), pa razlog od samih belina
+' postaje otkazivanje, ne crvena greska. Pravilo razloga (obaveznost, duzina)
+' i dalje drzi modCenovnik.
+Private Function RazlogPrazan(ByVal razlog As String) As Boolean
+    razlog = Replace(Replace(Replace(Replace(razlog, vbTab, ""), vbCr, ""), vbLf, ""), ChrW(160), "")
+    RazlogPrazan = (Len(Trim$(razlog)) = 0)
+End Function
+
+' Potvrda pre upisa globalne cene koja prekida posebne. TEST SEAM, tvrdo
+' gejtovan: u test rezimu se tekst DOPISUJE u mCenPitanjeTest i odgovor je Ne.
+Private Function PotvrdiPrekidPosebnih(ByVal spisak As String) As Boolean
+    Dim tekst As String
+    tekst = Poruka("CEN_ASK_PREKID_POSEBNIH") & vbCrLf & spisak & vbCrLf & vbCrLf & _
+            Poruka("CEN_ASK_NASTAVITI")
+    If IsTestMode() Then
+        ZabeleziPitanjeCene tekst
+        Exit Function
+    End If
+    PotvrdiPrekidPosebnih = (MsgBox(tekst, vbQuestion + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
+End Function
+
+' Razlog storna ili ispravke. TEST SEAM, tvrdo gejtovan: u test rezimu se
+' pitanje DOPISUJE u mCenPitanjeTest i vraca "" (odustajanje).
+Private Function PitajRazlogCene(ByVal pitanje As String) As String
+    If IsTestMode() Then
+        ZabeleziPitanjeCene pitanje
+        Exit Function
+    End If
+    PitajRazlogCene = InputBox(pitanje, APP_NAME)
+End Function
+
+Private Sub ZabeleziPitanjeCene(ByVal tekst As String)
+    If Len(mCenPitanjeTest) > 0 Then mCenPitanjeTest = mCenPitanjeTest & vbCrLf
+    mCenPitanjeTest = mCenPitanjeTest & tekst
+End Sub
 
 Public Sub ZatvoriEditor()
     mEditKljuc = ""
@@ -1083,6 +1265,10 @@ Private Sub FokusNaPolje(ByVal polja As Object)
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     nm = KontrolaPolja(mEditKljuc, CStr(polja(modMaticniUnos.MAT_FOKUS)))
+    ' Forma bez .Show ne prima fokus, a u nevidljivom Excelu SetFocus visi
+    ' (.claude/rules/testovi.md par.4) -- greska cene je put koji test dosegne.
+    ' Test cita polja(MAT_FOKUS), ne kontrolu.
+    If IsTestMode() Then Exit Sub
     If Len(nm) > 0 Then z.Controls(nm).Controls(nm & "T").SetFocus
     Err.Clear
 End Sub
@@ -1106,6 +1292,19 @@ End Function
 Public Function MatEditIDTest() As String
     MatEditIDTest = mEditID
 End Function
+
+' TEST SEAM: pitanja cenovnika zabelezena u test rezimu, spojena vbCrLf ("" =
+' nijedno). Tvrdo gejtovan, kao PitanjeManjkaTest.
+Public Function CenPitanjeTest() As String
+    If Not IsTestMode() Then Exit Function
+    CenPitanjeTest = mCenPitanjeTest
+End Function
+
+' TEST SEAM: brise zabelezena pitanja -- test pre poteza, i ResetSeamova.
+Public Sub CenPitanjeTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mCenPitanjeTest = ""
+End Sub
 
 ' Kontrola bazena koja nosi dato polje -- tvrdnja da se dodela ne razilazi sa
 ' rasporedom (tekst i combo idu u odvojene brojace).
