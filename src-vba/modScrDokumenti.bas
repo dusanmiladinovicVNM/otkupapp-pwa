@@ -3398,7 +3398,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' otpremnica -> aktivna zbirna), nikad citac po redu. Kad strogi citac
     ' odbije tabelu (KI-081), lista se NE obara i NE pogadja: red dobija
     ' "veza nepoznata", a razlog ide u log (S92-ODL-01, plan 14.66).
-    Dim zbrIzClanstva As Boolean, clRazlog As String
+    Dim zbrIzClanstva As Boolean, clRazlog As String, nNepoznatih As Long
     Dim clOtp As Object, clZbr As Object, brPoZbr As Object
     zbrIzClanstva = (mk = "OTKUP" Or mk = "OTPREMNICA")
     If zbrIzClanstva Then
@@ -3650,7 +3650,14 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 zbrID = ZbirnaReda(mk, CellS(src, r, iStavID), clOtp, clZbr)
                 bezZbirne = (Len(zbrID) = 0)
                 If Not bezZbirne Then
-                    If brPoZbr.Exists(zbrID) Then vZbir = CStr(brPoZbr(zbrID))
+                    ' S92-REV-01: citac E3 postojanje zbirne ne proverava. Clanstvo
+                    ' na zbirnu koje nema u zaglavljima je kvar BAS tog reda --
+                    ' veza nepoznata, ne "Poslato" bez labele.
+                    If brPoZbr.Exists(zbrID) Then
+                        vZbir = CStr(brPoZbr(zbrID))
+                    Else
+                        nepoznato = True: If Not isStorno Then nNepoznatih = nNepoznatih + 1
+                    End If
                 End If
             End If
         Else
@@ -3696,8 +3703,9 @@ NextRow:
     ' ekran. Dok je sortiranje bilo unutar ovog koda, mreza je umela da sortira
     ' samo dokumenta.
     mStep = "OK"
-    ' Brojac "Bez zbirne" uz nepoznatu vezu je -1 ("?" na cipu), ne broj.
-    If Len(clRazlog) > 0 Then cBez = -1
+    ' Brojac "Bez zbirne" uz nepoznatu vezu (cela tabela ili bar jedan red) je
+    ' -1 ("?" na cipu), ne broj -- tacan broj se tada ne zna.
+    If Len(clRazlog) > 0 Or nNepoznatih > 0 Then cBez = -1
     RedoviZaTip = Array(cols, outA, n, sumKg, sumVal, Array(cOtk, cBez, cNef))
     Exit Function
 EH:

@@ -12011,8 +12011,8 @@ zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragov
   - storno zbirne vraća otpremnicu u „bez zbirne"; OTK red **sagrađen** posle storna otpremnice nosi prazan vozač (već poslat red se ne menja: push ide jednom);
   - dve aktivne zbirne istog broja (A2) sa **različitom** vrstom: keš vrste daje „(Nepoznato)", ne vrstu prve zbirne po redu tabele;
   - hladnjački blok: vozač tekuće predaje je stanica (ogledalo, `docs/DOMEN/README.md`);
-  - članstvo na zbirnu koje nema u `tblZbirna` (`AktivnoClanstvoZbirni` postojanje ne proverava): F1/F2 pokazuju „Poslato" bez labele; ROBA (OM) pada sa razlogom (`vbObjectError + 7512`); detalj samo izostavi red zbirne (nije označeno — slabost čitača E3);
-  - **nisu mereni testom** (ručna provera ili sledeći rez): otpremnica u nacrtu zbirne, hladnjački blok, članstvo na nepostojeću zbirnu, naslov ispravke na papiru otpremnice (tačka 8) i `ImpactHeader` (tačka 9; polja traga ne čita niko).
+  - članstvo na zbirnu koje nema u `tblZbirna` (`AktivnoClanstvoZbirni` postojanje ne proverava): F1/F2 daju **tom redu** „Veza nepoznata" i brojač „?" (ostali redovi tačni); ROBA (OM) pada sa razlogom (`vbObjectError + 7512`); detalj otpremnice imenuje zbirnu koje nema (`S92-REV-01`, posle završnog review-a; do tada je red bio „Poslato" bez labele). **Ostaje bez oznake:** detalj otkupa i izvoz `OtkupiAll` (oba kroz `TekucaPredajaOtkupa`, koji čita samo broj zbirne) izostave red zbirne i ne kažu razlog — kanonski pisci to stanje ne prave (zaglavlje zbirne se ne briše), pa je P3; zajednička provera postojanja „E3 → zaglavlje" pripada S9-3 ili S9-5;
+  - **nisu mereni testom** (ručna provera ili sledeći rez): otpremnica u nacrtu zbirne, hladnjački blok, naslov ispravke na papiru otpremnice (tačka 8) i `ImpactHeader` (tačka 9; polja traga ne čita niko).
 - **Negativ:**
   - **mamac** (*synthetic anomaly*): na lancu Y, kolone bez pisca (`Otkup.VozacID`, `Otkup.BrojZbirne`, `Otkup.OtpremnicaID`, `Otpremnica.BrojZbirne`) pokazuju na lanac X; detalj, status i OTK red ih ne smeju pratiti;
   - otpremnica bez aktivne zbirne ostaje „bez zbirne"; blok bez otpremnice ostaje „bez zbirne";
@@ -12064,6 +12064,25 @@ zrnatost fail-closed ponašanja za E1–E3, E5 i E6 (ivica se gasi za sve tragov
   `vba_gate --require-green --require-compile` prolazi za svih šest suita. PR `#486`.
 - **Nije izvršeno:** dokaz u redosledu cele suite (isti poziv bez `--izbor`); ručna provera u Excelu (status i
   čip u F1/F2, detalj izveštaja, naslov na papiru otpremnice).
+- **Završni review (18.11.2026, CONDITIONAL MERGE GO, 9,2 / 10):**
+  - `S92-REV-01` (P2) **zatvoren u rezu:** članstvo na zbirnu koje nema u `tblZbirna` (čitač E3 postojanje ne
+    proverava) je u F1/F2 davalo „Poslato" bez labele. Sada taj red nosi „Veza nepoznata", brojač je „?", a
+    ostali redovi ostaju tačni; detalj otpremnice imenuje zbirnu koje nema. Postojanje se meri po ID-u, ne po
+    broju (nacrt zbirne sme da nema broj). Test 363 (deo REV-01) je pokazan crven nad prethodnim kodom
+    (`1|1|1|27` umesto `3|3|1|-1`); nova sabotaža `s92-zbirna-koje-nema-je-poslato`; sidro
+    `s92-brojac-nepoznate-veze-je-broj` pomereno uz izmenu brojača; sabotaža `s92-detalj-zbirna-koje-nema-cuti` za
+    detalj. Nije mereno: ograda `If Not isStorno` (storniran red sa članstvom na zbirnu koje nema ne pali „?")
+    i deo brojača `Or nNepoznatih > 0` zasebno (postojeća sabotaža brojača briše ceo red).
+  - `S92-REV-02` (P3, ne blokira): keš vrste koristi poređenje ključa osetljivo na velika slova, a `BrojJednak`
+    ne. Kanonski pisci problematičan oblik ne prave; zavisnost izveštaja od broja uklanja S9-3.
+  - Van ovog PR-a: raniji P1 u `ReassignPrijemnicaToZbirna_TX` (bira ciljnu zbirnu po broju, N7) se zatvara
+    sa S9-4, pre dalje izmene operaterskog prevezivanja.
+  - Lokalni review-i nisu GitHub approval; PR nema formalno podnet review.
+  - **Izvršeno nad izvorom sa REV-01** (otisak `5a866d00c2eb`): ciljano 5 / 0; `dokaz.py s92- --izbor` 13 / 13
+    (potpis `ea2193533981b8b0`) i `s92-detalj-zbirna-koje-nema-cuti` 1 / 1; pune suite `RunAllTests` 365 / 0,
+    BFP 3491 / 0, Storno 111 / 0, Palete 115 provera, `RunIzvestajTests` i StornoCentar zeleni; marker upisan.
+    Adversarijalna provera ispravke (dva čitača): bez P1/P2. **Ručni Compile od `973c08af` ne važi za ovaj
+    izvor** — ponavlja ga operater.
 - **Pre-existing nalaz, van reza:** sabotaža `prefill-broj` (sidro u prijemničkom repu `PrefillIzStorniranog`)
   ne može da obori test 20, jer test prefill prijemnice ne zove; postoji i na `57ab47ed`. Nije KI dok se ne
   dokaže `dokaz.py`-om.

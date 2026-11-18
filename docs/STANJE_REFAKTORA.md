@@ -4,7 +4,7 @@
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
 
-**Ažurirano:** 18.11.2026 (stavka 333: S9-2 — čitaoci kolona bez pisca na kanonu, testovi 362–365, 12 sabotaža dokazano, pune suite zelene, ručni Compile prošao, PR `#486`; stavka 332: S9-1 drugi deo — GP lanac E9/E10, verzije zbirne, testovi 360–361, pune suite zelene, ručni Compile prošao; stavka 331: S9-1 prvi deo — jezgro grafa `modSledljivost`, ivice E1–E6, testovi 356–359; stavka 330: pre-flight S9 preslagan na `4591f3d3`, bez novih nalaza, sledeći test 356; stavka 329: N17 — prag `prj_brojzbirne` 35 uz dokaz u oba smera; stavka 328: pre-flight S9 preslagan na `6b601ee1`; stavka 327: `SLED-ODL-09` „tok dokumenta" doneta, N15 prag 33; stavka 326: preslaganje na `1fa4937a`).
+**Ažurirano:** 18.11.2026 (stavka 333: S9-2 — čitaoci kolona bez pisca na kanonu, testovi 362–365, 12 sabotaža dokazano, pune suite zelene, REV-01 zatvoren posle završnog review-a, ručni Compile se ponavlja nad novim izvorom, PR `#486`; stavka 332: S9-1 drugi deo — GP lanac E9/E10, verzije zbirne, testovi 360–361, pune suite zelene, ručni Compile prošao; stavka 331: S9-1 prvi deo — jezgro grafa `modSledljivost`, ivice E1–E6, testovi 356–359; stavka 330: pre-flight S9 preslagan na `4591f3d3`, bez novih nalaza, sledeći test 356; stavka 329: N17 — prag `prj_brojzbirne` 35 uz dokaz u oba smera; stavka 328: pre-flight S9 preslagan na `6b601ee1`; stavka 327: `SLED-ODL-09` „tok dokumenta" doneta, N15 prag 33; stavka 326: preslaganje na `1fa4937a`).
 
 ## Pravila koja važe (16.09.2026)
 
@@ -11181,6 +11181,12 @@
        111 / 0, Palete zeleno (115), `RunIzvestajTests` i StornoCentar zeleni; Python koraci CI-ja 21 / 21.
      - **Ručni Compile: prošao** (operater, 18.11.2026) nad izvorom commita `973c08af` (otisak `be3b057f2c1c`, isti
        kao pune suite); `vba_gate --require-green --require-compile` prolazi za svih šest suita. PR `#486`.
+     - **Završni review (18.11.2026): CONDITIONAL MERGE GO, 9,2 / 10.** `S92-REV-01` (članstvo na zbirnu koje nema
+       davalo je „Poslato") zatvoren u rezu: taj red je „Veza nepoznata", brojač „?", detalj otpremnice imenuje
+       zbirnu; test 363 crven pa zelen, sabotaže 14 (`s92-*`) dokazane, pune suite ponovo zelene nad
+       `5a866d00c2eb` (365 / 3491 / 111 / Palete / Izveštaji / StornoCentar). `S92-REV-02` (P3) ide u S9-3;
+       P1 u `ReassignPrijemnicaToZbirna_TX` ide sa S9-4.
+     - **Ručni Compile treba ponoviti** nad izvorom sa REV-01 (prethodni prolaz je bio nad `973c08af`).
      - **Nije izvršeno:** dokaz u redosledu cele suite; ručna provera u Excelu.
      - **Prelazi dalje:** `N16` (KUL2) u S9-5; zatečeni mrtvi unosi `WRITE_OWNERSHIP.json` (`modMasterSync`,
        `modStorno`) u backlog §15; sabotaža `prefill-broj` ne može da obori test 20 (zatečeno, van reza).

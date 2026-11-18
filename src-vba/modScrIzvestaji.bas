@@ -2375,7 +2375,18 @@ Private Function ClanstvoOtpremniceZaDetalj(ByVal otpID As String, ByRef outBlok
     On Error GoTo EH
     outBlokova = modDokumenta.IzvoriOtpremnice(Trim$(otpID)).count
     zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(Trim$(otpID))
-    If Len(zbrID) > 0 Then outBrZb = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    If Len(zbrID) > 0 Then
+        ' S92-REV-01: citac E3 postojanje zbirne ne proverava -- clanstvo na
+        ' zbirnu koje nema je razlog, ne prazan red zbirne. Postojanje se meri
+        ' po ID-u, ne po broju (nacrt zbirne sme da nema broj).
+        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then
+            outBlokova = 0
+            ClanstvoOtpremniceZaDetalj = "Clanstvo otpremnice " & Trim$(otpID) & _
+                                         " pokazuje na zbirnu koje nema: " & zbrID
+            Exit Function
+        End If
+        outBrZb = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+    End If
     Exit Function
 EH:
     outBlokova = 0

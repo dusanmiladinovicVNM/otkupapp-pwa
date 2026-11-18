@@ -13655,10 +13655,26 @@ SABOTAZE = {
     ),
     "s92-brojac-nepoznate-veze-je-broj": (
         "modScrDokumenti.bas",
-        "    If Len(clRazlog) > 0 Then cBez = -1\n",
+        "    If Len(clRazlog) > 0 Or nNepoznatih > 0 Then cBez = -1\n",
         "    ' SABOTAZA: brojac uz nepoznatu vezu ostaje broj\n",
         "T_S92_StatusVezaNepoznata",
         "363 KI-081: brojac cipa Bez zbirne je nepoznat, ne broj",
+    ),
+    # S92-REV-01: clanstvo na zbirnu koje nema u zaglavljima (citac E3 postojanje
+    # ne proverava) mora dati "veza nepoznata" bas tom redu, ne "Poslato".
+    "s92-zbirna-koje-nema-je-poslato": (
+        "modScrDokumenti.bas",
+        "                        nepoznato = True: If Not isStorno Then nNepoznatih = nNepoznatih + 1\n",
+        "                        ' SABOTAZA: clanstvo na zbirnu koje nema ostaje Poslato\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni",
+    ),
+    "s92-detalj-zbirna-koje-nema-cuti": (
+        "modScrIzvestaji.bas",
+        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: detalj cuti o zbirnoj koje nema\n",
+        "T_S92_StatusVezaNepoznata",
+        "363 REV-01: detalj otpremnice imenuje zbirnu koje nema, ne cuti",
     ),
     "s92-otk-red-cita-otkup-vozacid": (
         "modStanicaLock.bas",

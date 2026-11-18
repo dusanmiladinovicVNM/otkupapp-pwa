@@ -32867,6 +32867,19 @@ Private Sub T_S92_StatusVezaNepoznata()
     AssertEq S92Pilula("OTPREMNICA", otpX) & "|" & S92Pilula("OTKUP", bX), "1|1", _
              "363 posle popravke clanstva status je opet tacan"
 
+    ' S92-REV-01: clanstvo pokazuje na zbirnu koje NEMA u tblZbirna. Citac E3
+    ' postojanje ne proverava, pa je red bio "Poslato" bez labele. To je kvar
+    ' podataka bas tog reda: veza nepoznata i brojac "?", a ostali redovi tacni.
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_ZBIRNA_ID, "ZBR-NEMA-" & t
+    AssertEq S92Pilula("OTPREMNICA", otpY) & "|" & S92Pilula("OTKUP", bY) & "|" & _
+             S92Pilula("OTPREMNICA", otpX) & "|" & S92BrojacBez("OTPREMNICA"), "3|3|1|-1", _
+             "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni"
+    spoj = IzvDetSpoj(modScrIzvestaji.IzDetaljOtpremnice(otpY))
+    AssertEq (InStr(1, spoj, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
+              InStr(1, spoj, "ZBR-NEMA-" & t, vbTextCompare) > 0 And _
+              InStr(1, spoj, Poruka("OTKUI_IZ_DET_ZBIRNA"), vbTextCompare) = 0), True, _
+             "363 REV-01: detalj otpremnice imenuje zbirnu koje nema, ne cuti"
+
     Err.Clear
 CleanUp:
     errNum = Err.Number
