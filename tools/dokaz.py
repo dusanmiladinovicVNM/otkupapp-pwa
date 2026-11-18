@@ -1007,9 +1007,21 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
 #              `_procedura`) -- izmenjen, dodat ili obrisan red, gledano i na
 #              novoj i na staroj strani (obrisan red se pripisuje proceduri u
 #              STAROM tekstu);
+#   POZIVALAC  (D-5b) procedura sidra NIJE dirnuta, ali poziva dirnutu
+#              direktno (dubina 1) ili preko jedne posredne (dubina 2,
+#              _OD_DUBINA). Seme su imena dirnutih procedura (obe strane) i
+#              imena deklarisana na dirnutim redovima KODA van procedura
+#              (izmenjena `Public Const X` cini dubinom 1 svaku proceduru
+#              koja pominje X; _OD_SEME_DEKLARACIJE). Graf je po IMENU nad
+#              SVIM modulima nove strane (_od_graf), bez string literala,
+#              komentara i lokalnih imena (parametar ili Dim koji zaklanja
+#              proceduru); string uz Run / .OnAction / CallByName se racuna;
 #   TEST       dirnuta je procedura ciljanog testa (Sub u _TEST_FAJLOVI), ili
 #              KOD deklaracija test-modula (FX_* konstante i stanje dele svi
-#              testovi tog modula, pa se tada racunaju dirnuti svi);
+#              testovi tog modula, pa se tada racunaju dirnuti svi), ili
+#              (D-5b) ciljani test zove do dubine 2 dirnutu proceduru TEST
+#              modula (zajednicki test-pomocnik). Seme iz produkcije se na
+#              testove NE siri -- to bi biralo skoro sve;
 #   FAJL       rezerva: dirnut je KOD van procedura (deklaraciona sekcija, ili
 #              red izmedju procedura koji nije komentar -- npr. `#If VBA7`
 #              grana zaglavlja, koju _procedure_po_redu ne pripise proceduri),
@@ -1024,12 +1036,19 @@ def _izaberi(sab, filter_: list, src: str = None) -> list:
 # Komentar i prazan red van procedura ne biraju nista (v. _od_bez_koda):
 # zaglavlje modula je komentar koji svaki rez dopuni.
 #
-# POZNATO OGRANICENJE: pozivaoci dirnute procedure se NE biraju. Izmena u
-# BrojJednak menja ponasanje ZBR-NORM-02 (sidro u pozivaocu), a izbor to ne
-# vidi. Nad diff-om 5c3d72a8 (stavka 288) zato fali 6 od 11 odlozenih: s6k4-*
-# u pozivaocima IsPaletaPreradjena, dubina 1 i 2 (plan, Prilog D.3, tacka 4).
-# Ne prati se ni sam alat (run_vba, sabotaza, dokaz) -- on ima svoj self-test.
-_OD_VRSTE = ("KATALOG", "PROCEDURA", "TEST", "FAJL", "FIXTURE")
+# POZNATA OGRANICENJA (D-5b): pozivaoci se biraju do dubine 2; dublji ne.
+# Graf ne vidi Application.Run sa IZRACUNATIM imenom (`Application.Run
+# procName`), dogadjaje i UI handlere (Click, OnAction iz tabele), ni sirenje
+# iz produkcije na testove (test koji zove dirnutu produkcionu proceduru se ne
+# bira, osim ako je i sabotaza pozivalac). Graf je po imenu, pa je istoimena
+# procedura u drugom modulu ista (visak, bezbedan smer); jedino pravilo koje
+# SKIDA pozivaoca je zaklanjanje lokalnim imenom (_od_lokalna, uprosceno
+# citanje zaglavlja i Dim/Static/Const). Nad 5c3d72a8 (stavka
+# 288) to daje svih 11 odlozenih (plan, Prilog D.3, tacka 4). Ne prati se ni
+# sam alat (run_vba, sabotaza, dokaz) -- on ima svoj self-test.
+_OD_VRSTE = ("KATALOG", "PROCEDURA", "POZIVALAC", "TEST", "FAJL", "FIXTURE")
+_OD_DUBINA = 2
+_OD_SEME_DEKLARACIJE = True
 _OD_EKST = (".bas", ".cls", ".frm", ".doccls")
 _OD_PUT_KATALOGA = "tools/sabotaza.py"
 _OD_FIXTURE = ("tools/make_fixture.py", "schema/schema.json")
@@ -1040,10 +1059,55 @@ _OD_FIXTURE = ("tools/make_fixture.py", "schema/schema.json")
 _OD_DRUGI_PROLAZ_MAX = 1000000
 _OD_MUTATORI = {"update", "pop", "popitem", "setdefault", "clear",
                 "__setitem__", "__delitem__"}
+# D-5b, citanje VBA bez kompajlera. Nastavak reda je RAZMAK pa `_` na kraju
+# reda; spaja i komentar (komentar koji se zavrsava sa ` _` nastavlja se u
+# sledeci red). String: `""` unutar stringa su dva susedna stringa, pa granice
+# ostaju tacne. `Rem` pocinje komentar samo kao naredba (pocetak reda ili posle
+# `:`). Redosled alternativa je redosled citanja: sta pocne ranije, to je.
+_OD_NASTAVAK = re.compile(r"[ \t]_[ \t]*\n")
+_OD_NASTAVLJA = re.compile(r"[ \t]_[ \t]*$")
+_OD_TEKST_KOMENTAR = re.compile(
+    r"\"[^\"\n]*\"?|'[^\n]*|(?<![^\n:])[ \t]*rem(?![A-Za-z0-9_])[^\n]*", re.I)
+# Isto bez `Rem` -- cetiri puta brze (alternativa sa lookbehind-om se proba na
+# svakom polozaju); pun obrazac ide samo kad tokeni sadrze `rem`.
+_OD_TEKST_KOMENTAR_BRZO = re.compile(r"\"[^\"\n]*\"?|'[^\n]*")
+_OD_IDENT = re.compile(r"[a-z_][a-z0-9_]*")          # nad tekstom malim slovima
+_OD_POSLE_TACKE = re.compile(r"\.[ \t]*([a-z_][a-z0-9_]*)")
+_OD_LOKAL = re.compile(r"\b(?:dim|static|const)[ \t]+([^\n:]*)")
+_OD_PARAM = re.compile(r"\s*(?:(?:byval|byref|optional|paramarray)\s+)*([a-z_][a-z0-9_]*)")
+_OD_IME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+# String-argument ovih poziva je ime procedure (Application.Run "modX.P",
+# .OnAction = "Knjiga!P", CallByName o, "P", VbMethod): racuna se kao poziv.
+_OD_DINAMICKI = re.compile(r"(?<![A-Za-z0-9_])(?:run|onaction|callbyname)(?![A-Za-z0-9_])",
+                           re.I)
+_OD_DINAMICKI_DELOVI = re.compile(
+    r"\"([^\"\n]*)\"?|('[^\n]*|(?<![^\n:])[ \t]*rem(?![A-Za-z0-9_])[^\n]*)"
+    r"|(?<![A-Za-z0-9_])(?:run|onaction|callbyname)(?![A-Za-z0-9_])", re.I)
+_OD_DEKL_OPSEG = re.compile(
+    r"\s*#?\s*((?:(?:Public|Private|Global|Friend|Dim|Static)\s+)*)", re.I)
+_OD_DEKL_IME = re.compile(
+    r"(?:Declare\s+(?:PtrSafe\s+)?(?:Sub|Function)|Sub|Function|Property\s+(?:Get|Let|Set)"
+    r"|Type|Enum|Event)\s+([A-Za-z_][A-Za-z0-9_]*)", re.I)
+_OD_DEKL_CONST = re.compile(r"Const\s+", re.I)
+_OD_PRVO_IME = re.compile(r"\s*(?:WithEvents\s+)?([A-Za-z_][A-Za-z0-9_]*)", re.I)
+_OD_BLOK_POC = re.compile(r"\s*(?:(?:Public|Private|Friend)\s+)?(Type|Enum)\s+"
+                          r"([A-Za-z_][A-Za-z0-9_]*)", re.I)
+_OD_BLOK_KRAJ = re.compile(r"\s*End\s+(?:Type|Enum)\b", re.I)
 
 
 class _OdGreska(Exception):
     """Ulaz za `--od` se ne moze procitati -- rc 2 sa ovom porukom."""
+
+
+class _OdRazlog(str):
+    """Razlog sa opisom za red ispisa (POZIVALAC: procedura, dubina, preko
+    cega). Jednak je svom imenu kao str, pa poredjenje, `in` i zbirni red ne
+    vide razliku."""
+
+    def __new__(cls, ime: str, gde: str):
+        r = str.__new__(cls, ime)
+        r.gde = gde
+        return r
 
 
 def _od_literal(cvor, imena: dict):
@@ -1219,6 +1283,82 @@ def _od_bez_koda(red: str) -> bool:
     return (t.startswith("'") or t[:4].lower() == "rem ") and not t.endswith("_")
 
 
+def _od_po_zarezu(tekst: str) -> list:
+    """Delovi izmedju zareza van zagrada (stringovi su vec uklonjeni)."""
+    delovi, dubina, poc = [], 0, 0
+    for i, c in enumerate(tekst):
+        if c == "(":
+            dubina += 1
+        elif c == ")":
+            dubina -= 1
+        elif c == "," and dubina <= 0:
+            delovi.append(tekst[poc:i])
+            poc = i + 1
+    delovi.append(tekst[poc:])
+    return delovi
+
+
+def _od_imena_deklaracije(red: str) -> list:
+    """Imena koja logicki red KODA van procedura deklarise (bez stringova i
+    komentara): Const i promenljive (svaki deo liste), Declare, Type, Enum,
+    Event, i zaglavlje procedure (npr. #If VBA7 grana). Ostalo (Option,
+    Attribute, #If, Implements) ne deklarise nista."""
+    m = _OD_DEKL_OPSEG.match(red)
+    opseg, ostatak = m.group(1), red[m.end():]
+    m = _OD_DEKL_IME.match(ostatak)
+    if m:
+        return [m.group(1)]
+    m = _OD_DEKL_CONST.match(ostatak)
+    if m:
+        ostatak = ostatak[m.end():]
+    elif not opseg:
+        return []
+    return [m.group(1) for m in (_OD_PRVO_IME.match(d) for d in _od_po_zarezu(ostatak)) if m]
+
+
+def _od_deklarisano(redovi: list, kod: list, prvi: int) -> dict:
+    """{ime malim: Ime} deklarisanih na redovima `kod` (KOD van procedura).
+
+    Red se cita kao LOGICKI (nastavak ` _` unazad i unapred). Red unutar
+    Type/Enum bloka (moguc samo pre prve procedure) daje ime bloka, a red
+    Enum-a i ime clana -- clan Type-a ne, jer se pominje kao `.x` i bio bi
+    "pozvan" iz svake procedure sa istim imenom polja.
+    """
+    blok, stanje = {}, None
+    for i in range(min(max(kod) + 1, prvi, len(redovi))):
+        if stanje is None:
+            m = _OD_BLOK_POC.match(redovi[i])
+            if m:
+                stanje = (m.group(1).lower(), m.group(2))
+            continue
+        blok[i] = stanje
+        if _OD_BLOK_KRAJ.match(redovi[i]):
+            stanje = None
+    out, videni = {}, set()
+    for r in kod:
+        a = r
+        while a > 0 and _OD_NASTAVLJA.search(redovi[a - 1]):
+            a -= 1
+        if a in videni:
+            continue
+        videni.add(a)
+        z = a
+        while z + 1 < len(redovi) and _OD_NASTAVLJA.search(redovi[z]):
+            z += 1
+        logicki = _OD_TEKST_KOMENTAR.sub(" ", _OD_NASTAVAK.sub(" ", "\n".join(redovi[a:z + 1])))
+        if a in blok:
+            vrsta, ime = blok[a]
+            imena = [ime]
+            m = _OD_PRVO_IME.match(logicki)
+            if vrsta == "enum" and m and not _OD_BLOK_KRAJ.match(logicki):
+                imena.append(m.group(1))
+        else:
+            imena = _od_imena_deklaracije(logicki)
+        for ime in imena:
+            out.setdefault(ime.lower(), ime)
+    return out
+
+
 def _od_dirnuto(stari, novi, podeli):
     """Sta je izmena dirala u jednom fajlu, ili None ako je izmena samo kraj
     reda (ili je nema). stari/novi None = fajl ne postoji na toj strani."""
@@ -1249,22 +1389,194 @@ def _od_dirnuto(stari, novi, podeli):
                 procedure.add(gde)
             else:                       # deklaracije ili izmedju procedura
                 deklaracije = deklaracije or not _od_bez_koda(tekst[red])
+    # D-5b: imena deklarisana na dirnutim redovima KODA van procedura, obe
+    # strane -- seme za POZIVALAC (obrisana `Const X` menja svakog ko je pominje).
+    imena = {}
+    for kod_redovi, mapa, tekst in ((ia, ma, ra), (ib, mb, rb)):
+        kod = sorted(r for r in kod_redovi
+                     if not _od_gde(r, mapa) and not _od_bez_koda(tekst[r]))
+        if kod:
+            for k, v in _od_deklarisano(tekst, kod, mapa[2]).items():
+                imena.setdefault(k, v)
     # Procedura koje nema na novoj strani su obrisani redovi -- vec su u
     # `procedure`; ovde su dovoljna imena nove strane.
     sve = {p[0].lower() for p in mb[0]}
     return {"procedure": procedure, "deklaracije": deklaracije, "sve": sve,
-            "tekst": b if novi is not None else None, "mapa": mb}
+            "tekst": b if novi is not None else None, "mapa": mb, "imena": imena}
+
+
+def _od_dinamicki(telo: str) -> set:
+    """Imena iz string-argumenta uz Run / .OnAction / CallByName (malim
+    slovima), bez prefiksa "modX." i "Knjiga!". Izracunato ime je nevidljivo;
+    `m & ".Scr_Build"` daje scr_build."""
+    out = set()
+    for red in telo.split("\n"):
+        if not _OD_DINAMICKI.search(red):
+            continue
+        posle = False
+        for m in _OD_DINAMICKI_DELOVI.finditer(red):
+            if m.group(2) is not None:          # komentar: kraj reda
+                break
+            if m.group(1) is None:              # Run / OnAction / CallByName
+                posle = True
+            elif posle:
+                ime = m.group(1).rsplit("!", 1)[-1].rsplit(".", 1)[-1].strip(" '")
+                if _OD_IME.match(ime):
+                    out.add(ime.lower())
+    return out
+
+
+def _od_tokeni(telo: str) -> set:
+    """Identifikatori tela procedure (malim slovima), bez string literala i
+    komentara; nastavak reda je vec spojen.
+
+    `Rem` je rezervisana rec, pa je token `rem` van stringa i `'` komentara
+    (skoro) uvek komentar-naredba: tek tada se tekst cita punim obrascem.
+    Isto tako se Run / OnAction / CallByName traze tek kad ih tekst sadrzi.
+    """
+    low = telo.lower()
+    cist = _OD_TEKST_KOMENTAR_BRZO.sub(" ", low)
+    tok = set(_OD_IDENT.findall(cist))
+    if "rem" in tok:
+        cist = _OD_TEKST_KOMENTAR.sub(" ", low)
+        tok = set(_OD_IDENT.findall(cist))
+    lok = _od_lokalna(cist)
+    if lok & tok:                   # kvalifikovan `modX.Ime` ostaje poziv
+        tok -= lok - set(_OD_POSLE_TACKE.findall(cist))
+    if (("run" in low or "onaction" in low or "callbyname" in low)
+            and _OD_DINAMICKI.search(low)):
+        tok |= _od_dinamicki(telo)
+    return tok
+
+
+def _od_lokalna(cist: str) -> set:
+    """Parametri i lokalni Dim/Static/Const procedure (tekst malim slovima,
+    bez stringova i komentara). Lokalno ime ZAKLANJA istoimenu proceduru
+    (VBA), pa parametar `testName` u AssertEquals nije poziv modTest.TestName
+    -- bez ovoga je svaka izmena registra testova (Case N: TestName = ...)
+    birala TEST za skoro ceo katalog (rez 1b: 417 stavki)."""
+    out = set()
+    zag = cist.split("\n", 1)[0]
+    i, k = zag.find("("), zag.rfind(")")
+    if 0 <= i < k:
+        params = zag[i + 1:k]
+        for deo in (_od_po_zarezu(params) if "(" in params else params.split(",")):
+            m = _OD_PARAM.match(deo)
+            if m:
+                out.add(m.group(1))
+    for m in _OD_LOKAL.finditer(cist):
+        deo = m.group(1)
+        for d in (_od_po_zarezu(deo) if "(" in deo else deo.split(",")):
+            m2 = _OD_PARAM.match(d)
+            if m2:
+                out.add(m2.group(1))
+    return out
+
+
+def _od_graf(tekstovi_svi: dict, podeli) -> dict:
+    """CISTA: graf poziva po IMENU nad svim modulima nove strane (D-5b).
+
+    tekstovi_svi = {fajl: tekst} (None se preskace); granice procedura daje
+    `podeli` (sab._procedure_po_redu). Vraca {"tela": {(fajl, ime malim):
+    skup identifikatora tela bez sopstvenog imena}, "imena": {ime malim: Ime},
+    "mape": {fajl: (tekst LF, mapa za _od_gde)}}. Sopstveno ime se brise jer
+    ga Function pominje pri svakom vracanju vrednosti (`F = x`): istoimena
+    procedura u drugom modulu bi inace "zvala" dirnutu.
+    """
+    tela, imena, mape = {}, {}, {}
+    for fajl in sorted(tekstovi_svi):
+        if tekstovi_svi[fajl] is None:
+            continue
+        tekst = tekstovi_svi[fajl].replace("\r\n", "\n")
+        mapa = _od_mapa(tekst, podeli)
+        mape[fajl] = (tekst, mapa)
+        redovi = tekst.split("\n")
+        for ime, _vrsta, a, z in mapa[0]:
+            telo = "\n".join(redovi[a:z + 1])
+            if "_\n" in telo or "_ " in telo or "_\t" in telo:
+                telo = _OD_NASTAVAK.sub(" ", telo)
+            tok = _od_tokeni(telo)
+            mi = ime.lower()
+            tok.discard(mi)
+            kljuc = (fajl, mi)
+            tela[kljuc] = tela[kljuc] | tok if kljuc in tela else tok
+            imena.setdefault(mi, ime)
+    return {"tela": tela, "imena": imena, "mape": mape}
+
+
+def _od_pozivaoci(graf: dict, seme, dubina: int, fajlovi=None) -> dict:
+    """{(fajl, ime): (dubina, seme, kroz)} za procedure koje do `dubina` zovu
+    neko ime iz `seme`; kroz je posredna procedura (None za dubinu 1).
+
+    BFS po nivoima nad imenima: nivo k su imena na rastojanju k, svako ime
+    najvise jednom (ciklus A<->B se zavrsava). Procedura se meri SVOJIM telom,
+    a posrednik imenom (istoimene u vise modula se spajaju -- visak). Izbor
+    medju vise pogodaka je najmanje ime, da ispis bude stabilan.
+    fajlovi: samo procedure tih fajlova (testovi).
+    """
+    if not seme or dubina < 1:
+        return {}
+    nivoi = [{s: (s, None) for s in seme}]
+    videno = set(seme)
+    for _ in range(dubina - 1):
+        kljucevi, nov = set(nivoi[-1]), {}
+        for (_fajl, ime), tok in graf["tela"].items():
+            if ime in videno or tok.isdisjoint(kljucevi):
+                continue
+            p = min(tok & kljucevi)
+            kand = (nivoi[-1][p][0], p)
+            if ime not in nov or kand < nov[ime]:
+                nov[ime] = kand
+        if not nov:
+            break
+        videno.update(nov)
+        nivoi.append(nov)
+    skupovi = [set(n) for n in nivoi]
+    out = {}
+    for kljuc, tok in graf["tela"].items():
+        if fajlovi is not None and kljuc[0] not in fajlovi:
+            continue
+        for k, sk in enumerate(skupovi):
+            if not tok.isdisjoint(sk):
+                p = min(tok & sk)
+                out[kljuc] = (k + 1, nivoi[k][p][0], p if k else None)
+                break
+    return out
+
+
+def _od_sidro_u_grafu(graf: dict, fajl: str, sidro: str, nl: dict):
+    """Ime (malim) procedure u kojoj je prvi pogodak sidra na novoj strani,
+    "" ili None van procedura i kad sidra nema. nl je lenji kes pozicija
+    kraja reda po fajlu (sabotaza dira tek mali deo fajlova)."""
+    tekst, mapa = graf["mape"][fajl]
+    poz = tekst.find("\n" + sidro)
+    if poz < 0:
+        return None
+    if fajl not in nl:
+        nl[fajl] = [m.start() for m in re.finditer("\n", tekst)]
+    return _od_gde(bisect.bisect_right(nl[fajl], poz), mapa)
+
+
+def _od_opis_poziva(graf: dict, prikaz: dict, kome: str, nalaz: tuple) -> str:
+    """'<kome> (dubina d, preko Seme[, kroz Posrednik])' za red ispisa."""
+    dub, seme, kroz = nalaz
+
+    def ime(x):
+        return graf["imena"].get(x) or prikaz.get(x) or x
+    return "%s (dubina %d, preko %s%s)" % (kome, dub, ime(seme),
+                                           ", kroz %s" % ime(kroz) if kroz else "")
 
 
 def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
                 test_fajlovi, stari_poznati: dict = None, novi_poznati: dict = None,
-                fixture: bool = False) -> dict:
+                fixture: bool = False, graf: dict = None) -> dict:
     """CISTA JEZGRA D-5: {ime: [razlozi]} za stavke NOVOG kataloga koje rez dira.
 
     tekstovi = {fajl (kao u katalogu): (stari_tekst, novi_tekst)}; None znaci
     da fajl na toj strani ne postoji. *_poznati = POZNATI_NALAZI_DOKAZ na
     obe strane; fixture = dirnut je ulaz fixture-a. Stavka bez razloga se ne
-    vraca.
+    vraca. graf = _od_graf nove strane (D-5b: POZIVALAC i TEST preko
+    test-pomocnika); bez njega je izbor tacno D-5.
     """
     stari_poznati, novi_poznati = stari_poznati or {}, novi_poznati or {}
     dirnuto = {}
@@ -1277,6 +1589,27 @@ def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
         if fajl in dirnuto:
             d = dirnuto[fajl]
             testovi |= d["sve"] if d["deklaracije"] else d["procedure"]
+
+    # D-5b: seme su dirnute procedure (obe strane) i imena deklarisana na
+    # dirnutim redovima koda van procedura; za TEST samo seme iz test-modula.
+    pozivaoci, test_poz, prikaz, u_fajlu, nl = {}, {}, {}, set(), {}
+    if graf is not None:
+        seme, test_seme = set(), set()
+        for fajl, d in dirnuto.items():
+            s = set(d["procedure"])
+            if _OD_SEME_DEKLARACIJE:
+                s |= set(d["imena"])
+                for k, v in d["imena"].items():
+                    prikaz.setdefault(k, v)
+            seme |= s
+            if fajl in test_fajlovi:
+                test_seme |= s
+        pozivaoci = _od_pozivaoci(graf, seme, _OD_DUBINA)
+        u_fajlu = {f for f, _ime in pozivaoci}
+        for (_f, t), nalaz in _od_pozivaoci(graf, test_seme, _OD_DUBINA,
+                                           set(test_fajlovi)).items():
+            if t not in test_poz or nalaz < test_poz[t]:
+                test_poz[t] = nalaz
 
     out = {}
     for ime, unos in novi_kat.items():
@@ -1296,8 +1629,17 @@ def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
                 if gde and gde in d["procedure"]:
                     razlozi.append("PROCEDURA")
             fajl_razlog = fajl_razlog or d["deklaracije"]
+        if fajl in u_fajlu and "PROCEDURA" not in razlozi:
+            gde = _od_sidro_u_grafu(graf, fajl, sidro, nl)
+            if (fajl, gde) in pozivaoci:
+                razlozi.append(_OdRazlog("POZIVALAC", _od_opis_poziva(
+                    graf, prikaz, "%s::%s" % (fajl, graf["imena"].get(gde, gde)),
+                    pozivaoci[(fajl, gde)])))
         if str(test).lower() in testovi:
             razlozi.append("TEST")
+        elif str(test).lower() in test_poz:
+            razlozi.append(_OdRazlog("TEST", _od_opis_poziva(
+                graf, prikaz, str(test), test_poz[str(test).lower()])))
         if fajl_razlog:
             razlozi.append("FAJL")
         if fixture:
@@ -1307,10 +1649,10 @@ def _od_razlozi(stari_kat: dict, novi_kat: dict, tekstovi: dict, podeli,
     return out
 
 
-def _od_git(args: list, koren: str = None, ok_rc=(0,)) -> bytes:
+def _od_git(args: list, koren: str = None, ok_rc=(0,), ulaz: bytes = None) -> bytes:
     """stdout git-a (bajtovi); greska je _OdGreska, ne traceback."""
     try:
-        r = subprocess.run(["git"] + list(args), cwd=koren or ROOT,
+        r = subprocess.run(["git"] + list(args), cwd=koren or ROOT, input=ulaz,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except OSError as exc:
         raise _OdGreska("git nije dostupan: %s" % exc)
@@ -1349,6 +1691,47 @@ def _od_baza(ref: str, glava: str = None, koren: str = None) -> str:
 
 def _od_nule(b: bytes) -> list:
     return [p for p in b.decode("utf-8").split("\0") if p]
+
+
+def _od_svi(glava: str, koren: str) -> dict:
+    """{fajl: tekst} SVIH modula src-vba nove strane -- ulaz grafa poziva.
+
+    glava=None: radno stablo -- spisak iz git-a (u indeksu i nov van git-a,
+    bez ignorisanih), sadrzaj sa diska kao bajtovi (latin-1). glava=commit:
+    jedan proces `git cat-file --batch` za sve blobove. Samo plumbing.
+    """
+    pre = "src-vba/"
+    if glava is None:
+        out = {}
+        for put in _od_nule(_od_git(["ls-files", "--cached", "--others",
+                                     "--exclude-standard", "-z", "--", "src-vba"], koren)):
+            if put.startswith(pre) and put.lower().endswith(_OD_EKST):
+                try:
+                    with open(os.path.join(koren, *put.split("/")), "rb") as fh:
+                        out[put[len(pre):]] = fh.read().decode("latin-1")
+                except FileNotFoundError:   # obrisan u radnom stablu
+                    pass
+        return out
+    blobovi = []
+    for zapis in _od_nule(_od_git(["ls-tree", "-r", "-z", glava, "--", "src-vba"], koren)):
+        meta, put = zapis.split("\t", 1)
+        if (meta.split()[1] == "blob" and put.startswith(pre)
+                and put.lower().endswith(_OD_EKST)):
+            blobovi.append((put[len(pre):], meta.split()[2]))
+    if not blobovi:
+        return {}
+    izlaz = _od_git(["cat-file", "--batch"], koren,
+                    ulaz="".join(sha + "\n" for _f, sha in blobovi).encode("ascii"))
+    out, poz = {}, 0
+    for fajl, sha in blobovi:
+        kraj = izlaz.find(b"\n", poz)
+        zag = izlaz[poz:kraj].split() if kraj >= 0 else []
+        if len(zag) != 3 or zag[0].decode("ascii", "replace") != sha or zag[1] != b"blob":
+            raise _OdGreska("git cat-file --batch: neocekivan odgovor za %s" % fajl)
+        n = int(zag[2])
+        out[fajl] = izlaz[kraj + 1:kraj + 1 + n].decode("latin-1")
+        poz = kraj + 2 + n
+    return out
 
 
 def _od_ulazi(baza: str, glava: str = None, koren: str = None) -> dict:
@@ -1419,17 +1802,23 @@ def _od_ulazi(baza: str, glava: str = None, koren: str = None) -> dict:
 
     stari_kat, stari_poznati = katalog(baza)
     novi_kat, novi_poznati = katalog(glava) if glava else (None, None)
+    # D-5b: graf poziva trazi SVE module nove strane, ali tek kad rez dira kod.
+    svi = _od_svi(glava, koren) if tekstovi else {}
     return {"stari_kat": stari_kat, "stari_poznati": stari_poznati,
             "novi_kat": novi_kat, "novi_poznati": novi_poznati,
-            "tekstovi": tekstovi, "fixture": fixture}
+            "tekstovi": tekstovi, "fixture": fixture, "svi": svi}
 
 
 def _od_iz_ulaza(ulaz: dict, novi_kat: dict, novi_poznati: dict, sab) -> dict:
     """Jezgro nad ulazom iz git-a; novi katalog je ucitan modul (radno stablo)
-    ili katalog glave (istorija)."""
+    ili katalog glave (istorija). Graf poziva (D-5b) se gradi iz SVIH modula
+    nove strane, i samo kad rez dira kod."""
+    graf = (_od_graf(ulaz["svi"], sab._procedure_po_redu)
+            if ulaz.get("svi") and ulaz["tekstovi"] else None)
     return _od_razlozi(ulaz["stari_kat"], novi_kat, ulaz["tekstovi"],
                        sab._procedure_po_redu, sab._TEST_FAJLOVI,
-                       ulaz["stari_poznati"], novi_poznati, bool(ulaz["fixture"]))
+                       ulaz["stari_poznati"], novi_poznati, bool(ulaz["fixture"]),
+                       graf)
 
 
 def od_istorija(ref: str, glava: str, sab, koren: str = None) -> tuple:
@@ -1444,10 +1833,14 @@ def od_istorija(ref: str, glava: str, sab, koren: str = None) -> tuple:
 
 
 def _od_red(s: dict, razlozi: list) -> str:
-    """Red ispisa jedne izabrane stavke: razlozi i gde."""
+    """Red ispisa jedne izabrane stavke: razlozi i gde (POZIVALAC i TEST preko
+    pomocnika nose svoj opis: procedura, dubina, preko cega)."""
     gde = {"PROCEDURA": s["proc"], "TEST": s["test"], "FAJL": s["fajl"]}
-    return "OD %-46s %s" % (s["ime"], "; ".join(
-        r + (" " + gde[r] if gde.get(r) else "") for r in razlozi))
+
+    def opis(r):
+        g = getattr(r, "gde", "") or gde.get(r)
+        return r + (" " + g if g else "")
+    return "OD %-46s %s" % (s["ime"], "; ".join(opis(r) for r in razlozi))
 
 
 def _od_zbir(ref: str, baza: str, razlozi: dict) -> str:
@@ -2272,8 +2665,8 @@ def main(argv: list) -> int:
     ap.add_argument("--od", metavar="REF", default=None,
                     help="D-5: obim reza iz diff-a -- sabotaze koje rez od "
                          "merge-base(REF, HEAD) do radnog stabla dira (unos "
-                         "kataloga, procedura sidra, ciljani test, deklaracije); "
-                         "zamenjuje filter")
+                         "kataloga, procedura sidra i njeni pozivaoci do dubine "
+                         "2, ciljani test, deklaracije); zamenjuje filter")
     ap.add_argument("--self-test", action="store_true",
                     help="dokazi da pravila grupisanja, ocena i orkestracija prolaza grizu")
     args = ap.parse_args(argv)
@@ -2344,9 +2737,9 @@ def main(argv: list) -> int:
         od_razlozi = _od_iz_ulaza(ulaz, sab.SABOTAZE, poznati_spisak, sab)
         stavke = [s for s in stavke if s["ime"] in od_razlozi]
         if not stavke:
-            print("--od %s (baza %s): rez ne dira nijednu sabotazu (kod, katalog ni "
-                  "fixture; pozivaoci se ne biraju) -- dokaz nema sta da meri"
-                  % (args.od, od_baza[:8]), file=sys.stderr)
+            print("--od %s (baza %s): rez ne dira nijednu sabotazu (kod, pozivaoce "
+                  "do dubine %d, katalog ni fixture) -- dokaz nema sta da meri"
+                  % (args.od, od_baza[:8], _OD_DUBINA), file=sys.stderr)
             return 2
         for s in stavke:
             print(_od_red(s, od_razlozi[s["ime"]]))
@@ -4415,6 +4808,25 @@ def _self_test_od() -> list:
                     "fixture": fixture}
         return ulazi
     prava_ulazi = _od_ulazi
+    # D-5b: cetvrti prolaz -- jedina veza stavke sa rezom je POZIVALAC, a modul
+    # sidra je samo u "svi" (nije dirnut). main koji ne prosledi graf jezgru,
+    # ili graf samo iz dirnutih fajlova, daje prazan izbor (rc 2). Test je
+    # stvaran (vec u kesu suite), fajlovi sinteticki (proc ostaje None).
+    kat4 = {"d5b-pozivalac": ("modD5bA.bas", "    s_d5b = 1\n", "    s_d5b = 2\n",
+                              mali[imena[0]][3], "t")}
+    p4 = 'Attribute VB_Name = "modD5bP"\nPublic Sub PomocD5b()\n    x = 1\nEnd Sub\n'
+    svi4 = {"modD5bA.bas": 'Attribute VB_Name = "modD5bA"\nPublic Sub Sidrena()\n'
+                           "    PomocD5b\n    s_d5b = 1\nEnd Sub\n",
+            "modD5bP.bas": p4.replace("x = 1", "x = 2")}
+
+    class Lazni4(Lazni):
+        SABOTAZE, POZNATI_NALAZI_DOKAZ = kat4, {}
+
+    def ulazi4(baza, glava=None, koren=None):
+        return {"stari_kat": kat4, "stari_poznati": {}, "novi_kat": None,
+                "novi_poznati": None, "fixture": [], "svi": svi4,
+                "tekstovi": {"modD5bP.bas": (p4, svi4["modD5bP.bas"])}}
+    graf_ishod = None
     globals()["_modul_sabotaza"] = lambda: lazni
     globals()["_od_baza"] = lambda ref, *a, **kw: "e" * 40
     try:
@@ -4428,6 +4840,12 @@ def _self_test_od() -> list:
             red = [r.split()[1] for r in out.getvalue().splitlines()
                    if r.startswith("OD ") and r.split()[1] in mali]
             ishodi.append((rc, red, out.getvalue(), err.getvalue()))
+        lazni4 = Lazni4()
+        globals()["_modul_sabotaza"] = lambda: lazni4
+        globals()["_od_ulazi"] = ulazi4
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            graf_ishod = (main(["--od", "HEAD", "--plan"]), out.getvalue(), err.getvalue())
     except BaseException as e:              # noqa: BLE001 -- pad je nalaz
         ishodi = [repr(e)] * 3
     finally:
@@ -4447,14 +4865,174 @@ def _self_test_od() -> list:
           and "FIXTURE 3" in fixture[2],
           "dirnut fixture ne bira ceo katalog u main-u (%r)" % (fixture[:2],))
     tvrdi(pozivi == [None] * 3, "main ne poredi sa RADNIM STABLOM (glava %r)" % pozivi)
+    tvrdi(graf_ishod is not None and graf_ishod[0] == 0
+          and "OD d5b-pozivalac" in graf_ishod[1]
+          and "POZIVALAC modD5bA.bas::Sidrena (dubina 1, preko PomocD5b)" in graf_ishod[1]
+          and "izabrano 1 -- KATALOG 0, PROCEDURA 0, POZIVALAC 1, TEST 0," in graf_ishod[1],
+          "main ne prosledi graf poziva iz SVIH modula jezgru (POZIVALAC) (%r)"
+          % ((graf_ishod[0], graf_ishod[2][-160:]) if graf_ishod else None,))
+    nalazi.extend(_self_test_od_pozivaoci(podeli))
     nalazi.extend(_self_test_od_git(kat, mod_a, mod_b, podeli))
+    return nalazi
+
+
+def _self_test_od_pozivaoci(podeli) -> list:
+    """D-5b: POZIVALAC (dubina 1 i 2, ne 3) i TEST preko test-pomocnika, nad
+    sintetickim modulima. Svaki slucaj ima svoju poruku, da mutant pada PO
+    IMENU, i jednu zbirnu tvrdnju nad celim izborom (nista vise)."""
+    nalazi = []
+
+    def tvrdi(uslov, opis):
+        if not uslov:
+            nalazi.append("D5: pozivaoci: " + opis)
+
+    def proc(ime, *redovi, vrsta="Sub", zag="()"):
+        return ("Public %s %s%s\n" % (vrsta, ime, zag) + "".join("    %s\n" % r for r in redovi)
+                + "    s_%s = 1\nEnd %s\n\n" % (ime.lower(), vrsta))
+    mod_p = ('Attribute VB_Name = "modP"\nOption Explicit\n' "' zaglavlje\n"
+             "Public Const KP As Long = 1\n"
+             'Public Const KD As String = "a" & _\n    "b"\n'
+             "Public Enum EVrsta\n    evA = 1\n    evB = 2\nEnd Enum\n\n"
+             + proc("Dno", "x = 1") + proc("Sred", "Dno") + proc("Vrh", "Sred")
+             + proc("Cetvrti", "Vrh")
+             + proc("UStringu", 'z = "Dno"', 'z = "a""Dno""b"')
+             + proc("UKomentaru", "z = 1 ' Dno", "' nastavak komentara _", "    Dno")
+             + proc("URem", "Rem Dno", "z = 2: Rem Dno")
+             + proc("PrekoRun", 'Application.Run "modP.Dno"')
+             + proc("PrekoOnAction", "b.OnAction = \"'Knjiga.xlsm'!Dno\"")
+             + proc("PrekoCallByName", 'CallByName o, "Dno", VbMethod')
+             + proc("Nastavak", "Application.Run _", '    "Dno"')
+             + proc("CA", "CB", "Dno") + proc("CB", "CA")
+             + proc("Zaklonjen", "Dim dno As Long", "dno = 1")
+             + proc("Param", "y = dno + 1", zag="(ByVal x As Long, Optional dno As Long = 0)")
+             + proc("Kvalifikovan", "Dim dno As Long", "modP.Dno"))
+    mod_s = ('Attribute VB_Name = "modS"\n'
+             + proc("KoristiKP", "y = KP + 1") + proc("ZoviPom", "z = Pom()")
+             + proc("KoristiKD", "y = KD") + proc("KoristiEnum", "y = evB"))
+    mod_q = 'Attribute VB_Name = "modQ"\n' + proc("Pom", "Pom = 1", vrsta="Function")
+    mod_r = 'Attribute VB_Name = "modR"\n' + proc("Pom", "Pom = 2", vrsta="Function")
+    mod_t = ('Attribute VB_Name = "modT"\n' + proc("PomocT", "h = 1")
+             + proc("PomocT2", "PomocT") + proc("T_1", "PomocT") + proc("T_2", "Dno")
+             + proc("T_3", "PomocT2"))
+    svi = {"modP.bas": mod_p, "modS.bas": mod_s, "modQ.bas": mod_q, "modR.bas": mod_r,
+           "modT.bas": mod_t}
+    testovi = {"UStringu": "T_1", "UKomentaru": "T_3", "KoristiKP": "T_2"}
+    kat = {}
+    for fajl, tekst in sorted(svi.items()):
+        if fajl == "modT.bas":
+            continue
+        for ime in re.findall(r"^Public (?:Sub|Function) (\w+)", tekst, re.M):
+            sid = "    s_%s = 1\n" % ime.lower()
+            kat["s-%s%s" % ("q" if fajl == "modQ.bas" else "r" if fajl == "modR.bas" else "",
+                            ime.lower())] = (fajl, sid, sid.replace("1", "9"),
+                                             testovi.get(ime, "T_0"), "t")
+
+    def izbor(fajl, staro, novo, sa_grafom=True):
+        assert svi[fajl].count(staro) == 1, staro
+        nov = dict(svi, **{fajl: svi[fajl].replace(staro, novo)})
+        try:
+            return _od_razlozi(kat, kat, {fajl: (svi[fajl], nov[fajl])}, podeli,
+                               ("modT.bas",), graf=_od_graf(nov, podeli) if sa_grafom else None)
+        except Exception as e:              # noqa: BLE001 -- pad je nalaz
+            return {"pukla": [repr(e)]}
+
+    def opis(r, ime):
+        return [getattr(x, "gde", "") for x in r.get(ime, [])]
+
+    r = izbor("modP.bas", "    x = 1\n", "    x = 2\n")
+    tvrdi(r.get("s-sred") == ["POZIVALAC"]
+          and opis(r, "s-sred") == ["modP.bas::Sred (dubina 1, preko Dno)"],
+          "dubina 1 ne bira (%r)" % (r.get("s-sred"),))
+    tvrdi(r.get("s-vrh") == ["POZIVALAC"]
+          and opis(r, "s-vrh") == ["modP.bas::Vrh (dubina 2, preko Dno, kroz Sred)"],
+          "dubina 2 ne bira (%r, %r)" % (r.get("s-vrh"), opis(r, "s-vrh")))
+    tvrdi("s-cetvrti" not in r, "dubina 3 bira (%r)" % (opis(r, "s-cetvrti"),))
+    tvrdi("s-ustringu" not in r, "pominjanje u stringu se racuna kao poziv")
+    tvrdi("s-ukomentaru" not in r, "pominjanje u ' komentaru (i u nastavku komentara "
+          "` _`) se racuna kao poziv")
+    tvrdi("s-urem" not in r, "pominjanje u Rem komentaru se racuna kao poziv")
+    for ime in ("s-prekorun", "s-prekoonaction", "s-prekocallbyname"):
+        tvrdi(r.get(ime) == ["POZIVALAC"], "string uz Application.Run / .OnAction / "
+              "CallByName (bez prefiksa modX. i Knjiga!) nije poziv: %s" % ime)
+    tvrdi(r.get("s-nastavak") == ["POZIVALAC"],
+          "Application.Run sa imenom u nastavku reda (` _`) nije poziv")
+    tvrdi(r.get("s-ca") == ["POZIVALAC"] and r.get("s-cb") == ["POZIVALAC"]
+          and opis(r, "s-cb") == ["modP.bas::CB (dubina 2, preko Dno, kroz CA)"],
+          "ciklus CA<->CB: ocekivano CA dubina 1, CB dubina 2 (%r)" % (opis(r, "s-cb"),))
+    tvrdi("s-zaklonjen" not in r and "s-param" not in r,
+          "lokalno ime (Dim, parametar) koje zaklanja proceduru se racuna kao poziv")
+    tvrdi(r.get("s-kvalifikovan") == ["POZIVALAC"],
+          "kvalifikovan poziv modP.Dno uz lokalno `dno` nije poziv")
+    tvrdi("s-koristikp" not in r, "produkciona promena bira TEST sirenjem na test koji "
+          "je zove (T_2 zove Dno)")
+    tvrdi(r.get("s-dno") == ["PROCEDURA"], "dirnuta procedura: ocekivano samo PROCEDURA, "
+          "dobijeno %r" % (r.get("s-dno"),))
+    ocekivano = dict.fromkeys(("s-sred", "s-vrh", "s-prekorun", "s-prekoonaction",
+                               "s-prekocallbyname", "s-nastavak", "s-ca", "s-cb",
+                               "s-kvalifikovan"), ["POZIVALAC"])
+    ocekivano["s-dno"] = ["PROCEDURA"]
+    tvrdi(r == ocekivano, "izmena Dno: izbor %r" % (sorted(set(r) ^ set(ocekivano)),))
+    s = {"ime": "s-vrh", "proc": "modP.bas::Vrh", "test": "T_0", "fajl": "modP.bas"}
+    tvrdi("POZIVALAC modP.bas::Vrh (dubina 2, preko Dno, kroz Sred)"
+          in _od_red(s, r.get("s-vrh", [])), "red stavke ne pokazuje proceduru, dubinu "
+          "i preko cega (%r)" % _od_red(s, r.get("s-vrh", [])))
+    tvrdi(", PROCEDURA 1, POZIVALAC 9, TEST 0," in _od_zbir("X", "b" * 40, r),
+          "zbirni red ne broji POZIVALAC posle PROCEDURA (%r)" % _od_zbir("X", "b" * 40, r))
+    tvrdi(izbor("modP.bas", "    x = 1\n", "    x = 2\n", sa_grafom=False)
+          == {"s-dno": ["PROCEDURA"]}, "bez grafa izbor nije tacno D-5")
+
+    r = izbor("modP.bas", "    s_sred = 1\n", "    s_sred = 1\n    w = 1\n")
+    tvrdi(r.get("s-sred") == ["PROCEDURA"] and r.get("s-vrh") == ["POZIVALAC"]
+          and opis(r, "s-cetvrti") == ["modP.bas::Cetvrti (dubina 2, preko Sred, kroz Vrh)"]
+          and "s-dno" not in r and "s-ca" not in r,
+          "dubina se ne meri od najblize dirnute (Sred): %r" % (opis(r, "s-cetvrti"),))
+
+    r = izbor("modP.bas", "KP As Long = 1", "KP As Long = 2")
+    tvrdi(r.get("s-koristikp") == ["POZIVALAC"]
+          and opis(r, "s-koristikp") == ["modS.bas::KoristiKP (dubina 1, preko KP)"],
+          "seme iz deklaracije (Public Const KP) ne bira proceduru koja je pominje (%r)"
+          % (r.get("s-koristikp"),))
+    tvrdi(izbor("modP.bas", "' zaglavlje\n", "' zaglavlje KP\n") == {},
+          "komentar u deklaracijama daje seme")
+    r = izbor("modP.bas", "Public Const KP As Long = 1\n", "")
+    tvrdi(r.get("s-koristikp") == ["POZIVALAC"],
+          "obrisana deklaracija (samo stara strana) ne daje seme (%r)" % (r.get("s-koristikp"),))
+    r = izbor("modP.bas", '    "b"\n', '    "c"\n')
+    tvrdi(r.get("s-koristikd") == ["POZIVALAC"] and "s-koristikp" not in r,
+          "deklaracija u nastavku reda (` _`) ne daje seme svog imena, ili daje tudje (%r)"
+          % (sorted(n for n in r if n.startswith("s-koristi")),))
+    r = izbor("modP.bas", "    evB = 2\n", "    evB = 3\n")
+    tvrdi(r.get("s-koristienum") == ["POZIVALAC"]
+          and opis(r, "s-koristienum") == ["modS.bas::KoristiEnum (dubina 1, preko evB)"],
+          "izmenjen clan Enum-a ne daje seme clana (%r)" % (opis(r, "s-koristienum"),))
+
+    r = izbor("modP.bas", "    s_ca = 1\n", "    s_ca = 1\n    w = 2\n")
+    tvrdi(r == {"s-ca": ["PROCEDURA"], "s-cb": ["POZIVALAC"]},
+          "ciklus CA<->CB, dirnut CA: ocekivano CA samo PROCEDURA (ne i POZIVALAC "
+          "preko CB), CB POZIVALAC (%r)" % (r,))
+
+    r = izbor("modR.bas", "Pom = 2", "Pom = 3")
+    tvrdi(r == {"s-rpom": ["PROCEDURA"], "s-zovipom": ["POZIVALAC"]},
+          "isto ime u dva modula: ocekivano modR.Pom PROCEDURA i ZoviPom POZIVALAC, a "
+          "istoimena modQ.Pom nista (%r)" % (r,))
+
+    r = izbor("modT.bas", "    h = 1\n", "    h = 2\n")
+    tvrdi(r.get("s-ustringu") == ["TEST"]
+          and opis(r, "s-ustringu") == ["T_1 (dubina 1, preko PomocT)"]
+          and r.get("s-ukomentaru") == ["TEST"]
+          and opis(r, "s-ukomentaru") == ["T_3 (dubina 2, preko PomocT, kroz PomocT2)"],
+          "promena test-pomocnika ne bira TEST za testove koji ga zovu (%r)" % (r,))
+    tvrdi(set(r) == {"s-ustringu", "s-ukomentaru"},
+          "promena test-pomocnika bira i stavke cijem testu nije pomocnik (%r)" % (r,))
     return nalazi
 
 
 def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
     """D-5 git sloj nad privremenim repoom: CRLF na disku, nov fajl van git-a,
     fixture (sadrzaj prema samo kraju reda), bajt van ASCII, .git/index se NE
-    prepisuje, pretka nema, koren van repoa."""
+    prepisuje, pretka nema, koren van repoa. D-5b: "svi" su SVI moduli nove
+    strane (i nedirnuti, i nov van git-a, bez ne-modula), u istoriji iz
+    commit-a a ne sa diska, i graf iz njih bira pozivaoca u nedirnutom modulu."""
     nalazi = []
 
     def tvrdi(uslov, opis):
@@ -4481,6 +5059,9 @@ def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
         pisi("src-vba/modA.bas", mod_a.replace("\n", "\r\n"))
         pisi("src-vba/modB.bas", mod_b.replace("\n", "\r\n"))
         pisi("src-vba/modC.bas", "Attribute VB_Name = \"modC\"\r\n")
+        pisi("src-vba/modD.bas", "Attribute VB_Name = \"modD\"\r\nPublic Sub R()\r\n"
+             "    P1\r\n    r = 1\r\nEnd Sub\r\n")
+        pisi("src-vba/beleska.txt", "Public Sub P1()\n")
         pisi("tools/sabotaza.py", "SABOTAZE = %r\nPOZNATI_NALAZI_DOKAZ = {'s-q': 'X'}\n"
              % (kat,))
         pisi("tools/make_fixture.py", "X = 1\n")
@@ -4516,6 +5097,27 @@ def _self_test_od_git(kat: dict, mod_a: str, mod_b: str, podeli) -> list:
         razlozi = _od_razlozi(ulaz["stari_kat"], kat, ulaz["tekstovi"], podeli, ())
         tvrdi(razlozi == {"s-p1": ["PROCEDURA"]},
               "izbor nad radnim stablom: ocekivano s-p1 PROCEDURA, dobijeno %r" % razlozi)
+        moduli = {"modA.bas", "modB.bas", "modC.bas", "modD.bas", "modN.bas"}
+        tvrdi(set(ulaz.get("svi", {})) == moduli
+              and ulaz["svi"]["modC.bas"] == "Attribute VB_Name = \"modC\"\r\n",
+              "svi: ocekivani SVI moduli radnog stabla (i nedirnuti), dobijeno %r"
+              % (sorted(ulaz.get("svi", {})),))
+        kat_r = dict(kat, **{"s-r": ("modD.bas", "    r = 1\n", "    r = 2\n", "T_R", "r")})
+        razlozi = _od_razlozi(ulaz["stari_kat"], kat_r, ulaz["tekstovi"], podeli, (),
+                              graf=_od_graf(ulaz.get("svi", {}), podeli))
+        tvrdi(razlozi == {"s-p1": ["PROCEDURA"], "s-r": ["KATALOG", "POZIVALAC"]},
+              "graf iz svi (CRLF na disku) ne bira pozivaoca u nedirnutom modulu: %r" % razlozi)
+        # Istorija: glava je commit; disk posle commit-a se NE cita.
+        baza0 = g("rev-parse", "HEAD")
+        g("add", "-A")
+        g("commit", "-q", "-m", "glava")
+        pisi("src-vba/modC.bas", "Attribute VB_Name = \"modC\"\r\n' sa diska\r\n")
+        ist = _od_ulazi(baza0, "HEAD", koren=repo)
+        tvrdi(set(ist.get("svi", {})) == moduli
+              and ist["svi"]["modC.bas"] == "Attribute VB_Name = \"modC\"\r\n"
+              and ist["svi"]["modN.bas"] == "Attribute VB_Name = \"modN\"\n' \xe8\n",
+              "svi u istoriji: ocekivani svi moduli commit-a (ne disk), dobijeno %r"
+              % ({k: v[:40] for k, v in ist.get("svi", {}).items()},))
         sirota = g("commit-tree", "HEAD^{tree}", "-m", "sirota")
         try:
             _od_baza(sirota, koren=repo)
