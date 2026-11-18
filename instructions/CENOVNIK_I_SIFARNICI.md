@@ -1,5 +1,11 @@
 # Maticni podaci: sifarnici + cenovnik (dorade)
 
+> **Legacy (napomena 18.11.2026).** Ovaj dokument opisuje stare forme
+> (`frmMaticniPodaci`, `frmStammdaten`) i stari model cenovnika
+> (`GetVazecaCena`, "poslednji red vazi"). Forme su obrisane, a
+> `GetVazecaCena` vise ne postoji. Autoritet za cenovnik je
+> `docs/DOMEN/CENOVNIK.md`. Ostatak teksta je istorija i nije azuriran.
+
 Ovaj dokument opisuje dorade na desktop (Excel/VBA) aplikaciji vezane za
 maticne podatke, sifarnike i cenovnik.
 

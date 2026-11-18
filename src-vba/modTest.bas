@@ -733,6 +733,19 @@ Public Sub RunAllTests()
     RunOne 370
     RunOne 371
 
+    ' Cenovnik (docs/DOMEN/CENOVNIK.md, CEN-01..13). 366-367 su ciste funkcije
+    ' bez sveske; 368-374 rade nad SVOJIM praznim tblCenovnik u transakciji
+    ' testa i vracaju ga (373-374 i nad formom), pa redosled nije nosec.
+    RunOne 366
+    RunOne 367
+    RunOne 368
+    RunOne 369
+    RunOne 370
+    RunOne 371
+    RunOne 372
+    RunOne 373
+    RunOne 374
+
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
@@ -969,6 +982,9 @@ Private Sub ResetSeamova()
     ' Beleska fokusa ljuske (271, 368): zaostalo ime polja bi sledecem testu
     ' izgledalo kao fokus koji je SAM trazio.
     modOtkupUI.FokusTestReset
+    ' Zabelezena pitanja cenovnika (374): zaostao tekst bi sledecem testu
+    ' izgledao kao pitanje koje je SAM postavio.
+    modMaticniEkran.CenPitanjeTestReset
     Err.Clear
 End Sub
 
@@ -1341,6 +1357,15 @@ Private Function TestName(ByVal idx As Long) As String
         Case 369: TestName = "T_RezimZbirne_F1NeNasledjuje"
         Case 370: TestName = "T_Zbirne_PickerOpisMestaKgAmb"
         Case 371: TestName = "T_Ljuska_DvoklikVanRedaNeUcitava"
+        Case 366: TestName = "T_Cen_VazecaCenaTabelaC1C19"
+        Case 367: TestName = "T_Cen_PreduslovIBezCene"
+        Case 368: TestName = "T_Cen_UnosOdbijaIPusta"
+        Case 369: TestName = "T_Cen_StornoJednokratanSaRazlogom"
+        Case 370: TestName = "T_Cen_IspravkaVezaUObaSmera"
+        Case 371: TestName = "T_Cen_MigracijaDuplikataIdempotentna"
+        Case 372: TestName = "T_Cen_PregledPrekidaPosebne"
+        Case 373: TestName = "T_Cen_PredlogCenePratiDatumIOM"
+        Case 374: TestName = "T_Cen_PitanjaSuGejtovana"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1720,6 +1745,15 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 369: T_RezimZbirne_F1NeNasledjuje
         Case 370: T_Zbirne_PickerOpisMestaKgAmb
         Case 371: T_Ljuska_DvoklikVanRedaNeUcitava
+        Case 366: T_Cen_VazecaCenaTabelaC1C19
+        Case 367: T_Cen_PreduslovIBezCene
+        Case 368: T_Cen_UnosOdbijaIPusta
+        Case 369: T_Cen_StornoJednokratanSaRazlogom
+        Case 370: T_Cen_IspravkaVezaUObaSmera
+        Case 371: T_Cen_MigracijaDuplikataIdempotentna
+        Case 372: T_Cen_PregledPrekidaPosebne
+        Case 373: T_Cen_PredlogCenePratiDatumIOM
+        Case 374: T_Cen_PitanjaSuGejtovana
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -26022,14 +26056,18 @@ End Sub
 ' ============================================================
 ' 171. Radnje nad redom prate ono sto sekcija STVARNO ume.
 '
-' Cenovnik je append-only, pa "Izmeni" nema (legacy je za isto krio dugme).
+' Red cenovnika se posle unosa ne menja (CEN-02), pa "Izmeni" nema (legacy je
+' za isto krio dugme). Umesto izmene cenovnik ima TACNO ispravku (storno + nov
+' red) i storno -- odluka vlasnika iz pre-flight-a 18.11.2026,
+' docs/DOMEN/CENOVNIK.md (CEN-11..13). Do tada je ovde stajalo "cenovnik nema
+' radnji nad redom", jer je bio samo-dodavanje bez storna.
 ' "Deaktiviraj" ima smisla samo tamo gde postoji kolona statusa -- dugme koje
 ' tiho ne radi nista je gore od dugmeta kog nema.
 Private Sub T_MatEkran_RadnjeIRezim()
     Dim ekrani As Variant, e As Variant, liste As Variant, r As Variant
     Dim kljuc As String, sr As String, p As Variant, deo As Variant
     Dim losOblik As String, manjka As String, prekoBazena As String
-    Dim viskaIzmeni As String, viskaStatus As String
+    Dim viskaIzmeni As String, viskaStatus As String, radnjeCen As String
 
     ekrani = Array("MAT_PARTNERI", "MAT_ROBA", "MAT_PAKOVANJE", "MAT_KORISNICI")
     For Each e In ekrani
@@ -26049,9 +26087,9 @@ Private Sub T_MatEkran_RadnjeIRezim()
                 Next deo
             End If
 
-            ' Izmena postoji svuda gde sekcija UOPSTE ima polja. Cenovnik je
-            ' append-only, a lista prava nema zapis koji bi se menjao -- oba se
-            ' vide po tome sto MatPolja za njih ne daje editor.
+            ' Izmena postoji svuda gde sekcija UOPSTE ima polja. Cenovnik se
+            ' ne menja na mestu (ispravka je storno + nov red), a lista prava
+            ' nema zapis koji bi se menjao (MatPolja za nju ne daje editor).
             If kljuc = "CENOVNIK" Or Not IsArray(modMaticniIzvor.MatPolja(kljuc)) Then
                 If InStr(sr, "izmeni:") > 0 Then viskaIzmeni = viskaIzmeni & " " & kljuc
             Else
@@ -26073,9 +26111,14 @@ Private Sub T_MatEkran_RadnjeIRezim()
     AssertEq manjka, "", "ne nedostaje nijedna radnja koju sekcija ume"
     AssertEq prekoBazena, "", "radnje staju u bazen ljuske"
 
-    ' Cenovnik zaista nema NIJEDNU radnju nad redom: nema ni izmene ni statusa.
-    AssertEq modMaticniEkran.Radnje("CENOVNIK"), "", _
-             "cenovnik nema radnji nad redom (append-only, bez statusa)"
+    ' Cenovnik nad redom nudi TACNO ispravku i storno, tim redom -- bez izmene
+    ' (red se ne menja na mestu) i bez statusa (tblCenovnik nema kolonu statusa).
+    For Each deo In Split(modMaticniEkran.Radnje("CENOVNIK"), "|")
+        If Len(radnjeCen) > 0 Then radnjeCen = radnjeCen & ","
+        radnjeCen = radnjeCen & Split(CStr(deo), ":")(0)
+    Next deo
+    AssertEq radnjeCen, "ispravi,storno", _
+             "cenovnik nad redom nudi tacno ispravku i storno (bez izmene i statusa)"
     AssertEq (Len(modMaticniEkran.Radnje("KOOPERANTI")) > 0), True, _
              "kooperanti imaju radnje nad redom"
 End Sub
@@ -33688,4 +33731,1156 @@ EH:
     modOtkupUI.GridOtkaciFormuTest
     modOtkupUI.ActiveMode = prev
     Err.Raise errNum, "modTest.T_Ljuska_DvoklikVanRedaNeUcitava", errDesc
+End Sub
+
+' ============================================================
+' CENOVNIK (docs/DOMEN/CENOVNIK.md, CEN-01..13) -- testovi 366-374.
+' ============================================================
+' Model je preuzet iz AgriXSystems (packages/domain/src/maticni/cena.ts), pa i
+' tabela slucajeva C1-C19 ide 1:1 iz packages/domain/test/maticni/cena.test.ts.
+'
+' 366-367 mere CISTO pravilo (modCenovnik.CenPobednik / CenVazeciRed) nad
+' sintetickim nizom, bez sveske. 368-374 rade nad tblCenovnik u transakciji
+' testa: snimak, pa PRAZNA tabela (CenIsprazniTabelu), pa samo redovi koje test
+' sam upise -- tvrdnja ne zavisi od zatecenog cenovnika sveske, pa test prolazi
+' i pusten sam (S-4a) -- i rollback PRE tvrdnji (obrazac
+' T_Kontekst_NovaStanicaUlaziUListu). Katalog poruka i sema idu PRE transakcije
+' (CenPripremi): Ensure moze da doda kolonu, a tabela kojoj se posle snimka
+' promeni broj kolona se ne vraca ("Column count mismatch").
+
+' Sinteticki niz u obliku pravila (CEN_R_*). spec je niz redova
+' Array(id, vrsta, sorta, klasa, stanica, datum, cena, storno); prazan spec daje
+' Empty -- isto sto CenovnikRedovi vraca za praznu tabelu.
+Private Function CenTestRedovi(ByVal spec As Variant) As Variant
+    Dim res() As Variant, i As Long, n As Long, r As Variant
+    If Not IsArray(spec) Then Exit Function
+    n = UBound(spec) - LBound(spec) + 1
+    If n <= 0 Then Exit Function
+    ReDim res(1 To n, 1 To modCenovnik.CEN_R_KOLONA)
+    For i = 1 To n
+        r = spec(LBound(spec) + i - 1)
+        res(i, modCenovnik.CEN_R_ID) = CStr(r(0))
+        res(i, modCenovnik.CEN_R_VRSTA) = CStr(r(1))
+        res(i, modCenovnik.CEN_R_SORTA) = CStr(r(2))
+        res(i, modCenovnik.CEN_R_KLASA) = CStr(r(3))
+        res(i, modCenovnik.CEN_R_STANICA) = CStr(r(4))
+        res(i, modCenovnik.CEN_R_DAN) = CLng(Int(CDbl(CDate(r(5)))))
+        res(i, modCenovnik.CEN_R_CENA) = CDbl(r(6))
+        res(i, modCenovnik.CEN_R_STORNO) = CBool(r(7))
+    Next i
+    CenTestRedovi = res
+End Function
+
+' Red fixture-a tabele C (vrsta Malina, godina 2026) u obliku za CenTestRedovi.
+Private Function CenR(ByVal id As String, ByVal sorta As String, ByVal stanica As String, _
+                      ByVal mesec As Long, ByVal dan As Long, ByVal cena As Double, _
+                      Optional ByVal klasa As String = KLASA_I, _
+                      Optional ByVal storno As Boolean = False) As Variant
+    CenR = Array(id, "Malina", sorta, klasa, stanica, DateSerial(2026, mesec, dan), cena, storno)
+End Function
+
+' Fixture tabele C1-C19, 1:1 iz cena.test.ts. M0 = Malina bez sorte, MP = Polka,
+' MM = Miker; stanice A i B. r4Storniran = varijanta slucajeva C18 i C19.
+Private Function CenFixC(ByVal r4Storniran As Boolean) As Variant
+    CenFixC = Array( _
+        CenR("r1", "", "", 6, 1, 200), _
+        CenR("r2", "Polka", "", 7, 1, 300), _
+        CenR("r3", "Polka", "A", 7, 10, 320), _
+        CenR("r4", "Polka", "", 8, 1, 310, KLASA_I, r4Storniran), _
+        CenR("r5", "Polka", "B", 8, 1, 305), _
+        CenR("r6", "Polka", "", 9, 1, 330, KLASA_I, True), _
+        CenR("r7", "Polka", "A", 10, 1, 340), _
+        CenR("r8", "", "A", 6, 15, 210), _
+        CenR("r9", "Polka", "", 7, 1, 250, KLASA_II), _
+        CenR("r10", "Miker", "A", 7, 20, 400), _
+        CenR("r11", "", "", 7, 22, 220))
+End Function
+
+' spec sa jos jednim redom na kraju (pregled pre upisa: isti redovi + nov).
+Private Function CenSpecSa(ByVal spec As Variant, ByVal novi As Variant) As Variant
+    Dim res() As Variant, i As Long
+    ReDim res(LBound(spec) To UBound(spec) + 1)
+    For i = LBound(spec) To UBound(spec)
+        res(i) = spec(i)
+    Next i
+    res(UBound(spec) + 1) = novi
+    CenSpecSa = res
+End Function
+
+' Ishod pravila u obliku tabele C1-C19: ime pobednika ("r5"), uz " (rezerva)"
+' kad je cena dosla od iste vrste bez sorte, ili "bez cene".
+Private Function CenVazi(ByRef redovi As Variant, ByVal stanica As String, _
+                         ByVal sorta As String, ByVal klasa As String, _
+                         ByVal mesec As Long, ByVal dan As Long, _
+                         Optional ByVal vrsta As String = "Malina") As String
+    Dim r As Long, rez As Boolean
+    r = modCenovnik.CenVazeciRed(redovi, vrsta, sorta, klasa, stanica, _
+                                 DateSerial(2026, mesec, dan), rez)
+    If r = 0 Then
+        CenVazi = "bez cene"
+    Else
+        CenVazi = CStr(redovi(r, modCenovnik.CEN_R_ID))
+        If rez Then CenVazi = CenVazi & " (rezerva)"
+    End If
+End Function
+
+' Priprema testa nad tabelom, PRE transakcije (v. zaglavlje bloka).
+Private Sub CenPripremi()
+    modSetup.EnsurePoruke
+    modSetup.EnsureCenovnikSchema
+End Sub
+
+' Prazan tblCenovnik UNUTAR transakcije testa (snimak je vec uzet).
+Private Sub CenIsprazniTabelu()
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_CENOVNIK)
+    If lo Is Nothing Then Err.Raise ERR_ASSERT, "modTest.CenIsprazniTabelu", "tblCenovnik ne postoji"
+    If Not lo.DataBodyRange Is Nothing Then lo.DataBodyRange.Delete
+End Sub
+
+Private Function CenBrojRedova() As Long
+    Dim data As Variant
+    data = GetTableData(TBL_CENOVNIK)
+    If IsArray(data) Then CenBrojRedova = UBound(data, 1)
+End Function
+
+' Celija reda po CenaID i IMENU kolone: AppendRow pise poziciono, pa bi
+' vrednost u pogresnom redosledu zavrsila u susednoj koloni -- citanje po imenu
+' to vidi. Red koji ne postoji jednoznacno daje oznaku, ne gresku: tvrdnja tada
+' pada po svom imenu.
+Private Function CenCelija(ByVal cenaID As String, ByVal kolona As String) As Variant
+    Dim pogoci As Collection, data As Variant
+    Set pogoci = FindRows(TBL_CENOVNIK, COL_CEN_ID, cenaID)
+    If pogoci.count <> 1 Then
+        CenCelija = "[redova: " & pogoci.count & "]"
+        Exit Function
+    End If
+    data = GetTableData(TBL_CENOVNIK)
+    CenCelija = data(pogoci(1), RequireColumnIndex(TBL_CENOVNIK, kolona, "modTest.CenCelija"))
+End Function
+
+Private Function CenTekst(ByVal cenaID As String, ByVal kolona As String) As String
+    CenTekst = Trim$(NzToText(CenCelija(cenaID, kolona)))
+End Function
+
+' Broj iz celije kao tekst "0.00" (Format$ na obe strane tvrdnje, v. DopRed).
+Private Function CenBroj(ByVal cenaID As String, ByVal kolona As String) As String
+    Dim v As Variant
+    v = CenCelija(cenaID, kolona)
+    If IsNumeric(v) And Len(NzToText(v)) > 0 Then
+        CenBroj = Format$(CDbl(v), "0.00")
+    Else
+        CenBroj = "[" & NzToText(v) & "]"
+    End If
+End Function
+
+' Serijski dan iz kolone Datum; -1 kad celija nije datum.
+Private Function CenDan(ByVal cenaID As String) As Long
+    Dim v As Variant
+    CenDan = -1
+    v = CenCelija(cenaID, COL_CEN_DATUM)
+    If VarType(v) = vbDate Then
+        CenDan = CLng(Int(CDbl(v)))
+    ElseIf IsNumeric(v) And Len(NzToText(v)) > 0 Then
+        CenDan = CLng(Int(CDbl(v)))
+    End If
+End Function
+
+' Sirov red tblCenovnik MIMO pisca (AppendRow, po imenu kolone): stanje koje
+' pisac ne sme da napravi -- duplikat starog modela, Datum van granice.
+' Sinteticka anomalija, SAMO unutar transakcije testa. ID ne pocinje sa "CEN-",
+' da ne pomeri GetNextID pisca.
+Private Sub CenUpisiSirov(ByVal cenaID As String, ByVal dan As Date, ByVal vrsta As String, _
+                          ByVal sorta As String, ByVal klasa As String, _
+                          ByVal cena As Double, ByVal stanicaID As String)
+    Const SRC As String = "modTest.CenUpisiSirov"
+    Dim red As Variant
+    ReDim red(1 To GetTable(TBL_CENOVNIK).ListColumns.count)
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_ID, SRC)) = cenaID
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_DATUM, SRC)) = dan
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_VRSTA, SRC)) = vrsta
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_SORTA, SRC)) = sorta
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_KLASA, SRC)) = klasa
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_CENA, SRC)) = cena
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_CREATED, SRC)) = Now
+    red(RequireColumnIndex(TBL_CENOVNIK, COL_CEN_STANICA, SRC)) = stanicaID
+    If AppendRow(TBL_CENOVNIK, red) <= 0 Then _
+        Err.Raise ERR_ASSERT, SRC, "AppendRow nije uspeo za " & cenaID
+End Sub
+
+' Recnik polja editora cenovnika -- isti kljucevi koje ekran skuplja
+' (MatPolja("CENOVNIK")); stanica u PRIKAZ obliku combo-a ili prazna.
+Private Function CenPoljaEditora(ByVal vrsta As String, ByVal sorta As String, _
+                                 ByVal klasa As String, ByVal stanicaPrikaz As String, _
+                                 ByVal dan As Date, ByVal cena As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    d("vrsta") = vrsta
+    d("sorta") = sorta
+    d("klasa") = klasa
+    d("stanica") = stanicaPrikaz
+    d("datum") = Format$(dan, "dd.mm.yyyy")
+    d("cena") = cena
+    Set CenPoljaEditora = d
+End Function
+
+' Prikaz stanice kako ga combo editora STVARNO nudi ("Naziv (ID)"), ili "".
+Private Function CenPrikazStanice(ByVal stanicaID As String) As String
+    Dim a As Variant, i As Long
+    a = modMaticniIzvor.MatComboStavke("@stanice", "")
+    If Not IsArray(a) Then Exit Function
+    For i = LBound(a) To UBound(a)
+        If InStr(1, CStr(a(i)), "(" & stanicaID & ")", vbTextCompare) > 0 Then
+            CenPrikazStanice = CStr(a(i))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ============================================================
+' 366. VAZECA CENA: TABELA SLUCAJEVA C1-C19 (CEN-05..07), 1:1 IZ AGRIXSYSTEMS.
+' ============================================================
+' Fixture: synthetic (niz CEN_R_*, bez sveske). Firma sa stanicama A i B; vrsta
+' Malina bez sorte (M0), Polka (MP) i Miker (MM); godina 2026:
+'   r1 M0 globalna 06-01 200 I      r7  MP A 10-01 340 I
+'   r2 MP globalna 07-01 300 I      r8  M0 A 06-15 210 I
+'   r3 MP A 07-10 320 I             r9  MP globalna 07-01 250 II
+'   r4 MP globalna 08-01 310 I      r10 MM A 07-20 400 I
+'   r5 MP B 08-01 305 I             r11 M0 globalna 07-22 220 I
+'   r6 MP globalna 09-01 330 I STORNIRAN
+' Ishod je ime reda ("r5"), uz " (rezerva)" kad je cena dosla od vrste bez
+' sorte, ili "bez cene" -- isti oblik kao u cena.test.ts, pa se slucaj poredi
+' red po red. Dva slucaja pregleda pre upisa idu kroz ISTO pravilo nad nizom sa
+' novim globalnim redom -- tako ih racuna i PrekinutePosebneCene.
+Private Sub T_Cen_VazecaCenaTabelaC1C19()
+    Dim c As Variant, c4 As Variant, p1 As Variant, p2 As Variant
+
+    c = CenTestRedovi(CenFixC(False))
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 6, 30), "r8 (rezerva)", _
+             "366 C1: sorta bez reda -> rezerva M0, posebna na A (r8)"
+    AssertEq CenVazi(c, "B", "Polka", KLASA_I, 6, 30), "r1 (rezerva)", _
+             "366 C2: rezerva M0 na B je globalna (r1)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 1), "r2", _
+             "366 C3: prva globalna sorte (r2)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 10), "r3", _
+             "366 C4: posebna sa kasnijim danom (r3)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 31), "r3", _
+             "366 C5: posebna i dalje vazi (r3)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 8, 1), "r4", _
+             "366 C6: nova globalna prekida raniju posebnu (r4)"
+    AssertEq CenVazi(c, "B", "Polka", KLASA_I, 8, 1), "r5", _
+             "366 C7: istog dana posebna pobedjuje globalnu (r5)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 15), "r4", _
+             "366 C8: storniran r6 ne vazi (r4)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 10, 1), "r7", _
+             "366 C9: posebna od svog dana (r7)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 30), "r4", _
+             "366 C10: buduca r7 ne vazi pre svog dana (r4)"
+    AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 15), "r8 (rezerva)", _
+             "366 C11: sorta bez reda -> rezerva M0 na A (r8)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_II, 7, 15), "r9", _
+             "366 C12: klasa II odvojeno od I (r9)"
+    AssertEq CenVazi(c, "A", "Polka", KLASA_II, 6, 15), "bez cene", _
+             "366 C13: ni sorta ni rezerva nemaju II (bez cene)"
+    AssertEq CenVazi(c, "A", "", KLASA_I, 5, 31), "bez cene", _
+             "366 C14: pre prve cene (bez cene)"
+    AssertEq CenVazi(c, "B", "Miker", KLASA_I, 7, 25), "r11 (rezerva)", _
+             "366 C15: samo posebna na A -> na B rezerva (r11)"
+    AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 25), "r10", _
+             "366 C16: sorta pobedjuje i noviju rezervu (r10)"
+    AssertEq CenVazi(c, "A", "", KLASA_I, 7, 25), "r11", _
+             "366 C17: bez sorte nema rezervu, globalna novija (r11)"
+
+    c4 = CenTestRedovi(CenFixC(True))
+    AssertEq CenVazi(c4, "A", "Polka", KLASA_I, 8, 15), "r3", _
+             "366 C18: storno globalne r4 vraca raniju posebnu na A (r3)"
+    AssertEq CenVazi(c4, "B", "Polka", KLASA_I, 8, 15), "r5", _
+             "366 C19: posle storna r4 posebna na B ostaje (r5)"
+
+    ' PREGLED PRE UPISA 1: nova globalna MP/I od 09-01 prekida posebnu na B (r5),
+    ' a na A ne prekida nista posebno (tamo vec vazi globalna r4).
+    AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 1), "r4", _
+             "366 P1: pre nove globalne MP/I od 09-01 na A vazi r4"
+    AssertEq CenVazi(c, "B", "Polka", KLASA_I, 9, 1), "r5", _
+             "366 P1: pre nove globalne MP/I od 09-01 na B vazi posebna r5"
+    p1 = CenTestRedovi(CenSpecSa(CenFixC(False), CenR("r12", "Polka", "", 9, 1, 335)))
+    AssertEq CenVazi(p1, "B", "Polka", KLASA_I, 9, 1), "r12", _
+             "366 P1: nova globalna od svog dana prekida posebnu r5 na B"
+    AssertEq CenVazi(p1, "A", "Polka", KLASA_I, 9, 1), "r12", _
+             "366 P1: nova globalna od svog dana vazi i na A"
+
+    ' PREGLED PRE UPISA 2: nova globalna MM/I od 07-15 na A prekida posebnu
+    ' preko rezerve (r8), i sama nije rezerva.
+    AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 15), "r8 (rezerva)", _
+             "366 P2: pre nove globalne MM/I od 07-15 na A vazi posebna rezerva r8"
+    p2 = CenTestRedovi(CenSpecSa(CenFixC(False), CenR("r13", "Miker", "", 7, 15, 390)))
+    AssertEq CenVazi(p2, "A", "Miker", KLASA_I, 7, 15), "r13", _
+             "366 P2: nova globalna sorte prekida posebnu rezervu r8 na A (nije rezerva)"
+End Sub
+
+' ============================================================
+' 367. PREDUSLOV CEN-03 I "BEZ CENE" (CEN-03, CEN-05, CEN-07).
+' ============================================================
+' Fixture: synthetic (niz CEN_R_*, bez sveske). Citalac prekrsen preduslov
+' (dva nestornirana reda istog kljuca, NIVOA i dana) PRIJAVLJUJE greskom
+' ERR_CEN_DUPLI_KLJUC -- ne bira jedan od njih, jer bi izbor bio pogadjanje.
+' Globalna i posebna istog dana NISU duplikat: posebna pobedjuje, kojim god
+' redom stoje u tabeli. Bez reda nema cene (indeks 0, nikad cena 0), prazna
+' stanica upita vidi samo globalne, a druga vrsta nije rezerva.
+Private Sub T_Cen_PreduslovIBezCene()
+    Dim dupG As Variant, dupP As Variant, gp As Variant, pg As Variant, c As Variant
+    Dim errG As Long, errP As Long, errGP As Long, r As Long, rez As Boolean
+    Dim rPrazan As Long, rEmpty As Long, rVazeci As Long
+
+    dupG = CenTestRedovi(Array(CenR("r2", "Polka", "", 7, 1, 300), _
+                               CenR("r14", "Polka", "", 7, 1, 301)))
+    dupP = CenTestRedovi(Array(CenR("r3", "Polka", "A", 7, 10, 320), _
+                               CenR("r15", "Polka", "A", 7, 10, 321)))
+    gp = CenTestRedovi(Array(CenR("r4", "Polka", "", 8, 1, 310), _
+                             CenR("r5", "Polka", "B", 8, 1, 305)))
+    pg = CenTestRedovi(Array(CenR("r5", "Polka", "B", 8, 1, 305), _
+                             CenR("r4", "Polka", "", 8, 1, 310)))
+
+    On Error Resume Next
+    r = modCenovnik.CenPobednik(dupG, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
+    errG = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(dupP, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 11))
+    errP = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(gp, "Malina", "Polka", KLASA_I, "B", DateSerial(2026, 8, 1))
+    errGP = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(pg, "Malina", "Polka", KLASA_I, "B", DateSerial(2026, 8, 1))
+    If errGP = 0 Then errGP = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq errG, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
+    AssertEq errP, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 dve posebne iste stanice, kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
+    AssertEq errGP, 0, "367 globalna i posebna istog dana nisu duplikat"
+    AssertEq CenVazi(gp, "B", "Polka", KLASA_I, 8, 1), "r5", _
+             "367 istog dana posebna pobedjuje globalnu i kad globalna stoji prva"
+    AssertEq CenVazi(pg, "B", "Polka", KLASA_I, 8, 1), "r5", _
+             "367 istog dana posebna pobedjuje globalnu i kad posebna stoji prva"
+    AssertEq CenVazi(gp, "A", "Polka", KLASA_I, 8, 1), "r4", _
+             "367 posebna jedne stanice ne vazi na drugoj"
+
+    rPrazan = modCenovnik.CenPobednik(Array(), "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
+    rEmpty = modCenovnik.CenPobednik(Empty, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
+    rVazeci = modCenovnik.CenVazeciRed(Empty, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2), rez)
+    AssertEq rPrazan, 0, "367 prazan niz nema pobednika (0)"
+    AssertEq rEmpty, 0, "367 prazna tabela (Empty) nema pobednika (0)"
+    AssertEq (rVazeci = 0 And Not rez), True, "367 bez ijednog reda nema cene ni rezerve"
+
+    c = CenTestRedovi(CenFixC(False))
+    AssertEq CenVazi(c, "", "Polka", KLASA_I, 7, 15), "r2", _
+             "367 prazna stanica upita ne vidi posebnu r3 (vazi globalna r2)"
+    AssertEq CenVazi(c, "", "Miker", KLASA_I, 6, 20), "r1 (rezerva)", _
+             "367 prazna stanica upita: rezerva je globalna r1, ne posebna r8"
+    AssertEq CenVazi(c, "A", "Duke", KLASA_I, 10, 1, "Borovnica"), "bez cene", _
+             "367 druga vrsta bez reda nema cene (Malina nije njena rezerva)"
+End Sub
+
+' ============================================================
+' 368. UNOS CENE: PROVERA ODBIJA I PUSTA, PISAC UPISUJE KANONSKI RED (CEN-01..04, CEN-09).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
+' FX_SORTA i stanice FX_STANICA / FX_STANICA_B iz fixture-a, FX_STANICA2 je
+' namerno nepostojeca). Jedna provera (CenaUnosProblem) za editor i pisca:
+' tacan KLJUC za svaki razlog odbijanja, i ivice granice datuma (31 dan unazad,
+' 366 unapred) prolaze. Duplikat je isti kljuc, nivo i dan; globalna i posebna
+' istog dana to nisu. Pisac upisuje red sa StanicaID, a red se cita PO IMENU
+' kolone -- pozicioni AppendRow bi pogresnim redosledom poslao vrednost u
+' susednu kolonu. Los ulaz pisac odbija praznim ID-em i ne dodaje red.
+Private Sub T_Cen_UnosOdbijaIPusta()
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim dan As Date, idG As String, idP As String, nPre As Long
+    Dim ok As Boolean, c As Double
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    dan = Date + 7
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    m("cena0") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 0, "")
+    m("decimale") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 1.234, "")
+    m("opseg") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 10000000000#, "")
+    m("granicaCene") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 9999999999.99, "")
+    m("klasa") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, "III", 250, "")
+    m("klasaMala") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, "ii", 250, "")
+    m("stanica") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 250, FX_STANICA2)
+    m("vrsta") = modCenovnik.CenaUnosProblem(dan, "CENTEST-NEMA-VRSTE", "", KLASA_I, 250, "")
+    m("sorta") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, "CENTEST-NEMA-SORTE", KLASA_I, 250, "")
+    m("bezVrste") = modCenovnik.CenaUnosProblem(dan, "", "", KLASA_I, 250, "")
+    m("bezSorte") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, "", KLASA_I, 250, "")
+    m("datum") = modCenovnik.CenaUnosProblem(CDate(0), FX_VRSTA, FX_SORTA, KLASA_I, 250, "")
+    m("unazad32") = modCenovnik.CenaUnosProblem(Date - (CEN_DANA_UNAZAD + 1), FX_VRSTA, FX_SORTA, KLASA_I, 250, "")
+    m("unapred367") = modCenovnik.CenaUnosProblem(Date + (CEN_DANA_UNAPRED + 1), FX_VRSTA, FX_SORTA, KLASA_I, 250, "")
+    m("unazad31") = modCenovnik.CenaUnosProblem(Date - CEN_DANA_UNAZAD, FX_VRSTA, FX_SORTA, KLASA_I, 250, "")
+    m("unapred366") = modCenovnik.CenaUnosProblem(Date + CEN_DANA_UNAPRED, FX_VRSTA, FX_SORTA, KLASA_I, 250, "")
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c)
+    m("bezCene") = (Not ok And c = 0)
+
+    idG = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 250)
+    m("dup") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 255, "")
+    m("dupSlova") = modCenovnik.CenaUnosProblem(dan, LCase$(FX_VRSTA), LCase$(FX_SORTA), "i", 255, "")
+    m("posebnaNijeDup") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 255, FX_STANICA)
+    m("drugiDan") = modCenovnik.CenaUnosProblem(dan + 1, FX_VRSTA, FX_SORTA, KLASA_I, 255, "")
+    m("drugaKlasa") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_II, 255, "")
+    idP = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 260, FX_STANICA)
+    m("seme") = (Len(idG) > 0 And Len(idP) > 0)
+    m("dupPosebne") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 265, FX_STANICA)
+    m("drugaStanica") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 265, FX_STANICA_B)
+
+    m("stP") = CenTekst(idP, COL_CEN_STANICA)
+    m("stG") = CenTekst(idG, COL_CEN_STANICA)
+    m("dan") = CenDan(idP)
+    m("roba") = CenTekst(idP, COL_CEN_VRSTA) & "|" & CenTekst(idP, COL_CEN_SORTA) & "|" & _
+                CenTekst(idP, COL_CEN_KLASA)
+    m("cena") = CenBroj(idP, COL_CEN_CENA)
+    m("bezStorna") = CenTekst(idP, COL_STORNIRANO) & CenTekst(idP, COL_CEN_STORNIRANO_AT) & _
+                     CenTekst(idP, COL_CEN_STORNIRANO_BY) & CenTekst(idP, COL_CEN_STORNO_RAZLOG)
+    m("bezVeze") = CenTekst(idP, COL_TRACE_ISPRAVKA_OD_ID) & CenTekst(idP, COL_TRACE_ZAMENJEN_SA_ID)
+    m("created") = (Len(CenTekst(idP, COL_CEN_CREATED)) > 0)
+
+    nPre = CenBrojRedova()
+    m("losaCena") = modCenovnik.AddCena(dan + 2, FX_VRSTA, FX_SORTA, KLASA_I, 0)
+    m("losDup") = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 270)
+    m("losaStanica") = modCenovnik.AddCena(dan + 2, FX_VRSTA, FX_SORTA, KLASA_I, 270, FX_STANICA2)
+    m("nLosih") = CenBrojRedova() - nPre
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("cena0"), "CEN_ERR_CENA_POZITIVNA", "368 cena 0 se odbija (CEN_ERR_CENA_POZITIVNA)"
+    AssertEq m("decimale"), "CEN_ERR_CENA_DECIMALE", "368 cena sa tri decimale se odbija (CEN_ERR_CENA_DECIMALE)"
+    AssertEq m("opseg"), "CEN_ERR_CENA_OPSEG", "368 cena preko gornje granice se odbija (CEN_ERR_CENA_OPSEG)"
+    AssertEq m("granicaCene"), "", "368 cena tacno na gornjoj granici prolazi"
+    AssertEq m("klasa"), "CEN_ERR_KLASA", "368 klasa III se odbija (CEN_ERR_KLASA)"
+    AssertEq m("klasaMala"), "", "368 klasa malim slovima je klasa (ii prolazi)"
+    AssertEq m("stanica"), "CEN_ERR_STANICA_NEPOZNATA", "368 nepoznata stanica se odbija (CEN_ERR_STANICA_NEPOZNATA)"
+    AssertEq m("vrsta"), "CEN_ERR_KULTURA_NEPOZNATA", "368 nepoznata vrsta se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
+    AssertEq m("sorta"), "CEN_ERR_KULTURA_NEPOZNATA", "368 nepoznata sorta poznate vrste se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
+    AssertEq m("bezVrste"), "CEN_ERR_VRSTA_OBAVEZNA", "368 prazna vrsta se odbija (CEN_ERR_VRSTA_OBAVEZNA)"
+    AssertEq m("bezSorte"), "", "368 vrsta bez sorte prolazi kad vrsta postoji"
+    AssertEq m("datum"), "CEN_ERR_DATUM", "368 nevazeci datum se odbija (CEN_ERR_DATUM)"
+    AssertEq m("unazad32"), "CEN_ERR_DATUM_GRANICA", "368 datum 32 dana unazad se odbija (CEN_ERR_DATUM_GRANICA)"
+    AssertEq m("unapred367"), "CEN_ERR_DATUM_GRANICA", "368 datum 367 dana unapred se odbija (CEN_ERR_DATUM_GRANICA)"
+    AssertEq m("unazad31"), "", "368 datum tacno 31 dan unazad prolazi"
+    AssertEq m("unapred366"), "", "368 datum tacno 366 dana unapred prolazi"
+    AssertEq m("bezCene"), True, "368 bez reda nema cene (False, ne cena 0)"
+
+    AssertEq m("seme"), True, "368 preduslov: AddCena upisuje globalnu i posebnu cenu"
+    AssertEq m("dup"), "CEN_ERR_DUPLIKAT", "368 isti kljuc i dan posle upisa je duplikat (CEN_ERR_DUPLIKAT)"
+    AssertEq m("dupSlova"), "CEN_ERR_DUPLIKAT", "368 duplikat se trazi bez razlike u velicini slova"
+    AssertEq m("posebnaNijeDup"), "", "368 posebna cena istog kljuca i dana nije duplikat globalne"
+    AssertEq m("drugiDan"), "", "368 isti kljuc drugog dana nije duplikat"
+    AssertEq m("drugaKlasa"), "", "368 druga klasa istog dana nije duplikat"
+    AssertEq m("dupPosebne"), "CEN_ERR_DUPLIKAT", "368 druga posebna iste stanice i dana je duplikat"
+    AssertEq m("drugaStanica"), "", "368 posebna druge stanice istog dana nije duplikat"
+
+    AssertEq m("stP"), FX_STANICA, "368 posebna cena nosi StanicaID u svojoj koloni"
+    AssertEq m("stG"), "", "368 globalna cena ima praznu StanicaID"
+    AssertEq m("dan"), CLng(dan), "368 Datum je u svojoj koloni (dan cene)"
+    AssertEq m("roba"), FX_VRSTA & "|" & FX_SORTA & "|" & KLASA_I, _
+             "368 VrstaVoca, SortaVoca i Klasa su u svojim kolonama"
+    AssertEq m("cena"), Format$(260, "0.00"), "368 Cena je u svojoj koloni"
+    AssertEq m("bezStorna"), "", "368 nov red nije storniran i nema trag storna"
+    AssertEq m("bezVeze"), "", "368 nov red nema vezu ispravke"
+    AssertEq m("created"), True, "368 CreatedAt je upisan"
+
+    AssertEq m("losaCena"), "", "368 pisac odbija cenu 0 praznim ID-em"
+    AssertEq m("losDup"), "", "368 pisac odbija duplikat praznim ID-em (drugi zid)"
+    AssertEq m("losaStanica"), "", "368 pisac odbija nepoznatu stanicu praznim ID-em"
+    AssertEq m("nLosih"), 0, "368 odbijen upis ne dodaje red"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    Err.Raise errNum, "modTest.T_Cen_UnosOdbijaIPusta", errDesc
+End Sub
+
+' ============================================================
+' 369. STORNO CENE JE JEDNOKRATAN, SA RAZLOGOM I TRAGOM (CEN-11, CEN-12).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
+' FX_SORTA iz fixture-a). Razlog je obavezan: prazan i od samih belina (razmak,
+' tab, NBSP, CR/LF) se odbija i red ostaje netaknut. Uspeo storno upisuje
+' Stornirano = Da, vreme, autora i razlog bez belina na krajevima. Drugi storno
+' se odbija i ne menja trag prvog. Stornirana cena vise ne vazi, a storno
+' oslobadja kljuc dana: ista roba istog dana se ponovo unosi i ona vazi.
+Private Sub T_Cen_StornoJednokratanSaRazlogom()
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim dan As Date, id As String, id2 As String, beline As String
+    Dim ok As Boolean, c As Double, cid As String, tragPrvi As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    dan = Date + 4
+    beline = " " & vbTab & ChrW(160) & vbCrLf
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    id = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 300)
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("pre") = (Len(id) > 0 And ok And cid = id)
+
+    m("kBez") = modCenovnik.CenaStornoProblem(id, "")
+    m("pBez") = modCenovnik.StornirajCenu(id, "")
+    m("kBeline") = modCenovnik.CenaStornoProblem(id, beline)
+    m("pBeline") = modCenovnik.StornirajCenu(id, beline)
+    m("kDug") = modCenovnik.CenaStornoProblem(id, String$(CEN_RAZLOG_MAX + 1, "x"))
+    m("netaknut") = CenTekst(id, COL_STORNIRANO) & "|" & CenTekst(id, COL_CEN_STORNO_RAZLOG)
+    m("kNema") = modCenovnik.CenaStornoProblem("CENT-NEMA-TAKVOG", "razlog")
+
+    m("pOk") = modCenovnik.StornirajCenu(id, vbTab & " pogresna" & ChrW(160) & "cena " & ChrW(160))
+    m("sto") = CenTekst(id, COL_STORNIRANO)
+    m("at") = (Len(CenTekst(id, COL_CEN_STORNIRANO_AT)) > 0)
+    m("by") = (Len(CenTekst(id, COL_CEN_STORNIRANO_BY)) > 0)
+    m("razlog") = NzToText(CenCelija(id, COL_CEN_STORNO_RAZLOG))
+    tragPrvi = NzToText(CenCelija(id, COL_CEN_STORNO_RAZLOG)) & "|" & _
+               NzToText(CenCelija(id, COL_CEN_STORNIRANO_AT))
+
+    m("kDrugi") = modCenovnik.CenaStornoProblem(id, "opet")
+    m("pDrugi") = modCenovnik.StornirajCenu(id, "opet")
+    m("trag") = (NzToText(CenCelija(id, COL_CEN_STORNO_RAZLOG)) & "|" & _
+                 NzToText(CenCelija(id, COL_CEN_STORNIRANO_AT)) = tragPrvi)
+
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("posle") = (Not ok And Len(cid) = 0)
+    m("kPonovo") = modCenovnik.CenaUnosProblem(dan, FX_VRSTA, FX_SORTA, KLASA_I, 310, "")
+    id2 = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 310)
+    m("novi") = (Len(id2) > 0)
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("vaziNova") = (ok And cid = id2 And Format$(c, "0.00") = Format$(310, "0.00"))
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("pre"), True, "369 preduslov: upisana cena vazi pre storna"
+    AssertEq m("kBez"), "CEN_ERR_RAZLOG_OBAVEZAN", "369 storno bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
+    AssertEq m("pBez"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), "369 pisac odbija storno bez razloga porukom iz kataloga"
+    AssertEq m("kBeline"), "CEN_ERR_RAZLOG_OBAVEZAN", "369 razlog od samih belina je prazan razlog"
+    AssertEq (Len(m("pBeline")) > 0), True, "369 pisac odbija storno sa razlogom od samih belina"
+    AssertEq m("kDug"), "CEN_ERR_RAZLOG_DUZINA", "369 razlog duzi od 500 znakova se odbija (CEN_ERR_RAZLOG_DUZINA)"
+    AssertEq m("netaknut"), "|", "369 odbijen storno ne dira red"
+    AssertEq m("kNema"), "CEN_ERR_NEMA_REDA", "369 storno nepostojeceg reda se odbija (CEN_ERR_NEMA_REDA)"
+    AssertEq m("pOk"), "", "369 storno sa razlogom uspeva"
+    AssertEq m("sto"), "Da", "369 storniran red nosi Stornirano = Da"
+    AssertEq m("at"), True, "369 vreme storna je upisano"
+    AssertEq m("by"), True, "369 autor storna je upisan"
+    AssertEq m("razlog"), "pogresna" & ChrW(160) & "cena", _
+             "369 razlog je bez belina na krajevima, a unutrasnje ostaju"
+    AssertEq m("kDrugi"), "CEN_ERR_STORNIRANA", "369 drugi storno se odbija (CEN_ERR_STORNIRANA)"
+    AssertEq m("pDrugi"), Poruka("CEN_ERR_STORNIRANA"), "369 pisac odbija drugi storno porukom iz kataloga"
+    AssertEq m("trag"), True, "369 drugi storno ne menja trag prvog"
+    AssertEq m("posle"), True, "369 stornirana cena vise ne vazi (nema cene)"
+    AssertEq m("kPonovo"), "", "369 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti"
+    AssertEq m("novi"), True, "369 pisac upisuje novu cenu istog kljuca i dana posle storna"
+    AssertEq m("vaziNova"), True, "369 posle storna i novog unosa vazi nova cena"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    Err.Raise errNum, "modTest.T_Cen_StornoJednokratanSaRazlogom", errDesc
+End Sub
+
+' ============================================================
+' 370. ISPRAVKA CENE: STORNO + NOV RED, VEZA U OBA SMERA (CEN-09, CEN-13).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
+' FX_SORTA iz fixture-a). Red sa Datumom VAN granice se kroz pisca ne moze
+' napraviti, pa ga test upisuje sirovo (CenUpisiSirov) unutar iste transakcije.
+' Ispravka bez ijedne promene se odbija PRE storna -- 310 i "310.00" su ista
+' cena, a velicina slova nije promena -- i nista se ne stornira. Prava ispravka
+' stornira stari red sa razlogom i dodaje nov: nov nosi IspravkaOdID = stari,
+' stari ZamenjenSaID = nov. Ispravka koja zadrzava stari Datum nije pod
+' granicom; ona koja ga pomera van granice se odbija. Storniran red se ne
+' ispravlja, a ispravka bez razloga se odbija pre ikakvog upisa.
+Private Sub T_Cen_IspravkaVezaUObaSmera()
+    Const STARI As String = "CENT-STARI-60"
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim dan As Date, id As String, novi As String, n2 As String, n3 As String
+    Dim n4 As String, n5 As String, nPre As Long, ok As Boolean, c As Double, cid As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    dan = Date + 6
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    id = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 310)
+    m("seme") = (Len(id) > 0)
+    nPre = CenBrojRedova()
+
+    ' --- bez promene: odbija se PRE storna --------------------------------
+    m("pBez") = modCenovnik.IspraviCenu(id, dan, FX_VRSTA, FX_SORTA, KLASA_I, 310, "", "razlog", novi)
+    m("noviBez") = novi
+    m("kSlova") = modCenovnik.CenaIspravkaProblem(id, dan, LCase$(FX_VRSTA), LCase$(FX_SORTA), "i", 310, "")
+    m("pEditor") = modMaticniUnos.MatIspravkaCeneProblem(id, _
+                       CenPoljaEditora(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, "310.00"))
+    m("netaknut") = CenTekst(id, COL_STORNIRANO) & "|" & CStr(CenBrojRedova() - nPre)
+
+    ' --- bez razloga: odbija se pre ikakvog upisa -------------------------
+    m("pBezRazloga") = modCenovnik.IspraviCenu(id, dan, FX_VRSTA, FX_SORTA, KLASA_I, 320, "", "", n5)
+    m("bezRazlogaNetaknut") = CenTekst(id, COL_STORNIRANO) & "|" & CStr(CenBrojRedova() - nPre) & "|" & n5
+
+    ' --- prava ispravka ---------------------------------------------------
+    m("pOk") = modCenovnik.IspraviCenu(id, dan, FX_VRSTA, FX_SORTA, KLASA_I, 320, "", _
+                                       "  greska u unosu ", novi)
+    m("noviID") = (Len(novi) > 0)
+    m("n") = CenBrojRedova() - nPre
+    m("odID") = CenTekst(novi, COL_TRACE_ISPRAVKA_OD_ID)
+    m("zamID") = CenTekst(id, COL_TRACE_ZAMENJEN_SA_ID)
+    m("staroSto") = CenTekst(id, COL_STORNIRANO)
+    m("razlog") = CenTekst(id, COL_CEN_STORNO_RAZLOG)
+    m("staroTrag") = (Len(CenTekst(id, COL_CEN_STORNIRANO_AT)) > 0 And _
+                      Len(CenTekst(id, COL_CEN_STORNIRANO_BY)) > 0)
+    m("novSto") = CenTekst(novi, COL_STORNIRANO)
+    m("novCena") = CenBroj(novi, COL_CEN_CENA)
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("vazi") = (ok And cid = novi)
+
+    ' --- granica datuma (CEN-09): sinteticki red 60 dana unazad ------------
+    CenUpisiSirov STARI, Date - 60, FX_VRSTA, FX_SORTA, KLASA_II, 300, ""
+    m("kDatumVan") = modCenovnik.CenaIspravkaProblem(STARI, Date - 59, FX_VRSTA, FX_SORTA, KLASA_II, 300, "")
+    m("pDatumVan") = modCenovnik.IspraviCenu(STARI, Date - 59, FX_VRSTA, FX_SORTA, KLASA_II, 300, "", _
+                                             "pomeren datum", n2)
+    m("stariPosleOdbijene") = CenTekst(STARI, COL_STORNIRANO) & "|" & n2
+    m("pZadrzi") = modCenovnik.IspraviCenu(STARI, Date - 60, FX_VRSTA, FX_SORTA, KLASA_II, 305, "", _
+                                           "ispravka cene", n3)
+    m("n3Dan") = CenDan(n3)
+    m("n3Veza") = CenTekst(n3, COL_TRACE_ISPRAVKA_OD_ID)
+
+    ' --- storniran red se ne ispravlja ------------------------------------
+    m("kStorniran") = modCenovnik.CenaIspravkaProblem(STARI, Date - 60, FX_VRSTA, FX_SORTA, KLASA_II, 310, "")
+    m("pStorniran") = modCenovnik.IspraviCenu(STARI, Date - 60, FX_VRSTA, FX_SORTA, KLASA_II, 310, "", _
+                                              "opet", n4)
+    m("n4") = n4
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("seme"), True, "370 preduslov: AddCena upisuje red koji se ispravlja"
+    AssertEq m("pBez"), Poruka("CEN_ERR_ISPRAVKA_BEZ_PROMENE"), _
+             "370 ispravka bez promene se odbija (CEN_ERR_ISPRAVKA_BEZ_PROMENE)"
+    AssertEq m("noviBez"), "", "370 ispravka bez promene ne daje nov red"
+    AssertEq m("kSlova"), "CEN_ERR_ISPRAVKA_BEZ_PROMENE", _
+             "370 velicina slova vrste, sorte i klase nije promena"
+    AssertEq m("pEditor"), Poruka("CEN_ERR_ISPRAVKA_BEZ_PROMENE"), _
+             "370 ispravka iz editora: 310.00 i 310 su ista cena"
+    AssertEq m("netaknut"), "|0", "370 odbijena ispravka nista ne stornira i ne dodaje red"
+    AssertEq m("pBezRazloga"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), _
+             "370 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
+    AssertEq m("bezRazlogaNetaknut"), "|0|", "370 ispravka bez razloga ne upisuje nista"
+    AssertEq m("pOk"), "", "370 prava ispravka uspeva"
+    AssertEq m("noviID"), True, "370 ispravka vraca ID novog reda"
+    AssertEq m("n"), 1, "370 ispravka dodaje tacno jedan red"
+    AssertEq m("odID"), id, "370 nov red nosi IspravkaOdID = stari"
+    AssertEq m("zamID"), novi, "370 stari red nosi ZamenjenSaID = nov"
+    AssertEq m("staroSto"), "Da", "370 stari red je storniran u istoj ispravci"
+    AssertEq m("razlog"), "greska u unosu", "370 razlog ispravke je trag storna starog reda"
+    AssertEq m("staroTrag"), True, "370 storno starog reda nosi vreme i autora"
+    AssertEq m("novSto"), "", "370 nov red nije storniran"
+    AssertEq m("novCena"), Format$(320, "0.00"), "370 nov red nosi ispravljenu cenu"
+    AssertEq m("vazi"), True, "370 posle ispravke vazi nov red"
+    AssertEq m("kDatumVan"), "CEN_ERR_DATUM_GRANICA", _
+             "370 ispravka koja pomera datum van granice se odbija"
+    AssertEq m("pDatumVan"), Poruka("CEN_ERR_DATUM_GRANICA"), _
+             "370 pisac odbija ispravku koja pomera datum van granice"
+    AssertEq m("stariPosleOdbijene"), "|", "370 odbijena ispravka datuma ne stornira stari red"
+    AssertEq m("pZadrzi"), "", "370 ispravka koja zadrzava stari datum van granice prolazi"
+    AssertEq m("n3Dan"), CLng(Date - 60), "370 nov red zadrzava stari datum"
+    AssertEq m("n3Veza"), STARI, "370 nov red ispravke van granice nosi vezu na stari"
+    AssertEq m("kStorniran"), "CEN_ERR_STORNIRANA", "370 storniran red se ne ispravlja (CEN_ERR_STORNIRANA)"
+    AssertEq m("pStorniran"), Poruka("CEN_ERR_STORNIRANA"), "370 pisac odbija ispravku storniranog reda"
+    AssertEq m("n4"), "", "370 odbijena ispravka storniranog reda ne daje nov red"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    Err.Raise errNum, "modTest.T_Cen_IspravkaVezaUObaSmera", errDesc
+End Sub
+
+' ============================================================
+' 371. MIGRACIJA ZATECENIH DUPLIKATA JE IDEMPOTENTNA (CEN-03, CEN-ODL-04).
+' ============================================================
+' Fixture: synthetic anomaly -- stari model je dozvoljavao vise nestorniranih
+' redova istog kljuca i dana, a pisac to danas odbija, pa se redovi upisuju
+' sirovo (CenUpisiSirov) u prazan tblCenovnik unutar transakcije: tri
+' globalna reda istog kljuca i dana (drugi sa sortom malim slovima -- kljuc je
+' bez razlike u velicini slova), posebna cena istog dana i red drugog dana.
+' Stari citalac je birao KASNIJI red tabele, pa on ostaje vazeci, a raniji se
+' storniraju sa razlogom koji imenuje pobednika. Pre migracije citalac prekrsen
+' preduslov ne razresava (nema cene); posle nje vazi cena pobednika. Drugi
+' prolaz ne stornira nista.
+Private Sub T_Cen_MigracijaDuplikataIdempotentna()
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim dan As Date, ok As Boolean, c As Double, cid As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    dan = Date - 10
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    CenUpisiSirov "CENT-MIG-1", dan, FX_VRSTA, FX_SORTA, KLASA_I, 300, ""
+    CenUpisiSirov "CENT-MIG-2", dan, FX_VRSTA, LCase$(FX_SORTA), KLASA_I, 305, ""
+    CenUpisiSirov "CENT-MIG-5", dan, FX_VRSTA, FX_SORTA, KLASA_I, 315, FX_STANICA
+    CenUpisiSirov "CENT-MIG-3", dan, FX_VRSTA, FX_SORTA, KLASA_I, 310, ""
+    CenUpisiSirov "CENT-MIG-4", dan + 1, FX_VRSTA, FX_SORTA, KLASA_I, 320, ""
+
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("preMig") = (Not ok And Len(cid) = 0)
+
+    m("n1") = modCenovnik.MigrirajDupleCene()
+    m("pob") = CenTekst("CENT-MIG-3", COL_STORNIRANO)
+    m("rani") = CenTekst("CENT-MIG-1", COL_STORNIRANO) & "|" & CenTekst("CENT-MIG-2", COL_STORNIRANO)
+    m("razlogImenuje") = (InStr(1, CenTekst("CENT-MIG-1", COL_CEN_STORNO_RAZLOG), "CENT-MIG-3", vbTextCompare) > 0 And _
+                          InStr(1, CenTekst("CENT-MIG-2", COL_CEN_STORNO_RAZLOG), "CENT-MIG-3", vbTextCompare) > 0)
+    m("trag") = (Len(CenTekst("CENT-MIG-1", COL_CEN_STORNIRANO_AT)) > 0 And _
+                 Len(CenTekst("CENT-MIG-1", COL_CEN_STORNIRANO_BY)) > 0)
+    m("drugiDan") = CenTekst("CENT-MIG-4", COL_STORNIRANO)
+    m("posebna") = CenTekst("CENT-MIG-5", COL_STORNIRANO)
+    m("n2") = modCenovnik.MigrirajDupleCene()
+    ok = modCenovnik.TryVazecaCena(FX_VRSTA, FX_SORTA, KLASA_I, "", dan, c, cid)
+    m("vazi") = (ok And cid = "CENT-MIG-3" And Format$(c, "0.00") = Format$(310, "0.00"))
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("preMig"), True, "371 pre migracije prekrsen CEN-03 znaci nema cene, ne izbor"
+    AssertEq m("n1"), 2, "371 migracija stornira dva ranija reda istog kljuca i dana"
+    AssertEq m("pob"), "", "371 kasniji red tabele ostaje vazeci"
+    AssertEq m("rani"), "Da|Da", "371 raniji redovi istog kljuca su stornirani (i sorta malim slovima)"
+    AssertEq m("razlogImenuje"), True, "371 razlog storna imenuje pobednika"
+    AssertEq m("trag"), True, "371 migracija ostavlja pun trag storna (vreme i autor)"
+    AssertEq m("drugiDan"), "", "371 red drugog dana se ne dira"
+    AssertEq m("posebna"), "", "371 posebna cena istog dana nije duplikat globalne"
+    AssertEq m("n2"), 0, "371 drugi prolaz migracije ne stornira nista (idempotentno)"
+    AssertEq m("vazi"), True, "371 posle migracije vazi cena pobednika"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    Err.Raise errNum, "modTest.T_Cen_MigracijaDuplikataIdempotentna", errDesc
+End Sub
+
+' ============================================================
+' 372. PREGLED PRE UPISA: NOVA GLOBALNA CENA PREKIDA POSEBNU (ADR 0019).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
+' FX_SORTA i stanice FX_STANICA / FX_STANICA_B iz fixture-a). Posebna cena na
+' FX_STANICA od d1 i na FX_STANICA_B od d3. Nova globalna od d2 (d1 < d2 < d3)
+' prekida posebnu na FX_STANICA i spisak je imenuje sa cenom i danom od kog je
+' vazila; buduca posebna FX_STANICA_B se ne prijavljuje dok ne pocne da vazi.
+' Istog dana posebna pobedjuje, pa globalna od d1 ne prekida nista; ni druga
+' klasa ni vrsta bez sorte (sorta pobedjuje rezervu) ne prekidaju posebnu
+' cenu sorte. Iz editora: posebna cena (stanica izabrana) nema pregled.
+Private Sub T_Cen_PregledPrekidaPosebne()
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim d1 As Date, d2 As Date, d3 As Date, idA As String, idB As String
+    Dim s As String, prikazA As String, polja As Object
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    d1 = Date + 3: d2 = Date + 8: d3 = Date + 12
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    idA = modCenovnik.AddCena(d1, FX_VRSTA, FX_SORTA, KLASA_I, 280, FX_STANICA)
+    idB = modCenovnik.AddCena(d3, FX_VRSTA, FX_SORTA, KLASA_I, 290, FX_STANICA_B)
+    m("seme") = (Len(idA) > 0 And Len(idB) > 0)
+
+    s = modCenovnik.PrekinutePosebneCene(d2, FX_VRSTA, FX_SORTA, KLASA_I)
+    m("saA") = (InStr(1, s, "(" & FX_STANICA & ")", vbTextCompare) > 0)
+    m("odDana") = (InStr(1, s, "(od " & Format$(d1, "dd.mm.yyyy") & ")", vbBinaryCompare) > 0)
+    m("cenaPosebne") = (InStr(1, s, Format$(280, "0.00"), vbBinaryCompare) > 0)
+    m("bezB") = (InStr(1, s, "(" & FX_STANICA_B & ")", vbTextCompare) = 0)
+    m("istiDan") = modCenovnik.PrekinutePosebneCene(d1, FX_VRSTA, FX_SORTA, KLASA_I)
+    m("drugaKlasa") = modCenovnik.PrekinutePosebneCene(d2, FX_VRSTA, FX_SORTA, KLASA_II)
+    m("bezSorte") = modCenovnik.PrekinutePosebneCene(d2, FX_VRSTA, "", KLASA_I)
+    m("posleB") = (InStr(1, modCenovnik.PrekinutePosebneCene(d3 + 1, FX_VRSTA, FX_SORTA, KLASA_I), _
+                         "(" & FX_STANICA_B & ")", vbTextCompare) > 0)
+
+    prikazA = CenPrikazStanice(FX_STANICA)
+    m("prikaz") = (Len(prikazA) > 0)
+    Set polja = CenPoljaEditora(FX_VRSTA, FX_SORTA, KLASA_I, prikazA, d2, "300")
+    m("edPosebna") = modMaticniUnos.MatCenaPregled(polja)
+    Set polja = CenPoljaEditora(FX_VRSTA, FX_SORTA, KLASA_I, "", d2, "300")
+    m("edGlobalna") = (InStr(1, modMaticniUnos.MatCenaPregled(polja), "(" & FX_STANICA & ")", _
+                             vbTextCompare) > 0)
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("seme"), True, "372 preduslov: posebne cene na dve stanice su upisane"
+    AssertEq m("saA"), True, "372 nova globalna posle posebne imenuje stanicu cija posebna prestaje"
+    AssertEq m("odDana"), True, "372 spisak nosi dan od kog je posebna vazila"
+    AssertEq m("cenaPosebne"), True, "372 spisak nosi cenu posebne koja prestaje"
+    AssertEq m("bezB"), True, "372 buduca posebna druge stanice se ne prijavljuje"
+    AssertEq m("istiDan"), "", "372 nova globalna istog dana kao posebna ne prekida nista"
+    AssertEq m("drugaKlasa"), "", "372 nova globalna druge klase ne prekida posebnu"
+    AssertEq m("bezSorte"), "", "372 nova globalna bez sorte ne prekida posebnu cenu sorte"
+    AssertEq m("posleB"), True, "372 posebna druge stanice se prijavljuje kad vec vazi"
+    AssertEq m("prikaz"), True, "372 preduslov: combo nudi otkupno mesto iz fixture-a"
+    AssertEq m("edPosebna"), "", "372 pregled iz editora za posebnu cenu (stanica izabrana) je prazan"
+    AssertEq m("edGlobalna"), True, "372 pregled iz editora za globalnu cenu imenuje stanicu"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    If txZapoceta Then tx.RollbackTx
+    Err.Raise errNum, "modTest.T_Cen_PregledPrekidaPosebne", errDesc
+End Sub
+
+' Predlog cene u polju klase I forme, kao broj u tekstu "0.00"; necitljiv tekst
+' ide u zagradama, da se vidi sta je stajalo.
+Private Function CenPoljeCeneI(ByVal zf As Object) As String
+    Dim t As String, d As Double
+    t = CStr(zf.Controls("fgCena").Controls("fgCena1T").text)
+    If TryParseDouble(t, d) Then
+        CenPoljeCeneI = Format$(d, "0.00")
+    Else
+        CenPoljeCeneI = "[" & t & "]"
+    End If
+End Function
+
+' Datum dokumenta kao da ga je operater otkucao: tekst polja, pa Change kroz
+' pravi dispecer ljuske (UiEvent -> UiChange -> OnDatumChanged).
+Private Sub CenDatumForme(ByVal zf As Object, ByVal dan As Date)
+    SetPolje zf, "fgDatum", Format$(dan, "dd.mm.yyyy")
+    modOtkupUI.UiEvent "fgDatumT", "Change", Empty
+End Sub
+
+' Lock stanice je stanje SESIJE (modStanicaLock), ne forme: Unload ga ne pusta.
+' Vraca se zateceno stanje dok je cloud sync jos iskljucen (pre rollback-a
+' tblSEFConfig), pa ni pustanje ni vracanje ne idu na mrezu.
+Private Sub CenVratiLock(ByVal prevSt As String, ByVal prevDat As Date)
+    If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
+    If Len(prevSt) > 0 Then AcquireStanicaLock prevSt, prevDat
+End Sub
+
+' ============================================================
+' 373. PREDLOG CENE NA FORMI PRATI DATUM I OTKUPNO MESTO (CEN-05, odluka vlasnika).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA i
+' stanica FX_STANICA iz fixture-a). Globalna cena od d1 i posebna za
+' FX_STANICA od d2 (d1 < d2), obe za vrstu BEZ sorte: forma trazi izabranu
+' sortu, pa cena stize kao rezerva -- tvrdnja tako ne zavisi od toga da li
+' RefillSorta ostavi sortu u combo-u.
+'
+' Ide kroz PRAVI put forme (NewOtkupUIForm, FillCombos, SelectMode F1), a
+' promene su eksplicitan Change kroz UiEvent -- isti ulaz kojim clsFlatBtn
+' javlja Change, deterministican i kad MSForms nad formom bez .Show ne okine
+' dogadjaj (ako okine, AutoFillCena se izvrsi dvaput, sto je idempotentno).
+' Promena datuma i otkupnog mesta trazi stanica-lock i predlog broja SA
+' pitanjem Google-u; zato test u svojoj transakciji pinuje CLOUD_SYNC_ENABLED
+' = NO (snimak tblSEFConfig, kao sto fixture pinuje druge kljuceve), pa lock i
+' predlog broja ostaju lokalni. Nijedna tvrdnja ne meri lock ni broj.
+'
+' Tvrdi se nad fgCena1T: datum pre d1 ne dira unetu cenu; datum >= d1 bez OM
+' daje globalnu, i na dan posebne (prazna stanica vidi samo globalne); izbor
+' FX_STANICA uz datum >= d2 daje posebnu; povratak datuma u [d1, d2) vraca
+' globalnu; brisanje OM vraca globalnu.
+Private Sub T_Cen_PredlogCenePratiDatumIOM()
+    Dim f As frmOtkupUI, zf As Object, ctx As Object, cbOM As MSForms.ComboBox
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim d1 As Date, d2 As Date, idG As String, idP As String
+    Dim prevSt As String, prevDat As Date
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    d1 = Date + 2: d2 = Date + 5
+    prevSt = GetActiveStanica()
+    prevDat = GetActiveDatum()
+    ' Aktivna otpremnica iz ranijeg testa bi na promenu OM vratila datum na
+    ' danas i ispraznila robu (NapustiOtpremnicu) -- test mora da prolazi i sam.
+    modScrDokumenti.Scr_OtpTestReset
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    tx.AddTableSnapshot TBL_SEF_CONFIG
+    SetConfigValue CFG_KEY_CLOUD_SYNC_ENABLED, "NO"
+    CenIsprazniTabelu
+    idG = modCenovnik.AddCena(d1, FX_VRSTA, "", KLASA_I, 250)
+    idP = modCenovnik.AddCena(d2, FX_VRSTA, "", KLASA_I, 270, FX_STANICA)
+    m("seme") = (Len(idG) > 0 And Len(idP) > 0)
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    Set ctx = f.Controls("zCtx")
+    Set cbOM = ctx.Controls("cbOM")
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F1"
+    m("rezim") = modOtkupUI.ActiveMode
+
+    ' Bez otkupnog mesta; roba izabrana.
+    SetComboByID cbOM, ""
+    modOtkupUI.UiEvent "cbOM", "Change", Empty
+    ctx.Controls("cbVrsta").value = FX_VRSTA
+    modOtkupUI.UiEvent "cbVrsta", "Change", Empty
+    ctx.Controls("cbSorta").value = FX_SORTA
+    modOtkupUI.UiEvent "cbSorta", "Change", Empty
+    m("vrsta") = CStr(ctx.Controls("cbVrsta").value)
+
+    ' a) datum pre prve cene: uneta cena ostaje
+    zf.Controls("fgCena").Controls("fgCena1T").text = "777"
+    CenDatumForme zf, d1 - 1
+    m("c0") = CenPoljeCeneI(zf)
+    ' b) dan globalne, bez OM
+    CenDatumForme zf, d1
+    m("c1") = CenPoljeCeneI(zf)
+    ' c) dan posebne, i dalje bez OM
+    CenDatumForme zf, d2
+    m("c2") = CenPoljeCeneI(zf)
+    ' d) izbor otkupnog mesta
+    SetComboByID cbOM, FX_STANICA
+    modOtkupUI.UiEvent "cbOM", "Change", Empty
+    m("om") = GetComboID(cbOM)
+    m("c3") = CenPoljeCeneI(zf)
+    ' e) datum nazad, pre posebne
+    CenDatumForme zf, d1 + 1
+    m("c4") = CenPoljeCeneI(zf)
+    ' f) datum ponovo na dan posebne
+    CenDatumForme zf, d2
+    m("c5") = CenPoljeCeneI(zf)
+    ' g) otkupno mesto obrisano
+    SetComboByID cbOM, ""
+    modOtkupUI.UiEvent "cbOM", "Change", Empty
+    m("c6") = CenPoljeCeneI(zf)
+
+    CenVratiLock prevSt, prevDat
+    tx.RollbackTx
+    txZapoceta = False
+    ReleaseOtkupUIForm f
+    Set f = Nothing
+
+    AssertEq m("seme"), True, "373 preduslov: globalna i posebna cena su upisane"
+    AssertEq m("rezim"), "F1", "373 preduslov: forma je u rezimu otkupa (F1)"
+    AssertEq m("vrsta"), FX_VRSTA, "373 preduslov: vrsta je izabrana"
+    AssertEq m("c0"), Format$(777, "0.00"), "373 datum pre prve cene ne dira unetu cenu"
+    AssertEq m("c1"), Format$(250, "0.00"), "373 datum od dana globalne cene, bez OM, daje globalnu cenu"
+    AssertEq m("c2"), Format$(250, "0.00"), _
+             "373 bez OM ni dan posebne cene ne daje posebnu (prazna stanica vidi samo globalne)"
+    AssertEq m("om"), FX_STANICA, "373 preduslov: otkupno mesto je izabrano po ID-u"
+    AssertEq m("c3"), Format$(270, "0.00"), "373 izbor otkupnog mesta uz datum posebne cene daje posebnu cenu"
+    AssertEq m("c4"), Format$(250, "0.00"), "373 povratak datuma pre posebne cene vraca globalnu"
+    AssertEq m("c5"), Format$(270, "0.00"), "373 datum ponovo na dan posebne vraca posebnu"
+    AssertEq m("c6"), Format$(250, "0.00"), "373 brisanje otkupnog mesta vraca globalnu cenu"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If txZapoceta Then
+        CenVratiLock prevSt, prevDat
+        tx.RollbackTx
+    End If
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Cen_PredlogCenePratiDatumIOM", errDesc
+End Sub
+
+' Indeks dugmeta radnje (btnAct<i>) za kljuc radnje liste, ili -1.
+Private Function CenIndeksRadnje(ByVal lista As String, ByVal radnja As String) As Long
+    Dim p As Variant, i As Long
+    CenIndeksRadnje = -1
+    p = Split(modMaticniEkran.Radnje(lista), "|")
+    For i = LBound(p) To UBound(p)
+        If Split(CStr(p(i)), ":")(0) = radnja Then
+            CenIndeksRadnje = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Upis u polje editora cenovnika kao kad operater kuca: kontrola je ona koju
+' ekran sam dodeljuje polju (MatKontrolaPoljaTest), u zoni ekrana.
+Private Sub CenUpisiPoljeEditora(ByVal ekran As String, ByVal poljeKljuc As String, _
+                                 ByVal v As String)
+    Dim z As Object, nm As String
+    Set z = modOtkupUI.ScreenZone(ekran)
+    If z Is Nothing Then Err.Raise ERR_ASSERT, "modTest.CenUpisiPoljeEditora", "nema zone ekrana " & ekran
+    nm = modMaticniEkran.MatKontrolaPoljaTest("CENOVNIK", poljeKljuc)
+    If Len(nm) = 0 Then Err.Raise ERR_ASSERT, "modTest.CenUpisiPoljeEditora", "polje bez kontrole: " & poljeKljuc
+    z.Controls(nm).Controls(nm & "T").value = v
+End Sub
+
+' ============================================================
+' 374. PITANJA CENOVNIKA SU GEJTOVANA: ZABELEZE SE, NISTA SE NE UPISE.
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji; globalna i posebna
+' cena za FX_STANICA od d1, kultura FX_VRSTA / FX_SORTA iz fixture-a).
+'
+' Razlog storna, razlog ispravke i potvrda prekida posebnih cena su InputBox /
+' MsgBox -- u nevidljivom Excelu vise do timeout-a. U test rezimu ih seam
+' modMaticniEkran (CenPitanjeTest / CenPitanjeTestReset) BELEZI i odgovara
+' odbijanjem ("" / Ne). Test vozi PRAVU ljusku (IdiNaEkran MAT_ROBA na listi
+' cenovnika, izbor reda "rb", radnja "btnAct", dugmad editora scrMat*) i tvrdi
+' za svako pitanje da je postavljeno, da je zabelezeno, i da se NISTA nije
+' upisalo: red nije storniran, nov red nije dodat. Odustajanje je "otkazano",
+' ne greska, a editor ostaje otvoren (otkucano se ne gubi).
+Private Sub T_Cen_PitanjaSuGejtovana()
+    Const EKRAN As String = "MAT_ROBA"
+    Dim f As frmOtkupUI, tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim d1 As Date, d2 As Date, idG As String, idP As String
+    Dim r As Long, rG As Long, iIspravi As Long, iStorno As Long, nPre As Long
+    Dim prevLista As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    d1 = Date + 1: d2 = Date + 3
+    prevLista = modScrMatRoba.Scr_Lista()
+    ' Zaostao editor bi na prelazak liste otvorio MsgBox (ObradiDogadjaj "ls").
+    modMaticniEkran.ZatvoriEditor
+    modMaticniEkran.CenPitanjeTestReset
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+    idG = modCenovnik.AddCena(d1, FX_VRSTA, FX_SORTA, KLASA_I, 250)
+    idP = modCenovnik.AddCena(d1, FX_VRSTA, FX_SORTA, KLASA_I, 260, FX_STANICA)
+    m("seme") = (Len(idG) > 0 And Len(idP) > 0)
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modScrMatRoba.Scr_MrTestSet "CENOVNIK"
+    modOtkupUI.IdiNaEkran EKRAN
+    m("ekran") = modOtkupUI.AktivanEkran() & "/" & modScrMatRoba.Scr_Lista()
+    For r = 1 To modOtkupUI.GridRedovaTest()
+        If StrComp(CStr(modOtkupUI.GridCell(r, modMaticniIzvor.MatKolonaID("CENOVNIK"))), _
+                   idG, vbTextCompare) = 0 Then rG = r
+    Next r
+    m("uMrezi") = (rG > 0)
+    iIspravi = CenIndeksRadnje("CENOVNIK", "ispravi")
+    iStorno = CenIndeksRadnje("CENOVNIK", "storno")
+    m("radnje") = (iIspravi >= 0 And iStorno >= 0)
+    nPre = CenBrojRedova()
+
+    ' 1) STORNO: izbor reda, pa radnja storno.
+    modOtkupUI.UiEvent "rb" & (rG - 1), "Click", Empty
+    OcistiToast f
+    modOtkupUI.UiEvent "btnAct" & iStorno, "Click", Empty
+    m("pitStorno") = modMaticniEkran.CenPitanjeTest()
+    m("toastStorno") = ToastTekst(f)
+    m("stornoRed") = CenTekst(idG, COL_STORNIRANO)
+    modMaticniEkran.CenPitanjeTestReset
+    m("posleReseta") = modMaticniEkran.CenPitanjeTest()
+
+    ' 2) ISPRAVKA: radnja ispravi, promena cene, Sacuvaj.
+    modOtkupUI.UiEvent "rb" & (rG - 1), "Click", Empty
+    modOtkupUI.UiEvent "btnAct" & iIspravi, "Click", Empty
+    m("editID") = modMaticniEkran.MatEditIDTest()
+    CenUpisiPoljeEditora EKRAN, "cena", "333"
+    modOtkupUI.UiEvent "scrMatSacuvaj", "Click", Empty
+    m("pitIspr") = modMaticniEkran.CenPitanjeTest()
+    m("isprRed") = CenTekst(idG, COL_STORNIRANO) & "|" & CStr(CenBrojRedova() - nPre)
+    m("editPosle") = modMaticniEkran.MatEditIDTest()
+    modOtkupUI.UiEvent "scrMatOdustani", "Click", Empty
+    modMaticniEkran.CenPitanjeTestReset
+
+    ' 3) UNOS nove GLOBALNE cene od d2, koja prekida posebnu na FX_STANICA.
+    modOtkupUI.UiEvent "scrMatNovi", "Click", Empty
+    CenUpisiPoljeEditora EKRAN, "vrsta", FX_VRSTA
+    CenUpisiPoljeEditora EKRAN, "sorta", FX_SORTA
+    CenUpisiPoljeEditora EKRAN, "klasa", KLASA_I
+    CenUpisiPoljeEditora EKRAN, "stanica", ""
+    CenUpisiPoljeEditora EKRAN, "datum", Format$(d2, "dd.mm.yyyy")
+    CenUpisiPoljeEditora EKRAN, "cena", "300"
+    modOtkupUI.UiEvent "scrMatSacuvaj", "Click", Empty
+    m("pitPrekid") = modMaticniEkran.CenPitanjeTest()
+    m("unosRed") = CStr(CenBrojRedova() - nPre)
+    modOtkupUI.UiEvent "scrMatOdustani", "Click", Empty
+    modMaticniEkran.CenPitanjeTestReset
+
+    m("katalog") = Not (PorukaNedostaje("CEN_ASK_RAZLOG_STORNO") Or _
+                        PorukaNedostaje("CEN_ASK_RAZLOG_ISPRAVKE") Or _
+                        PorukaNedostaje("CEN_ASK_PREKID_POSEBNIH") Or _
+                        PorukaNedostaje("CEN_ASK_NASTAVITI") Or _
+                        PorukaNedostaje("CEN_MSG_OTKAZANO"))
+
+    modMaticniEkran.Deaktiviraj
+    tx.RollbackTx
+    txZapoceta = False
+    ReleaseOtkupUIForm f
+    Set f = Nothing
+    modScrMatRoba.Scr_MrTestSet prevLista
+
+    AssertEq m("seme"), True, "374 preduslov: globalna i posebna cena su upisane"
+    AssertEq m("ekran"), EKRAN & "/CENOVNIK", "374 preduslov: ljuska je na listi cenovnika ekrana MAT_ROBA"
+    AssertEq m("uMrezi"), True, "374 preduslov: upisana cena je u mrezi"
+    AssertEq m("radnje"), True, "374 preduslov: cenovnik nudi radnje ispravi i storno"
+    AssertEq (InStr(1, m("pitStorno"), Poruka("CEN_ASK_RAZLOG_STORNO"), vbBinaryCompare) > 0), True, _
+             "374 storno u test rezimu pita za razlog, a pitanje se belezi"
+    AssertEq (InStr(1, m("pitStorno"), idG, vbTextCompare) > 0), True, _
+             "374 pitanje storna imenuje izabran red"
+    AssertEq m("stornoRed"), "", "374 storno bez razloga ne stornira red"
+    AssertEq m("toastStorno"), Poruka("CEN_MSG_OTKAZANO"), _
+             "374 odustajanje od storna je javljeno kao otkazano, ne kao greska"
+    AssertEq m("posleReseta"), "", "374 reset seam-a brise zabelezena pitanja"
+    AssertEq m("editID"), idG, "374 preduslov: radnja ispravi otvara ispravku izabranog reda"
+    AssertEq (InStr(1, m("pitIspr"), Poruka("CEN_ASK_RAZLOG_ISPRAVKE"), vbBinaryCompare) > 0), True, _
+             "374 ispravka u test rezimu pita za razlog, a pitanje se belezi"
+    AssertEq m("isprRed"), "|0", "374 ispravka bez razloga ne stornira stari red i ne dodaje nov"
+    AssertEq m("editPosle"), idG, "374 otkazana ispravka ostavlja editor otvoren (otkucano se ne gubi)"
+    AssertEq (InStr(1, m("pitPrekid"), Poruka("CEN_ASK_PREKID_POSEBNIH"), vbBinaryCompare) > 0), True, _
+             "374 unos globalne koja prekida posebnu trazi potvrdu, a potvrda se belezi"
+    AssertEq (InStr(1, m("pitPrekid"), "(" & FX_STANICA & ")", vbTextCompare) > 0), True, _
+             "374 potvrda prekida imenuje stanicu cija posebna prestaje"
+    AssertEq (InStr(1, m("pitPrekid"), Poruka("CEN_ASK_NASTAVITI"), vbBinaryCompare) > 0), True, _
+             "374 potvrda prekida pita da li da se upise"
+    AssertEq m("unosRed"), "0", "374 bez potvrde se globalna cena ne upisuje"
+    AssertEq m("katalog"), True, "374 pitanja cenovnika su iz kataloga poruka"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modMaticniEkran.CenPitanjeTestReset
+    modMaticniEkran.Deaktiviraj
+    If txZapoceta Then tx.RollbackTx
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrMatRoba.Scr_MrTestSet prevLista
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Cen_PitanjaSuGejtovana", errDesc
 End Sub

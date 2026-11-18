@@ -110,7 +110,7 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 
 | # | Pravilo | Legacy mesto | Poslovna rutina | Novi UI |
 |---|---|---|---|---|
-| Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` | **IMA** (`AutoFillCena`, v6-ui-102) |
+| Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` — *od 18.11.2026 `modCenovnik.TryVazecaCena(vrsta, sorta, klasa, stanica, datum, cena)`: cena na datum dokumenta, stanica samo u F1/F2; `GetVazecaCena` više ne postoji (`docs/DOMEN/CENOVNIK.md`)* | **IMA** (`AutoFillCena`, v6-ui-102; od 18.11.2026 i na promenu datuma i otkupnog mesta, CEN-ODL-02) |
 | Z2 | **Tip ambalaže iz kulture** po vrsti+sorti | isto | `GetKulturaTipAmbalaze` | **IMA** (v6-ui-102) |
 | Z3 | **Predlog broja dokumenta** — po režimu (tabela ispod); poštuje toggle auto-broja | isto | `modBrojevi.SuggestNextBroj(kind, entityID, datum)`, `GenerateBrojPrijemnice` | **IMA** (`RefreshBrojPredlog`, v6-ui-104; pravila po režimu v6-ui-112) |
 | Z4 | **Živi zbir kg** uz polje količine; u bruto režimu prikazuje neto posle tare | `UpdateUkupnoKg`, `UpdateUkupnoKgOtp`, `UpdateUkupnoKgPrij` | `GetTezinaGajbice`, `OtkupBrutoUnos()` | **IMA** (`SetKgLine`, v6-ui-102) |
@@ -6418,7 +6418,7 @@ proverom koju legacy koristi (`AktivanColName` → `Aktivan` ili `Aktivna`,
 
 | Lista | Radnje |
 | sve osim Cenovnika i Parcela | `izmeni` (soft) · `status` — „Deaktiviraj/Aktiviraj" (danger) |
-| Cenovnik | `novacena` — „Nova cena" (soft); **nema `izmeni`** — append-only, isto pravilo po kom legacy krije `btnIzmeni` |
+| Cenovnik | ~~`novacena` — „Nova cena" (soft)~~ *(ispravka 18.11.2026: `novacena` u `src-vba/` ne postoji; do 18.11.2026 Cenovnik nije imao nijednu radnju nad redom, a „nova cena" je dvoklik na red)* · danas: `ispravi` — „Ispravi" (soft) · `storno` — „Storniraj" (danger), `docs/DOMEN/CENOVNIK.md` CEN-11..13; **nema `izmeni`** — red se ne menja (CEN-02), isto pravilo po kom legacy krije `btnIzmeni` |
 | Parcele | `izmeni` · `status` · `geo` — „Geo" (soft), otvara postojeće ulazne tačke (v. §26.9) |
 
 **Kolone lista** se ne izmišljaju — preslikavaju se iz `LoadList`, koja je za

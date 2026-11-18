@@ -430,6 +430,30 @@ na kupca jezgro još ne sudi (`KI-069`). Pravilo: `AMBALAZA.md` 6.14b, tačka 4.
 Mere ih `modTest` 295–300 (`T_KI024_*`), 301–306 (`T_Prazne_*`) i 307–308
 (`T_ODL39_*`), sabotaže `ki024-*`, `prazne-*`, `storno-rev-razlog-*` i `odl39-*`.
 
+**Cenovnik otkupa — red je odluka firme o ceni (model AgriXSystems ADR 0019 i
+0027, 18.11.2026).** Red je cena u din/kg sa PDV-om za vrstu, sortu i klasu, od
+dana `Datum`, za celu firmu (prazan `StanicaID`) ili za jednu stanicu. Cena na
+stavci dokumenta je snimak: cenovnik daje samo predlog (CEN-10).
+
+**CEN-05 — važeća cena je poslednja odluka do dana dokumenta.** Za (stanica,
+roba, klasa, dan) pobeđuje najkasniji nestorniran `Datum` ≤ dan; istog dana
+posebna pobeđuje globalnu; sorta bez reda koristi istu vrstu bez sorte. Bez reda
+cene nema — nikad 0, i forma tada polje ne dira (CEN-07). Pravilo ima jednog
+vlasnika: `modCenovnik.CenPobednik` / `CenVazeciRed`; predlog na formi
+(`TryVazecaCena`) i pregled pre upisa zovu isto pravilo.
+
+**CEN-03 — najviše jedan nestorniran red po (vrsta, sorta, klasa, stanica,
+dan).** Pisac duplikat odbija (`CenaUnosProblem`). Čitalac ga ne razrešava nego
+prijavljuje greškom (`ERR_CEN_DUPLI_KLJUC`). Zatečene duplikate starog modela
+stornira migracija iz Ensure (`MigrirajDupleCene`, CEN-ODL-04).
+
+**CEN-13 — red se ne menja; ispravka je storno i nov red u jednoj transakciji.**
+Nov red nosi `IspravkaOdID`, stari `ZamenjenSaID`. Storno nosi razlog, autora i
+vreme zajedno, jednokratan je i ne poništava se (CEN-11, CEN-12).
+
+Mere ih `modTest` 366–374 (`T_Cen_*`), još nepušteni. Pun spisak CEN-01..13 i
+odluke CEN-ODL-01..13: `CENOVNIK.md`.
+
 ## 3) Ko šta piše
 
 `WHO_WRITES.md` u ovom folderu — generisana mapa vlasništva nad tabelama
@@ -464,6 +488,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Novac pri stornu / ispravci otkupa | `docs/DOMEN/ODLUKA_NOVAC_PRI_STORNU.md` — **OTVORENO, čeka operatera** |
 | Isplata gotovinom — PDV nadoknada nikad gotovinom (`ISP-ODL-01..03`) | `docs/DOMEN/ISPLATA_GOTOVINA.md` — **odluke 05.11.2026; test 341** |
 | Doplata kooperantu — knjižno odobrenje po kulturi i klasi (`DOP-ODL-01..13`, `DOP-01..11`) | `docs/DOMEN/DOPLATA.md` — **F1–F4b u kodu (šema, pisac, storno, kartica, Saldo OM, PWA, ekran, papir KO, signal DOP1, isplata KO kroz naloge, izvod, gotovinu i avans; testovi 315–340); Excel prijem P1 zelen 05.11.2026 (RunAllTests 337/0, BFP 3014/0, dokaz 41/41, Compile PASS) — P1 zatvoren; P2 (ekran) zatvoren; P3 (papir bloka, broj i PDF specifikacije) zatvoren; P3–P4 sledi** |
+| **Cenovnik otkupa — red je odluka o ceni: globalna i posebna po stanici, od dana, storno i ispravka** (`CEN-01..13`, `CEN-ODL-01..13`; model AgriXSystems ADR 0019 i 0027) | `docs/DOMEN/CENOVNIK.md` — **jezgro i ekran u kodu 18.11.2026 (grana `claude/elegant-mccarthy-jqlkk6`); testovi 366–374 imenovani; `run_vba` i Compile nisu pušteni — NEVERIFIKOVANO** |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
 | Otkup / dokumenta — pravila izmene | `.claude/rules/otkup-i-dokumenta.md` |
 | Verifikacija i definicija gotovog | `CLAUDE.md` §5, `.claude/rules/testovi.md` |
