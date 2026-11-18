@@ -13729,6 +13729,138 @@ SABOTAZE = {
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
         "otpremnica ne nosi broj zbirne: Otpremnica.BrojZbirne nema pisca (S9-2)",
     ),
+    # ------------------------------------------------------------------
+    # Radni tok operatera 18.11.2026 (testovi 366-370).
+    #
+    # 366: raspored reda DOKUMENT nema svoju listu -- LayoutFields slaze polja
+    # redom gradnje. Datum vracen iza broja = stari raspored "broj, ..., datum".
+    "dok-red-datum-posle-broja": (
+        "modOtkupUI.bas",
+        '    NewFieldG z, "fgDatum", Poruka("OTKUI_FLD_DATUM"), "txt", "", 1, False, False, "DOK"\n'
+        '    NewFieldG z, "fgBrOtpr", Poruka("OTKUI_FLD_BROJ_OTPR"), "txt", "", 1, False, True, "DOK"\n',
+        '    NewFieldG z, "fgBrOtpr", Poruka("OTKUI_FLD_BROJ_OTPR"), "txt", "", 1, False, True, "DOK"\n'
+        '    NewFieldG z, "fgDatum", Poruka("OTKUI_FLD_DATUM"), "txt", "", 1, False, False, "DOK"'
+        "   ' SABOTAZA: datum posle broja\n",
+        "T_FormaDok_DatumPreBroja",
+        "red DOKUMENT: datum -> broj -> zbirna u svakom rezimu",
+    ),
+    # 367: strelica opet ide kroz filter kucanja -- nad izabranom stavkom nudi
+    # samo nju (simptom "strelica ne radi kad je polje popunjeno").
+    "pop-strelica-filtrira-tekstom": (
+        "modOtkupUI.bas",
+        "    If mPopFor = nm Then ClosePopup Else OpenPopup nm, True\n",
+        "    If mPopFor = nm Then ClosePopup Else OpenPopup nm   ' SABOTAZA: strelica filtrira tekstom polja\n",
+        "T_Ljuska_StrelicaOtvaraPunuListu",
+        "strelica nad izabranim vozacem otvara PUNU listu, ne samo izabranog",
+    ),
+    # 367, drugi smer: ispravka ne sme da ukine suzavanje kucanjem.
+    "pop-kucanje-ne-suzava": (
+        "modOtkupUI.bas",
+        "    If Not punaLista Then f = Trim$(CStr(cmb.text))\n",
+        "    f = \"\"   ' SABOTAZA: kucanje ne suzava listu\n",
+        "T_Ljuska_StrelicaOtvaraPunuListu",
+        "kucanje i dalje suzava listu",
+    ),
+    # 368: strelica opet ne trazi fokus -- kucanje ide u combo koji je fokus vec
+    # imao (simptom "kucam u kooperanta, a slova idu u Vrstu voca").
+    "strelica-bez-fokusa": (
+        "modOtkupUI.bas",
+        "            DajFokus FindCombo(popK)\n",
+        "            popK = popK   ' SABOTAZA: strelica ne daje fokus svom polju\n",
+        "T_Ljuska_StrelicaDajeFokusSvomPolju",
+        "strelica partnera daje fokus partneru, a ne Vrsti",
+    ),
+    # 368: izbor iz panela ostavlja fokus gde ga je MSForms ostavio.
+    "izbor-bez-fokusa": (
+        "modOtkupUI.bas",
+        "    DajFokus cmb\n",
+        "    Set cmb = cmb   ' SABOTAZA: izbor iz panela ne vraca fokus\n",
+        "T_Ljuska_StrelicaDajeFokusSvomPolju",
+        "izbor iz panela vraca fokus partneru",
+    ),
+    # 368: podloga kontekstnog polja opet neozicena -- klik na nju daje fokus
+    # ActiveControl-u Frame-a zCtx (Vrsti), ne polju.
+    "podloga-bez-taga": (
+        "modOtkupUI.bas",
+        '    WireBtn parent.Controls(nm & "F"), nm & "D", "chev"\n',
+        "    ' SABOTAZA: podloga polja bez taga strelice\n",
+        "T_Ljuska_StrelicaDajeFokusSvomPolju",
+        "podloga svakog kontekstnog polja nosi tag strelice",
+    ),
+    # 369: broj zbirne pripada svom dokumentu. Polje je ista kontrola u F1/F2/F4;
+    # svaka sabotaza skida jedan od pet delova i obara SVOJU tvrdnju.
+    #   (A) F1 opet preuzima zapamcenu zbirnu (ApplyAktivnaZbirna)
+    "zbr-f1-preuzima-pamcenje": (
+        "modOtkupUI.bas",
+        '    If mode = "F1" Then Exit Sub\n',
+        "    ' SABOTAZA: F1 preuzima zapamcenu zbirnu\n",
+        "T_RezimZbirne_F1NeNasledjuje",
+        "F1 ne preuzima zapamcenu zbirnu ni nad praznim poljem",
+    ),
+    #   (C) promena rezima opet ne prazni polje -- simptom koji je operater video
+    "zbr-f1-ne-prazni": (
+        "modOtkupUI.bas",
+        '            frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT").text = ""\n',
+        "            mZbirnaFill = True   ' SABOTAZA: promena rezima ne prazni zbirnu\n",
+        "T_RezimZbirne_F1NeNasledjuje",
+        "ulazak u F1 iz F4 ne nosi broj zbirne prijemnice",
+    ),
+    #   (uslov) praznjenje i u ISTOM rezimu -- lomi ugovor "broj ostaje za
+    #   sledeci blok" na prekidacu liste i povratku na ekran
+    "zbr-f1-prazni-isti-rezim": (
+        "modOtkupUI.bas",
+        "    If StrComp(stariRezim, key, vbTextCompare) <> 0 Then\n"
+        '        If key = "F1" Or stariRezim = "F1" Then\n',
+        "    If True Then   ' SABOTAZA: zbirna se prazni i u istom rezimu\n"
+        '        If key = "F1" Or stariRezim = "F1" Then\n',
+        "T_RezimZbirne_F1NeNasledjuje",
+        "ponovni ulazak u ISTI rezim ne brise broj zbirne",
+    ),
+    #   (B) kucanje u F1 opet menja zapamcenu zbirnu prijemnice
+    "zbr-f1-pise-pamcenje": (
+        "modOtkupUI.bas",
+        '    If ActiveMode = "F1" Then Exit Sub\n',
+        "    ' SABOTAZA: F1 pise zapamcenu zbirnu\n",
+        "T_RezimZbirne_F1NeNasledjuje",
+        "F1 ne menja zapamcenu zbirnu prijemnice",
+    ),
+    #   (obrnuto) izlazak iz F1 ne prazni polje -- broj iz F1 ode u prijemnicu
+    "zbr-f1-izlazak-ne-prazni": (
+        "modOtkupUI.bas",
+        '        If key = "F1" Or stariRezim = "F1" Then\n',
+        '        If key = "F1" Then   \' SABOTAZA: izlazak iz F1 ne prazni zbirnu\n',
+        "T_RezimZbirne_F1NeNasledjuje",
+        "izlazak iz F1 ne nosi broj otkucan u F1",
+    ),
+    # 370: izbor zbirne u prijemnici nosi opis (mesta, kg, amb). Filter opet
+    # gleda samo broj -- kucanje imena mesta ne nalazi nista.
+    "zbr-opis-filter-po-broju": (
+        "modOtkupUI.bas",
+        "        ElseIf InStr(1, PopStavka(cmb, i), f, vbTextCompare) > 0 Then\n",
+        "        ElseIf InStr(1, CStr(cmb.List(i, 0)), f, vbTextCompare) > 0 Then"
+        "   ' SABOTAZA: filter ne vidi opis\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F4: kucanje imena mesta u izboru zbirne nalazi zbirnu sa tog mesta",
+    ),
+    # 370: opis upisan u kolonu prikaza -- panel izgleda isto, ali izbor u polje
+    # upise broj SA opisom, a p("brojZbirne") cita bas taj tekst.
+    "zbr-opis-u-koloni-0": (
+        "modOtkupUI.bas",
+        "        cmb.List(i, 2) = ZbirnaOpisTekst(CStr(cmb.List(i, 1)), st, mesta)\n",
+        "        cmb.List(i, 0) = CStr(cmb.List(i, 0)) & \" \" & "
+        "ZbirnaOpisTekst(CStr(cmb.List(i, 1)), st, mesta)   ' SABOTAZA: opis u koloni 0\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F4: izbor iz panela upisuje u polje SAMO broj zbirne",
+    ),
+    # 370: opis i van prijemnice -- u F1/F2 polje cesto pokazuje nacrt, ciji je
+    # kg najava, a operater opis nije trazio.
+    "zbr-opis-i-van-prijemnice": (
+        "modOtkupUI.bas",
+        '        If ActiveMode = "F4" Then PopImaOpis = True\n',
+        "        PopImaOpis = True   ' SABOTAZA: opis i van prijemnice\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj",
+    ),
 }
 
 

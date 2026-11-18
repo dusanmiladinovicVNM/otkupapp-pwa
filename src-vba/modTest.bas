@@ -723,6 +723,15 @@ Public Sub RunAllTests()
     RunOne 364
     RunOne 365
 
+    ' Radni tok operatera 18.11.2026: raspored reda DOKUMENT, panel izbora
+    ' (puna lista na strelici, fokus svom polju), broj zbirne po rezimu i opis
+    ' zbirne u izboru prijemnice. Svaki gradi svoju formu i sve vraca sam.
+    RunOne 366
+    RunOne 367
+    RunOne 368
+    RunOne 369
+    RunOne 370
+
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
@@ -956,6 +965,9 @@ Private Sub ResetSeamova()
     ' Mapiranje izvoda u testovima doplate (329-332) gasi dijaloge greske; test
     ' koji pukne pre vracanja ostavio bi tih rezim i produkciji posle suite.
     modBankaMapiranje.gBankaSilentBatch = False
+    ' Beleska fokusa ljuske (271, 368): zaostalo ime polja bi sledecem testu
+    ' izgledalo kao fokus koji je SAM trazio.
+    modOtkupUI.FokusTestReset
     Err.Clear
 End Sub
 
@@ -1322,6 +1334,11 @@ Private Function TestName(ByVal idx As Long) As String
         Case 363: TestName = "T_S92_StatusVezaNepoznata"
         Case 364: TestName = "T_S92_OtkRedVozacTekucePredaje"
         Case 365: TestName = "T_S92_IzvestajiPoClanstvu"
+        Case 366: TestName = "T_FormaDok_DatumPreBroja"
+        Case 367: TestName = "T_Ljuska_StrelicaOtvaraPunuListu"
+        Case 368: TestName = "T_Ljuska_StrelicaDajeFokusSvomPolju"
+        Case 369: TestName = "T_RezimZbirne_F1NeNasledjuje"
+        Case 370: TestName = "T_Zbirne_PickerOpisMestaKgAmb"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1695,6 +1712,11 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 363: T_S92_StatusVezaNepoznata
         Case 364: T_S92_OtkRedVozacTekucePredaje
         Case 365: T_S92_IzvestajiPoClanstvu
+        Case 366: T_FormaDok_DatumPreBroja
+        Case 367: T_Ljuska_StrelicaOtvaraPunuListu
+        Case 368: T_Ljuska_StrelicaDajeFokusSvomPolju
+        Case 369: T_RezimZbirne_F1NeNasledjuje
+        Case 370: T_Zbirne_PickerOpisMestaKgAmb
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -32993,4 +33015,492 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S92_IzvestajiPoClanstvu", _
              "365: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' ============================================================
+' 366. RED "DOKUMENT": DATUM -> BROJ -> ZBIRNA (zahtev operatera 18.11.2026)
+'
+' Raspored polja nema svoju listu: LayoutFields slaze polja grupe redom kojim
+' ih je BuildForm napravio. Zato se meri RASPORED, ne redosled poziva -- seam
+' FieldsLayoutTest pusti isti LayoutFields sa zadatim brojem kolona, jer
+' neprikazana forma nema pouzdanu sirinu (LayoutOtkup bira kolone po njoj).
+'
+' Mere se F1, F2 i F4 (zbirna vidljiva) i F3, F5, F7 (bez zbirne). F6 deli
+' granu ApplyFormFields sa F5, a nijedan test ga headless ne vozi -- nije meren.
+' Bez rasporeda su sva polja na Left = 0, pa "datum levo od broja" ne moze
+' lazno da prodje. Nalazi se skupljaju i tvrde POSLE oslobadjanja forme.
+' ============================================================
+Private Sub T_FormaDok_DatumPreBroja()
+    Dim f As frmOtkupUI, zf As Object
+    Dim rez As Variant, m As Variant
+    Dim d As Object, b As Object, zb As Object
+    Dim nalaz As String, saZbirnom As Long
+    Dim uskiRed As Boolean, uskiZbirnaIspod As Boolean
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    Set d = zf.Controls("fgDatum")
+    Set b = zf.Controls("fgBrOtpr")
+    Set zb = zf.Controls("fgBrZbir")
+
+    rez = Array("F1", "F2", "F3", "F4", "F5", "F7")
+    For Each m In rez
+        modOtkupUI.SelectMode f, CStr(m)
+        modOtkupUI.FieldsLayoutTest zf, 3, 900
+        If d.top <> b.top Or Not (d.Left < b.Left) Then
+            nalaz = nalaz & CStr(m) & ": datum nije levo od broja u istom redu; "
+        End If
+        If zb.Visible Then
+            saZbirnom = saZbirnom + 1
+            If zb.top <> b.top Or Not (b.Left < zb.Left) Then
+                nalaz = nalaz & CStr(m) & ": zbirna nije desno od broja u istom redu; "
+            End If
+        End If
+    Next m
+
+    ' Uski prozor (2 kolone): datum i broj ostaju u istom redu, a zbirna prelazi
+    ' u sledeci -- red se lomi posle broja, ne posle zbirne.
+    modOtkupUI.SelectMode f, "F1"
+    modOtkupUI.FieldsLayoutTest zf, 2, 700
+    uskiRed = (d.top = b.top And d.Left < b.Left)
+    uskiZbirnaIspod = (zb.top > b.top)
+
+    ReleaseOtkupUIForm f
+
+    AssertEq nalaz, "", "red DOKUMENT: datum -> broj -> zbirna u svakom rezimu"
+    AssertEq saZbirnom, 3, "zbirna je izmerena u F1, F2 i F4"
+    AssertEq uskiRed, True, "uski raspored: datum i broj u istom redu, datum levo"
+    AssertEq uskiZbirnaIspod, True, "uski raspored: zbirna prelazi u sledeci red"
+End Sub
+
+' ============================================================
+' 367. STRELICA OTVARA PUNU LISTU, KUCANJE SUZAVA (zahtev operatera 18.11.2026)
+'
+' "Kada je u DD za OM, vozaca ili kooperanta uneto nesto, strelica ne radi.
+' Proradi tek kad obrisem sadrzaj polja." Strelica je isla kroz isti filter kao
+' kucanje, a filter je tekst polja: nad izabranom stavkom panel je nudio samo
+' nju, a nad tekstom bez pogotka se nije ni otvarao. Meri se kroz pravu ljusku
+' (UiEvent / HandleKeyFrom), nad formom bez .Show -- na tom putu nema SetFocus-a.
+'
+' Vozac umesto otkupnog mesta: punjenje i otvaranje su isti (FillComboDisplayID),
+' a izbor OM-a okida OnStanicaChanged (zakljucavanje stanice), sto ovde nije
+' predmet. Kooperant je treci oblik punjenja (FillFormPartner, tri kolone).
+' Nalazi se skupljaju i tvrde POSLE oslobadjanja forme.
+' ============================================================
+Private Sub T_Ljuska_StrelicaOtvaraPunuListu()
+    Dim f As frmOtkupUI, z As Object, cb As Object, kp As Object
+    Dim pre As Boolean, i As Long
+    Dim nVoz As Long, nKoop As Long, punoVoz As Long, punoKoop As Long
+    Dim redIzabran As Long, idxPosle As Long, vidZatvoren As Boolean
+    Dim redNista As Long, kuc As String, ocekKuc As Long, redKuc As Long
+    Dim redAlt As Long, redKoop As Long
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F1"
+    Set z = f.Controls("zPop")
+    Set cb = f.Controls("zCtx").Controls("cbVozac")
+    Set kp = f.Controls("zCtx").Controls("cbKupac")
+    nVoz = cb.ListCount
+    nKoop = kp.ListCount
+    punoVoz = nVoz: If punoVoz > 14 Then punoVoz = 14
+    punoKoop = nKoop: If punoKoop > 14 Then punoKoop = 14
+
+    ' A) izabran vozac -> strelica nudi SVE, i iz nje se bira drugi
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    cb.ListIndex = 0
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "cbVozacD", "Click", Empty
+    redIzabran = VidljivihRedovaPanela(z)
+    modOtkupUI.UiEvent "pop1", "Click", Empty
+    idxPosle = cb.ListIndex
+
+    ' B) dugme i dalje zatvara svoju listu (otvori, pa zatvori)
+    modOtkupUI.UiEvent "cbVozacD", "Click", Empty
+    modOtkupUI.UiEvent "cbVozacD", "Click", Empty
+    vidZatvoren = z.Visible
+
+    ' C) tekst koji ne pogadja nijednu stavku: strelica i dalje otvara listu
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    cb.text = "zzz#367"
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "cbVozacD", "Click", Empty
+    redNista = VidljivihRedovaPanela(z)
+    ZatvoriPanelTest z
+
+    ' D) KUCANJE i dalje suzava. Ocekivani broj test broji SAM, ne kroz PopIndex.
+    kuc = Left$(CStr(cb.List(1, 0)), 3)
+    For i = 0 To cb.ListCount - 1
+        If InStr(1, CStr(cb.List(i, 0)), kuc, vbTextCompare) > 0 Then ocekKuc = ocekKuc + 1
+    Next i
+    If ocekKuc > 14 Then ocekKuc = 14
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    cb.text = kuc
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "cbVozac", "Change", Empty
+    redKuc = VidljivihRedovaPanela(z)
+    ZatvoriPanelTest z
+
+    ' E) Alt+dole nad izabranom stavkom: isto kao strelica
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    cb.ListIndex = 0
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.HandleKeyFrom "cbVozac", vbKeyDown, 4
+    redAlt = VidljivihRedovaPanela(z)
+    ZatvoriPanelTest z
+
+    ' F) kooperant (tri kolone, prikaz "Ime Prezime - OM")
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    kp.ListIndex = 0
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "cbKupacD", "Click", Empty
+    redKoop = VidljivihRedovaPanela(z)
+    ZatvoriPanelTest z
+
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+
+    AssertEq (nVoz >= 2), True, "preduslov: fixture ima bar dva vozaca"
+    AssertEq redIzabran, punoVoz, "strelica nad izabranim vozacem otvara PUNU listu, ne samo izabranog"
+    AssertEq idxPosle, 1, "iz pune liste se bira drugi vozac (pop1)"
+    AssertEq vidZatvoren, False, "drugi klik na strelicu zatvara panel"
+    AssertEq redNista, punoVoz, "strelica radi i kad tekst u polju ne pogadja nijednu stavku"
+    AssertEq (ocekKuc > 0 And ocekKuc < punoVoz), True, "preduslov: kucani podniz suzava listu vozaca"
+    AssertEq redKuc, ocekKuc, "kucanje i dalje suzava listu"
+    AssertEq redAlt, punoVoz, "Alt+dole nad izabranom stavkom otvara punu listu"
+    AssertEq (nKoop >= 2), True, "preduslov: F1 ima bar dva kooperanta"
+    AssertEq redKoop, punoKoop, "strelica nad izabranim kooperantom otvara punu listu"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    ReleaseOtkupUIForm f
+    Err.Raise errNum, "modTest.T_Ljuska_StrelicaOtvaraPunuListu", errDesc
+End Sub
+
+' Broj vidljivih redova ljuskinog panela izbora; 0 kad panel nije otvoren.
+Private Function VidljivihRedovaPanela(z As Object) As Long
+    Dim i As Long
+    If Not z.Visible Then Exit Function
+    For i = 0 To 13
+        If z.Controls("popT" & i).Visible Then VidljivihRedovaPanela = VidljivihRedovaPanela + 1
+    Next i
+End Function
+
+' Zatvara panel izbora SAMO ako je otvoren. Esc bez otvorenog panela ide u
+' granu koja brise pretragu ili sakriva formu -- tvrdnja ne sme od toga da zavisi.
+Private Sub ZatvoriPanelTest(z As Object)
+    If z.Visible Then modOtkupUI.HandleKeyFrom "cbVozac", vbKeyEscape, 0
+End Sub
+
+' ============================================================
+' 368. STRELICA I IZBOR DAJU FOKUS SVOM POLJU (zahtev operatera 18.11.2026)
+'
+' "Kad krenem da kucam u kooperanta, to sto kucam se nadovezuje na tekst u
+' Vrsti voca." Pet kontekstnih combo-a deli JEDAN Frame (zCtx). Strelica,
+' podloga polja i red panela su Label-i i fokus ne primaju, pa je kucanje islo
+' u combo koji je fokus vec imao (ili u ActiveControl Frame-a -- Vrstu), dok je
+' panel stajao pod drugim poljem.
+'
+' Meri se NAMERA ljuske kroz belesku fokusa (DajFokus u test rezimu ne zove
+' SetFocus -- u nevidljivom Excelu on visi). Stvarni fokus MSForms-a i kuda idu
+' otkucani znaci ostaju rucna provera. Beleska je modulska i prezivi tudji
+' test, pa se pred svaki potez prazni (FokusTestReset) i uzastopne tvrdnje
+' traze RAZLICITE vrednosti (A -> B -> A).
+'
+' Podloga polja nosi tag strelice, pa se headless od nje ne razlikuje po klicu
+' -- meri se zato da je ozicena: dva omotaca sa tagom strelice (strelica i
+' podloga) za svako kontekstno polje.
+' ============================================================
+Private Sub T_Ljuska_StrelicaDajeFokusSvomPolju()
+    Dim f As frmOtkupUI, z As Object, kp As Object
+    Dim pre As Boolean, nm As Variant, losePodloge As String
+    Dim fOM As String, fKup As String, fTip As String, fVr As String, fIzb As String
+    Dim visKup As Boolean, zatKup As Boolean, visIzb As Boolean, idxIzb As Long
+    Dim nOM As Long, nKoop As Long, nTip As Long
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F1"
+    Set z = f.Controls("zPop")
+    Set kp = f.Controls("zCtx").Controls("cbKupac")
+    nOM = f.Controls("zCtx").Controls("cbOM").ListCount
+    nKoop = kp.ListCount
+    nTip = f.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").ListCount
+
+    For Each nm In Array("cbVrsta", "cbSorta", "cbOM", "cbVozac", "cbKupac")
+        If BrojSinkovaSaTagom(CStr(nm) & "D") <> 2 Then losePodloge = losePodloge & " " & CStr(nm)
+    Next nm
+
+    ' A -> B -> A: svaka strelica belezi SVOJE polje. Beleska se prazni pred
+    ' svaki potez, da zaostalo ime iz ranijeg poteza (ili testa) ne prodje.
+    modOtkupUI.FokusTestReset
+    modOtkupUI.UiEvent "cbOMD", "Click", Empty
+    fOM = modOtkupUI.FokusTest()
+    modOtkupUI.FokusTestReset
+    modOtkupUI.UiEvent "cbKupacD", "Click", Empty
+    fKup = modOtkupUI.FokusTest()
+    visKup = z.Visible
+    modOtkupUI.UiEvent "cbKupacD", "Click", Empty
+    zatKup = Not z.Visible
+    ' kontrola: polje forme (svoj Frame) -- ponasanje je jedinstveno za sva polja
+    modOtkupUI.FokusTestReset
+    modOtkupUI.UiEvent "fgTipAmbD", "Click", Empty
+    fTip = modOtkupUI.FokusTest()
+    ZatvoriPanelTest z
+    modOtkupUI.FokusTestReset
+    modOtkupUI.UiEvent "cbVrstaD", "Click", Empty
+    fVr = modOtkupUI.FokusTest()
+    ZatvoriPanelTest z
+
+    ' Izbor iz panela koji je otvorilo KUCANJE -- kucanje fokus ne trazi, pa je
+    ' beleska posle praznjenja "" i samo izbor moze da je postavi na partnera.
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    kp.text = Left$(CStr(kp.List(0, 0)), 3)
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "cbKupac", "Change", Empty
+    visIzb = z.Visible
+    modOtkupUI.FokusTestReset
+    modOtkupUI.UiEvent "pop0", "Click", Empty
+    fIzb = modOtkupUI.FokusTest()
+    idxIzb = kp.ListIndex
+
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+
+    AssertEq (nOM > 0 And nKoop > 0 And nTip > 0), True, _
+             "preduslov: otkupna mesta, kooperanti i tipovi ambalaze nisu prazni"
+    AssertEq fKup, "cbKupac", "strelica partnera daje fokus partneru, a ne Vrsti"
+    AssertEq fOM, "cbOM", "strelica otkupnog mesta daje fokus otkupnom mestu"
+    AssertEq (visKup And zatKup), True, "panel partnera se otvara i drugi klik ga zatvara"
+    AssertEq fTip, "fgTipAmbT", "kontrola: strelica polja forme daje fokus svom polju"
+    AssertEq fVr, "cbVrsta", "strelica vrste daje fokus vrsti"
+    AssertEq visIzb, True, "preduslov: kucanje u partnera otvara panel"
+    AssertEq fIzb, "cbKupac", "izbor iz panela vraca fokus partneru"
+    AssertEq (idxIzb >= 0), True, "izbor iz panela je postavio partnera"
+    AssertEq losePodloge, "", "podloga svakog kontekstnog polja nosi tag strelice"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    ReleaseOtkupUIForm f
+    Err.Raise errNum, "modTest.T_Ljuska_StrelicaDajeFokusSvomPolju", errDesc
+End Sub
+
+' Koliko omotaca ljuske nosi dati tag (strelica, podloga, natpis dugmeta...).
+Private Function BrojSinkovaSaTagom(ByVal tag As String) As Long
+    Dim b As clsFlatBtn
+    On Error Resume Next
+    If modOtkupUI.Btns Is Nothing Then Exit Function
+    For Each b In modOtkupUI.Btns
+        If b.SinkTag = tag Then BrojSinkovaSaTagom = BrojSinkovaSaTagom + 1
+    Next b
+End Function
+
+' ============================================================
+' 369. BROJ ZBIRNE NE PRELAZI U OTKUPNI LIST (zahtev operatera 18.11.2026)
+'
+' "Broj zbirne ostaje popunjen u otkupnim blokovima kad se unese otpremnica ili
+' prijemnica pa se vrati na unos otkupnih blokova." Polje BROJ ZBIRNE je ISTA
+' kontrola u F1, F2 i F4, a promena rezima ga nije praznila; uz to je zapamcena
+' zbirna (ApplyAktivnaZbirna) punila i F1. Pisac otkupnog lista broj zbirne ne
+' prima -- otkup se za zbirnu vezuje kroz otpremnicu.
+'
+' Isti oblik kao 203 (T_RezimBroja_PrelazakNeNasledjuje, ista invarijanta za
+' broj dokumenta): kroz SelectMode, isti poziv koji radi precica ljuske. Ugovor
+' ClearForm-a (posle snimanja u F1 broj OSTAJE) i pamcenje F2/F4 se cuvaju.
+'
+' Promena polja se okida RUCNO (UiEvent Change): na formi bez .Show se ne zna da
+' li MSForms okida Change na programski upis. Pamcenje je stanje MODULA i
+' prezivi ReleaseOtkupUIForm, pa se gasi PRE tvrdnji -- inace bi 166 ("F4 bez
+' zbirne nema liniju") dobio nasu zbirnu. Svaka izmena ima SVOJU tvrdnju, a
+' redosled tvrdnji je deo dokaza (sabotaza.py, zamke 5 i 6).
+' ============================================================
+Private Sub T_RezimZbirne_F1NeNasledjuje()
+    Dim f As frmOtkupUI, zf As Object
+    Dim uF4 As String, uF1 As String, praznoF1 As String
+    Dim posleClear As String, istiRezim As String
+    Dim bNazadF4 As String, obrnutoF4 As String
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    On Error GoTo EH
+
+    ' 1) F4: operater bira zbirnu -> zapamcena
+    modOtkupUI.SelectMode f, "F4"
+    SetPolje zf, "fgBrZbir", FX_ZBIRNA
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    uF4 = Polje(zf, "fgBrZbir")
+
+    ' 2) F4 -> F1: polje se prazni
+    modOtkupUI.SelectMode f, "F1"
+    uF1 = Polje(zf, "fgBrZbir")
+
+    ' 3) F1 ne preuzima zapamcenu zbirnu ni nad PRAZNIM poljem (isti rezim, pa
+    '    praznjenje pri promeni rezima ovde ne ucestvuje)
+    SetPolje zf, "fgBrZbir", ""
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    modOtkupUI.SelectMode f, "F1"
+    praznoF1 = Polje(zf, "fgBrZbir")
+
+    ' 4) ugovor ClearForm-a u F1: posle snimanja broj ostaje
+    SetPolje zf, "fgBrZbir", FX_ZBIRNA2
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    modOtkupUI.ClearForm
+    posleClear = Polje(zf, "fgBrZbir")
+
+    ' 5) ponovni ulazak u ISTI rezim ne brise broj
+    modOtkupUI.SelectMode f, "F1"
+    istiRezim = Polje(zf, "fgBrZbir")
+
+    ' 6) kucanje i brisanje u F1 ne diraju zapamcenu zbirnu prijemnice. Polje se
+    '    prazni PRE izlaska, pa izlazak ovde nema sta da obrise.
+    SetPolje zf, "fgBrZbir", ""
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    modOtkupUI.SelectMode f, "F4"
+    bNazadF4 = Polje(zf, "fgBrZbir")
+
+    ' 7) izlazak iz F1 ne nosi broj otkucan u F1 -- prijemnica dobija svoj
+    modOtkupUI.SelectMode f, "F1"
+    SetPolje zf, "fgBrZbir", FX_ZBIRNA2
+    modOtkupUI.SelectMode f, "F4"
+    obrnutoF4 = Polje(zf, "fgBrZbir")
+
+    GasiZapamcenuZbirnuTest f
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+
+    AssertEq uF4, FX_ZBIRNA, "preduslov: F4 nosi broj zbirne"
+    AssertEq praznoF1, "", "F1 ne preuzima zapamcenu zbirnu ni nad praznim poljem"
+    AssertEq uF1, "", "ulazak u F1 iz F4 ne nosi broj zbirne prijemnice"
+    AssertEq posleClear, FX_ZBIRNA2, "F1: posle snimanja broj zbirne ostaje (ugovor ClearForm)"
+    AssertEq istiRezim, FX_ZBIRNA2, "ponovni ulazak u ISTI rezim ne brise broj zbirne"
+    AssertEq bNazadF4, FX_ZBIRNA, "F1 ne menja zapamcenu zbirnu prijemnice"
+    AssertEq obrnutoF4, FX_ZBIRNA, "izlazak iz F1 ne nosi broj otkucan u F1"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    GasiZapamcenuZbirnuTest f
+    ReleaseOtkupUIForm f
+    Err.Raise errNum, "modTest.T_RezimZbirne_F1NeNasledjuje", errDesc
+End Sub
+
+' Gasi zapamcenu zbirnu ljuske (mAktivnaZbirna) kroz isti put kojim to radi
+' operater: prazno polje u rezimu koji pamti. Pamcenje je modulsko i prezivi
+' ReleaseOtkupUIForm, pa bi ga inace nasledio sledeci test.
+Private Sub GasiZapamcenuZbirnuTest(f As frmOtkupUI)
+    On Error Resume Next
+    modOtkupUI.SelectMode f, "F4"
+    SetPolje f.Controls("zForm"), "fgBrZbir", ""
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+End Sub
+
+' ============================================================
+' 370. IZBOR ZBIRNE U PRIJEMNICI POKAZUJE MESTA, KG I AMB (zahtev 18.11.2026)
+'
+' "Kad se radi prijemnica, u izboru zbirne bi bilo korisno da pored broja
+' zbirne stoje i mesta koja su dala otpremnice zbirnoj, kao i KG i AMB zbirne."
+' U polju posle izbora ostaje SAM broj -- njega cita p("brojZbirne").
+'
+' Lanac se seje kroz kanonske pisce (dva bloka, dve otpremnice, jedna zbirna)
+' u transakciji testa, po obrascu S9-1. Drugo otkupno mesto i gajbe se podmecu
+' SIROVO: SledOtpremnica pise samo FX_STANICA, a SledZbirna stavku bez gajbi.
+' Filter se vozi KUCANJEM (UiEvent Change -> PopFromTyping), ne strelicom: on
+' je taj koji mora da vidi opis, a strelica nudi punu listu (test 367).
+' Tvrdnje se mere u F4 i u F1 (isti combo, opis samo u prijemnici).
+' ============================================================
+Private Sub T_Zbirne_PickerOpisMestaKgAmb()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, broj As String, c As Collection
+    Dim blokA As String, blokB As String, otpA As String, otpB As String, zbr As String
+    Dim nazA As String, nazB As String
+    Dim f As frmOtkupUI, zf As Object, z As Object, CB As Object, pre As Boolean
+    Dim vidF4 As Boolean, capF4 As String, uPolju As String
+    Dim vidF1 As Boolean, capF1 As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    broj = "ZB-OPIS-" & t
+    blokA = SledBlok("OA", FX_STANICA, 60, 0)
+    blokB = SledBlok("OB", FX_STANICA, 40, 0)
+    Set c = New Collection
+    c.Add blokA
+    otpA = SledOtpremnica(c, FX_VOZAC)
+    Set c = New Collection
+    c.Add blokB
+    otpB = SledOtpremnica(c, FX_VOZAC)
+    Set c = New Collection
+    c.Add otpA
+    c.Add otpB
+    zbr = SledZbirna(broj, c, FX_VOZAC, FX_KUPAC, 100, 0)
+    ' sirovo: druga otpremnica je sa DRUGOG otkupnog mesta, a stavka nosi gajbe
+    PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_STANICA, FX_STANICA_B
+    PostaviPoljePoPK TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr, COL_ZBS_KOL_AMB, 7
+    nazA = NzToText(LookupValue(TBL_STANICE, COL_STA_ID, FX_STANICA, "Naziv"))
+    nazB = NzToText(LookupValue(TBL_STANICE, COL_STA_ID, FX_STANICA_B, "Naziv"))
+
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    Set z = f.Controls("zPop")
+    Set CB = zf.Controls("fgBrZbir").Controls("fgBrZbirT")
+    modOtkupUI.SelectMode f, "F4"
+    modOtkupUI.RefreshFromData
+
+    ' F4: kucanje IMENA MESTA nalazi zbirnu -- prikaz i filter su isti tekst
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    CB.text = nazB
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    vidF4 = z.Visible
+    capF4 = CStr(z.Controls("popT0").caption)
+    modOtkupUI.UiEvent "pop0", "Click", Empty
+    uPolju = Polje(zf, "fgBrZbir")
+
+    ' F1: isti combo, bez opisa
+    modOtkupUI.SelectMode f, "F1"
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    CB.text = broj
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    vidF1 = z.Visible
+    capF1 = CStr(z.Controls("popT0").caption)
+    ZatvoriPanelTest z
+
+    GasiZapamcenuZbirnuTest f
+    ReleaseOtkupUIForm f
+    Set f = Nothing
+
+    AssertEq (Len(nazA) > 0 And Len(nazB) > 0 And nazA <> nazB), True, _
+             "370 preduslov: dva otkupna mesta sa razlicitim nazivom"
+    AssertEq (vidF4 And InStr(1, capF4, broj, vbTextCompare) > 0), True, _
+             "370 F4: kucanje imena mesta u izboru zbirne nalazi zbirnu sa tog mesta"
+    AssertEq CStr(InStr(1, capF4, nazA, vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4, nazB, vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4, "100 " & Poruka("OTKUI_UNIT_KG"), vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4, Poruka("OTKUI_OTP_AMB") & " 7", vbTextCompare) > 0), _
+             CStr(True) & "|" & CStr(True) & "|" & CStr(True) & "|" & CStr(True), _
+             "370 F4: stavka izbora zbirne nosi oba mesta, kg i amb zbirne"
+    AssertEq uPolju, broj, "370 F4: izbor iz panela upisuje u polje SAMO broj zbirne"
+    AssertEq vidF1, True, "370 preduslov: u F1 kucanje broja otvara izbor zbirne"
+    AssertEq capF1, "   " & broj, "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not f Is Nothing Then
+        GasiZapamcenuZbirnuTest f
+        ReleaseOtkupUIForm f
+    End If
+    SledKraj tx, redoviPre, errNum, errDesc, "T_Zbirne_PickerOpisMestaKgAmb", _
+             "370: rollback je vratio redove svih tabela lanca"
 End Sub
