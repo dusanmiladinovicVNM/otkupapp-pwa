@@ -91,6 +91,12 @@ Private Const GEO_RED_H As Single = 32
 ' CenPitanjeTestReset (i modTest.ResetSeamova).
 Private mCenPitanjeTest As String
 
+' Potvrda prekida posebnih cena ide kroz MsgBox, koji tekst duzi od oko 1024
+' znaka odseca -- nestale bi poslednje stanice i samo pitanje. Spisak se zato
+' skracuje na ovoliko znakova, uz broj preostalih; ukupan broj i pitanje uvek
+' ostaju (review PR #491).
+Private Const CEN_PREKID_MAX_ZNAKOVA As Long = 700
+
 '--------------------------------------------------------------- ZONA
 Public Sub ZonaGradi(ByVal z As Object)
     Dim i As Long
@@ -1048,13 +1054,32 @@ End Function
 ' gejtovan: u test rezimu se tekst DOPISUJE u mCenPitanjeTest i odgovor je Ne.
 Private Function PotvrdiPrekidPosebnih(ByVal spisak As String) As Boolean
     Dim tekst As String
-    tekst = Poruka("CEN_ASK_PREKID_POSEBNIH") & vbCrLf & spisak & vbCrLf & vbCrLf & _
-            Poruka("CEN_ASK_NASTAVITI")
+    tekst = TekstPrekidaPosebnih(spisak)
     If IsTestMode() Then
         ZabeleziPitanjeCene tekst
         Exit Function
     End If
     PotvrdiPrekidPosebnih = (MsgBox(tekst, vbQuestion + vbYesNo + vbDefaultButton2, APP_NAME) = vbYes)
+End Function
+
+' Tekst potvrde: naslov sa UKUPNIM brojem stanica, spisak skracen na
+' CEN_PREKID_MAX_ZNAKOVA (uz broj preostalih), pa pitanje. Javno da bi se
+' granica merila bez dijaloga (test 376).
+Public Function TekstPrekidaPosebnih(ByVal spisak As String) As String
+    Dim linije As Variant, i As Long, n As Long, prikaz As String, prikazano As Long
+    linije = Split(spisak, vbCrLf)
+    n = UBound(linije) - LBound(linije) + 1
+    For i = LBound(linije) To UBound(linije)
+        If Len(prikaz) + Len(linije(i)) + 2 > CEN_PREKID_MAX_ZNAKOVA Then Exit For
+        If Len(prikaz) > 0 Then prikaz = prikaz & vbCrLf
+        prikaz = prikaz & linije(i)
+        prikazano = prikazano + 1
+    Next i
+    If prikazano < n Then
+        prikaz = prikaz & vbCrLf & Poruka("CEN_MSG_PREKID_JOS") & " " & CStr(n - prikazano)
+    End If
+    TekstPrekidaPosebnih = Poruka("CEN_ASK_PREKID_POSEBNIH") & " (" & CStr(n) & ")" & vbCrLf & _
+                           prikaz & vbCrLf & vbCrLf & Poruka("CEN_ASK_NASTAVITI")
 End Function
 
 ' Razlog storna ili ispravke. TEST SEAM, tvrdo gejtovan: u test rezimu se

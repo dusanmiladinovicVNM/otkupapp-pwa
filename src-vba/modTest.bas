@@ -745,6 +745,8 @@ Public Sub RunAllTests()
     RunOne 372
     RunOne 373
     RunOne 374
+    RunOne 375
+    RunOne 376
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -985,6 +987,8 @@ Private Sub ResetSeamova()
     ' Zabelezena pitanja cenovnika (374): zaostao tekst bi sledecem testu
     ' izgledao kao pitanje koje je SAM postavio.
     modMaticniEkran.CenPitanjeTestReset
+    ' Podmetnut pad upisa cene (375): zaostao seam bi oborio svaki sledeci unos.
+    modCenovnik.CenUpisPadaTestSet False
     Err.Clear
 End Sub
 
@@ -1366,6 +1370,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 372: TestName = "T_Cen_PregledPrekidaPosebne"
         Case 373: TestName = "T_Cen_PredlogCenePratiDatumIOM"
         Case 374: TestName = "T_Cen_PitanjaSuGejtovana"
+        Case 375: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
+        Case 376: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1754,6 +1760,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 372: T_Cen_PregledPrekidaPosebne
         Case 373: T_Cen_PredlogCenePratiDatumIOM
         Case 374: T_Cen_PitanjaSuGejtovana
+        Case 375: T_Cen_UnosSeVracaPriPaduUpisa
+        Case 376: T_Cen_PotvrdaPrekidaStajeUDijalog
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -33734,7 +33742,7 @@ EH:
 End Sub
 
 ' ============================================================
-' CENOVNIK (docs/DOMEN/CENOVNIK.md, CEN-01..13) -- testovi 366-374.
+' CENOVNIK (docs/DOMEN/CENOVNIK.md, CEN-01..13) -- testovi 366-376.
 ' ============================================================
 ' Model je preuzet iz AgriXSystems (packages/domain/src/maticni/cena.ts), pa i
 ' tabela slucajeva C1-C19 ide 1:1 iz packages/domain/test/maticni/cena.test.ts.
@@ -34026,11 +34034,15 @@ End Sub
 ' ERR_CEN_DUPLI_KLJUC -- ne bira jedan od njih, jer bi izbor bio pogadjanje.
 ' Globalna i posebna istog dana NISU duplikat: posebna pobedjuje, kojim god
 ' redom stoje u tabeli. Bez reda nema cene (indeks 0, nikad cena 0), prazna
-' stanica upita vidi samo globalne, a druga vrsta nije rezerva.
+' stanica upita vidi samo globalne, a druga vrsta nije rezerva. Duplikat se
+' prijavljuje NEZAVISNO od redosleda (CEN-REV-02): globalna-posebna-globalna
+' istog dana i par starijeg dana iza kasnije cene padaju kojim god redom stoje.
 Private Sub T_Cen_PreduslovIBezCene()
     Dim dupG As Variant, dupP As Variant, gp As Variant, pg As Variant, c As Variant
     Dim errG As Long, errP As Long, errGP As Long, r As Long, rez As Boolean
     Dim rPrazan As Long, rEmpty As Long, rVazeci As Long
+    Dim gpg As Variant, pgg As Variant, skriven As Variant
+    Dim errGpgA As Long, errGpg0 As Long, errPgg As Long, errSkriven As Long
 
     dupG = CenTestRedovi(Array(CenR("r2", "Polka", "", 7, 1, 300), _
                                CenR("r14", "Polka", "", 7, 1, 301)))
@@ -34040,6 +34052,17 @@ Private Sub T_Cen_PreduslovIBezCene()
                              CenR("r5", "Polka", "B", 8, 1, 305)))
     pg = CenTestRedovi(Array(CenR("r5", "Polka", "B", 8, 1, 305), _
                              CenR("r4", "Polka", "", 8, 1, 310)))
+    ' Primer iz review-a: dve globalne istog dana, posebna izmedju njih.
+    gpg = CenTestRedovi(Array(CenR("g1", "Polka", "", 7, 1, 300), _
+                              CenR("p2", "Polka", "A", 7, 1, 320), _
+                              CenR("g3", "Polka", "", 7, 1, 310)))
+    pgg = CenTestRedovi(Array(CenR("p2", "Polka", "A", 7, 1, 320), _
+                              CenR("g1", "Polka", "", 7, 1, 300), _
+                              CenR("g3", "Polka", "", 7, 1, 310)))
+    ' Par starijeg dana iza kasnije cene istog kljuca.
+    skriven = CenTestRedovi(Array(CenR("r4", "Polka", "", 8, 1, 310), _
+                                  CenR("r2", "Polka", "", 7, 1, 300), _
+                                  CenR("r14", "Polka", "", 7, 1, 301)))
 
     On Error Resume Next
     r = modCenovnik.CenPobednik(dupG, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
@@ -34054,6 +34077,18 @@ Private Sub T_Cen_PreduslovIBezCene()
     r = modCenovnik.CenPobednik(pg, "Malina", "Polka", KLASA_I, "B", DateSerial(2026, 8, 1))
     If errGP = 0 Then errGP = Err.Number
     Err.Clear
+    r = modCenovnik.CenPobednik(gpg, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
+    errGpgA = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(gpg, "Malina", "Polka", KLASA_I, "", DateSerial(2026, 7, 2))
+    errGpg0 = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(pgg, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
+    errPgg = Err.Number
+    Err.Clear
+    r = modCenovnik.CenPobednik(skriven, "Malina", "Polka", KLASA_I, "", DateSerial(2026, 8, 2))
+    errSkriven = Err.Number
+    Err.Clear
     On Error GoTo 0
 
     AssertEq errG, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
@@ -34061,6 +34096,14 @@ Private Sub T_Cen_PreduslovIBezCene()
     AssertEq errP, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
              "367 dve posebne iste stanice, kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
     AssertEq errGP, 0, "367 globalna i posebna istog dana nisu duplikat"
+    AssertEq errGpgA, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice"
+    AssertEq errGpg0, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit bez stanice"
+    AssertEq errPgg, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 posebna-globalna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC (ne zavisi od redosleda)"
+    AssertEq errSkriven, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
+             "367 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC"
     AssertEq CenVazi(gp, "B", "Polka", KLASA_I, 8, 1), "r5", _
              "367 istog dana posebna pobedjuje globalnu i kad globalna stoji prva"
     AssertEq CenVazi(pg, "B", "Polka", KLASA_I, 8, 1), "r5", _
@@ -34952,4 +34995,115 @@ EH:
     modScrMatRoba.Scr_MrTestSet prevLista
     On Error GoTo 0
     Err.Raise errNum, "modTest.T_Cen_PitanjaSuGejtovana", errDesc
+End Sub
+
+' Sadrzaj tblCenovnik kao tekst (Value2 svih celija, red po red) -- poredi se
+' pre i posle poteza koji ne sme da promeni tabelu. Prazna tabela daje "".
+Private Function CenOtisakTabele() As String
+    Dim lo As ListObject, v As Variant, i As Long, j As Long, s As String
+    Set lo = modDataAccess.GetTable(TBL_CENOVNIK)
+    If lo.DataBodyRange Is Nothing Then Exit Function
+    v = lo.DataBodyRange.Value2
+    For i = LBound(v, 1) To UBound(v, 1)
+        For j = LBound(v, 2) To UBound(v, 2)
+            s = s & CStr(v(i, j)) & "|"
+        Next j
+        s = s & ";"
+    Next i
+    CenOtisakTabele = s
+End Function
+
+' ============================================================
+' 375. UNOS CENE SE VRACA PRI PADU UPISA (CEN-REV-01).
+' ============================================================
+' Fixture: synthetic (prazan tblCenovnik u transakciji testa; kultura
+' FX_VRSTA / FX_SORTA iz fixture-a). AppendRow doda red PRE nego sto upise
+' celije, pecat i dnevnik, a pri gresci ga ne skida -- zato AddCena ima svoju
+' transakciju. Seam modCenovnik.CenUpisPadaTestSet podmece pad POSLE dodatog
+' reda: AddCena mora da vrati "" i tabelu u stanje pre poziva (broj redova i
+' sadrzaj postojeceg reda), rollback mora biti potpun (upis ostaje dozvoljen),
+' a sledeci unos istog kljuca mora da prodje.
+Private Sub T_Cen_UnosSeVracaPriPaduUpisa()
+    Dim tx As clsTransaction, txZapoceta As Boolean, m As Object
+    Dim dan As Date, idSeme As String, idPad As String, idPosle As String
+    Dim nPre As Long, otisakPre As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    dan = Date + 3
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    txZapoceta = True
+    tx.AddTableSnapshot TBL_CENOVNIK
+    CenIsprazniTabelu
+
+    idSeme = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_I, 300)
+    nPre = CenBrojRedova()
+    otisakPre = CenOtisakTabele()
+    m("seme") = (Len(idSeme) > 0 And nPre = 1)
+
+    modCenovnik.CenUpisPadaTestSet True
+    idPad = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_II, 250)
+    modCenovnik.CenUpisPadaTestSet False
+    m("idPad") = idPad
+    m("n") = CenBrojRedova() - nPre
+    m("sadrzaj") = (CenOtisakTabele() = otisakPre)
+    m("upis") = modTxState.UpisDozvoljen()
+
+    idPosle = modCenovnik.AddCena(dan, FX_VRSTA, FX_SORTA, KLASA_II, 250)
+    m("posle") = (Len(idPosle) > 0 And CenBrojRedova() - nPre = 1)
+
+    tx.RollbackTx
+    txZapoceta = False
+
+    AssertEq m("seme"), True, "375 preduslov: AddCena upisuje prvi red"
+    AssertEq m("idPad"), "", "375 pad posle dodatog reda: AddCena vraca prazan ID"
+    AssertEq m("n"), 0, "375 pad posle dodatog reda ne ostavlja red u cenovniku"
+    AssertEq m("sadrzaj"), True, "375 pad posle dodatog reda ne menja sadrzaj tabele"
+    AssertEq m("upis"), True, "375 rollback unosa je potpun (upis ostaje dozvoljen)"
+    AssertEq m("posle"), True, "375 sledeci unos istog kljuca posle vracenog pada prolazi"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modCenovnik.CenUpisPadaTestSet False
+    If txZapoceta Then tx.RollbackTx
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Cen_UnosSeVracaPriPaduUpisa", errDesc
+End Sub
+
+' ============================================================
+' 376. POTVRDA PREKIDA POSEBNIH CENA STAJE U DIJALOG (CEN-ODL-03).
+' ============================================================
+' Fixture: synthetic (sam tekst, bez sveske i bez dijaloga). MsgBox odseca
+' tekst duzi od oko 1024 znaka, pa bi kod mnogo stanica nestali poslednje
+' stavke i samo pitanje. Sa 40 sintetickih linija tekst mora da stane, da nosi
+' ukupan broj, broj preostalih i pitanje; kratak spisak ide ceo, bez "jos".
+Private Sub T_Cen_PotvrdaPrekidaStajeUDijalog()
+    Dim i As Long, dug As String, t As String, kratak As String
+
+    ' Katalog pre teksta: test mora da prolazi i pusten sam (S-4a).
+    modSetup.EnsurePoruke
+    For i = 1 To 40
+        If Len(dug) > 0 Then dug = dug & vbCrLf
+        dug = dug & "Otkupno mesto broj " & CStr(i) & " (STA-" & Format$(i, "000") & _
+              "): posebna 270,00 od 01.07.2026"
+    Next i
+    t = modMaticniEkran.TekstPrekidaPosebnih(dug)
+    kratak = modMaticniEkran.TekstPrekidaPosebnih("Mesto A (STA-001): posebna 270,00 od 01.07.2026")
+
+    AssertEq (Len(t) <= 1000), True, "376 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)"
+    AssertEq (InStr(1, t, Poruka("CEN_ASK_NASTAVITI"), vbBinaryCompare) > 0), True, _
+             "376 potvrda sa 40 stanica i dalje nosi pitanje"
+    AssertEq (InStr(1, t, "(40)", vbBinaryCompare) > 0), True, "376 potvrda nosi ukupan broj stanica"
+    AssertEq (InStr(1, t, Poruka("CEN_MSG_PREKID_JOS"), vbBinaryCompare) > 0), True, _
+             "376 skracen spisak kaze koliko stanica nije prikazano"
+    AssertEq (InStr(1, t, "(STA-001)", vbBinaryCompare) > 0), True, "376 skracen spisak pocinje prvom stanicom"
+    AssertEq (InStr(1, kratak, "(STA-001)", vbBinaryCompare) > 0 And _
+              InStr(1, kratak, Poruka("CEN_MSG_PREKID_JOS"), vbBinaryCompare) = 0), True, _
+             "376 kratak spisak ide ceo, bez napomene o preostalim"
+    AssertEq PorukaNedostaje("CEN_MSG_PREKID_JOS"), False, "376 napomena o preostalim je u katalogu poruka"
 End Sub

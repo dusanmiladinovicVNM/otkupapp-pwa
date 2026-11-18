@@ -71,6 +71,11 @@ Private Const CEN_MAX As Double = 9999999999.99
 Private Const MIG_RAZLOG_PRE As String = "Zamenjen kasnijim redom "
 Private Const MIG_RAZLOG_POSLE As String = " istog kljuca i dana (migracija CEN-ODL-04)."
 
+' TEST SEAM (CEN-REV-01): podmetnut pad u UpisiCenu POSLE dodatog reda, pre
+' kraja upisa. Sme samo da POKVARI: postavljac odbija rad van test rezima, a
+' kuka ponovo pita IsTestMode(). Gasi ga modTest.ResetSeamova.
+Private mUpisPadaTest As Boolean
+
 ' ============================================================
 ' PRAVILO (ciste funkcije, bez sveske)
 ' ============================================================
@@ -80,15 +85,23 @@ Private Const MIG_RAZLOG_POSLE As String = " istog kljuca i dana (migracija CEN-
 ' (prazna stanica upita vidi samo globalne). Pobedjuje najkasniji dan; istog
 ' dana posebna pobedjuje globalnu. Dva reda istog nivoa istog dana su
 ' prekrsen preduslov (CEN-03), ne izbor -- greska ERR_CEN_DUPLI_KLJUC.
+'
+' Duplikat se trazi NEZAVISNO od izbora pobednika, nad svim kandidatima upita
+' (nivo|dan), pa ishod ne zavisi od redosleda redova u tabeli. Ranije se par
+' poredio samo sa trenutnim pobednikom: globalna-posebna-globalna istog dana,
+' ili par starijeg dana iza kasnijeg reda, prolazio je ili padao zavisno od
+' toga kojim redom stoje (review PR #491, CEN-REV-02). Zato pada i par starijeg
+' dana koji kasnija cena zaklanja: preduslov kljuca koji se cita je prekrsen.
 Public Function CenPobednik(ByRef redovi As Variant, ByVal vrsta As String, _
                             ByVal sorta As String, ByVal klasa As String, _
                             ByVal stanicaID As String, ByVal dan As Date) As Long
     Dim i As Long, best As Long, d As Long, danUpita As Long
-    Dim st As String, bestSt As String
+    Dim st As String, nivoDan As Object, k As String
 
     CenPobednik = 0
     If Not IsArray(redovi) Then Exit Function
     danUpita = CLng(Int(CDbl(dan)))
+    Set nivoDan = CreateObject("Scripting.Dictionary")
 
     For i = LBound(redovi, 1) To UBound(redovi, 1)
         If Not CBool(redovi(i, CEN_R_STORNO)) Then
@@ -99,17 +112,24 @@ Public Function CenPobednik(ByRef redovi As Variant, ByVal vrsta As String, _
                 If IstiTekst(redovi(i, CEN_R_KLASA), klasa) Then
                     st = Trim$(CStr(redovi(i, CEN_R_STANICA)))
                     If Len(st) = 0 Or IstiTekst(st, stanicaID) Then
+                        ' Nivo kandidata: globalna ili posebna -- posebna je
+                        ' ovde uvek bas stanica upita, pa je "P" jednoznacno.
+                        If Len(st) = 0 Then
+                            k = "G|" & CStr(d)
+                        Else
+                            k = "P|" & CStr(d)
+                        End If
+                        If nivoDan.Exists(k) Then
+                            Err.Raise ERR_CEN_DUPLI_KLJUC, "modCenovnik.CenPobednik", _
+                                      "Dva nestornirana reda istog kljuca i dana (CEN-03): " & _
+                                      CStr(nivoDan(k)) & ", " & CStr(redovi(i, CEN_R_ID))
+                        End If
+                        nivoDan.Add k, CStr(redovi(i, CEN_R_ID))
                         If best = 0 Then
                             best = i
                         ElseIf d > CLng(redovi(best, CEN_R_DAN)) Then
                             best = i
                         ElseIf d = CLng(redovi(best, CEN_R_DAN)) Then
-                            bestSt = Trim$(CStr(redovi(best, CEN_R_STANICA)))
-                            If (Len(st) = 0) = (Len(bestSt) = 0) Then
-                                Err.Raise ERR_CEN_DUPLI_KLJUC, "modCenovnik.CenPobednik", _
-                                          "Dva nestornirana reda istog kljuca i dana (CEN-03): " & _
-                                          CStr(redovi(best, CEN_R_ID)) & ", " & CStr(redovi(i, CEN_R_ID))
-                            End If
                             If Len(st) > 0 Then best = i
                         End If
                     End If
@@ -366,20 +386,52 @@ End Function
 ' Nov red cene. Vraca CenaID ili "" pri gresci (uzrok je u logu; editor pre
 ' poziva pusta CenaUnosProblem da operateru kaze sta ne valja). stanicaID
 ' prazno = globalna cena.
+'
+' U SVOJOJ transakciji, kao storno i ispravka (CEN-REV-01). AppendRow doda red
+' (ListRows.Add) PRE nego sto upise celije, pecat i dnevnik, a pri gresci vrati
+' 0 i red ne skida -- bez snimka bi neuspeo unos ostavio delimican red, koji
+' kao nestorniran red cene ucestvuje u pravilu i u CEN-03.
 Public Function AddCena(ByVal datum As Date, _
                         ByVal vrstaVoca As String, _
                         ByVal sortaVoca As String, _
                         ByVal klasa As String, _
                         ByVal cena As Double, _
                         Optional ByVal stanicaID As String = "") As String
+    Const SRC As String = "modCenovnik.AddCena"
+    Dim tx As clsTransaction, noviID As String
+
     On Error GoTo EH
-    AddCena = UpisiCenu(datum, vrstaVoca, sortaVoca, klasa, cena, stanicaID, True, "", "")
+    ' Kapija seme PRE transakcije: Ensure moze da doda kolonu, a tabela kojoj
+    ' se posle snimka promeni broj kolona se ne vraca.
+    modSchema.SchemaReadyOrFail SRC, TBL_CENOVNIK
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_CENOVNIK
+
+    noviID = UpisiCenu(datum, vrstaVoca, sortaVoca, klasa, cena, stanicaID, True, "", "")
+
+    tx.CommitTx
+    Set tx = Nothing
+    AddCena = noviID
     Exit Function
 
 EH:
-    LogErr "modCenovnik.AddCena", Err.description
+    LogErr SRC, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx   ' unos: vraca dodat red
+    On Error GoTo 0
     AddCena = ""
 End Function
+
+' TEST SEAM (v. mUpisPadaTest): True = sledeci UpisiCenu padne posle dodatog
+' reda. Van test rezima ne radi nista.
+Public Sub CenUpisPadaTestSet(ByVal pada As Boolean)
+    If Not IsTestMode() Then
+        mUpisPadaTest = False
+        Exit Sub
+    End If
+    mUpisPadaTest = pada
+End Sub
 
 ' Storno reda (CEN-11, CEN-12): Stornirano + vreme + autor + razlog, u jednoj
 ' transakciji. Jednokratan i konacan: storniran red se ne stornira ponovo i
@@ -653,6 +705,9 @@ Private Function UpisiCenu(ByVal datum As Date, ByVal vrsta As String, ByVal sor
 
     If AppendRow(TBL_CENOVNIK, rowData) <= 0 Then
         Err.Raise ERR_CEN_UPIS, SRC, "AppendRow nije uspeo za tblCenovnik."
+    End If
+    If mUpisPadaTest Then
+        If IsTestMode() Then Err.Raise ERR_CEN_UPIS, SRC, "Test: podmetnut pad posle dodatog reda."
     End If
 
     UpisiCenu = newID

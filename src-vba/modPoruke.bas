@@ -630,6 +630,8 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
         "Nova globalna cena od tog dana prekida posebnu cenu na:"
     UpsertRow lo, existing, "CEN_ASK_NASTAVITI", _
         "Upisati globalnu cenu?"
+    UpsertRow lo, existing, "CEN_MSG_PREKID_JOS", _
+        "... i jo" & ChrW(353) & " stanica:"
     UpsertRow lo, existing, "CEN_MSG_OTKAZANO", _
         "Otkazano " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano."
     UpsertRow lo, existing, "CEN_OK_STORNIRANO", _

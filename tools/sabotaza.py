@@ -13987,10 +13987,27 @@ SABOTAZE = {
     # reda istog kljuca, nivoa i dana.
     "cen-dupli-kljuc-se-ne-prijavljuje": (
         "modCenovnik.bas",
-        "                            If (Len(st) = 0) = (Len(bestSt) = 0) Then\n",
-        "                            If False Then   ' SABOTAZA: dva reda istog kljuca i dana se ne prijavljuju\n",
+        "                        If nivoDan.Exists(k) Then\n",
+        "                        If False Then   ' SABOTAZA: dva reda istog kljuca i dana se ne prijavljuju\n",
         "T_Cen_PreduslovIBezCene",
         "367 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC",
+    ),
+    # CEN-REV-02 (review PR #491): duplikat se poredi samo sa nivoom trenutnog
+    # pobednika -- stari oblik, kod koga je globalna-posebna-globalna prolazila.
+    "cen-dupli-samo-uz-nivo-pobednika": (
+        "modCenovnik.bas",
+        "                        If nivoDan.Exists(k) Then\n",
+        "                        If nivoDan.Exists(k) And ((Len(st) = 0) = (Len(Trim$(CStr(redovi(best, CEN_R_STANICA)))) = 0)) Then   ' SABOTAZA: samo uz nivo pobednika\n",
+        "T_Cen_PreduslovIBezCene",
+        "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice",
+    ),
+    # CEN-REV-02: par starijeg dana koji kasnija cena zaklanja se ne prijavljuje.
+    "cen-dupli-skriven-kasnijom-cenom": (
+        "modCenovnik.bas",
+        "                        If nivoDan.Exists(k) Then\n",
+        "                        If nivoDan.Exists(k) And d >= CLng(redovi(best, CEN_R_DAN)) Then   ' SABOTAZA: stariji par se ne prijavljuje\n",
+        "T_Cen_PreduslovIBezCene",
+        "367 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC",
     ),
     # Sorta bez reda nema rezervu (CEN-06). U 366 bi pala C1, koju vec nosi
     # cen-buduca-cena-vazi, pa se meri na prvoj tvrdnji 367 koja trazi rezervu.
@@ -14277,6 +14294,23 @@ SABOTAZE = {
         "    ' SABOTAZA: StornoRazlog ostaje General (bez ugovora formata)\n",
         "T_Cen_StornoJednokratanSaRazlogom",
         "369 razlog koji pocinje sa = ostaje doslovan tekst, ne formula",
+    ),
+    # CEN-REV-01 (review PR #491): unos bez rollback-a -- pad posle dodatog reda
+    # ostavlja delimican red u cenovniku.
+    "cen-unos-bez-rollbacka": (
+        "modCenovnik.bas",
+        "    If Not tx Is Nothing Then tx.RollbackTx   ' unos: vraca dodat red\n",
+        "    ' SABOTAZA: neuspeo unos cene se ne vraca\n",
+        "T_Cen_UnosSeVracaPriPaduUpisa",
+        "375 pad posle dodatog reda ne ostavlja red u cenovniku",
+    ),
+    # Review PR #491: potvrda bez granice duzine -- MsgBox odsece pitanje.
+    "cen-potvrda-bez-granice": (
+        "modMaticniEkran.bas",
+        "        If Len(prikaz) + Len(linije(i)) + 2 > CEN_PREKID_MAX_ZNAKOVA Then Exit For\n",
+        "        ' SABOTAZA: spisak potvrde se ne skracuje\n",
+        "T_Cen_PotvrdaPrekidaStajeUDijalog",
+        "376 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)",
     ),
     # K10: posle prefill-a bez cene predlog ostaje izracunat nad mestom koje je
     # forma imala PRE prepisa.
