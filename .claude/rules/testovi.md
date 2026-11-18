@@ -446,6 +446,30 @@ Dvosmerni dokaz (pokvari → provera pukne **po imenu** → vrati → zeleno) tr
 `python tools/sabotaza.py --lista` — skripta je izvor istine, ne prepisivati ovde.
 Zamke pri pisanju nove (kraj reda, uvlačenje, vraćanje): `docs/EXCEL_TEST_HARNESS.md`.
 
+**Kako se dokaz pušta.**
+
+- **U rezu — izborom:** `python tools/dokaz.py --izbor --radnika 4 <prefiks>`.
+  Mutacija pušta samo ciljani test. Stavka koju izbor ne obori ne prolazi
+  tiho: dokaz je sam meri celom suite-om (red „MERI SE CELOM SUITE-OM"), uz
+  zelenu bazu cele suite. `--radnika 4` je **izmereni optimum na mašini
+  operatera** (6 jezgara: 3:09 / 1:15 / 1:12 za 1 / 4 / 5 radnika), ne opšta
+  formula; na drugoj mašini se meri jednom (`docs/EXCEL_TEST_HARNESS.md`,
+  „Koliko radnika").
+- **Zašto je to dozvoljeno:** G1 prijem (18.11.2026, `dokaz.py --prijem`, plan
+  Prilog D.3): nad 59 slučajnih sabotaža izbor i cela suite daju isti verdikt
+  po stavci, 0 razlika; povrataka na celu suitu u uzorku 0/60. Granica od
+  5,0% uz 95% je **orijentaciona**: uzorak je stratifikovan (po fajlu, jedan
+  mutant po testu, bez poznatih nalaza), pa nije garancija za ceo katalog —
+  zato pun dokaz celom suite-om ostaje pred release. Izbor se meri nad testom
+  puštenim **sam**, ne u punom redosledu — zato
+  nov test mora da prolazi i sam (S-4a; `dokaz.py --izolacija` to proverava).
+- **Pred release — celom suite-om:** pun `python tools/dokaz.py`, uz FULL.
+  Izbor nad celim katalogom pred release (O-1, V2) traži G1 nad najmanje 100
+  presuđenih (`--prijem 115`) i uslove iz plana — do tada važi staro pravilo.
+- Prijem se ponavlja (`--prijem --radnika 4`, jedna noć) kad se promeni sam
+  mehanizam izbora (`run_vba --test`, `RunOne`/`BfpIzabran`) ili kad dokaz u
+  rezu počne da vraća mnogo stavki na celu suitu.
+
 ## 7) Šta ostaje na operateru
 
 Finalni smoke-test u Excelu (klik po klik), izgled forme, štampa i PDF, ponašanje
