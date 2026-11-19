@@ -226,9 +226,9 @@ commit):
   - Compile;
   - suite `RunAllTests` sa testovima 384–389;
   - BFP test iznad;
-  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane` i
-    `python tools/dokaz.py --izbor --radnika 4 izvestaji-`, obavezno, jer su
-    dirana sidra sabotaža.
+  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane
+    izvestaji-pretraga-puni-iznova izvestaji-rang-kontekst-prazan`, obavezno,
+    jer su dirana sidra sabotaža.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
