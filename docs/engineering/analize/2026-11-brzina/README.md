@@ -216,19 +216,21 @@ commit):
 | OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **neverifikovano** |
 | HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **neverifikovano** |
 | IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **neverifikovano** |
+| IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **neverifikovano** |
+| IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **neverifikovano** |
+| IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **neverifikovano** |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
 - **Na Windows-u ostaje:**
   - Compile;
-  - suite `RunAllTests` sa testovima 384, 385 i 386;
+  - suite `RunAllTests` sa testovima 384–389;
   - BFP test iznad;
-  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane`, obavezno, jer
-    je dirano sidro sabotaže.
+  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane` i
+    `python tools/dokaz.py --izbor --radnika 4 izvestaji-`, obavezno, jer su
+    dirana sidra sabotaža.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
-- IZV-2 i IZV-9: naziv entiteta i dinamički čipovi van prozora keša;
-- IZV-7: bubble sort u RANG-u;
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
   čita knjiga ambalaže; to ide uz D1 (knjiga) i D3 (rečnici).
 
