@@ -77,11 +77,13 @@ Public Sub AddTableSnapshot(ByVal tableName As String)
     Set lo = modDataAccess.GetTable(tableName)
     
     Dim snap(0 To 1) As Variant  ' (0)=data, (1)=colCount
+    If gPerfOn Then PerfPocni "TX.Snapshot|" & tableName
     If lo.DataBodyRange Is Nothing Then
         snap(0) = Empty
     Else
         snap(0) = lo.DataBodyRange.Value2
     End If
+    If gPerfOn Then PerfKraj "TX.Snapshot|" & tableName
     snap(1) = lo.ListColumns.count
     
     If Not mSnapshots.Exists(tableName) Then

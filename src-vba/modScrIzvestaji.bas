@@ -1077,8 +1077,10 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
                             ByVal odN As Double, ByVal doN As Double) As Variant
     Dim dOd As Date, dDo As Date
     Dim errNum As Long, errDesc As String, errSrc As String
+    Dim perfOzn As String
     BeginTableCache
     On Error GoTo EH
+    If gPerfOn Then perfOzn = "IZV.PuniSnimak|" & kljuc & IIf(zbirni, "|Z", "|P"): PerfPocni perfOzn
     dOd = CDate(IIf(odN > 0, odN, IZ_DAT_MIN))
     dDo = CDate(IIf(doN > 0, doN, IZ_DAT_MAX))
 
@@ -1147,10 +1149,12 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             PuniSnimak = modOtkupBlok.KoopRangRows(rKg, rVal, eKg, eVal, _
                                                    CDbl(dOd), CDbl(dDo))
     End Select
+    If Len(perfOzn) > 0 Then PerfKraj perfOzn
     EndTableCache
     Exit Function
 EH:
     errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    If Len(perfOzn) > 0 Then PerfKraj perfOzn
     EndTableCache
     Err.Raise errNum, errSrc, errDesc
 End Function

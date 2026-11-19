@@ -1068,7 +1068,9 @@ Public Function AutoZbirnaZaOtpremnicu(ByVal otpremnicaID As String, _
         If Not modAutoHladnjaca.OtpremnicaJeHladnjacka(otpremnicaID) Then Exit Function
     End If
 
+    If gPerfOn Then PerfPocni "DOK.NevezaneOtpremnice"
     Set slobodne = modDokumenta.NevezaneOtpremnice()
+    If gPerfOn Then PerfKraj "DOK.NevezaneOtpremnice"
     If Not slobodne.Exists(UCase$(otpremnicaID)) Then Exit Function
 
     AutoZbirnaZaOtpremnicu = AutoZbirnaUpis(otpremnicaID, outGreska)
