@@ -3,6 +3,8 @@
 > **Ulaz za svaku novu sesiju.** Kratko i ažurno — čita se umesto celog plana. Pun plan i istorijat odluka:
 > `docs/REFAKTOR_DOKUMENT_HEADER_STAVKE.md` (odluke po datumu u §14.x; važeće: §14.7 „Odluke operatera 16.09“).
 > Ažurira se na kraju svakog koraka, u istom commit-u.
+>
+> **Redosled rada po prioritetima (predlog od 19.11.2026, čeka odluke operatera):** `docs/PLAN_RADA_2026-11.md`.
 
 **Ažurirano:** 18.11.2026 (stavka 333: S9-2 — čitaoci kolona bez pisca na kanonu, testovi 362–365, 12 sabotaža dokazano, pune suite zelene, REV-01 zatvoren posle završnog review-a, ručni Compile prošao nad `b022f3b1`, PR `#486`; stavka 332: S9-1 drugi deo — GP lanac E9/E10, verzije zbirne, testovi 360–361, pune suite zelene, ručni Compile prošao; stavka 331: S9-1 prvi deo — jezgro grafa `modSledljivost`, ivice E1–E6, testovi 356–359; stavka 330: pre-flight S9 preslagan na `4591f3d3`, bez novih nalaza, sledeći test 356; stavka 329: N17 — prag `prj_brojzbirne` 35 uz dokaz u oba smera; stavka 328: pre-flight S9 preslagan na `6b601ee1`; stavka 327: `SLED-ODL-09` „tok dokumenta" doneta, N15 prag 33; stavka 326: preslaganje na `1fa4937a`).
 
