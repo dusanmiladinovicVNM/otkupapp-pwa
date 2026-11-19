@@ -207,6 +207,12 @@ Public Const PAY_NEFAKT  As Long = 13
 Public Const PAY_DELIM_FAKT As Long = 14
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
+' Izbor zbirne u prijemnici nosi opis u kolonama (vozac, kg, amb, mesta) --
+' siri od ostalih, koji ostaju na 320pt. Panel se tada drzi unutar desne ivice
+' forme. Kolone su poravnate razmacima, pa se taj panel crta u F_NUM (Consolas):
+' u proporcionalnom fontu razmak nije iste sirine kao slovo i kolone beze.
+Private Const POP_W_ZBIRNA As Single = 640
+Private Const POP_KOL_RAZMAK As String = "    "
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
@@ -446,11 +452,14 @@ Private mColsPotpis As String        ' po cemu se zna da je opis DRUGI
 ' Poslednja zbirna sa kojom se radilo. Preuzeto iz frmDokumenta: tamo je
 ' RefreshBrojZbirneSuggestion upisivala isti broj u sekciju Zbirne I u sekciju
 ' Otpremnice, a btnUnosZbr ga je posle snimanja gurao u Prijemnicu. Ovde je to
-' jedan sticky broj koji prati prelazak izmedju rezima.
+' jedan sticky broj koji prati prelazak izmedju F2, F3 i F4 -- otkupni list
+' (F1) ne ucestvuje (v. ApplyAktivnaZbirna, SetAktivnaZbirna).
 Private mAktivnaZbirna As String
 ' Traje dok FillZbirneCombo puni listu. ComboBox.Clear brise i UPISANU vrednost,
 ' pa polje javi promenu koju operater nije napravio - bez ovog garda bi svako
 ' osvezavanje posle snimanja obrisalo zapamcenu zbirnu i zaprljalo dokument.
+' Isti gard drzi i SelectModeCore dok pri ulasku u F1 / izlasku iz njega
+' prazni polje, i ZbirneOpisUpisi dok upisuje opis stavki izbora.
 Private mZbirnaFill As Boolean
 ' Isto za listu partnera: FillFormPartner radi CB.Clear, sto polje javi kao
 ' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
@@ -488,8 +497,8 @@ Private mLoading As Boolean          ' program puni polja - to NIJE izmena koris
 ' (v. Dijalog). KI-011: ishod upisa mora da se izmeri, a MsgBox u nevidljivom
 ' Excelu visi do timeout-a.
 Private mDijalogTest As String
-' Polje na koje bi CommitDokument dao fokus -- belezi se SAMO u test rezimu
-' (v. FokusNaPolje): SetFocus u nevidljivom Excelu visi, kao i MsgBox.
+' Polje na koje bi ljuska dala fokus -- belezi se SAMO u test rezimu
+' (v. DajFokus): SetFocus u nevidljivom Excelu visi, kao i MsgBox.
 Private mFokusTest As String
 '=====================================================================
 ' BUILD
@@ -1233,15 +1242,21 @@ Private Sub BuildForm(frm As Object)
         NewLbl z, "grpLn" & gi, "", 0, 0, 100, 1, 8, False, 0, C_BORDER
     Next gi
 
+    ' DATUM dokumenta. Do sada je bio precutno "danas" - stajao je samo u
+    ' naslovu ekrana, pa se zaostali dokument nije mogao uneti sa svojim
+    ' datumom. Vidljiv je u SVIM rezimima - datum ima svaki dokument.
+    '
+    ' REDOSLED GRADNJE JE RASPORED: LayoutFields slaze polja grupe redom kojim
+    ' su napravljena (For Each nad z.Controls), bez svoje liste. Operater red
+    ' cita kao "datum, broj, zbirna" (zahtev 18.11.2026), a i predlog broja
+    ' zavisi od datuma (OnDatumChanged), pa datum ide PRVI. Fokus pri ulasku
+    ' ostaje na broju (isFocus kod fgBrOtpr), ne na prvom polju reda: kucanje
+    ' u datum okida zakljucavanje stanice i predlog broja.
+    NewFieldG z, "fgDatum", Poruka("OTKUI_FLD_DATUM"), "txt", "", 1, False, False, "DOK"
     NewFieldG z, "fgBrOtpr", Poruka("OTKUI_FLD_BROJ_OTPR"), "txt", "", 1, False, True, "DOK"
     ' PARTNER nije ovde - on je poslednje polje u "Osnovni podaci" (cbKupac),
     ' jer je isto pitanje "s kim radimo" kao otkupno mesto i vozac.
     NewFieldG z, "fgBrZbir", Poruka("OTKUI_FLD_BROJ_ZBIRNE"), "cmb", "", 1, False, False, "DOK"
-    ' DATUM dokumenta. Do sada je bio precutno "danas" - stajao je samo u
-    ' naslovu ekrana, pa se zaostali dokument nije mogao uneti sa svojim
-    ' datumom. Ide u grupu DOKUMENT, u trecu kolonu koja je u svakom rezimu
-    ' ostajala prazna, i vidljiv je u SVIM rezimima - datum ima svaki dokument.
-    NewFieldG z, "fgDatum", Poruka("OTKUI_FLD_DATUM"), "txt", "", 1, False, False, "DOK"
     NewFieldG z, "fgNovac", Poruka("OTKUI_FLD_NOVAC"), "txt", Poruka("OTKUI_UNIT_RSD"), 1, True, False, "NOV"
     NewFieldG z, "fgKgI", Poruka("OTKUI_FLD_KG_I"), "txt", Poruka("OTKUI_UNIT_KG"), 1, True, False, "ROBA"
     NewFieldG z, "fgKgII", Poruka("OTKUI_FLD_KG_II"), "txt", Poruka("OTKUI_UNIT_KG"), 1, True, False, "ROBA"
@@ -1719,7 +1734,10 @@ Private Sub BuildPopup(frm As Object)
     WireBtn z.Controls("popDn"), "popDn", "chev"
 End Sub
 
-Private Sub OpenPopup(ByVal comboNm As String)
+' punaLista: panel nudi SVE stavke, bez obzira na tekst u polju. Trazi ga
+' eksplicitno otvaranje (strelica, Alt+dole, Drop -- sve ide kroz
+' OpenPopupFor); kucanje (PopFromTyping) i dalje otvara SUZEN panel.
+Private Sub OpenPopup(ByVal comboNm As String, Optional ByVal punaLista As Boolean = False)
     Dim cmb As Object
     On Error Resume Next
     Set cmb = FindCombo(comboNm)
@@ -1731,24 +1749,210 @@ Private Sub OpenPopup(ByVal comboNm As String)
     mPopFor = comboNm
     mPopTop = 0
     mPopHover = -1
-    PopIndex cmb
+    ' Opis zbirne se racuna LENJO, pri otvaranju izbora u prijemnici -- jedinom
+    ' mestu gde se vidi. OpenPopup je jedini ulaz u panel (kucanje, strelica,
+    ' Alt+dole), pa svi putevi vide isti opis. Uslovi su ugnjezdeni (v. PopStavka).
+    If comboNm = "fgBrZbir" Then
+        If ActiveMode = "F4" Then ZbirneOpisUpisi cmb
+    End If
+    PopIndex cmb, punaLista
     PopRender
 End Sub
+
+' Tekst stavke panela -- ISTI za prikaz, sirinu i suzavanje kucanjem. Za izbor
+' zbirne u prijemnici uz broj ide i opis (kolona 2, ZbirneOpisUpisi), pa kucanje
+' imena mesta nalazi zbirnu sa tog mesta. Svi ostali combo-i (i izbor zbirne u
+' F1/F2) pokazuju kolonu 0, kao i pre. Uslovi su UGNJEZDENI: VBA nema kratko
+' spajanje, a pod Resume Next greska u uslovu If-a nastavlja U Then grani --
+' jednokolonski combo bi tada dobio tudji opis.
+Private Function PopStavka(cmb As Object, ByVal i As Long) As String
+    Dim s As String, o As String
+    On Error Resume Next
+    s = CStr(cmb.List(i, 0))
+    If PopImaOpis() Then
+        ' Opis nosi SVOJE poravnanje: dopunu broja do najduzeg i razmake kolona
+        ' (ZbirnaOpisRed), pa se samo nadovezuje.
+        o = CStr(cmb.List(i, 2))
+        If Len(o) > 0 Then s = s & o
+    End If
+    PopStavka = s
+End Function
+
+' Da li otvoreni panel nosi opis stavki: samo izbor zbirne u prijemnici.
+Private Function PopImaOpis() As Boolean
+    If mPopFor = "fgBrZbir" Then
+        If ActiveMode = "F4" Then PopImaOpis = True
+    End If
+End Function
+
+' OPIS STAVKI IZBORA ZBIRNE (zahtev operatera 18.11.2026; kolone i vozac
+' 19.11.2026): uz broj zbirne prijemnica pokazuje vozaca, kg i ambalazu zbirne
+' i otkupna mesta koja su dala otpremnice zbirnoj -- u poravnatim kolonama.
+' Sve iz POSTOJECIH citaca, bez nove kopije pravila:
+'   kg i amb -- modDokumenta.ZbirStavkiPoZbirni (sadrzaj je na stavkama,
+'               ZBR-KANON-02; isti citac koji crta liniju manjka);
+'   mesta    -- modDokumenta.AktivnoClanstvoZbirni (clanstvo je zapis,
+'               ZBR-KANON-01) -> Otpremnica.StanicaID -> Stanice.Naziv;
+'   vozac    -- Zbirna.VozacID -> Vozaci "Ime Prezime" (isti prikaz kao lista
+'               dokumenata, modScrDokumenti).
+' Pise u kolonu 2 combo-a (kolona 1 je ZbirnaID iz FillZbirneCombo). Sirine
+' kolona se mere preko CELE liste, pa su iste u svakom redu i pri suzavanju.
+' Kvar citaca ne sme da obori izbor: opis se tada brise i nudi se sam broj.
+' mZbirnaFill: upis u listu nije izbor operatera.
+Private Sub ZbirneOpisUpisi(cmb As Object)
+    Dim st As Object, cl As Object, otpSt As Object, stNaz As Object
+    Dim zbrVoz As Object, vozIme As Object
+    Dim mesta As Object, k As Variant, zbr As String, sid As String, ime As String
+    Dim i As Long, c As Long, n As Long, kol() As Variant, w(0 To 3) As Long
+    On Error GoTo EH
+    Set st = modDokumenta.ZbirStavkiPoZbirni()
+    Set cl = modDokumenta.AktivnoClanstvoZbirni()
+    Set otpSt = PartnerMap(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_STANICA, "")
+    Set stNaz = PartnerMap(TBL_STANICE, COL_STA_ID, "Naziv", "")
+    Set zbrVoz = PartnerMap(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_VOZAC, "")
+    Set vozIme = PartnerMap(TBL_VOZACI, COL_VOZ_ID, "Ime", "Prezime")
+    Set mesta = CreateObject("Scripting.Dictionary")
+    mesta.CompareMode = vbTextCompare
+    For Each k In cl.keys
+        zbr = CStr(cl(k))
+        sid = ""
+        If otpSt.Exists(CStr(k)) Then sid = CStr(otpSt(CStr(k)))
+        ime = sid
+        If Len(sid) > 0 Then
+            If stNaz.Exists(sid) Then ime = CStr(stNaz(sid))
+        End If
+        If Len(ime) > 0 Then
+            If Not mesta.Exists(zbr) Then
+                mesta(zbr) = ime
+            ElseIf InStr(1, ", " & CStr(mesta(zbr)) & ", ", ", " & ime & ", ", vbTextCompare) = 0 Then
+                mesta(zbr) = CStr(mesta(zbr)) & ", " & ime
+            End If
+        End If
+    Next k
+
+    ' Prvi prolaz: kolone svake stavke i najveca sirina svake kolone.
+    n = cmb.ListCount
+    If n = 0 Then Exit Sub
+    ReDim kol(0 To n - 1)
+    For i = 0 To n - 1
+        kol(i) = ZbirnaOpisKolone(CStr(cmb.List(i, 1)), st, mesta, zbrVoz, vozIme)
+        If IsArray(kol(i)) Then
+            If Len(CStr(cmb.List(i, 0))) > w(0) Then w(0) = Len(CStr(cmb.List(i, 0)))
+            For c = 0 To 2
+                If Len(CStr(kol(i)(c))) > w(c + 1) Then w(c + 1) = Len(CStr(kol(i)(c)))
+            Next c
+        End If
+    Next i
+
+    ' Drugi prolaz: red sa dopunom do tih sirina.
+    mZbirnaFill = True
+    For i = 0 To n - 1
+        If IsArray(kol(i)) Then
+            cmb.List(i, 2) = ZbirnaOpisRed(CStr(cmb.List(i, 0)), kol(i), w)
+        Else
+            cmb.List(i, 2) = ""
+        End If
+    Next i
+    mZbirnaFill = False
+    Exit Sub
+EH:
+    LogWarn "modOtkupUI.ZbirneOpisUpisi", Err.Number & " " & Err.description
+    On Error Resume Next
+    mZbirnaFill = True
+    For i = 0 To cmb.ListCount - 1
+        cmb.List(i, 2) = ""
+    Next i
+    mZbirnaFill = False
+End Sub
+
+' Kolone jedne stavke izbora zbirne: Array(vozac, "1.240 kg", "310", mesta), ili
+' Empty kad o zbirnoj nema nista. zids su ZbirnaID-jevi stavke ("|" kad je
+' dokument na dva reda) -- kg i gajbe se sabiraju, mesta spajaju bez ponavljanja,
+' vozac je sa prvog zaglavlja (dva reda istog dokumenta dele vozaca). Jedinice
+' su postojeci kljucevi (OTKUI_UNIT_KG, OTKUI_OTP_AMB kao traka otpremnice), kg
+' kroz FmtKg (decimale kad ih ima).
+Private Function ZbirnaOpisKolone(ByVal zids As String, st As Object, mesta As Object, _
+                                  zbrVoz As Object, vozIme As Object) As Variant
+    Dim p As Variant, i As Long, z As String, rec As Variant
+    Dim kg As Double, amb As Double, ima As Boolean, ms As String, m As String
+    Dim voz As String, vid As String
+    If Len(zids) = 0 Then Exit Function
+    p = Split(zids, "|")
+    For i = 0 To UBound(p)
+        z = Trim$(CStr(p(i)))
+        If Len(z) > 0 Then
+            If st.Exists(z) Then
+                rec = st(z)
+                kg = kg + CDbl(rec(0))
+                amb = amb + CDbl(rec(2))
+                ima = True
+            End If
+            If mesta.Exists(z) Then
+                m = CStr(mesta(z))
+                If Len(ms) = 0 Then
+                    ms = m
+                ElseIf InStr(1, ", " & ms & ", ", ", " & m & ", ", vbTextCompare) = 0 Then
+                    ms = ms & ", " & m
+                End If
+            End If
+            If Len(voz) = 0 Then
+                If zbrVoz.Exists(z) Then
+                    vid = CStr(zbrVoz(z))
+                    voz = vid
+                    If vozIme.Exists(vid) Then voz = CStr(vozIme(vid))
+                End If
+            End If
+        End If
+    Next i
+    If Not ima And Len(ms) = 0 Then Exit Function
+    ZbirnaOpisKolone = Array(voz, FmtKg(kg) & " " & Poruka("OTKUI_UNIT_KG"), FmtBroj(amb, 0), ms)
+End Function
+
+' Red opisa posle broja: dopuna broja do najduzeg, pa kolone iste sirine u svakom
+' redu -- vozac ulevo, kg i broj gajbi udesno (brojke se citaju po desnoj
+' ivici), mesta poslednja: panel ima granicu sirine, pa se dugacak spisak mesta
+' odseca s kraja, a brojke ostaju. w = sirine (broj, vozac, kg, amb).
+Private Function ZbirnaOpisRed(ByVal broj As String, ByVal k As Variant, w() As Long) As String
+    Dim s As String
+    s = Space$(w(0) - Len(broj)) & POP_KOL_RAZMAK & PopKolona(CStr(k(0)), w(1), False) & _
+        POP_KOL_RAZMAK & PopKolona(CStr(k(1)), w(2), True) & _
+        POP_KOL_RAZMAK & Poruka("OTKUI_OTP_AMB") & " " & PopKolona(CStr(k(2)), w(3), True)
+    If Len(CStr(k(3))) > 0 Then s = s & POP_KOL_RAZMAK & CStr(k(3))
+    ZbirnaOpisRed = s
+End Function
+
+' Tekst dopunjen razmacima do sirine w: udesno poravnat (desno = True) ili ulevo.
+Private Function PopKolona(ByVal s As String, ByVal w As Long, ByVal desno As Boolean) As String
+    If Len(s) >= w Then
+        PopKolona = s
+    ElseIf desno Then
+        PopKolona = Space$(w - Len(s)) & s
+    Else
+        PopKolona = s & Space$(w - Len(s))
+    End If
+End Function
 
 ' Koje stavke panel prikazuje. Suzavanje je po PODNIZU, ne po pocetku reci -
 ' "pilica" nalazi i "Milosavljevic Dragan - Pilica". Zato je MatchEntry na
 ' combo-u ugasen: nativno dopunjavanje teksta bi se tuklo sa ovim filterom.
-Private Sub PopIndex(cmb As Object)
+'
+' SUZAVA SAMO KUCANJE (zahtev operatera 18.11.2026, "strelica ne radi kad je
+' polje popunjeno"). Do tada je i strelica isla kroz isti filter, a filter je
+' tekst polja: nad izabranom stavkom panel je nudio samo nju, a nad tekstom bez
+' pogotka se nije ni otvarao (mPopN = 0 -> ClosePopup) -- pa je drugi izbor
+' trazio da se polje prvo obrise. Isti kvar je smoke 28.08.2026 nasao u
+' Izvestajima (katalog 23.9 S1), gde je zaobidjen u ekranu.
+Private Sub PopIndex(cmb As Object, Optional ByVal punaLista As Boolean = False)
     Dim i As Long, f As String
     mPopN = 0
     If cmb.ListCount = 0 Then Exit Sub
     ReDim mPopSrc(0 To cmb.ListCount - 1)
-    f = Trim$(CStr(cmb.text))
+    If Not punaLista Then f = Trim$(CStr(cmb.text))
     For i = 0 To cmb.ListCount - 1
         If Len(f) = 0 Then
             mPopSrc(mPopN) = i
             mPopN = mPopN + 1
-        ElseIf InStr(1, CStr(cmb.List(i, 0)), f, vbTextCompare) > 0 Then
+        ElseIf InStr(1, PopStavka(cmb, i), f, vbTextCompare) > 0 Then
             mPopSrc(mPopN) = i
             mPopN = mPopN + 1
         End If
@@ -1758,7 +1962,7 @@ End Sub
 Private Sub PopRender()
     Dim cmb As Object, z As Object, i As Long, vis As Long
     Dim ax As Single, ay As Single, h As Single, tw As Single
-    Dim scroll As Boolean
+    Dim scroll As Boolean, fnt As String
     On Error Resume Next
     If Len(mPopFor) = 0 Then Exit Sub
     Set cmb = FindCombo(mPopFor)
@@ -1778,10 +1982,17 @@ Private Sub PopRender()
     ' Panel mora da stane najduza stavka, ne sirina polja - "Willamette teren"
     ' je bio isecen jer je Sorta usko polje. Sire od polja je u redu; nas panel
     ' nije nativna lista pa nema ni horizontalnog skrolera da to prikrije.
+    ' Font se postavlja pri SVAKOM crtanju: redovi panela su zajednicki za sve
+    ' combo-e, pa bi Consolas izbora zbirne ostao i u sledecem panelu.
+    fnt = PopFont()
     z.width = cmb.width + INPUT_PAD * 2 + 20
     tw = PopTextW(z, cmb) + 26
     If tw > z.width Then z.width = tw
-    If z.width > 320 Then z.width = 320
+    If PopImaOpis() Then
+        If z.width > POP_W_ZBIRNA Then z.width = POP_W_ZBIRNA
+    ElseIf z.width > 320 Then
+        z.width = 320
+    End If
     h = vis * POP_ITEM_H + 2
     If scroll Then h = h + POP_ITEM_H
     z.Height = h
@@ -1796,7 +2007,8 @@ Private Sub PopRender()
             z.Controls("pop" & i).top = 1 + i * POP_ITEM_H
             z.Controls("pop" & i).width = z.width - 2
             z.Controls("pop" & i).Visible = True
-            z.Controls("popT" & i).caption = "   " & CStr(cmb.List(mPopSrc(mPopTop + i), 0))
+            z.Controls("popT" & i).Font.Name = fnt
+            z.Controls("popT" & i).caption = "   " & PopStavka(cmb, mPopSrc(mPopTop + i))
             z.Controls("popT" & i).top = CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY)
             z.Controls("popT" & i).width = z.width - 2
             z.Controls("popT" & i).Visible = True
@@ -1808,6 +2020,10 @@ Private Sub PopRender()
     Next i
     PopFooter z, vis, scroll
     z.Left = ax - INPUT_PAD
+    ' Sirok panel (opis zbirne) pod poljem u desnoj koloni ne sme da izadje iz
+    ' forme; ostali panele ova granica ne pomera (staju i danas).
+    If z.Left + z.width > mFrm.InsideWidth Then z.Left = mFrm.InsideWidth - z.width
+    If z.Left < 0 Then z.Left = 0
     z.top = ay + cmb.Height + 5
     ' panel bi ispod donjih polja izasao iz forme - tada se otvara nagore
     If z.top + h > mFrm.InsideHeight Then z.top = ay - h - 5
@@ -1824,14 +2040,20 @@ Private Function PopTextW(z As Object, cmb As Object) As Single
     If mPopN = 0 Then Exit Function
     best = mPopSrc(0)
     For i = 0 To mPopN - 1
-        t = CStr(cmb.List(mPopSrc(i), 0))
+        t = PopStavka(cmb, mPopSrc(i))
         If Len(t) > bestLen Then
             bestLen = Len(t)
             best = mPopSrc(i)
         End If
     Next i
-    z.Controls("popRul").caption = "   " & CStr(cmb.List(best, 0)) & "   "
+    z.Controls("popRul").Font.Name = PopFont()
+    z.Controls("popRul").caption = "   " & PopStavka(cmb, best) & "   "
     PopTextW = z.Controls("popRul").width
+End Function
+
+' Font redova panela: Consolas samo kad stavke nose kolone (PopImaOpis).
+Private Function PopFont() As String
+    If PopImaOpis() Then PopFont = F_NUM Else PopFont = F_UI
 End Function
 
 Private Sub PopFooter(z As Object, ByVal vis As Long, ByVal scroll As Boolean)
@@ -1941,6 +2163,11 @@ Private Sub SelectPopup(ByVal idx As Long)
     mPopMute = True                  ' upis okida Change - ne otvaraj panel ponovo
     cmb.ListIndex = src               ' povlaci i skrivenu ID kolonu
     mPopMute = False
+    ' Kursor se vraca u polje ciji je izbor upravo napravljen, kao kod obicne
+    ' padajuce liste. Red panela je Label i fokus ne prima, pa bi on inace ostao
+    ' gde ga je MSForms ostavio -- a pet kontekstnih combo-a deli jedan Frame,
+    ' pa je to cesto bila Vrsta (zahtev operatera 18.11.2026).
+    DajFokus cmb
 End Sub
 
 '=====================================================================
@@ -3592,10 +3819,6 @@ Private Sub RenderChipCounts(z As Object)
     z.Controls("chipOtvoreneC").caption = Poruka("OTKUI_CHIP_OTVORENE") & "  " & mCntOtvor
 End Sub
 
-' Otpremnica i prijemnica pri ulasku preuzimaju broj zbirne sa kojom se radilo.
-' U frmDokumenta je to radila RefreshBrojZbirneSuggestion (isti broj u obe
-' sekcije) plus btnUnosZbr posle snimanja; ovde je jedan sticky broj.
-' Rucni unos ima prednost - vec popunjeno polje se NE gazi.
 ' Skup polja zavisi od dokumenta. Gotovinski rezimi nemaju ni kilograme ni
 ' cenu ni ambalazu - ambalaza zivi iskljucivo u rezimu reversa. LayoutFields
 ' preskace sakrivena polja, pa se preostala sama presloze u mrezu.
@@ -3816,11 +4039,17 @@ Private Function FldVidljivo(ByVal nm As String) As Boolean
     FldVidljivo = mFrm.Controls("zForm").Controls(nm).Visible
 End Function
 
+' Otpremnica i prijemnica pri ulasku preuzimaju broj zbirne sa kojom se radilo
+' (F3 klikom na red, ili sam broj u F2/F4). Rucni unos ima prednost - vec
+' popunjeno polje se NE gazi. Otkupni list NE ucestvuje (zahtev operatera
+' 18.11.2026): legacy je broj delio samo izmedju otpremnice, zbirne i
+' prijemnice, a pisac otkupnog lista ga ne prima.
 Private Sub ApplyAktivnaZbirna(frm As Object, ByVal mode As String)
     Dim fld As Object
     On Error Resume Next
     Set fld = frm.Controls("zForm").Controls("fgBrZbir")
     If Not ModeVezujeZbirnu(mode) Then Exit Sub
+    If mode = "F1" Then Exit Sub
     If Not fld.Visible Then Exit Sub
     If Len(mAktivnaZbirna) = 0 Then Exit Sub
     If Len(Trim$(fld.Controls("fgBrZbirT").text)) > 0 Then Exit Sub
@@ -3828,8 +4057,10 @@ Private Sub ApplyAktivnaZbirna(frm As Object, ByVal mode As String)
 End Sub
 
 ' Pamti broj zbirne kao "aktivan". Zove se iz F3 (broj dokumenta JESTE broj
-' zbirne) i sa polja BROJ ZBIRNE u ostalim rezimima.
+' zbirne) i sa polja BROJ ZBIRNE u F2 i F4. Otkupni list ne ucestvuje: ni
+' kucanje ni prefill u F1 ne menjaju zapamcenu zbirnu otpremnice/prijemnice.
 Private Sub SetAktivnaZbirna(ByVal broj As String)
+    If ActiveMode = "F1" Then Exit Sub
     broj = Trim$(broj)
     If Len(broj) = 0 Then
         ' prazno polje znaci "ovaj dokument NEMA zbirnu" - bez ovoga bi
@@ -3842,22 +4073,14 @@ Private Sub SetAktivnaZbirna(ByVal broj As String)
     ShowToast Poruka("OTKUI_MSG_ZBIRNA_AKTIVNA") & " " & broj, False
 End Sub
 
-Private Sub LoadRowIntoForm()
-    Dim r As Long
+' Dvoklik na zbirnu u F3 je BIRA za prijemnicu: broj ide u zapamcenu zbirnu,
+' pa ga F4 nasledi pri ulasku (ApplyAktivnaZbirna). Zamena za legacy
+' lstZbirne_Click (broj zbirne u prijemnicu). Forma F3 se NE puni -- broj
+' izdate zbirne u polju broja bi sledece snimanje poslalo kao nov nacrt.
+Private Sub ZapamtiZbirnuReda()
     On Error Resume Next
     If mSelRow < 1 Or mSelRow > mViewN Then Exit Sub
-    r = mSelRow
-    SetFld "fgBrOtpr", CStr(mView(r, 1))
-    ' U rezimu Zbirne broj dokumenta JESTE broj zbirne - klik na red je isto
-    ' sto i lstZbirne_Click u staroj formi.
-    If ActiveMode = "F3" Then SetAktivnaZbirna CStr(mView(r, 1))
-    SetFld "fgKgI", FmtBroj(CDbl(mView(r, 4)), 0)
-    If CDbl(mView(r, 4)) > 0 Then
-        mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").text = _
-            FmtBroj(CDbl(mView(r, 5)) / CDbl(mView(r, 4)), 2)
-    End If
-    RecalcVrednost
-    ShowToast Poruka("OTKUI_MSG_UCITANO") & " " & CStr(mView(r, 1)), False
+    SetAktivnaZbirna CStr(mView(mSelRow, 1))
 End Sub
 
 '=====================================================================
@@ -3945,6 +4168,24 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ' nema. Grid-max ostaje samo kao operaterov izbor kroz prekidac.
     SetGridCols k                      ' pre LayoutGrid-a i pre naslova kolona
     ApplyFormFields frm, key           ' pre LayoutFields-a
+    ' BROJ ZBIRNE PRIPADA SVOM DOKUMENTU (zahtev operatera 18.11.2026: "broj
+    ' zbirne ostaje u otkupnim blokovima kad se unese otpremnica ili prijemnica
+    ' pa se vrati na unos"). Polje je ISTA kontrola u F1, F2 i F4, pa bi broj
+    ' prijemnice ostao u otkupnom listu -- ciji pisac ga i ne prima (otkup se za
+    ' zbirnu vezuje kroz otpremnicu, ne kroz ovo polje). Zato se pri ulasku u F1
+    ' i izlasku iz njega polje prazni; F2/F4 tada dobijaju SVOJU zapamcenu
+    ' zbirnu (ApplyAktivnaZbirna, nize). Isti rezim (prekidac liste, povratak na
+    ' ekran) ga ne dira -- to je ugovor ClearForm-a (broj ostaje za sledeci blok).
+    ' Ovde, a ne uz praznjenje broja na kraju: jos smo pod mPopMute/mLoading, pre
+    ' SetManjakLine i pre ApplyAktivnaZbirna. mZbirnaFill: praznjenje nije unos i
+    ' ne sme da obrise zapamcenu zbirnu prijemnice (UiChange -> SetAktivnaZbirna).
+    If StrComp(stariRezim, key, vbTextCompare) <> 0 Then
+        If key = "F1" Or stariRezim = "F1" Then
+            mZbirnaFill = True
+            frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT").text = ""
+            mZbirnaFill = False
+        End If
+    End If
 
     With frm.Controls("zTitle")
         .Controls("titName").caption = Poruka("OTKUI_TITLE_" & k)
@@ -4340,12 +4581,13 @@ Public Function HandleKeyFrom(ByVal tag As String, ByVal KeyCode As Long, _
     HandleKeyFrom = HandleGlobalKey(KeyCode, Shift)
 End Function
 
-' Otvori/zatvori nas panel za kontrolu ciji je tag dat.
+' Otvori/zatvori nas panel za kontrolu ciji je tag dat. Eksplicitno otvaranje
+' (strelica, Alt+dole, Drop) nudi PUNU listu -- suzava samo kucanje (PopIndex).
 Private Sub OpenPopupFor(ByVal tag As String)
     Dim nm As String
     nm = PopKeyFor(tag)
     If Len(nm) = 0 Then Exit Sub
-    If mPopFor = nm Then ClosePopup Else OpenPopup nm
+    If mPopFor = nm Then ClosePopup Else OpenPopup nm, True
 End Sub
 
 ' Kljuc panela za dati tag kontrole, ili "" ako to nije combo. Kontekstni combo
@@ -4543,8 +4785,18 @@ Private Sub UiClickCore(ByVal tag As String)
     ' Strelica combo-a se resava PRE grane ekrana: tag pocinje sa 'scr' kao i sve
     ' ostalo sto ekran nosi, pa bi inace otisao ekranu -- a on o panelu izbora ne
     ' zna nista, niti treba. Panel je ljuskin i radi isto nad svim poljima.
+    '
+    ' FOKUS IDE PRE PANELA (zahtev operatera 18.11.2026: "to sto kucam se
+    ' nadovezuje na tekst u Vrsti voca"). Strelica je Label i fokus ne prima, a
+    ' pet kontekstnih combo-a deli JEDAN Frame (zCtx): bez ovoga kucanje ide u
+    ' combo koji je fokus vec imao -- najcesce Vrsta, prvi u tom Frame-u -- dok
+    ' panel stoji pod drugim poljem. Pre panela, jer Focus ide kroz
+    ' CloseOverlays, koji tudji panel zatvara, a svoj (tag = mPopFor) ne dira.
     If Right$(tag, 1) = "D" And Len(tag) > 2 Then
-        If Len(PopKeyFor(Left$(tag, Len(tag) - 1))) > 0 Then
+        Dim popK As String
+        popK = PopKeyFor(Left$(tag, Len(tag) - 1))
+        If Len(popK) > 0 Then
+            DajFokus FindCombo(popK)
             OpenPopupFor Left$(tag, Len(tag) - 1)
             Exit Sub
         End If
@@ -5134,8 +5386,16 @@ Private Function OperaterText() As String
     OperaterText = s
 End Function
 
-' Dvoklik na red. Na unosnom ekranu ucitava red u formu -- kao i do sada. Na
-' ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem kao 'row:' i 'act:'.
+' Dvoklik na red. Na ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem
+' kao 'row:' i 'act:'. Na unosnom ekranu (DOKUMENTI) FORMU NE PUNI -- jedino
+' u F3 pamti zbirnu reda za prijemnicu (ZapamtiZbirnuReda).
+'
+' Do 18.11.2026 je ovde stajao LoadRowIntoForm: broj reda u polje broja NOVOG
+' dokumenta (u listi Otpremnice F1 -- broj tudjeg dokumenta), a kg i cenu iz
+' 4. i 5. kolone, koje su odavno Vrsta i Sorta, pa su tiho preskakane. Nije
+' bio legacy (frmDokumenta/frmOtkup takav dvoklik nisu imali), a postojeci
+' dokument se menja kroz Ispravku, ne prepisom u formu (pre-flight 18.11.2026,
+' INTENTIONALLY REMOVED, docs/UI_MIGRACIJA_KATALOG.md).
 '
 ' Zasto ekran ne moze da otvara detalj OBICNIM klikom: klik BIRA red, a radnje
 ' nad redom (zatvori paletu, storniraj, stampaj) rade bas nad izabranim. Da klik
@@ -5143,10 +5403,17 @@ End Function
 '
 ' Ljuska i dalje ne zna nijedan ekran po imenu -- zna samo svoj POCETNI, koji
 ' jedini ima formu za unos ispod mreze.
+'
+' DVOKLIK RADI SAMO NAD REDOM MREZE (review 18.11.2026). clsFlatBtn salje
+' DblClick za SVAKI ozicen Label -- strelicu, dugme, cip, red panela, a od
+' zahteva 18.11.2026 i podlogu kontekstnog polja. Bez ovog reda bi dvoklik po
+' ivici polja Kooperant (uz izabran red liste) u F3 zapamtio zaostalu zbirnu, a
+' na drugom ekranu poslao "dbl:" za zaostali izbor.
 Private Sub UiDblClick(ByVal tag As String)
+    If RowIndexFromTag(tag) < 0 Then Exit Sub   ' dvoklik van reda mreze ne ucitava red
     RowFromTag tag
     If mScreen = SCR_POCETNI Then
-        LoadRowIntoForm
+        If ActiveMode = "F3" Then ZapamtiZbirnuReda
         Exit Sub
     End If
     If mSelRow <= 0 Then Exit Sub
@@ -5507,6 +5774,14 @@ End Sub
 ' kontekst combo: shell + combo + strelica koja maskira nativno dugme
 Private Sub NewCtxCombo(parent As Object, nm As String, X As Single, Y As Single, w As Single)
     NewShell parent, nm, X, Y, w, 26, C_INPUT_BORDER, C_WHITE
+    ' PODLOGA POLJA JE STRELICA (zahtev operatera 18.11.2026). Ispuna (nm & "F")
+    ' vidi se kao deo polja -- 9pt levo, 4pt gore i dole i oko strelice -- a
+    ' Label je i fokus ne prima. Kontekstni combo-i dele JEDAN Frame, pa klik na
+    ' podlogu daje fokus ActiveControl-u tog Frame-a (najcesce Vrsti) i kucanje
+    ' ode tamo. Sa tagom strelice klik daje fokus BAS ovom combo-u i otvara mu
+    ' listu (UiClickCore). Isti obrazac kao BoxText: "chev" prosledjuje klik, a
+    ' boju ispune ne dira (nju nosi stanje fokusa, ShellState).
+    WireBtn parent.Controls(nm & "F"), nm & "D", "chev"
     NewCombo parent, nm, "", X + INPUT_PAD, Y + 4, w - INPUT_PAD - 22, 18
     NewChevron parent, nm & "D", X + w - 19, Y + 1, 18, 24
 End Sub
@@ -6447,6 +6722,17 @@ Public Sub GridLayoutTest(z As Object, ByVal zw As Single, ByVal zh As Single)
     LayoutGrid z, zw, zh
 End Sub
 
+' TEST SEAM: pusti raspored polja forme nad zonom koju je test vec izgradio.
+' Tvrdo gejtovan, ne nosi stanje (ResetSeamova nema sta da gasi).
+'
+' Isti razlog kao GridLayoutTest: LayoutFields je Private, a broj kolona bira
+' LayoutOtkup po sirini prozora (InsideWidth) koji se u testu ne prikazuje --
+' pa test broj kolona i sirinu zadaje sam, umesto da zavisi od neprikazane forme.
+Public Sub FieldsLayoutTest(z As Object, ByVal cols As Long, ByVal zw As Single)
+    If Not IsTestMode() Then Exit Sub
+    LayoutFields z, cols, zw
+End Sub
+
 ' TEST SEAM: sagradi mrezu nad datom formom i NACRTAJ je. Tvrdo gejtovan.
 '
 ' Bez ovoga se pravilo "upis se radi uvek" moze izmeriti samo na CelijaTekst --
@@ -6915,11 +7201,19 @@ End Sub
 ' tamo je klik na red upisivao broj u prijemnicu, ovde se bira iz panela nad
 ' samim poljem koje taj broj i cuva. Broj zbirne je oblika "x/ddmmyy" pa nosi
 ' datum u sebi - zato je sam broj dovoljan za prepoznavanje.
+'
+' TRI KOLONE, po obrascu FillFormPartner: 0 = broj (prikaz i .text -- to cita
+' p("brojZbirne")), 1 = skriven ZbirnaID (vise ID-jeva sa "|" kad je dokument
+' na dva reda), 2 = opis za panel (mesta, kg, amb). Opis se NE racuna ovde:
+' ova rutina ide na svaki RefreshFromData (svaki upis i radnja koja menja
+' podatke, sync, promena prava, povratak iz panela -- NE promena rezima ni
+' ekrana), a opis se vidi samo u prijemnici -- racuna ga ZbirneOpisUpisi pri
+' otvaranju panela (zahtev operatera 18.11.2026).
 Public Sub FillZbirneCombo(frm As Object)
     Dim CB As MSForms.ComboBox, src As Variant, iBroj As Long, iDat As Long
     Dim r As Long, n As Long, arr() As Variant, key() As Double, i As Long, j As Long
     Dim cur As String, iGen As Long, gen As String, uzmi As Boolean
-    Dim vidjene As Object
+    Dim vidjene As Object, iId As Long, zid() As String, gi As Long, tz As String
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
     ' Punjenje liste NE sme da pojede upisani broj. ComboBox.Clear brise stavke
@@ -6930,6 +7224,10 @@ Public Sub FillZbirneCombo(frm As Object)
     cur = CStr(CB.text)
     mZbirnaFill = True
     CB.Clear
+    CB.ColumnCount = 3
+    CB.ColumnWidths = "140 pt;0 pt;0 pt"
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
     src = CachedTable(TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
     ' MIG-005a: STORNIRANE ZBIRNE SE NE NUDE.
@@ -6943,14 +7241,16 @@ Public Sub FillZbirneCombo(frm As Object)
     ' ZbirnaPostoji. Picker i writer time gledaju istu definiciju "aktivne", pa
     ' se ne mogu raziici. Radi nad prosledjenim nizom, bez novog citanja lista:
     ' CachedTable je kes ljuske i invalidira se generacijom (modUiData.ResetCache),
-    ' a ovo se zove na svaku promenu rezima.
+    ' a ovo se zove na svaki RefreshFromData (upis, radnja nad podacima, sync,
+    ' povratak iz panela -- ne pri promeni rezima ni ekrana).
     '
     ' MIG-005b: JEDNA STAVKA PO DOKUMENTU, ne po redu.
     '
     ' Isti broj na vise redova ima DVA razlicita uzroka, i samo jedan je kvar:
-    '   jedan dokument, dva reda -- Klasa I + II. SaveZbirnaMulti_TX zove
-    '       SaveZbirna dvaput sa ISTIM brojem, vozacem i kupcem, pa oba reda
-    '       nose ISTU generaciju. Tu treba JEDNA stavka -- to je MIG-005b.
+    '   jedan dokument, dva reda -- Klasa I + II starog modela (dva zaglavlja;
+    '       nekadasnji SaveZbirnaMulti_TX je pisao isti broj, vozaca i kupca
+    '       dvaput), pa oba reda nose ISTU generaciju. Tu treba JEDNA stavka --
+    '       to je MIG-005b. Kanonski pisac pravi jedno zaglavlje sa stavkama.
     '   dva dokumenta, isti broj -- anomalija (rucni unos sa ugasenim
     '       auto-brojem, uvoz, ispravka u tabeli). RAZLICITE generacije.
     '
@@ -6972,6 +7272,7 @@ Public Sub FillZbirneCombo(frm As Object)
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
     iGen = ColIdx(TBL_ZBIRNA, COL_GENERACIJA_ID)
+    iId = ColIdx(TBL_ZBIRNA, COL_ZBR_ID)
     If iBroj < 1 Then GoTo XIT
 
     If iGen > 0 Then
@@ -6980,7 +7281,7 @@ Public Sub FillZbirneCombo(frm As Object)
     End If
 
     n = UBound(src, 1)
-    ReDim arr(1 To n): ReDim key(1 To n)
+    ReDim arr(1 To n): ReDim key(1 To n): ReDim zid(1 To n)
     j = 0
     For r = 1 To n
         If Len(CellS(src, r, iBroj)) > 0 Then
@@ -6990,14 +7291,19 @@ Public Sub FillZbirneCombo(frm As Object)
             If Len(gen) > 0 Then
                 If vidjene.Exists(gen) Then
                     uzmi = False          ' drugi red ISTOG dokumenta
+                    ' ...a njegov ID ide uz stavku prvog reda: opis sabira oba
+                    ' reda (Klasa I + II starog modela), kao Oporavak.
+                    gi = CLng(vidjene(gen))
+                    If iId > 0 Then zid(gi) = zid(gi) & "|" & CellS(src, r, iId)
                 Else
-                    vidjene.Add gen, 1
+                    vidjene.Add gen, j + 1
                 End If
             End If
             If uzmi Then
                 j = j + 1
                 arr(j) = CellS(src, r, iBroj)
                 key(j) = CellDate(src, r, iDat)
+                If iId > 0 Then zid(j) = CellS(src, r, iId)
             End If
         End If
     Next r
@@ -7010,6 +7316,7 @@ Public Sub FillZbirneCombo(frm As Object)
                 Dim tk As Double, tv As Variant
                 tk = key(i): key(i) = key(r): key(r) = tk
                 tv = arr(i): arr(i) = arr(r): arr(r) = tv
+                tz = zid(i): zid(i) = zid(r): zid(r) = tz
             End If
         Next r
     Next i
@@ -7017,6 +7324,7 @@ Public Sub FillZbirneCombo(frm As Object)
     ' ogranicenja na POP_MAX vise nema - panel skroluje i suzava kucanjem
     For i = 1 To j
         CB.AddItem CStr(arr(i))
+        CB.List(CB.ListCount - 1, 1) = zid(i)
     Next i
 XIT:
     On Error Resume Next
@@ -8621,12 +8929,23 @@ Public Function DijalogTest() As String
     DijalogTest = mDijalogTest
 End Function
 
-' TEST SEAM: ime kontrole na koju bi poslednji CommitDokumentTest dao fokus
-' ("" = nijedna -- kljuc bez grane ili uspeh). Tvrdo gejtovan.
+' TEST SEAM: ime kontrole na koju je ljuska POSLEDNJI PUT dala fokus kroz
+' DajFokus (greska upisa, strelica panela, izbor iz panela). CommitDokumentTest
+' belesku prazni pred upis, pa posle njega "" znaci: kljuc bez grane ili uspeh.
+' Tvrdo gejtovan.
 Public Function FokusTest() As String
     If Not IsTestMode() Then Exit Function
     FokusTest = mFokusTest
 End Function
+
+' TEST SEAM: isprazni belesku fokusa. Beleska je modulska i prezivi tudji test,
+' pa test koji meri vise uzastopnih poteza prazni je pred svaki -- inace bi
+' zaostalo ime polja proslo kao fokus koji je potez SAM trazio. Samo posmatra:
+' van test rezima ne radi nista. Gasi je i modTest.ResetSeamova.
+Public Sub FokusTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mFokusTest = ""
+End Sub
 
 ' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
 ' poruku treba pokazati u dijalogu -- nije deo recenice. MsgBox crta kroz ANSI
@@ -8797,6 +9116,17 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
         Case "vozacID":      Set c = mFrm.Controls("zCtx").Controls("cbVozac")
         Case "napomena":     Set c = mFrm.Controls("zForm").Controls("fgNapomena").Controls("fgNapomenaT")
     End Select
+    DajFokus c
+End Sub
+
+' Fokus na kontrolu. U test rezimu se BELEZI (FokusTest) umesto SetFocus-a:
+' forma bez .Show ne prima fokus, a u nevidljivom Excelu SetFocus visi.
+' Jedini gejt beleske -- FokusNaPolje, strelica panela i izbor iz panela idu
+' kroz njega, pa ih ista sabotaza (s6k6-fokus-beleska-gluva) obara zajedno.
+' On Error Resume Next je obavezan: UiClickCore nema svoj handler, pa bi greska
+' SetFocus-a (nevidljiva ili onemogucena kontrola) preskocila otvaranje panela.
+Private Sub DajFokus(ByVal c As Object)
+    On Error Resume Next
     If c Is Nothing Then Exit Sub
     If IsTestMode() Then
         mFokusTest = c.Name

@@ -356,6 +356,8 @@ i (16.11.2026, u dokazu 87/87, §10) `lnc-f1-bez-potvrde`; ostali `lnc-*` / `odl
 > izabran), a nacrt radnja odbija. `modOtkupUI.bas` se ne dira. **Zatečeno, izvedeno čitanjem,
 > nije reprodukovano:** dvoklik na izdatu u listi Otpremnice puni formu otkupnog lista redom
 > otpremnice (`LoadRowIntoForm`, broj otpremnice u polje broja lista); važilo je i pre ovog reza.
+> **Uklonjeno 18.11.2026** (pre-flight, `docs/UI_MIGRACIJA_KATALOG.md` §28.2): dvoklik na red
+> početnog ekrana više ne puni formu; meri `T_Ljuska_DvoklikVanRedaNeUcitava`.
 > **Excel 15.11.2026:** BFP zelen na vrhu grane (`8d8db7fd`, RunID 20261115144955-3585, 3477/3477) —
 > svi testovi a2–a7 i dela (b); na `e8b3f492` (bez popravke KI-095 put 2) pali su samo očekivani
 > (RunID 20261115143613-6938). Čekaju: `RunAllTests`, dokaz `lncb`/`ki095`, Compile i ručna provera
