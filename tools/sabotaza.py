@@ -13994,10 +13994,15 @@ SABOTAZE = {
     ),
     # CEN-REV-02 (review PR #491): duplikat se poredi samo sa nivoom trenutnog
     # pobednika -- stari oblik, kod koga je globalna-posebna-globalna prolazila.
+    # VBA "And" NEMA kratko spajanje: desna strana se racuna i kad je best = 0
+    # (prvi kandidat), pa indeks ide kroz "best - (best = 0)" (True = -1) i
+    # nikad nije 0. Golo "redovi(best, ...)" je mutant obaralo greskom 9 na
+    # prvoj tvrdnji 373, ne na imenovanoj (dokaz 19.11.2026: PALA DRUGA TVRDNJA).
+    # Vrednost desne strane pri best = 0 ne odlucuje nista: tada je Exists False.
     "cen-dupli-samo-uz-nivo-pobednika": (
         "modCenovnik.bas",
         "                        If nivoDan.Exists(k) Then\n",
-        "                        If nivoDan.Exists(k) And ((Len(st) = 0) = (Len(Trim$(CStr(redovi(best, CEN_R_STANICA)))) = 0)) Then   ' SABOTAZA: samo uz nivo pobednika\n",
+        "                        If nivoDan.Exists(k) And ((Len(st) = 0) = (Len(Trim$(CStr(redovi(best - (best = 0), CEN_R_STANICA)))) = 0)) Then   ' SABOTAZA: samo uz nivo pobednika\n",
         "T_Cen_PreduslovIBezCene",
         "373 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice",
     ),
@@ -14005,7 +14010,7 @@ SABOTAZE = {
     "cen-dupli-skriven-kasnijom-cenom": (
         "modCenovnik.bas",
         "                        If nivoDan.Exists(k) Then\n",
-        "                        If nivoDan.Exists(k) And d >= CLng(redovi(best, CEN_R_DAN)) Then   ' SABOTAZA: stariji par se ne prijavljuje\n",
+        "                        If nivoDan.Exists(k) And d >= CLng(redovi(best - (best = 0), CEN_R_DAN)) Then   ' SABOTAZA: stariji par se ne prijavljuje\n",
         "T_Cen_PreduslovIBezCene",
         "373 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC",
     ),
