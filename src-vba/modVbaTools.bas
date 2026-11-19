@@ -32,11 +32,11 @@ Option Explicit
 ' ------------------------------------------------------------
 ' POLITIKA PO VRSTI KOMPONENTE
 ' ------------------------------------------------------------
-'   frmOtkupUI (postoji)  code merge (DeleteLines+AddFromString), NIKAD Remove
+'   frmOtkupUI (postoji)  code merge (ZameniTelo: DeleteLines + InsertLines u delovima), NIKAD Remove
 '   frmOtkupUI (nema je)  clean import u fazi 2 (nema sudara imena) + verifikacija
 '   .doccls               code merge u postojecu komponentu; nema je = FATALNO
 '                         (Document modul se NIKAD ne uklanja i ne dodaje)
-'   soft .bas/.cls        code merge; nova komponenta = Add + AddFromString
+'   soft .bas/.cls        code merge; nova komponenta = Add + ZameniTelo
 '   (svaki code merge / Add je SVOJ makro u lancu - vidi FAZE ispod)
 '   tvrd .bas/.cls        Remove (faza 1) -> OnTime -> Import (faza 2)
 '   komponenta van izvora Remove (stale), samo tip 1/2/3, nikad tip 100
@@ -107,7 +107,7 @@ Option Explicit
 ' ------------------------------------------------------------
 ' POZNATO OGRANICENJE: atributi NOVE .cls komponente
 ' ------------------------------------------------------------
-' Nova soft komponenta nastaje kroz VBComponents.Add + AddFromString, a
+' Nova soft komponenta nastaje kroz VBComponents.Add + ZameniTelo, a
 ' ExtractModuleCode namerno odbacuje "Attribute VB_*" linije. Za NOVU klasu to
 ' znaci da se ne prenose ne-podrazumevani class atributi (VB_PredeclaredId,
 ' VB_Exposed, VB_Creatable, MultiUse) - dobija se klasa sa default vrednostima.
@@ -173,6 +173,12 @@ Private Const PHASE2_SEC As Long = 2
 Private Const MERGE_STEP_PROC As String = "ImportAllVBA_MergeStep"
 Private Const MERGE_SEC As Long = 1
 Private Const PHASE_MERGE As String = "m"
+
+' ---------- upis tela u CodeModule (ZameniTelo) ----------
+' Broj linija po jednom InsertLines pozivu. Izmereno 19.11.2026: deo od 2000
+' linija kosta ~0,4 s bez obzira na to koliko je modul vec narastao, a jedan
+' AddFromString celog modTest-a 119 s.
+Private Const UPIS_DEO As Long = 2000
 
 ' ---------- plan tekuceg importa ----------
 ' Jedan import u jednom trenutku (mBusy brani re-entry), pa plan zivi kao stanje
@@ -1192,7 +1198,7 @@ End Function
 '   doc      code merge u postojecu komponentu; pad = fatalno (uz rollback)
 '   form     code merge frmOtkupUI, NIKAD Remove; kapije se ponavljaju pre izmene
 '   soft     merge; pad = fatalno (uz rollback)
-'   softnew  Add + AddFromString; pad -> nedovrsena komponenta se uklanja, fatalno
+'   softnew  Add + ZameniTelo; pad -> nedovrsena komponenta se uklanja, fatalno
 ' U lancu NEMA fallback-a "Remove sada, Import u fazi 2" koji je postojao dok je
 ' sve islo u jednom makrou: uklonjen modul bi ostao van projekta kroz SVE
 ' preostale tikove, a tik koji zavisi od njega mozda ne bi mogao ni da se
@@ -1301,7 +1307,7 @@ Private Function ApplyMergeStep(ByVal korak As String, ByVal folder As String) A
         Set vbc = proj.VBComponents.Add(TypeForExt(ext))
         If Err.Number = 0 Then
             vbc.name = nm
-            vbc.CodeModule.AddFromString body
+            ZameniTelo vbc.CodeModule, body
             addedName = vbc.name
         End If
         addErr = Err.Number
@@ -1428,8 +1434,7 @@ Private Function ReplaceCodeWithRollback(ByVal vbc As Object, ByVal newBody As S
 
     On Error Resume Next
     Err.Clear
-    If vbc.CodeModule.CountOfLines > 0 Then vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
-    If Len(newBody) > 0 Then vbc.CodeModule.AddFromString newBody
+    ZameniTelo vbc.CodeModule, newBody
     errNum = Err.Number
     errDesc = Err.description
     On Error GoTo 0
@@ -1443,14 +1448,73 @@ Private Function ReplaceCodeWithRollback(ByVal vbc As Object, ByVal newBody As S
     ' pokusaj povratka na staro telo
     On Error Resume Next
     Err.Clear
-    If vbc.CodeModule.CountOfLines > 0 Then vbc.CodeModule.DeleteLines 1, vbc.CodeModule.CountOfLines
-    If Len(old) > 0 Then vbc.CodeModule.AddFromString old
+    ZameniTelo vbc.CodeModule, old
     If Err.Number <> 0 Then
         rollbackOk = False
         errOut = errOut & " + ROLLBACK PAO [" & Err.Number & "] " & Err.description
     End If
     On Error GoTo 0
 End Function
+
+' Sadrzaj modula postaje TACNO body: obrisi sve linije, pa upisi telo u delovima
+' od UPIS_DEO linija. Prazno telo = prazan modul.
+'
+' Zasto ne jedan AddFromString: njegov trosak raste brze od duzine teksta.
+' Mereno 19.11.2026 (prazna sveska): 222 KB 2,3 s, 489 KB 10,4 s, modTest 1,8 MB
+' 119 s; isti modTest kroz InsertLines po 2000 linija 7,9 s (~0,4 s po delu).
+'
+' Delovi se upisuju OD POSLEDNJEG KA PRVOM, svaki na red 1 - dakle uvek ISPRED
+' postojeceg reda. Dodavanje na kraj (InsertLines CountOfLines + 1) iza nepraznog
+' poslednjeg reda VBE upise sa JOS JEDNIM praznim redom: A/B nad kompajliranim
+' projektom (19.11.2026) dao je modTest +17 redova, po jedan na svakoj granici,
+' i drift prolaz je oborio import. Upis na vrh daje isti modul (sonda nad
+' modTest, modDokumenta i modulom sa nastavkom na granici).
+'
+' Deo se ne sece posle reda koji se zavrsava sa "_" (nastavak). Izmereno: rez
+' posle "    x = 1 + _" ostavi "        2" da se parsira sam - VBE ga procita kao
+' OZNAKU REDA "2" i skine uvlacenje. Red koji ne nastavlja, a ipak se zavrsava
+' sa "_", samo produzi deo za jedan red.
+'
+' Namerno BEZ On Error: greska jednog InsertLines-a prekida upis i stize do
+' pozivaoca (ReplaceCodeWithRollback / softnew su pod Resume Next i citaju
+' Err.Number odmah posle poziva), isto kao ranije greska AddFromString-a.
+' Da je upis bio potpun, dokazuje drift prolaz u VerifyFinalProject.
+Private Sub ZameniTelo(ByVal cm As Object, ByVal body As String)
+    Dim t As String, arr() As String, n As Long, od As Long, doo As Long
+    Dim deo() As String, j As Long, k As Long, pocetak() As Long, nDel As Long
+
+    If cm.CountOfLines > 0 Then cm.DeleteLines 1, cm.CountOfLines
+    If Len(body) = 0 Then Exit Sub
+
+    ' ExtractModuleCode daje vbCrLf, ComponentCode (rollback) ume da da vbCr
+    t = Replace$(Replace$(body, vbCrLf, vbLf), vbCr, vbLf)
+    arr = Split(t, vbLf)
+    n = UBound(arr) + 1
+
+    ' granice delova (napred): pocetak(k) je prvi red dela k, pocetak(nDel) = n
+    ReDim pocetak(0 To n)
+    od = 0
+    Do While od < n
+        pocetak(nDel) = od: nDel = nDel + 1
+        doo = od + UPIS_DEO - 1
+        If doo > n - 1 Then doo = n - 1
+        Do While doo < n - 1
+            If Right$(RTrim$(Replace$(arr(doo), vbTab, " ")), 1) <> "_" Then Exit Do
+            doo = doo + 1
+        Loop
+        od = doo + 1
+    Loop
+    pocetak(nDel) = n
+
+    ' upis: od poslednjeg dela ka prvom, svaki na red 1
+    For k = nDel - 1 To 0 Step -1
+        ReDim deo(0 To pocetak(k + 1) - pocetak(k) - 1)
+        For j = pocetak(k) To pocetak(k + 1) - 1
+            deo(j - pocetak(k)) = arr(j)
+        Next j
+        cm.InsertLines 1, Join(deo, vbCrLf)
+    Next k
+End Sub
 
 ' Uvezi jedan fajl i verifikuj VRACENU komponentu (ime + tip). report dobija opis
 ' greske (prazan na uspeh).
@@ -1540,7 +1604,7 @@ Private Function VerifyFinalProject(ByVal folder As String) As String
                 bad = bad & "  " & nm & ": tip " & proj.VBComponents(nm).Type & ", ocekivano " & want & vbCrLf
             ElseIf Len(body) > 0 Then
                 ' DRIFT: prisustvo i tip ne dokazuju da je kod stvarno primenjen.
-                ' AddFromString ume da tiho ne upise sve (COM diskonekt), a tada bi
+                ' Upis (ZameniTelo) ume da tiho ne upise sve (COM diskonekt), a tada bi
                 ' prolaz zavrsio kao uspeh nad starim kodom. Isti SameCode kojim
                 ' delta-skip odlucuje da NE dira modul mora da vazi i kao dokaz da
                 ' ga je dirao kako treba - inace mu ni skip ne bi smeo da se veruje.
@@ -2177,13 +2241,23 @@ End Function
 ' Izvuci editabilno telo iz VBA export fajla (.bas/.cls/.frm/.doccls) bezbedno za
 ' AddFromString: preskoci VERSION, Begin..End dizajn blok i SVE "Attribute" linije
 ' (ni modulske ni clanske ne smeju u CodeModule).
+'
+' Telo se skuplja u niz i spaja JEDNIM Join-om. Ranije je raslo kroz
+' "body = body & vbCrLf & arr(i)": svako dodavanje kopira celo dosadasnje telo,
+' pa je trosak kvadratan u velicini modula. Mereno 19.11.2026 (prazna sveska,
+' identican izlaz): modTest 1,8 MB 29,6 s -> 0,07 s. Funkcija ide nad SVIM
+' modulima dvaput po uvozu (BuildPlan, VerifyFinalProject) i jos jednom po
+' merge-u, pa se taj trosak placao i kad veliki modul nije ni menjan.
 Private Function ExtractModuleCode(ByVal fpath As String) As String
     Dim allTxt As String, arr() As String, i As Long, depth As Long
-    Dim inHeader As Boolean, ls As String, u As String, body As String
+    Dim inHeader As Boolean, ls As String, u As String
+    Dim kept() As String, nKept As Long
 
     allTxt = ReadAllText(fpath)
     arr = Split(allTxt, vbCrLf)
     If UBound(arr) <= 0 Then arr = Split(allTxt, vbLf)
+    If UBound(arr) < 0 Then Exit Function          ' prazan fajl: Split vraca prazan niz
+    ReDim kept(0 To UBound(arr))
 
     inHeader = True
     For i = 0 To UBound(arr)
@@ -2206,16 +2280,18 @@ Private Function ExtractModuleCode(ByVal fpath As String) As String
                 ' prazna linija u zaglavlju -> skip
             Else
                 inHeader = False
-                body = arr(i)
+                kept(nKept) = arr(i): nKept = nKept + 1
             End If
         Else
             If Not (u Like "ATTRIBUTE *") Then
-                If Len(body) = 0 Then body = arr(i) Else body = body & vbCrLf & arr(i)
+                kept(nKept) = arr(i): nKept = nKept + 1
             End If
         End If
     Next i
 
-    ExtractModuleCode = body
+    If nKept = 0 Then Exit Function
+    ReDim Preserve kept(0 To nKept - 1)
+    ExtractModuleCode = Join(kept, vbCrLf)
 End Function
 
 ' ============================================================
