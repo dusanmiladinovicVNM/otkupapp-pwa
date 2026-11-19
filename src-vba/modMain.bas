@@ -206,6 +206,8 @@ Public Sub StartApp()
     Call PurgeOldJournals
     Call PurgeOldLogs
     Call LogAppStart
+    ' Merni tajmer (modPerf): ukljucuje ga PERF_MERENJE u tblLocalConfig.
+    modPerf.PerfInitIzKonfiga
 
     ' SEF recovery ostaje non-blocking za startup.
     ' Sama procedura RecoverAllStuckSEFSendingInvoices sada salje monitoring.

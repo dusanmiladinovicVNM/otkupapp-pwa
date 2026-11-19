@@ -14712,6 +14712,72 @@ SABOTAZE = {
         "T_KesTabele_RollbackZastareva",
         "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
     ),
+    # --- Merni tajmer (modPerf), testovi 392-398 ---
+    # Iskljucen merac otvara akciju -- merenje bi radilo i kad je ugaseno.
+    "perf-iskljucen-otvara-akciju": (
+        "modPerf.bas",
+        "    If gPerfOn Then\n"
+        "        If mAkcijaDub > 0 Then\n"
+        "            If SadMs() - mAkcijaT0 > PERF_ZASTARELA_MS Then\n",
+        "    If True Then   ' SABOTAZA: iskljucen merac otvara akciju\n"
+        "        If mAkcijaDub > 0 Then\n"
+        "            If SadMs() - mAkcijaT0 > PERF_ZASTARELA_MS Then\n",
+        "T_Perf_IskljucenNistaNeBelezi",
+        "392 iskljucen merac ne otvara akciju",
+    ),
+    # Self ne oduzima decu -- spoljna sekcija bi nosila vreme unutrasnje dvaput.
+    "perf-self-bez-dece": (
+        "modPerf.bas",
+        "    mSelf(k) = mSelf(k) + d - mStDete(mDub)\n",
+        "    mSelf(k) = mSelf(k) + d   ' SABOTAZA: self ne oduzima decu\n",
+        "T_Perf_UgnjezdenoSelfIUkupno",
+        "393 self spoljne sekcije = ukupno minus deca",
+    ),
+    # Zaostala sekcija se zatvara tiho -- izlaz kroz gresku se ne bi video.
+    "perf-nezatvorena-tiho": (
+        "modPerf.bas",
+        "            Do While mDub > nadjen\n"
+        "                mNezatvorenih = mNezatvorenih + 1\n",
+        "            Do While mDub > nadjen   ' SABOTAZA: zaostala sekcija se ne broji\n",
+        "T_Perf_TolerantStek",
+        "394 zaostala sekcija se broji kao nezatvorena",
+    ),
+    # Ugnjezdena akcija drugog imena se gubi -- npr. programski Change unutar
+    # Sacuvaj (UI-7) ne bi bio vidljiv u merenju.
+    "perf-ugnjezdena-akcija-nestaje": (
+        "modPerf.bas",
+        "                PerfPocni PERF_UGNJ & naziv\n",
+        "                ' SABOTAZA: ugnjezdena akcija se ne belezi\n",
+        "T_Perf_UgnjezdenaAkcija",
+        "395 ugnjezdena akcija drugog imena je sekcija spoljne",
+    ),
+    # Merac brise Err pozivaoca -- kuka pod On Error Resume Next bi menjala ishod.
+    "perf-brise-err": (
+        "modPerf.bas",
+        "    If errNum <> 0 Then\n"
+        "        Err.Number = errNum\n",
+        "    If False Then   ' SABOTAZA: Err pozivaoca se ne vraca\n"
+        "        Err.Number = errNum\n",
+        "T_Perf_ErrNeutralan",
+        "396 pocetak sekcije ne menja Err pozivaoca",
+    ),
+    # Sat ide unazad -- sva trajanja bi bila negativna.
+    "perf-sat-unazad": (
+        "modPerf.bas",
+        "        SadMs = CDbl(c - mQpcBaza) * mMsPoJedinici\n",
+        "        SadMs = -CDbl(c - mQpcBaza) * mMsPoJedinici   ' SABOTAZA: sat ide unazad\n",
+        "T_Perf_QpcMonoton",
+        "397 sat je monoton",
+    ),
+    # Kuka u GetTableData ne broji citanje sa lista -- brojaci pre/posle bi
+    # pokazivali nulu.
+    "perf-gtd-ne-broji": (
+        "modDataAccess.bas",
+        '    If gPerfOn Then PerfVelicina "DA.GTD|" & tblName, tblName, lo.DataBodyRange.rows.count, lo.DataBodyRange.Columns.count\n',
+        "    ' SABOTAZA: citanje sa lista se ne broji\n",
+        "T_Perf_GetTableDataBroji",
+        "398 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)",
+    ),
 }
 
 

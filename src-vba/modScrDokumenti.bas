@@ -2172,7 +2172,9 @@ Public Function Scr_Save(ByVal polja As Object) As String
         ' tudji dokument. Blok je upisan i ceka u listi "Bez otpremnice".
         poruke = Trim$(poruke & "  " & putGreska)
     ElseIf ruta = RUTA_LANAC Then
+        If gPerfOn Then PerfPocni "OTK.AutoLanacHladnjaca"
         modAutoHladnjaca.AutoLanacHladnjaca res, lanacPoruka
+        If gPerfOn Then PerfKraj "OTK.AutoLanacHladnjaca"
         If Len(lanacPoruka) > 0 Then poruke = Trim$(poruke & "  " & lanacPoruka)
     ElseIf ruta = RUTA_NACRT Then
         veza = VeziZaAktivnu(res)

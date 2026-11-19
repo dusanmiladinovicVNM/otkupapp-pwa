@@ -114,10 +114,12 @@ End Function
 Private Sub BuildWarm()
     On Error GoTo EH
     m_warming = True
+    If gPerfOn Then PerfAkcijaPocni "ONTIME.WARM"
     BeginTableCache
     Dim res As Collection
     Set res = GetActiveDocumentsForStorno("Svi", "")
     EndTableCache
+    If gPerfOn Then PerfAkcijaZavrsi "ONTIME.WARM"
     Set g_stornoDocs = res
     m_stornoDirty = False
     m_warming = False
@@ -126,6 +128,7 @@ EH:
     LogErr MOD_NAME & ".BuildWarm"
     On Error Resume Next
     EndTableCache
+    If gPerfOn Then PerfAkcijaZavrsi "ONTIME.WARM"
     m_warming = False
 End Sub
 

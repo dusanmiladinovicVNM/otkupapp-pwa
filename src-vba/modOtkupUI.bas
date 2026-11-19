@@ -4521,6 +4521,7 @@ End Sub
 ' DISPATCHER
 '=====================================================================
 Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant)
+    Dim perfAkc As String
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     ' Kontrole faze (splash, prijava, mini kartica) nose tag "fz..." i idu u
@@ -4530,6 +4531,8 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
         modUiFaze.FazaEvent tag, ev, arg
         Exit Sub
     End If
+    ' Merni tajmer (modPerf): svaka radnja operatera je jedna akcija.
+    If gPerfOn Then perfAkc = "UI." & ev & "." & PerfTagKlasa(tag): PerfAkcijaPocni perfAkc: PerfNapomena "ekran=" & mScreen
     Select Case ev
         Case "Click":    UiClick tag
         Case "DblClick": UiDblClick tag
@@ -4543,6 +4546,7 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
         Case "Commit":   ' rezervisano: normalizacija vrednosti posle unosa
         Case "Scroll":   ' rezervisano: zone sa sopstvenim klizacem
     End Select
+    If Len(perfAkc) > 0 Then PerfAkcijaZavrsi perfAkc
 End Sub
 
 ' Desni klik. Danas radi jedno: bira red na koji je pokazano, da radnja nad
@@ -6546,6 +6550,7 @@ End Function
 
 Public Sub RefreshFromData()
     On Error Resume Next
+    If gPerfOn Then PerfAkcijaPocni "REFRESH"
     modUiData.ResetCache
     ' i izvedene mape aktivnog ekrana - kasno vezano, ekran ne mora da ima
     Application.Run modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), _
@@ -6562,6 +6567,7 @@ Public Sub RefreshFromData()
     OsveziPrikaz
     ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
     RefreshOtpTraka mFrm
+    If gPerfOn Then PerfAkcijaZavrsi "REFRESH"
 End Sub
 
 ' OSVEZI PRIKAZ, NE PODATKE: za promenu konteksta koja ne menja tabele
@@ -8875,7 +8881,9 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
         Exit Sub
     End If
 
+    If gPerfOn Then PerfNapomena "rezim=" & ActiveMode: PerfPocni "UI.Commit.ScrSave"
     greska = modUiScreens.ScrSave(mScreen, p)
+    If gPerfOn Then PerfKraj "UI.Commit.ScrSave"
     If Len(modUiScreens.ScrLastErr) > 0 Then
         Debug.Print "modOtkupUI.CommitDokument: " & modUiScreens.ScrLastErr
         ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & modUiScreens.ScrLastErr, True
@@ -8907,7 +8915,9 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
 
     ' Uspeh: poruke koje je ekran vratio idu u toast, forma se prazni, podaci
     ' se citaju ponovo (KPI, liste).
+    If gPerfOn Then PerfPocni "UI.Commit.ClearForm"
     ClearForm
+    If gPerfOn Then PerfKraj "UI.Commit.ClearForm"
     RefreshFromData
     Dim dopuna As String
     If p.Exists("poruke") Then dopuna = Trim$(CStr(p("poruke")))
@@ -8946,7 +8956,9 @@ Private Sub Dijalog(ByVal txt As String)
         mDijalogTest = txt
         Exit Sub
     End If
+    If gPerfOn Then PerfPocni "UI.CekaOperatera"
     MsgBox txt, vbExclamation, APP_NAME
+    If gPerfOn Then PerfKraj "UI.CekaOperatera"
 End Sub
 
 ' TEST SEAM (KI-011): ceo potez "Sacuvaj" kroz CommitDokument -- isti put kojim
