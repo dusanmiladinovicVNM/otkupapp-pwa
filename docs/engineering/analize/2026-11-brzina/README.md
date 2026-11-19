@@ -219,8 +219,8 @@ commit):
 | IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **zeleno 19.11.** (izbor testova + FULL; dokaz 2 sidra 2/2) |
 | IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **zeleno 19.11.** (izbor testova + FULL) |
 | IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **zeleno 19.11.** (izbor testova + FULL) |
-| PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **neverifikovano** |
-| PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **neverifikovano** |
+| PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (izbor testova) |
+| PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (izbor testova) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -231,9 +231,13 @@ commit):
   suite-ova zeleno, `RunAllTests` 389/389, BFP 3.499/3.499, GREEN marker upisan.
   Testovi 387–389 i dokaz `izvestaji-pretraga-puni-iznova` i
   `izvestaji-rang-kontekst-prazan` 2/2 DOKAZANO. Compile je u prolazu preskočen.
+- **Posle ojačanja 19.11.:** testovi 387–391 zeleni (izbor), dokaz dva pomerena
+  sidra Izveštaja ponovljen 2/2.
 - **Na Windows-u ostaje:**
   - Compile;
-  - testovi 390–391 (ojačanja po pregledu);
+  - dokaz u oba smera za nove testove 384–391 (10 sabotaža u katalogu):
+    `python tools/dokaz.py --izbor --radnika 4 izv1- otk1- izv3- izv2-naziv
+    izv9- izv7- hld1- kes-rollback`;
   - još jedan pun prolaz `python tools/run_vba.py` posle ojačanja, jer su
     dirani `clsTransaction` (rollback) i `modStanicaLock`;
   - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
