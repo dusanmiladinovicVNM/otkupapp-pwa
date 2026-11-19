@@ -237,6 +237,12 @@ commit):
   (384–391) 10/10 DOKAZANO.
 - **FULL posle ojačanja 19.11.:** svih 12 suite-ova zeleno, BFP 3.499/3.499,
   GREEN marker upisan nad konačnim `src-vba/` grane.
+- **Pregled 19.11. (TEST390-REV-01):** testovi 386, 387 i 390 su pisali u fixture
+  kroz `UpdateCell`, koji pečatira `ModifiedAt`/`ModifiedBy`. Vraćanje vrednosti
+  nije vraćalo audit. Sada kvar ide u transakciji sa snimkom tabele i obaveznim
+  rollback-om, a test tvrdi da je cela tabela, i audit, posle testa ista kao pre.
+  Ostaje: ciljani testovi 386, 387, 390 i `dokaz.py --izbor --radnika 4 izv3-
+  izv2-naziv hld1-`.
 - **Ostaje pred merge** (ručno, nad kopijom prave sveske):
   - ručni Compile (`run_vba` ga preskače uz suite);
   - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
