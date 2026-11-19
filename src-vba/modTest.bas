@@ -3724,6 +3724,32 @@ Private Sub T_Oporavak_CiljneListe()
     AssertEq (InStr(vozaci, FX_KUPAC) > 0), True, _
              "vlasnik je kompozit -- uz vozaca se vidi i kupac"
 
+    ' --- ISTA KOLIZIJA U KANONSKOM OBLIKU: bez generacije ---
+    '
+    ' Fixture zbirne nose GeneracijaID, pa iznad red grupise IDENTITET, a kljuc
+    ' broj + vlasnik se ne izvrsava (sabotaza oporavak-cilj-po-broju nije
+    ' obarala nista, dokaz 19.11.2026). Kanonski pisac generaciju NE pise
+    ' (CreateZbirna_TX; A20), pa je bas taj kljuc put svake zbirne koju aplikacija
+    ' pravi. Generacija se brise i vraca PRE tvrdnje, uz kes liste u oba smera.
+    Dim pGenD1 As String, pGenD2 As String, duplihBezGen As Long
+    pGenD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID))
+    pGenD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID, ""
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID, ""
+    modUiData.ResetCache
+    d = modScrOporavak.Scr_Rows("sve", "")
+    If IsArray(d) Then
+        redovi = d(1)
+        For i = 1 To CLng(d(2))
+            If CStr(redovi(i, 1)) = FX_ZBIRNA_DUPL Then duplihBezGen = duplihBezGen + 1
+        Next i
+    End If
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID, pGenD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID, pGenD2
+    modUiData.ResetCache
+    AssertEq duplihBezGen, 2, _
+             "i bez generacije isti broj kod dva vozaca daje DVA cilja -- kljuc je broj + vlasnik"
+
     ' --- KOLIZIJA BROJEVA: dva kupca, isti broj -> DVA reda ---
     modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
     d = modScrOporavak.Scr_Rows("sve", "")
@@ -4867,12 +4893,19 @@ Private Sub T_ZamenaZbirne_NeDiraDecuTudje()
     AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
              "preduslov: tudja otpremnica visi na tom broju"
 
+    ' Dokument se imenuje ZbirnaID-em (S4-2). Do sada je ovde stajala generacija
+    ' ("GEN-ZB-K1"), pa je ScanZbirna pao na proveri para PRE kapije moda i test
+    ' je bio zelen i bez nje (dokaz 19.11.2026: NE OBARA SVOJ TEST).
     Set res = modStornoFlow.RunZbirnaCorrection(FX_ZBIRNA_KASK, SV_MODE_DUPLI, _
-                                                False, "GEN-ZB-K1")
+                                                False, "ZBI-KASK-1")
     AssertEq CBool(res("success")), False, _
              "DUPLI staje dok broj nose dva aktivna dokumenta"
-    AssertEq (Len(CStr(res("message"))) > 0), True, _
-             "razlog se IMENUJE -- tiho odbijanje je isto sto i tiha steta"
+    ' Bez kapije moda DUPLI i dalje ne uspe -- zaustavi ga kapija u transakciji
+    ' (StornoZbirnaIDetach_TX), ali tek POSLE zapisa konteksta ispravke i uz
+    ' genericko "Storno zbirne nije uspeo". Zato se tvrdi tekst kapije moda.
+    AssertEq (InStr(1, CStr(res("message")), "Zamena bi prevezala decu", _
+                    vbTextCompare) > 0), True, _
+             "razlog se IMENUJE -- staje kapija moda, ne genericki neuspeh transakcije"
 
     ' Nista nije dirano: ni izabrano zaglavlje, ni tudje, ni deca.
     AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), False, _
@@ -5281,11 +5314,11 @@ Private Sub T_StornoImpact_PoIdentitetu()
     ' PREDUSLOV: i DRUGI dokument istog broja ima svoju paletu -- inace test ne meri
     ' suzavanje nego prazan skup. Do S8 reza 2a-1 se to merilo uvidom po golom
     ' broju (palete OBA dokumenta); taj pad na broj je obrisan (R4, broj je
-    ' labela), pa se preduslov meri identitetom drugog dokumenta.
-    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "PRJ-TEST-Z1")
-    Set pal = m("palete")
-    AssertEq pal.count, 1, "preduslov: i drugi dokument istog broja ima svoju paletu"
+    ' labela). Preduslov se meri iz TABELE, ne uvidom: uvid drugog dokumenta ide
+    ' kroz isto suzavanje koje test meri, pa bi svako kvarenje suzavanja palo vec
+    ' ovde (sabotaza uvid-palete-po-broju je tako obarala preduslov, ne tvrdnju).
+    AssertEq (GajbicaZaDokument("PRJ-TEST-Z1") > 0), True, _
+             "preduslov: i drugi dokument istog broja ima svoju paletu"
 
     ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
@@ -5499,13 +5532,24 @@ VRATI:
     ' tudju kapiju. Mereno: poruka je bila "Kolona PrijemnicaID ne postoji u
     ' tblPaletaStavka" iz modStornoFlow.CountActive.
     '
-    ' PaletaID u BuildStornoImpact cita JEDINO GetPaleteImpactByField, pa je ovo
-    ' jedina tvrdnja koja meri strogost same paletne sekcije.
+    ' PaletaID u BuildStornoImpact cita GetPaleteImpactByField -- ali od S6 koraka
+    ' 4 ne samo paletna sekcija: lanac pita i da li je roba na PRERADJENOJ paleti
+    ' (modStornoFlow.PrijemnicaNaPreradjenojPaleti), istim strogim citacem i
+    ' RANIJE, kad dokument palete IMA. Nad Z2 je zato drift PaletaID obarao uvid
+    ' u lancu, a sabotaza strogosti paletne sekcije nije obarala nista (dokaz
+    ' 19.11.2026). Zato se meri dokument BEZ paleta: lanac tada PaletaID ne cita,
+    ' a paletna sekcija i dalje mora da proveri kolone pre nego sto prebroji redove.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "22/150326", _
+                                             "", FX_PRJ_FAK3, True)
+    AssertEq CBool(m("valid")), True, _
+             "pozitivna kontrola: dokument bez paleta daje valjan uvid"
+    AssertEq m("palete").count, 0, "pozitivna kontrola: taj dokument nema palete"
+
     Set lo = GetTable(TBL_PALETA_STAVKA)
     On Error GoTo VRATI_PAL
     lo.ListColumns(COL_PALS_PALETA_ID).name = COL_PALS_PALETA_ID & "_DRIFT"
-    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "PRJ-TEST-Z2", True)
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, "22/150326", _
+                                             "", FX_PRJ_FAK3, True)
     validPodPalDriftom = CBool(m("valid"))
 VRATI_PAL:
     On Error Resume Next
@@ -5816,6 +5860,24 @@ Private Sub T_StornoImpact_NestaoIdentitetJeInvalidan()
                                              "", "GEN-NE-POSTOJI", True)
     AssertEq CBool(m("valid")), False, _
              "nestao identitet ZBIRNE obara uvid"
+
+    ' ...I U LANCU, NE SAMO U ZAGLAVLJU. Od S4-2 (review #371) zaglavlje uvida ima
+    ' svoju kapiju identiteta (modStornoImpact.ZbrIdUvid) i ona ide PRVA, pa
+    ' tvrdnja iznad pada u zaglavlju i kapiju para u ScanZbirna ne vidi (sabotaza
+    ' zbirna-ne-proverava-par nije obarala nista, dokaz 19.11.2026). ScanZbirna
+    ' ima i citaoce mimo zaglavlja (pregled PONISTENJA), pa se njegova kapija meri
+    ' direktno, kroz javni citac zastavica -- uz kontrolu da svoj identitet prolazi.
+    Dim flg As Object, errLanac As Long, errLanacSvoj As Long
+    On Error Resume Next
+    Set flg = modStornoFlow.GetChainFlags(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "ZBI-TEST-1", True)
+    errLanacSvoj = Err.Number
+    Err.Clear
+    Set flg = modStornoFlow.GetChainFlags(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "GEN-NE-POSTOJI", True)
+    errLanac = Err.Number
+    On Error GoTo 0
+    AssertEq errLanacSvoj, 0, "pozitivna kontrola: lanac zbirne sa SVOJIM identitetom se cita"
+    AssertEq (errLanac <> 0), True, _
+             "nestao identitet ZBIRNE obara i lanac, ne samo zaglavlje uvida"
 
     ' Bez identiteta oba i dalje rade po broju -- zatecen zapis nema generaciju.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
@@ -6324,8 +6386,9 @@ Private Sub T_PaletaDvoklik_OtvaraStavke()
     modScrPalete.Scr_PalTestSet "PALETE"
     ' Zona koje NEMA ne sme da izgleda kao pad ekrana. Ekran u Scr_Rows dopunjava
     ' svoju zonu; kad zone nema, On Error Resume Next gresku preskoci ali je ostavi
-    ' postavljenu, pa je ScrGridData procita kao pad i isprazni mrezu. Ovo je merenje
-    ' bas tog puta -- harness nema zonu, kao ni ekran koji je pukao u gradnji.
+    ' postavljenu. Od KI-014 ScrGridData vracenu listu uz zaostao Err cita kao
+    ' ZAOSTATAK (ScrRunIshod), ne kao pad -- pa ova tvrdnja meri citaoca, a ne vise
+    ' i ScreenZone. Sam ScreenZone meri korak 5, nad izgradjenom formom.
     d = modUiScreens.ScrGridData("PALETE", "sve", "")
     AssertEq modUiScreens.ScrLastErr, "", _
              "procitana lista se ne prijavljuje kao pad ekrana"
@@ -6363,6 +6426,24 @@ Private Sub T_PaletaDvoklik_OtvaraStavke()
 
     modScrPalete.Scr_PalTestSet "PALETE"
     modOtkupUI.GridTestLoad ""
+
+    ' 5) ZONA KOJE NEMA NE OSTAVLJA GRESKU POZIVAOCU. Meri se ScreenZone sam:
+    ' citalac mreze ga od KI-014 vise ne odaje (korak gore), a bez forme
+    ' ScreenZone izlazi pre citanja zone (mFrm Is Nothing), pa test pusten SAM
+    ' ne bi ni stigao do reda koji meri. Zato forma, i kljuc koji ne postoji.
+    ' Ide POSLEDNJI: forma ne sme da promeni stanje ljuske za korake iznad.
+    Dim f As frmOtkupUI, z As Object, zonaErr As Long, prevMode As String
+    prevMode = modOtkupUI.ActiveMode
+    Set f = NewOtkupUIForm()
+    Err.Clear
+    Set z = modOtkupUI.ScreenZone("NEMA_TAKVE_ZONE")
+    zonaErr = Err.Number
+    Err.Clear
+    Unload f
+    modOtkupUI.GridOtkaciFormuTest
+    modOtkupUI.ActiveMode = prevMode
+    AssertEq zonaErr, 0, "zona koje nema ne ostavlja gresku u Err pozivaoca"
+    AssertEq (z Is Nothing), True, "zona koje nema je Nothing"
 End Sub
 
 ' 77. Nova prerada: cetvrta lista, izbor po identitetu, neto kao racun
@@ -26776,11 +26857,15 @@ Private Sub T_Maticni_KapijeUpisaIZivotniCiklus()
     odgKorStatus = modMaticniKorisnici.KorPromeniStatus(1, noviStatus)
     modMaticniUnos.MatBranaZatvoriTest False
 
-    AssertEq (Len(odgKorDodaj) > 0), True, _
+    ' Meri se RAZLOG odbijanja, ne samo da ga ima. polja je ovde recnik
+    ' ambalaze (bez korisnickog imena), pa KorDodaj i KorIzmeni odbija i
+    ' validacija: tvrdnja "Len > 0" je prolazila i bez kapije, a pisac bez
+    ' kapije je oborio tek promenu statusa -- i pritom je izmenio red 1.
+    AssertEq odgKorDodaj, Poruka("MATU_ERR_BEZ_PRAVA"), _
              "pisac naloga odbija unos kad kapija ne pusta"
-    AssertEq (Len(odgKorIzmeni) > 0), True, _
+    AssertEq odgKorIzmeni, Poruka("MATU_ERR_BEZ_PRAVA"), _
              "pisac naloga odbija izmenu kad kapija ne pusta"
-    AssertEq (Len(odgKorStatus) > 0), True, _
+    AssertEq odgKorStatus, Poruka("MATU_ERR_BEZ_PRAVA"), _
              "pisac naloga odbija promenu statusa kad kapija ne pusta"
     ' Odbijeno znaci i NEDIRNUTO: promena statusa ne sme da vrati novu vrednost.
     AssertEq noviStatus, "", "odbijena promena statusa nista nije izracunala"
@@ -27699,11 +27784,14 @@ Private Sub T_ZbirnaKapija_AktivanBrojNeSmeDvaput()
     AssertEq (InStr(1, oznakaSiroceta, "P") > 0), True, "I1: aktivna prijemnica daje oznaku izvora P"
     AssertEq (InStr(1, oznakaSiroceta, "Z") > 0), False, "I1: siroce nema zbirnu, pa nema oznaku Z"
 
+    ' A18 PRVA: i rInteg ispod meri ISTOG vlasnika (FX_VOZAC + FX_KUPAC) nad
+    ' aktivnim brojem, pa bi kapija koja pusta istog vlasnika pala tamo, pod
+    ' imenom generacije (dokaz 19.11.2026: PALA DRUGA TVRDNJA).
+    AssertEq rAktivanIsti, ZBR_GATE_AKTIVNA, _
+             "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan"
     AssertEq rInteg, ZBR_GATE_AKTIVNA, _
              "aktivan red bez generacije zaustavlja nov unos -- kao AKTIVNA, ne kao kvar"
     AssertEq rAktivan, ZBR_GATE_AKTIVNA, "aktivan broj ne prima nov unos od drugog vlasnika"
-    AssertEq rAktivanIsti, ZBR_GATE_AKTIVNA, _
-             "A18: ni ISTI vlasnik ne sme dvaput dok je dokument aktivan"
     AssertEq rRazmaci, ZBR_GATE_AKTIVNA, _
              "A15: razmaci ne otvaraju rupu koju sirovo poredjenje pusta"
     AssertEq rNov, "", "nov broj PROLAZI -- kapija ne odbija sve"
