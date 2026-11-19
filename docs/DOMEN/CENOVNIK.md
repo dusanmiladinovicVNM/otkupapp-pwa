@@ -7,7 +7,7 @@
 > grana na `f3215a0f`): FULL `run_vba` ZELENO (12 suita, `RunAllTests` 383/0,
 > BFP 3492/0); dokaz sabotaža cenovnika 45/45; ručni Compile prošao; migracija
 > na kopiji prave sveske stornirala je tačno zatečeni par (CEN-00001 uz
-> CEN-00003). Ručni UI smoke nije potvrđen (§10).
+> CEN-00003); ručni UI smoke prošao (operater, 19.11.2026).
 
 ## 1) Svrha i izvor
 
@@ -320,6 +320,8 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
   sopstveni fixture, 19.11.2026). Zatečeno propadanje kataloga; popravka ide posebnim
   rezom. Ostalih 33 nad `main`-om nije mereno (zaključak je iz statičke analize `--od`).
 - Ručni Compile (`Alt+F11 → Debug → Compile VBAProject`): prošao (operater, 19.11.2026).
+- Ručni UI smoke (operater, 19.11.2026): prošao -- Matični → Cenovnik (unos, Storniraj,
+  Ispravi, potvrda pre globalne cene) i forma otkupa (datum, OM, F1 → F4).
 - Kapija migracije na kopiji prave sveske (19.11.2026): `MigrirajDupleCene` je
   stornirao jedan red, CEN-00001 (Višnja Oblačinska, I, 19.06.), razlogom koji
   imenuje CEN-00003, sa `StorniranoAt` / `StorniranoBy`; ostali redovi netaknuti.
