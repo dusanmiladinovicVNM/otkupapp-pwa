@@ -3084,17 +3084,28 @@ Public Function NevezaneOtpremnice() As Object
     Set aktivno = AktivnoClanstvoPoKanonu(SRC)
     Set bila = BivseZbirneIzvora(SRC)
 
-    Dim cId As Long, cSto As Long, i As Long
-    Dim oidRaw As String, oid As String
+    Dim cId As Long, cSto As Long, cIzd As Long, i As Long
+    Dim oidRaw As String, oid As String, izdRaw As Variant
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    ' STATUS IZDAVANJA IZ REDA KOJI VEC DRZIMO, istim pravilom
+    ' (IzdatoStatusJeIzdato, review #362). Ranije je ovde stajao
+    ' OtpremnicaJeIzdata(oidRaw), dakle LookupValue -- puna kopija tblOtpremnica
+    ' ZA SVAKI RED tblOtpremnica, kvadratno po broju otpremnica. To se placalo
+    ' pri svakom snimanju otkupa na hladnjackoj stanici (auto-lanac ->
+    ' AutoZbirnaZaOtpremnicu), pri izdavanju uz auto-zbirnu i na listi NEVEZANE
+    ' (analiza brzine 2026-11, HLD-1). Bez kolone statusa vazi isto sto je
+    ' LookupValue vracao: prazno, dakle nije izdata.
+    cIzd = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS)
 
     For i = 1 To UBound(otp, 1)
         oidRaw = Trim$(NzToText(otp(i, cId)))
         oid = UCase$(oidRaw)
         If Len(oid) > 0 Then
             If StrComp(Trim$(NzToText(otp(i, cSto))), "Da", vbTextCompare) <> 0 Then
-                If OtpremnicaJeIzdata(oidRaw) Then
+                izdRaw = Empty
+                If cIzd > 0 Then izdRaw = otp(i, cIzd)
+                If IzdatoStatusJeIzdato(izdRaw) Then
                     If Not aktivno.Exists(oid) Then
                         If bila.Exists(oid) Then
                             res(oid) = CStr(bila(oid))

@@ -598,7 +598,7 @@ SABOTAZE = {
     # --- S4-2c/2b-1: citaoci za ekrane zbirne
     "zbirna-nevezane-nude-nacrt": (
         "modDokumenta.bas",
-        "                If OtpremnicaJeIzdata(oidRaw) Then\n",
+        "                If IzdatoStatusJeIzdato(izdRaw) Then\n",
         "                If True Then   ' SABOTAZA: i nacrt se nudi kao izvor\n",
         "Test_ZBR_NevezaneSamoIzdateISlobodne",
         "ZBR nevezane: NACRT otpremnice se ne nudi",
