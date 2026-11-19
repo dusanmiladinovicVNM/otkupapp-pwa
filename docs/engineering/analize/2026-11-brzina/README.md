@@ -12,6 +12,43 @@ menjano.** Uz nju ide predlog tajmera za merenje na Windows-u.
 
 ## 0. Šta ovo jeste, a šta nije
 
+- **Stablo.** Analiza i svi brojevi linija važe za `main @f154530`. Grana je
+  19.11. rebase-ovana na `main @1a2293d` (33 commita, uglavnom cenovnik i
+  matični), pa sam proverio šta se pomerilo:
+  - **Nepromenjeni** su `modPrint`, `modDokumenta`, `modAmbalaza`,
+    `modAutoHladnjaca`, `modMasterSync`, `modJournaling`, `clsTransaction`,
+    `modIzvestaj`, `modScrIzvestaji` i `modOtkup`. Zato OTK-1, HLD-1, knjiga
+    ambalaže, članstvo otpremnice, AutoSave i Izveštaji važe sa **istim**
+    linijama.
+  - `modDataAccess`: samo `AuditUser` je postao `Public`.
+  - `modScrDokumenti`: jedna linija komentara manje, pa su linije posle `2620`
+    pomerene za −1.
+  - `modOtkupUI` je pomeren za +9 do +340 linija. Na novom stablu:
+    - `UiEvent` 4523;
+    - `RefreshKpi` 4480;
+    - `RefreshFromData` 6547;
+    - `OsveziNavBrojace` 6513;
+    - `FillZbirneCombo` 7220;
+    - `RefillMaticniCombos` 7404;
+    - `UiHover` 5540;
+    - `RenderGrid` 3107;
+    - `LayoutGrid` 2829;
+    - `CommitDokument` 8821;
+    - `SelectModeCore` 4154;
+    - `UiChange` 5437;
+    - `OnStanicaChanged` 9152;
+    - `SaldoOMUkupno` 8346;
+    - `RefreshOtpTraka` 956.
+  - **UI-8 i dalje važi:** kvadratni sort zbirnih je netaknut u novom
+    `FillZbirneCombo`, oko linije 7320.
+  - **Novo na `main`-u, nije analizirano:**
+    - `SelectModeCore` i `OnStanicaChanged` sada zovu `AutoFillCena`, a on
+      zove `modCenovnik.TryVazecaCena` za jednu ili dve klase.
+    - To je novi trošak pri promeni režima i stanice. Ako se potvrdi kaskada
+      UI-7, ide i posle svakog snimanja.
+    - Cena `TryVazecaCena` nije čitana. Tajmer je hvata kroz akciju
+      `UI.Change.*`.
+
 - **Ništa nije mereno.** Sva vremena u ovom dokumentu su **PROCENE** dobijene iz
   čitanja koda i pretpostavljenih veličina tabela. Sveska `.xlsm` nije u repou.
   Broj redova, formule u listovima i uslovno formatiranje se ne vide, a

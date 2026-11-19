@@ -2,6 +2,8 @@
 
 Predlog, ne izmena koda. U `src-vba/` nista nije dodato. Skica modula je u `modPerf-skica.bas.txt` (ekstenzija `.txt` da je ne bi pokupili VBA alati i hook). Fajl je u repou sa LF krajem reda; kad ide u `src-vba/modPerf.bas`, mora biti CRLF (inace ga `vba_check` obara kao KRAJ_REDA, a Import ga ne cita kako treba).
 
+**Brojevi linija** u tackama merenja i u komentaru `POZIVNA MESTA` skice vaze za `main @f154530`. Na `main @1a2293d` je od tih modula pomeren samo `modOtkupUI` (npr. `UiEvent` 4274 -> 4523, `RefreshFromData` 6264 -> 6547; spisak je u `README.md` §0); ostali moduli su netaknuti. Skica je ponovo proverena nad kopijom `1a2293d`: `vba_check` cisto, `who_writes --check-ownership` exit 0.
+
 **Provereno u ovoj sesiji:** skica ubacena u KOPIJU repoa kao `src-vba/modPerf.bas` (CRLF): `python tools/vba_check.py` -- cisto nad celim `src-vba/`; `python tools/who_writes.py --check-ownership` -- exit 0, modPerf nije pisac. **Nije provereno:** Compile u Excelu, ijedan test, ponasanje QPC/Currency na 32/64-bit, nijedan hook u postojecim modulima (oni su samo opisani, nisu ni ubaceni).
 
 
