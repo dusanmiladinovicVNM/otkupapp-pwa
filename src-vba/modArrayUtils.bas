@@ -211,6 +211,66 @@ Private Sub MergeSortIndex(ByRef idx() As Long, ByRef tmp() As Long, _
     Next k
 End Sub
 
+' Stabilno OPADAJUCE sortiranje po BROJU: vraca permutaciju indeksa nad
+' granicama vals (rezultat(i) = indeks i-tog po redu). Od jednakih vrednosti
+' raniji ostaje prvi -- tacno poredak koji daje mehurasto sortiranje sa strogim
+' "<" (dva stabilna sortiranja nad istim poretkom daju isti rezultat), samo
+' O(n log n). Postoji zbog ranga kooperanata (analiza brzine 2026-11, IZV-7);
+' SortArrayPoKljucu bi trazio da se iznos prevede u tekst, a to bi bliske ili
+' negativne iznose poredilo drugacije.
+Public Function IndeksiPoBrojuOpadajuce(ByRef vals() As Double) As Long()
+    Dim lo As Long, hi As Long, i As Long
+    Dim idx() As Long, tmp() As Long
+    lo = LBound(vals)
+    hi = UBound(vals)
+    ReDim idx(lo To hi)
+    ReDim tmp(lo To hi)
+    For i = lo To hi
+        idx(i) = i
+    Next i
+    MergeSortIndexBrojOpad idx, tmp, vals, lo, hi
+    IndeksiPoBrojuOpadajuce = idx
+End Function
+
+Private Sub MergeSortIndexBrojOpad(ByRef idx() As Long, ByRef tmp() As Long, _
+                                   ByRef vals() As Double, ByVal lo As Long, _
+                                   ByVal hi As Long)
+    If lo >= hi Then Exit Sub
+
+    Dim sred As Long, i As Long, j As Long, k As Long
+    sred = (lo + hi) \ 2
+    MergeSortIndexBrojOpad idx, tmp, vals, lo, sred
+    MergeSortIndexBrojOpad idx, tmp, vals, sred + 1, hi
+
+    i = lo
+    j = sred + 1
+    k = lo
+    Do While i <= sred And j <= hi
+        ' >= drzi stabilnost: od jednakih vrednosti levi (raniji) ide prvi.
+        If vals(idx(i)) >= vals(idx(j)) Then
+            tmp(k) = idx(i)
+            i = i + 1
+        Else
+            tmp(k) = idx(j)
+            j = j + 1
+        End If
+        k = k + 1
+    Loop
+    Do While i <= sred
+        tmp(k) = idx(i)
+        i = i + 1
+        k = k + 1
+    Loop
+    Do While j <= hi
+        tmp(k) = idx(j)
+        j = j + 1
+        k = k + 1
+    Loop
+    For k = lo To hi
+        idx(k) = tmp(k)
+    Next k
+End Sub
+
 Private Sub QuickSortIndex(ByRef idx() As Long, ByRef data As Variant, _
                            ByVal sortCol As Long, ByVal low As Long, _
                            ByVal high As Long, ByVal ascending As Boolean, _

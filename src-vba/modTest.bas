@@ -757,6 +757,7 @@ Public Sub RunAllTests()
     RunOne 386
     RunOne 387
     RunOne 388
+    RunOne 389
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1388,6 +1389,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 386: TestName = "T_KesIzvedeno_ZbirniIstiUzKes"
         Case 387: TestName = "T_Izv_NazivEntitetaJednomPoKontekstu"
         Case 388: TestName = "T_Izv_CipoviCitajuKesLjuske"
+        Case 389: TestName = "T_Rang_StabilnoOpadajuce"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1784,6 +1786,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 386: T_KesIzvedeno_ZbirniIstiUzKes
         Case 387: T_Izv_NazivEntitetaJednomPoKontekstu
         Case 388: T_Izv_CipoviCitajuKesLjuske
+        Case 389: T_Rang_StabilnoOpadajuce
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24144,6 +24147,37 @@ Private Sub T_Izv_CipoviCitajuKesLjuske()
     AssertEq modUiData.KesImaKljuc(TBL_PRIJEMNICA), True, _
              "388 cipovi vrste i sorte citaju tblPrijemnica kroz kes ljuske"
     AssertEq s2, s1, "388 ponovljen upit daje iste cipove"
+End Sub
+
+' ============================================================
+' 389. RANG KOOPERANATA: STABILNO OPADAJUCE SORTIRANJE (brzina, IZV-7).
+' ============================================================
+' Rang je sortiran mehurasto (O(K^2) nad svim kooperantima sa otkupom u
+' periodu). Zamena je stabilno spajanje po broju
+' (modArrayUtils.IndeksiPoBrojuOpadajuce). Poredak mora ostati ISTI: opadajuce
+' po iznosu, a od jednakih iznosa raniji (prva pojava u podacima) ide prvi --
+' to je bio poredak mehurastog sortiranja sa strogim "<". Ocekivani niz je
+' izracunat starim algoritmom (Python simulacija, 20.000 slucajnih nizova,
+' 0 razlika). Rang nad fixture-om i dalje mere T_Izv_RangKooperanata i
+' T_Izv_RangSortIKontekst.
+Private Sub T_Rang_StabilnoOpadajuce()
+    Dim v() As Double, p() As Long, s As String, i As Long
+    Dim jedan() As Double, p1() As Long
+
+    ReDim v(1 To 7)
+    v(1) = 5: v(2) = 7: v(3) = 5: v(4) = 9: v(5) = 7: v(6) = 0: v(7) = -2
+    p = modArrayUtils.IndeksiPoBrojuOpadajuce(v)
+    For i = LBound(p) To UBound(p)
+        s = s & "|" & CStr(p(i))
+    Next i
+    AssertEq s, "|4|2|5|1|3|6|7", _
+             "389 rang: opadajuce po iznosu, jednaki iznosi redom prve pojave"
+    AssertEq LBound(p) & ":" & UBound(p), "1:7", "389 rang: permutacija prati granice ulaza"
+
+    ReDim jedan(1 To 1)
+    jedan(1) = 3
+    p1 = modArrayUtils.IndeksiPoBrojuOpadajuce(jedan)
+    AssertEq CStr(p1(1)), "1", "389 rang: jedan kooperant ostaje na mestu"
 End Sub
 
 ' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.

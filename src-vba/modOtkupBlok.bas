@@ -195,16 +195,24 @@ EH:
     LogErr "modOtkupBlok.KoopRangRows"
 End Function
 
-' Opadajuci sort paralelnih nizova po iznosu (umeren broj kooperanata -> bubble).
+' Opadajuci sort paralelnih nizova po iznosu. Stabilan: kooperanti istog
+' iznosa ostaju redom prve pojave u podacima, isto kao ranije mehurasto
+' sortiranje sa strogim "<" -- ali O(n log n). Period "sve" nad celim
+' sifarnikom je kvadratno placao (analiza brzine 2026-11, IZV-7).
 Private Sub SortDescByVal(ByRef ids() As String, ByRef vals() As Double)
-    Dim i As Long, j As Long, n As Long
-    n = UBound(vals)
-    For i = 1 To n - 1
-        For j = 1 To n - i
-            If vals(j) < vals(j + 1) Then
-                Dim tv As Double: tv = vals(j): vals(j) = vals(j + 1): vals(j + 1) = tv
-                Dim ts As String: ts = ids(j): ids(j) = ids(j + 1): ids(j + 1) = ts
-            End If
-        Next j
+    Dim p() As Long, i As Long, lo As Long, hi As Long
+    Dim ids2() As String, vals2() As Double
+    lo = LBound(vals)
+    hi = UBound(vals)
+    p = modArrayUtils.IndeksiPoBrojuOpadajuce(vals)
+    ReDim ids2(lo To hi)
+    ReDim vals2(lo To hi)
+    For i = lo To hi
+        ids2(i) = ids(p(i))
+        vals2(i) = vals(p(i))
+    Next i
+    For i = lo To hi
+        ids(i) = ids2(i)
+        vals(i) = vals2(i)
     Next i
 End Sub
