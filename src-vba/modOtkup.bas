@@ -1202,6 +1202,14 @@ Public Function StavkeOtkupaRedovi() As Variant
     Const SRC As String = "StavkeOtkupaRedovi"
 
     StavkeOtkupaRedovi = Empty
+    ' Kes izvedenog niza u prozoru citanja (zbirni izvestaji zovu ovaj citac
+    ' po entitetu; IZV-3/IZV-5). Van prozora ne radi nista. Pamti se samo
+    ' uspesan niz, na jedinom izlazu koji ga vraca (dole).
+    Dim izvMemo As Variant
+    If modDataAccess.IzvedenoTryGet("modOtkup.StavkeOtkupaRedovi", izvMemo) Then
+        StavkeOtkupaRedovi = izvMemo
+        Exit Function
+    End If
 
     Dim zagl As Object
     Set zagl = ZaglavljaOtkupaPoID(SRC)
@@ -1280,6 +1288,7 @@ Public Function StavkeOtkupaRedovi() As Variant
     Next i
 
     StavkeOtkupaRedovi = res
+    modDataAccess.IzvedenoPut "modOtkup.StavkeOtkupaRedovi", res
 End Function
 
 ' BrutoKg stavke: ISTA pravila koja pisac trazi na upisu (CreateOtkup_TX).

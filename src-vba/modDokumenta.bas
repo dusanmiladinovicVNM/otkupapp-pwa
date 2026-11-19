@@ -9275,6 +9275,14 @@ Public Function StavkePrijemniceRedovi() As Variant
     Const SRC As String = "StavkePrijemniceRedovi"
 
     StavkePrijemniceRedovi = Empty
+    ' Kes izvedenog niza u prozoru citanja (zbirni izvestaji zovu ovaj citac
+    ' po entitetu; IZV-3/IZV-5). Van prozora ne radi nista. Pamti se samo
+    ' uspesan niz, na jedinom izlazu koji ga vraca (dole).
+    Dim izvMemo As Variant
+    If modDataAccess.IzvedenoTryGet("modDokumenta.StavkePrijemniceRedovi", izvMemo) Then
+        StavkePrijemniceRedovi = izvMemo
+        Exit Function
+    End If
 
     Dim zagl As Object
     Set zagl = ZaglavljaPrijemnicePoID(SRC)
@@ -9359,6 +9367,7 @@ Public Function StavkePrijemniceRedovi() As Variant
     Next i
 
     StavkePrijemniceRedovi = res
+    modDataAccess.IzvedenoPut "modDokumenta.StavkePrijemniceRedovi", res
 End Function
 
 Private Function PrsBrutoIliPrazno(ByVal v As Variant) As Variant

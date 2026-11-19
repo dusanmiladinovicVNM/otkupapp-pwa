@@ -753,6 +753,8 @@ Public Sub RunAllTests()
     RunOne 384
     ' Brzina otkupnog lista (OTK-1): cista funkcija, bez sveske.
     RunOne 385
+    ' Brzina zbirnih izvestaja (IZV-3/IZV-5): kes izvedenih nizova.
+    RunOne 386
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1381,6 +1383,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 383: TestName = "T_Cen_KucanjeUEditoruNeDiraSortu"
         Case 384: TestName = "T_Izv_KontekstOsvezavaPrikazNePodatke"
         Case 385: TestName = "T_OtkList_RedoviStavkiKanonskimRedom"
+        Case 386: TestName = "T_KesIzvedeno_ZbirniIstiUzKes"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1774,6 +1777,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 383: T_Cen_KucanjeUEditoruNeDiraSortu
         Case 384: T_Izv_KontekstOsvezavaPrikazNePodatke
         Case 385: T_OtkList_RedoviStavkiKanonskimRedom
+        Case 386: T_KesIzvedeno_ZbirniIstiUzKes
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -23956,6 +23960,114 @@ Private Sub T_Izv_KesPretragaIHint()
 
     modScrIzvestaji.Scr_IzTestReset
 End Sub
+
+' ============================================================
+' 386. KES IZVEDENIH NIZOVA: ZBIRNI IZVESTAJI ISTI, STAVKE SE GRADE JEDNOM
+'      (brzina, IZV-3 / IZV-5).
+' ============================================================
+' Zbirni saldo po OM i saldo/roba po kupcima zovu pojedinacni Report* PO
+' ENTITETU, a svaki iznova gradi i validira stavke cele tabele
+' (StavkeOtkupaRedovi, DoplataStavkeRedovi, StavkePrijemniceRedovi). U prozoru
+' citanja (BeginTableCache -- PuniSnimak ga otvara za svaki snimak) se taj niz
+' sada pamti po imenu citaca.
+'
+' Mera je JEDNAKOST: isti izvestaj bez prozora (nema kesa, put kakav je bio) i u
+' prozoru mora dati isti sadrzaj, celiju po celiju -- a brojac pogodaka
+' dokazuje da je kes stvarno korisceni put, ne zaobidjen. Uz to: vracen niz je
+' kopija (izmena ne dira kes), upis kroz modDataAccess prazni kes, a van
+' prozora kesa nema. Brojke se ne zakucavaju (relacije, ne golden).
+Private Sub T_KesIzvedeno_ZbirniIstiUzKes()
+    Dim bezOM As String, saOM As String, bezKup As String, saKup As String
+    Dim bezRob As String, saRob As String
+    Dim h0 As Long, hOM As Long, hKup As Long, hRob As Long
+    Dim hKopija As Long, hUpis As Long, hVan As Long
+    Dim a As Variant, b As Variant, prviOrig As String, prviPosle As String
+    Dim dubina As Long, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+
+    ' (1) Bez prozora: put kakav je bio, kesa nema.
+    bezOM = KesIzvPotpis(modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), IzvDoD()))
+    bezKup = KesIzvPotpis(modIzvestaj.ReportSaldoKupciZbirni(IzvOdD(), IzvDoD()))
+    bezRob = KesIzvPotpis(modIzvestaj.ReportRobaKupciZbirni(IzvOdD(), IzvDoD()))
+
+    On Error GoTo CleanUp
+    BeginTableCache
+    otvoren = True
+
+    ' (2) Isti izvestaji u prozoru.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saOM = KesIzvPotpis(modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), IzvDoD()))
+    hOM = modDataAccess.IzvedenoPogodakaTest() - h0
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saKup = KesIzvPotpis(modIzvestaj.ReportSaldoKupciZbirni(IzvOdD(), IzvDoD()))
+    hKup = modDataAccess.IzvedenoPogodakaTest() - h0
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saRob = KesIzvPotpis(modIzvestaj.ReportRobaKupciZbirni(IzvOdD(), IzvDoD()))
+    hRob = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    ' (3) Kopija po vrednosti: izmena vracenog niza ne dira zapamcen.
+    a = modOtkup.StavkeOtkupaRedovi()
+    If IsArray(a) Then
+        prviOrig = NzToText(a(1, 1))
+        a(1, 1) = "ZZ-386"
+    End If
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hKopija = modDataAccess.IzvedenoPogodakaTest() - h0
+    If IsArray(b) Then prviPosle = NzToText(b(1, 1))
+
+    ' (4) Upis kroz modDataAccess (ista vrednost, menja se samo audit) prazni kes.
+    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, COL_KOOP_ID, FX_KOOPERANT
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hUpis = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    EndTableCache
+    otvoren = False
+    dubina = modDataAccess.TableCacheDepth()
+
+    ' (5) Van prozora kesa nema.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hVan = modDataAccess.IzvedenoPogodakaTest() - h0
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If otvoren Then EndTableCache
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesIzvedeno_ZbirniIstiUzKes", errDesc
+
+    AssertEq (Len(bezOM) > 0 And Len(bezKup) > 0 And Len(bezRob) > 0), True, _
+             "386 preduslov: sva tri zbirna izvestaja imaju sadrzaj nad fixture-om"
+    AssertEq (Len(prviOrig) > 0), True, "386 preduslov: stavke otkupa postoje"
+    AssertEq saOM, bezOM, "386 zbirni saldo po OM je isti sa kesom izvedenih nizova"
+    AssertEq saKup, bezKup, "386 zbirni saldo po kupcima je isti sa kesom izvedenih nizova"
+    AssertEq saRob, bezRob, "386 zbirna roba po kupcima je ista sa kesom izvedenih nizova"
+    AssertEq (hOM > 0), True, "386 zbirni saldo po OM gradi stavke jednom, ostalo iz kesa"
+    AssertEq (hKup > 0), True, "386 zbirni saldo po kupcima gradi stavke prijemnica jednom"
+    AssertEq (hRob > 0), True, "386 zbirna roba po kupcima gradi stavke prijemnica jednom"
+    AssertEq hKopija, 1, "386 ponovljen citac u prozoru ide iz kesa"
+    AssertEq prviPosle, prviOrig, "386 izmena vracenog niza ne dira zapamcen niz (kopija)"
+    AssertEq hUpis, 0, "386 upis kroz modDataAccess prazni kes izvedenih nizova"
+    AssertEq dubina, 0, "386 prozor kesa je zatvoren"
+    AssertEq hVan, 0, "386 van prozora citac ne pamti nista"
+End Sub
+
+' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.
+Private Function KesIzvPotpis(ByVal v As Variant) As String
+    Dim i As Long, j As Long, s As String
+    If Not IsArray(v) Then Exit Function
+    For i = LBound(v, 1) To UBound(v, 1)
+        For j = LBound(v, 2) To UBound(v, 2)
+            s = s & NzToText(v(i, j)) & "|"
+        Next j
+        s = s & vbLf
+    Next i
+    KesIzvPotpis = s
+End Function
 
 ' ============================================================
 ' 385. OTKUPNI LIST: STAVKE KANONSKIM REDOSLEDOM, JEDNIM PROLAZOM (brzina, OTK-1).
