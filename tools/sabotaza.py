@@ -4754,9 +4754,11 @@ SABOTAZE = {
         "        If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll\n"
         "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
         "        mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "        puni = True\n"
         "    End If\n",
         "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
-        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n",
+        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "    puni = True\n",
         "T_Izv_KesPretragaIHint",
         "tri citanja mreze = JEDNO punjenje snimka (pretraga ne placa pun prolaz)",
     ),
@@ -5054,8 +5056,8 @@ SABOTAZE = {
     # pojedinacnom ne sme da ispise prazan entitet "()".
     "izvestaji-rang-kontekst-prazan": (
         "modScrIzvestaji.bas",
-        "    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
-        "    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
+        "    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
+        "    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
         "T_Izv_RangSortIKontekst",
         "rang kontekst nije prazan entitet '()'",
     ),

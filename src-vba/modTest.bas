@@ -755,6 +755,7 @@ Public Sub RunAllTests()
     RunOne 385
     ' Brzina zbirnih izvestaja (IZV-3/IZV-5): kes izvedenih nizova.
     RunOne 386
+    RunOne 387
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1384,6 +1385,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 384: TestName = "T_Izv_KontekstOsvezavaPrikazNePodatke"
         Case 385: TestName = "T_OtkList_RedoviStavkiKanonskimRedom"
         Case 386: TestName = "T_KesIzvedeno_ZbirniIstiUzKes"
+        Case 387: TestName = "T_Izv_NazivEntitetaJednomPoKontekstu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1778,6 +1780,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 384: T_Izv_KontekstOsvezavaPrikazNePodatke
         Case 385: T_OtkList_RedoviStavkiKanonskimRedom
         Case 386: T_KesIzvedeno_ZbirniIstiUzKes
+        Case 387: T_Izv_NazivEntitetaJednomPoKontekstu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24054,6 +24057,64 @@ CleanUp:
     AssertEq hUpis, 0, "386 upis kroz modDataAccess prazni kes izvedenih nizova"
     AssertEq dubina, 0, "386 prozor kesa je zatvoren"
     AssertEq hVan, 0, "386 van prozora citac ne pamti nista"
+End Sub
+
+' ============================================================
+' 387. IZVESTAJI: NAZIV ENTITETA SE CITA JEDNOM PO KONTEKSTU (brzina, IZV-2).
+' ============================================================
+' Snimak je na SVAKI Scr_Rows -- svaki otkucaj pretrage i klik cipa -- citao
+' naziv entiteta iz sifarnika (LookupValue nad punom tabelom, van prozora
+' kesa), iako je snimak isti. Sada se naziv cita kad se prikazani kontekst
+' promeni ili je snimak tek napunjen.
+'
+' Mera sa dve strane. (a) Ime u sifarniku se menja MIMO upisa kroz UI (bez
+' ResetCache), pa pretraga nad istim snimkom mora da zadrzi naziv UCITANOG
+' konteksta -- da se sifarnik cita na otkucaj, novo ime bi se pojavilo. To je i
+' tacnije: naslov opisuje ucitane podatke (AUD-024 / FM-0029 #1). (b) Posle
+' upisa (ResetCache, isti poziv kao RefreshFromData) naziv prati novo ime.
+' Opseg od 5.1 je jedinstven za ovaj test (v. 129, 131, 384).
+Private Sub T_Izv_NazivEntitetaJednomPoKontekstu()
+    Dim d As Variant, imeOrig As String, od As Double
+    Dim n1 As String, nPretraga As String, nPosleUpisa As String
+    Dim errNum As Long, errDesc As String
+
+    od = CDbl(DateSerial(2026, 1, 5))
+    imeOrig = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, od, IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n1 = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+    ' (a) Ime promenjeno mimo UI upisa; pretraga nad istim snimkom.
+    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", "ZZ-387"
+    d = modScrIzvestaji.Scr_Rows("sve", "x")
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    nPretraga = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+    ' (b) Upis kroz UI podize generaciju -- sledece citanje vidi novo ime.
+    modUiData.ResetCache
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    nPosleUpisa = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", imeOrig
+    modUiData.ResetCache
+    modScrIzvestaji.Scr_IzTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Izv_NazivEntitetaJednomPoKontekstu", errDesc
+
+    AssertEq (Len(imeOrig) > 0), True, "387 preduslov: kooperant ima ime u sifarniku"
+    AssertEq (InStr(1, n1, imeOrig, vbTextCompare) > 0 And _
+              InStr(1, n1, FX_KOOPERANT, vbBinaryCompare) > 0), True, _
+             "387 preduslov: kartica nosi ime i ID kooperanta"
+    AssertEq nPretraga, n1, _
+             "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo"
+    AssertEq (InStr(1, nPosleUpisa, "ZZ-387", vbBinaryCompare) > 0), True, _
+             "387 posle upisa naziv prati sifarnik"
 End Sub
 
 ' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.

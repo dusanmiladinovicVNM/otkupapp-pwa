@@ -1050,6 +1050,7 @@ End Function
 Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As String, _
                         ByVal zbirni As Boolean, ByVal iD As String, _
                         ByVal odN As Double, ByVal doN As Double) As Variant
+    Dim puni As Boolean, noviNaziv As Boolean
     ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija podataka
     ' je deljeni signal da je snimljeno stanje mozda staro (blocker 1).
     If mSnimakGen <> modUiData.DataGeneracija() Then
@@ -1064,7 +1065,16 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
         If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll
         mSnimakPunjenja = mSnimakPunjenja + 1
         mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)
+        puni = True
     End If
+
+    ' Naziv entiteta se cita iz sifarnika (LookupValue, van prozora kesa) samo
+    ' kad se prikazani kontekst PROMENI ili je snimak upravo napunjen -- ne na
+    ' svaki otkucaj pretrage i klik cipa nad istim snimkom (analiza brzine
+    ' 2026-11, IZV-2). Kljuc k nosi listu, tip, rezim i entitet, dakle sve od
+    ' cega naziv zavisi; preimenovanje u sifarniku je upis, pa prazni mapu
+    ' (Scr_ResetCache ili generacija) i sledece citanje ide sa puni = True.
+    noviNaziv = puni Or (k <> mSnimakKljuc)
 
     ' Kontekst STVARNO prikazanih podataka -- za naslov stampe i hint.
     mSnimakKljuc = k
@@ -1077,7 +1087,7 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
     ' trazi entitet (svi zbirni oblici, i RANG cak i u pojedinacnom) je
     ' preko svih -- "Kooperanti: ()" za rang u P je bio nedovrsen UX.
     ' Lista koja entitet trazi nosi njegovo ime.
-    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))
+    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))
 
     Snimak = mSnimci(k)
 End Function
