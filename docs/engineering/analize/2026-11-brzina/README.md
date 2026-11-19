@@ -241,9 +241,12 @@ commit):
   kroz `UpdateCell`, koji pečatira `ModifiedAt`/`ModifiedBy`. Vraćanje vrednosti
   nije vraćalo audit. Sada kvar ide u transakciji sa snimkom tabele i obaveznim
   rollback-om, a test tvrdi da je cela tabela, i audit, posle testa ista kao pre.
-  Ostaje: ciljani testovi 386, 387, 390 i `dokaz.py --izbor --radnika 4 izv3-
-  izv2-naziv hld1-`.
+  Pušteno 19.11.: 386, 387, 390 zeleni (tabele posle testa iste, i audit, pa je
+  potvrđena i vernost rollback-a); dokaz `izv3-`, `izv2-naziv`, `hld1-` 4/4.
+- **Tajmer 19.11.** (grana `claude/merenje-modperf`): testovi 392–398 zeleni,
+  dokaz `perf-` 7/7. Test 396 potvrđuje da merač ne dira `Err` pozivaoca.
 - **Ostaje pred merge** (ručno, nad kopijom prave sveske):
+  - pun prolaz `python tools/run_vba.py` posle izmene testova 386, 387, 390;
   - ručni Compile (`run_vba` ga preskače uz suite);
   - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
     cena, bruto/neto, ambalaža);
