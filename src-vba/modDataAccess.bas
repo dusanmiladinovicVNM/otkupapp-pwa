@@ -104,6 +104,16 @@ Private Sub InvalidateTableCache(ByVal tblName As String)
     If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll
 End Sub
 
+' UPIS MIMO OVOG MODULA mora da javi da je tabela promenjena. AppendRow,
+' UpdateCell i DeleteRow to rade sami; pisac koji ide pravo u list (rollback
+' transakcije, oznaka sinhronizacije) zove ovo posle upisa. Bez toga bi
+' otvoren prozor citanja vracao staru kopiju tabele i izvedene nizove iz nje.
+' Van prozora ne radi nista. Ugovor je danas i dalje "prozori su samo
+' citanje" -- ovo je mreza ispod njega (pregled 19.11.2026, PERF-REV-03).
+Public Sub KesTabeleZastareo(ByVal tblName As String)
+    InvalidateTableCache tblName
+End Sub
+
 ' --- Kes izvedenih nizova (v. mIzvCache) ---
 ' Citac pita na ulazu i upise na JEDINOM uspesnom izlazu; van prozora oba ne
 ' rade nista, pa je ponasanje bez Begin/End nepromenjeno. Empty i sve sto nije

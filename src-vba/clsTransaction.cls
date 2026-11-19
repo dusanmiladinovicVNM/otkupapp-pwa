@@ -275,6 +275,7 @@ Private Sub RestoreTable(ByVal tableName As String, ByVal snap As Variant)
         If Not lo.DataBodyRange Is Nothing Then
             lo.DataBodyRange.Delete
         End If
+        modDataAccess.KesTabeleZastareo tableName
         Exit Sub
     End If
     
@@ -299,6 +300,9 @@ Private Sub RestoreTable(ByVal tableName As String, ByVal snap As Variant)
     Loop
     
     lo.DataBodyRange.Value2 = snapData
+    ' Vracanje ide pravo u list, mimo modDataAccess -- kes citanja mora da
+    ' sazna da je tabela promenjena (PERF-REV-03).
+    modDataAccess.KesTabeleZastareo tableName
 End Sub
 
 Private Function BuildAutoSaveSourceName() As String

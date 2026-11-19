@@ -758,6 +758,9 @@ Public Sub RunAllTests()
     RunOne 387
     RunOne 388
     RunOne 389
+    ' Pregled 19.11.2026: PERF-REV-02 (dupli ID) i PERF-REV-03 (rollback u prozoru).
+    RunOne 390
+    RunOne 391
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1390,6 +1393,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 387: TestName = "T_Izv_NazivEntitetaJednomPoKontekstu"
         Case 388: TestName = "T_Izv_CipoviCitajuKesLjuske"
         Case 389: TestName = "T_Rang_StabilnoOpadajuce"
+        Case 390: TestName = "T_Nevezane_DupliIdPadaPoImenu"
+        Case 391: TestName = "T_KesTabele_RollbackZastareva"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1787,6 +1792,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 387: T_Izv_NazivEntitetaJednomPoKontekstu
         Case 388: T_Izv_CipoviCitajuKesLjuske
         Case 389: T_Rang_StabilnoOpadajuce
+        Case 390: T_Nevezane_DupliIdPadaPoImenu
+        Case 391: T_KesTabele_RollbackZastareva
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24178,6 +24185,131 @@ Private Sub T_Rang_StabilnoOpadajuce()
     jedan(1) = 3
     p1 = modArrayUtils.IndeksiPoBrojuOpadajuce(jedan)
     AssertEq CStr(p1(1)), "1", "389 rang: jedan kooperant ostaje na mestu"
+End Sub
+
+' ============================================================
+' 390. NEVEZANE OTPREMNICE: DUPLI OtpremnicaID PADA PO IMENU (PERF-REV-02).
+' ============================================================
+' Pregled 19.11.2026: posle HLD-1 NevezaneOtpremnice cita status iz SVOG reda,
+' a ranije je citala status PRVOG reda sa istim ID-em. Za nejedinstven ID oba
+' ponasanja odlucuju po slucajnom redosledu pokvarene tabele. Sada citalac
+' primenjuje isto pravilo kao StavkeOtpremniceRedovi (greska 1941): dva reda sa
+' istim ID-em nisu dokument. Kvar se pravi nad DVA POSTOJECA reda fixture-a i
+' vraca se pre tvrdnji; kontrolno citanje pre kvara meri da cisto stanje ne pada.
+Private Sub T_Nevezane_DupliIdPadaPoImenu()
+    Dim d As Variant, cId As Long, i As Long, n As Object
+    Dim id1 As String, id2 As String, red2 As Long
+    Dim cistoBroj As Long, padBroj As Long, padOpis As String
+    Dim vracen As String
+
+    d = GetTableData(TBL_OTPREMNICA)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    If IsArray(d) And cId > 0 Then
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If Len(id1) = 0 Then
+                    id1 = Trim$(NzToText(d(i, cId)))
+                ElseIf Len(id2) = 0 Then
+                    id2 = Trim$(NzToText(d(i, cId)))
+                    red2 = i
+                End If
+            End If
+        Next i
+    End If
+
+    On Error Resume Next
+    Set n = modDokumenta.NevezaneOtpremnice()
+    cistoBroj = Err.Number
+    Err.Clear
+    If red2 > 0 Then
+        UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id1
+        Set n = modDokumenta.NevezaneOtpremnice()
+        padBroj = Err.Number
+        padOpis = Err.description
+        Err.Clear
+        ' Fixture se vraca PRE tvrdnji.
+        UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id2
+        d = GetTableData(TBL_OTPREMNICA)
+        vracen = Trim$(NzToText(d(red2, cId)))
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (Len(id1) > 0 And Len(id2) > 0 And red2 > 0), True, _
+             "390 preduslov: fixture ima bar dve otpremnice"
+    AssertEq cistoBroj, 0, "390 preduslov: nad cistim stanjem citalac ne pada"
+    AssertEq vracen, id2, "390 preduslov: pokvaren ID je vracen"
+    AssertEq padBroj, vbObjectError + 1941, _
+             "390 nevezane otpremnice: dupli OtpremnicaID pada po imenu"
+    AssertEq (InStr(1, padOpis, id1, vbBinaryCompare) > 0), True, _
+             "390 nevezane otpremnice: greska imenuje dupli ID"
+End Sub
+
+' ============================================================
+' 391. KES CITANJA: ROLLBACK U OTVORENOM PROZORU OBARA KOPIJE (PERF-REV-03).
+' ============================================================
+' Pregled 19.11.2026: invalidacija kesa je bila dokazana samo za upise kroz
+' modDataAccess (AppendRow/UpdateCell/DeleteRow). Rollback transakcije vraca
+' snimak PRAVO u list (clsTransaction.RestoreTable), mimo tih primitiva. Danas
+' se prozor ne otvara oko upisa, ali to je bio samo ugovor. Sada RestoreTable
+' javlja modDataAccess.KesTabeleZastareo, pa ni rollback u otvorenom prozoru ne
+' ostavlja staru kopiju tabele ni izveden niz. Mera: upis + citanje u prozoru,
+' rollback, ponovno citanje mora da vidi VRACENO stanje.
+Private Sub T_KesTabele_RollbackZastareva()
+    Dim tx As clsTransaction, rows As Collection, red As Long, cIme As Long
+    Dim imeOrig As String, uKesuPosleUpisa As String, uKesuPosleRollbacka As String
+    Dim naListu As String, d As Variant, b As Variant
+    Dim h0 As Long, hRollback As Long, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+
+    Set rows = FindRows(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT)
+    If Not rows Is Nothing Then
+        If rows.count > 0 Then red = rows(1)
+    End If
+    cIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
+    imeOrig = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+
+    On Error GoTo CleanUp
+    If red > 0 And cIme > 0 Then
+        BeginTableCache
+        otvoren = True
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_KOOPERANTI
+        UpdateCell TBL_KOOPERANTI, red, "Ime", "ZZ-391"
+        d = GetTableData(TBL_KOOPERANTI)
+        uKesuPosleUpisa = NzToText(d(red, cIme))
+        b = modOtkup.StavkeOtkupaRedovi()
+        tx.RollbackTx
+        d = GetTableData(TBL_KOOPERANTI)
+        uKesuPosleRollbacka = NzToText(d(red, cIme))
+        h0 = modDataAccess.IzvedenoPogodakaTest()
+        b = modOtkup.StavkeOtkupaRedovi()
+        hRollback = modDataAccess.IzvedenoPogodakaTest() - h0
+        EndTableCache
+        otvoren = False
+        naListu = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+    End If
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If otvoren Then EndTableCache
+    If NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime")) <> imeOrig Then
+        PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", imeOrig
+    End If
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesTabele_RollbackZastareva", errDesc
+
+    AssertEq (red > 0 And cIme > 0 And Len(imeOrig) > 0), True, _
+             "391 preduslov: kooperant fixture-a ima ime"
+    AssertEq uKesuPosleUpisa, "ZZ-391", "391 preduslov: prozor vidi upis kroz UpdateCell"
+    AssertEq naListu, imeOrig, "391 preduslov: rollback je vratio list"
+    AssertEq uKesuPosleRollbacka, imeOrig, _
+             "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele"
+    AssertEq hRollback, 0, "391 rollback prazni kes izvedenih nizova"
+    AssertEq modDataAccess.TableCacheDepth(), 0, "391 prozor kesa je zatvoren"
 End Sub
 
 ' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.

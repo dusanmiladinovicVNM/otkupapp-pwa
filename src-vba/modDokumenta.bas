@@ -3080,6 +3080,13 @@ Public Function NevezaneOtpremnice() As Object
     otp = GetTableData(TBL_OTPREMNICA)
     If Not IsArray(otp) Then Exit Function
 
+    ' JEDAN LOGICKI DOKUMENT = JEDAN ID, isto pravilo kao StavkeOtpremniceRedovi.
+    ' Dupli OtpremnicaID pada PO IMENU pre ponude: stara verzija je za njega
+    ' citala status PRVOG reda sa tim ID-em, a citanje iz svog reda (HLD-1)
+    ' svakog -- oba bi o identitetu odlucivala po slucajnom redosledu pokvarene
+    ' tabele (pregled 19.11.2026, PERF-REV-02).
+    RequireJedinstvenoZaglavljeOtpremnice ZaglavljaOtpremnicePoID(SRC), SRC
+
     Dim aktivno As Object, bila As Object
     Set aktivno = AktivnoClanstvoPoKanonu(SRC)
     Set bila = BivseZbirneIzvora(SRC)
