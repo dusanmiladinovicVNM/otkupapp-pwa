@@ -23,13 +23,30 @@ ne — nije stvar ukusa, nego radnog toka operatera na terenu:
 | Polje | Posle snimanja | Zašto |
 |---|---|---|
 | `fgDatum` | **ostaje** | sledeći blok ide u niz istog datuma otpremnice |
-| `fgBrZbir` | **ostaje** | sledeći blok iste otpremnice nosi istu zbirnu |
+| `fgBrZbir` | **ostaje** | kontekst operatera za sledeći blok — ne podatak dokumenta (v. ispod) |
 | `cbKupac` | **briše se** | sledeći unos je nov partner |
 | `fgKgI`, `fgKolAmb` | **brišu se** | podaci bloka odlaze sa partnerom |
 
 Bez aktivne otpremnice datum se **vraća na danas** — prazno ili staro polje bi
 bila greška koju operater ispravlja pri svakom novom dokumentu. To je jedina
 razlika u odnosu na legacy, koji datum uopšte nije dirao.
+
+**Broj zbirne u otkupnom listu nije podatak dokumenta.** Pisac otkupnog lista ga
+ne prima (`modOtkupUnos.OtkupUpisi`, komentar „KANONSKI PISAC" uz `brojZbirne`); otkup se za
+zbirnu vezuje kroz otpremnicu (`tblOtpremnicaIzvori` → otpremnica →
+`tblZbirnaIzvori`). Polje je **ista kontrola** u F1, F2 i F4, pa od zahteva
+operatera 18.11.2026 važi:
+
+- pri **ulasku u F1 i izlasku iz njega** `SelectModeCore` polje prazni (pod
+  `mZbirnaFill`, da pražnjenje ne obriše zapamćenu zbirnu) — broj prijemnice ne
+  ostaje u otkupnom listu, niti broj iz otkupnog lista ode u prijemnicu;
+- otkupni list **ne učestvuje** u zapamćenoj zbirnoj: `ApplyAktivnaZbirna` i
+  `SetAktivnaZbirna` za F1 izlaze. Pamćenje dele samo F2, F3 i F4;
+- isti režim (prekidač liste, povratak na ekran) polje ne dira, pa red iz tabele
+  stoji.
+
+Meri to `T_RezimZbirne_F1NeNasledjuje` (369), svaki deo svojom tvrdnjom; sabotaže
+`zbr-f1-*`.
 
 Sve to meri `T_ClearForm_Ugovor` u `modTest`, i dokazano je u oba smera — vrati
 brisanje datuma ili zbirne, odnosno ukloni brisanje partnera, i pukne tačno taj
@@ -44,18 +61,23 @@ test po imenu. **Ako menjaš ovu rutinu, prvo pročitaj šta test tvrdi.**
 Dve linije koje su ovde stajale (`ClearOtkupFields` kao `Public`, `SetFocus` iza
 `IsTestMode`) otišle su sa `frmOtkup` u koraku 2. Ljuska nosi svoje, i one su
 popisane na jednom mestu — `.claude/rules/testovi.md` §4: `ClearForm` /
-`ParseDatum` / `ParcelaID` su `Public`, tri `SetFocus`-a su iza `IsTestMode`, a
-`modScrDokumenti.Scr_OtpTestSet` je tvrdo gejtovan.
+`ParseDatum` / `ParcelaID` su `Public`, `SetFocus` u test putanji ide kroz
+`DajFokus` ili iza `IsTestMode`, a `modScrDokumenti.Scr_OtpTestSet` je tvrdo
+gejtovan.
 
 Pravilo je isto kao i pre: **„čišćenje" koje ih vrati u prethodno stanje obara
 suite — i to je jedini način da se to primeti.**
 
 ## 3) Kontekst otpremnice se napušta na jednom mestu
 
-Datum i broj zbirne se nasleđuju sa izabrane otpremnice. Vraćaju se na „danas /
-prazno" tek kad se taj kontekst stvarno napusti — u ljusci je to
-`modScrDokumenti.Scr_OtpOtkazi` (prazni `mOtpID` / `mOtpBroj` i vraća listu na
-otpremnice), a `ClearForm` posle njega vraća datum na danas (§1).
+Datum se nasleđuje sa izabrane otpremnice. Vraća se na „danas" tek kad se taj
+kontekst stvarno napusti — u ljusci je to `modScrDokumenti.Scr_OtpOtkazi`
+(prazni `mOtpID` / `mOtpBroj` i vraća listu na otpremnice), a `ClearForm` posle
+njega vraća datum na danas (§1).
+
+Broj zbirne se sa otpremnice **ne** nasleđuje: `PrefillSpec` / `PrefillZaglavlja`
+ne nose ključ `brzbirne`, a `ApplyPrefill` polje zbirne prvo isprazni — izbor
+otpremnice u F1 ga zato prazni.
 
 Legacy par je bio `OtkupBlok_ClearActiveOtp` + `frmOtkup.ResetDatumKontekst`.
 Prvi postoji i dalje; drugog nema, ali ga `modOtkupBlok` i dalje zove
@@ -116,8 +138,9 @@ diraju se.** „Ne diraju se" znači: ne menjaju se mimo koraka koji ih uklanja.
   (`ZbirnaValidiraj` / `PrijemnicaValidiraj`) ima svojih pet testova u istoj
   suite-i, a upis novca i ambalaže (`IsplataValidiraj` / `UplataValidiraj` /
   `ReversValidiraj`) svoja tri — spisak i sabotaže: `.claude/rules/testovi.md` §4. Novi UI ima i seam-ove iz §2
-  u svom obliku (`ClearForm`/`ParseDatum`/`ParcelaID` su `Public`, tri `SetFocus`-a
-  su iza `IsTestMode`, `Scr_OtpTestSet` je gejtovan) — detalji i sabotaže:
+  u svom obliku (`ClearForm`/`ParseDatum`/`ParcelaID` su `Public`, `SetFocus` u
+  test putanji ide kroz `DajFokus` ili iza `IsTestMode`, `Scr_OtpTestSet` je
+  gejtovan) — detalji i sabotaže:
   `.claude/rules/testovi.md` §4.
 - Razlika u odnosu na legacy koju test fiksira: **bez** aktivne otpremnice novi UI
   vraća datum na danas (legacy ga uopšte ne dira). Uz aktivnu otpremnicu ponašanje
