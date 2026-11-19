@@ -264,9 +264,9 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
    3. u `tblCenovnik` (list „Cenovnik") redovi sa `StornoRazlog` koji sadrži
       „(migracija CEN-ODL-04)" su tačno raniji redovi svakog para duplikata, sa
       upisanim `StorniranoAt`; lista Matični → Cenovnik ih više ne prikazuje.
-      (`LogSetup` piše u list `SETUP_LOG`, koji nastaje samo kroz `SetupNewPC`;
-      na svesci bez tog lista broj migriranih nije zapisan nigde, pa se kapija
-      meri nad tabelom, ne nad logom -- utvrđeno 19.11.2026);
+      (`LogSetup` piše u LIST `SETUP_LOG`, ne u tabelu, i to samo kad ga
+      `EnsureCenovnikSchema` pozove; list nastaje kroz `SetupNewPC`, pa ga
+      sveska bez setup-a nema. Tabela je zato pouzdaniji trag od loga);
    4. drugi Admin → Ensure ne sme da doda nijedan takav red niti da promeni
       `StorniranoAt` postojećih: drugi prolaz migracije ne stornira ništa, pa
       aktivnih duplikata više nema.
@@ -323,7 +323,9 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
 - Kapija migracije na kopiji prave sveske (19.11.2026): `MigrirajDupleCene` je
   stornirao jedan red, CEN-00001 (Višnja Oblačinska, I, 19.06.), razlogom koji
   imenuje CEN-00003, sa `StorniranoAt` / `StorniranoBy`; ostali redovi netaknuti.
-  Idempotentnost nad pravom sveskom nije posebno izmerena; meri je test 377 (zelen).
+  Drugi poziv `MigrirajDupleCene` vratio je 0 (idempotentno i nad pravom sveskom;
+  isto meri test 377). Prvi put je na kopiji pušten samo `EnsureRuntimeSchema`,
+  koji namerno ne migrira, pa je par ostao -- odatle napomena u §8, tačka 7.
 - UI tokovi na pravom Excelu: InputBox za razlog, MsgBox pregleda, editor
   ispravke (datum kao `dd.mm.yyyy`, cena kao `CStr(Double)` — čitanje nazad uz
   drugačiji decimalni separator nije izmereno), toast poruke, širina kolone
