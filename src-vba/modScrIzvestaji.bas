@@ -373,7 +373,12 @@ End Function
 Private Sub IzvDistinctU(ByVal dict As Object, ByVal tblName As String, _
                          ByVal kolona As String)
     Dim d As Variant, i As Long, c As Long, cStorno As Long, k As String
-    d = GetTableData(tblName)
+    ' Kes ljuske, ne citanje sa lista (analiza brzine 2026-11, IZV-9): posle
+    ' upisa RefreshFromData vec puni CachedTable za tblOtkup i tblPrijemnica
+    ' (KPI) pre naslova mreze, a tblPrijemnica se ovde cita dvaput (vrste i
+    ' sorte). CachedTable prazni isti ResetCache koji pomera generaciju po
+    ' kojoj se cipovi kesiraju (mCipVrsteGen), pa ne moze biti stariji od njih.
+    d = modUiData.CachedTable(tblName)
     If Not IsArray(d) Then Exit Sub
     c = GetColumnIndex(tblName, kolona)
     If c = 0 Then Exit Sub

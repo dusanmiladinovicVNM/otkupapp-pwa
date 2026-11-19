@@ -756,6 +756,7 @@ Public Sub RunAllTests()
     ' Brzina zbirnih izvestaja (IZV-3/IZV-5): kes izvedenih nizova.
     RunOne 386
     RunOne 387
+    RunOne 388
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1386,6 +1387,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 385: TestName = "T_OtkList_RedoviStavkiKanonskimRedom"
         Case 386: TestName = "T_KesIzvedeno_ZbirniIstiUzKes"
         Case 387: TestName = "T_Izv_NazivEntitetaJednomPoKontekstu"
+        Case 388: TestName = "T_Izv_CipoviCitajuKesLjuske"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1781,6 +1783,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 385: T_OtkList_RedoviStavkiKanonskimRedom
         Case 386: T_KesIzvedeno_ZbirniIstiUzKes
         Case 387: T_Izv_NazivEntitetaJednomPoKontekstu
+        Case 388: T_Izv_CipoviCitajuKesLjuske
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24115,6 +24118,32 @@ CleanUp:
              "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo"
     AssertEq (InStr(1, nPosleUpisa, "ZZ-387", vbBinaryCompare) > 0), True, _
              "387 posle upisa naziv prati sifarnik"
+End Sub
+
+' ============================================================
+' 388. IZVESTAJI: DINAMICKI CIPOVI CITAJU KES LJUSKE (brzina, IZV-9).
+' ============================================================
+' Cipovi vrste i sorte su posle svakog upisa citali tblOtkup i dvaput
+' tblPrijemnica sa lista (GetTableData), iako ljuska u istom osvezavanju te
+' tabele vec drzi u modUiData.CachedTable. Sada idu kroz CachedTable. Posle
+' ResetCache (upis) kes ljuske je prazan, pa tabele u njemu posle cipova
+' dokazuju da su cipovi isli tim putem -- GetTableData ga zaobilazi.
+' Sadrzaj cipova meri 149.
+Private Sub T_Izv_CipoviCitajuKesLjuske()
+    Dim s1 As String, s2 As String, otkPre As Boolean
+    modUiData.ResetCache
+    otkPre = modUiData.KesImaKljuc(TBL_OTKUP)
+    s1 = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+    s2 = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+
+    AssertEq otkPre, False, "388 preduslov: posle ResetCache kes ljuske je prazan"
+    AssertEq (InStr(1, s1, "|vr", vbBinaryCompare) > 0), True, _
+             "388 preduslov: otkupni listovi nude cip vrste iz podataka"
+    AssertEq modUiData.KesImaKljuc(TBL_OTKUP), True, _
+             "388 cipovi vrste citaju tblOtkup kroz kes ljuske"
+    AssertEq modUiData.KesImaKljuc(TBL_PRIJEMNICA), True, _
+             "388 cipovi vrste i sorte citaju tblPrijemnica kroz kes ljuske"
+    AssertEq s2, s1, "388 ponovljen upit daje iste cipove"
 End Sub
 
 ' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.
