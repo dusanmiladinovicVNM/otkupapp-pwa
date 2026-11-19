@@ -212,23 +212,26 @@ commit):
 
 | Rez | Šta | Test | Status |
 |---|---|---|---|
-| IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **neverifikovano** |
-| OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **neverifikovano** |
-| HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **neverifikovano** |
-| IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **neverifikovano** |
+| IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **zeleno 19.11.** (izbor testova) |
+| OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **zeleno 19.11.** (izbor testova) |
+| HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **zeleno 19.11.** (izbor testova; dokaz `zbirna-nevezane` 2/2) |
+| IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **zeleno 19.11.** (izbor testova) |
 | IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **neverifikovano** |
 | IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **neverifikovano** |
 | IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **neverifikovano** |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
+- **Pušteno na Windows-u 19.11.** (operater, izbor testova): 384, 385, 386 i
+  BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` zeleni;
+  `dokaz.py --izbor zbirna-nevezane` 2/2 DOKAZANO.
 - **Na Windows-u ostaje:**
   - Compile;
-  - suite `RunAllTests` sa testovima 384–389;
-  - BFP test iznad;
-  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane
-    izvestaji-pretraga-puni-iznova izvestaji-rang-kontekst-prazan`, obavezno,
-    jer su dirana sidra sabotaža.
+  - testovi 387–389;
+  - `python tools/dokaz.py --izbor --radnika 4 izvestaji-pretraga-puni-iznova
+    izvestaji-rang-kontekst-prazan`, obavezno, jer su dirana sidra sabotaža;
+  - pun prolaz `python tools/run_vba.py`, jer izbor testova ne upisuje GREEN
+    marker, a dirani su zajednički moduli (`modDataAccess`, `modArrayUtils`).
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
