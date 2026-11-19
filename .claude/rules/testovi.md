@@ -65,14 +65,14 @@ JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, tri kapije
 nad self-update motorom (§8), i dve kapije nad šemom i vlasništvom (§9). CI ne
 pokreće Excel i nikad neće.
 
-**Šest** od tih alata ima i `--self-test` korak u istom workflow-u:
-`vba_check`, `who_writes`, `run_vba`, `vba_parity_check`,
-`vba_selfupdate_gates`, `vba_hard_census`. To nije udvajanje — zelen checker
-nad čistim repoom ne razlikuje „nema greške" od „provera ništa ne meri".
+Većina tih alata ima i `--self-test` korak u istom workflow-u; tačan spisak je
+`.github/workflows/static.yml`, ne ovaj fajl (spisak ovde je zastarevao sa
+svakim novim alatom). To nije udvajanje — zelen checker nad čistim repoom ne
+razlikuje „nema greške" od „provera ništa ne meri".
 
-> `gen_schema_module.py` **nema** self-test, i to je poznata rupa a ne izuzetak:
-> `--check` koji nikad nije pokazan crven ne dokazuje da poredi otisak. Ranija
-> formulacija („svaki od tih alata") je tvrdila suprotno.
+> `gen_schema_module.py` ima self-test od 13.09.2026 (`static.yml`, korak
+> „gen_schema_module self-test"). Ovde je do 19.11.2026 stajalo da ga nema —
+> zatečena tvrdnja, nadživela je samu rupu.
 
 ## 2) `tools/vba_check.py` — radi svuda, i u Linux sesiji
 
