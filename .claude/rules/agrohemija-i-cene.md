@@ -43,6 +43,6 @@ Smoke suite: `RunAgrohemijaSmokeSuite` (bez fail-gate-a — vidi
 | Model | Gde | Za šta |
 |---|---|---|
 | single-current po artiklu | `tblArtikli.CenaPoJedinici` (inline `LookupValue`) | agrohemija |
-| append-only istorija | `tblCenovnik` → `modCenovnik` (`GetVazecaCena` / `AddCena`) | otkup voća |
+| append-only istorija | `tblCenovnik` → `modCenovnik` (`TryVazecaCena` / `AddCena` / `StornirajCenu` / `IspraviCenu`; model i invarijante: `docs/DOMEN/CENOVNIK.md`) | otkup voća |
 
 Ne uvoditi treći model i ne čitati cenu voća iz `tblArtikli` (ni obrnuto).
