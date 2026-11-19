@@ -71,7 +71,66 @@ ne na 107 nezavisnih mesta:
    na +60 s od poslednjeg commit-a. Ako operater tada kuca, forma stoji 2–12 s
    (PROCENA).
 
-## 2. Rang po očekivanoj dobiti
+## 1a. Rang za stvarne veličine (dopuna 19.11.2026)
+
+**Ulaz od vlasnika** (procena, ne izmereno):
+- `tblOtkup` najviše oko 10.000 redova;
+- `tblOtkupStavke` najviše 15.000, realno manje;
+- `tblAmbalaza` najviše oko 50.000;
+- `tblOtpremnica` i `tblZbirna` znatno manje od otkupa. **Pretpostavka ovde:
+  1.000–3.000.**
+- **Sve firme** koriste hladnjačku stanicu (RUTA_LANAC), **neke** malina režim.
+- Office je najčešće 64-bitni.
+
+**Štampa, kako sam razumeo:**
+- **bez malina režima** pojedinačni otkupni list je obavezan uz svaki otkup;
+- **u malina režimu** obavezan je grupni list, a pojedinačni otkupni listovi
+  nisu potrebni.
+
+**Provereno u kodu za ovu dopunu:**
+- `ds` u `FillOtkupSablon` je **cela** `tblOtkupStavke`
+  (`modPrint.bas:658`, `GetTableData(TBL_OTKUP_STAVKE)`).
+- `Scr_Save` (`modScrDokumenti.bas:2174-2176`) zove `AutoLanacHladnjaca` pri
+  svakom otkupu čija je ruta RUTA_LANAC. Lanac zatim ide:
+  - `CreateOtpremnicaIzIzvora_TX` (`modAutoHladnjaca.bas:382`);
+  - `modMasterSync.AutoZbirnaZaOtpremnicu` (`:392`), koja zove
+    `modDokumenta.NevezaneOtpremnice()` (`modMasterSync.bas:1071`);
+  - `NevezaneOtpremnice` za svaki nestorniran red `tblOtpremnica` zove
+    `OtpremnicaJeIzdata` → `LookupValue`. To je puna kopija `tblOtpremnica` po
+    redu (`modDataAccess.bas:631-635`), bez keša.
+- `GRUPNI_OTKUP_PRINT_MODE` kad je prazan **prati `OTKUP_PRINT_MODE`**
+  (`modConfig.bas:678`, `modPrint.bas:1196-1197`).
+
+**Preračun.** Cene po jedinici su iz kataloga. Agenti se oko njih razilaze i do
+10×, pa je za svaki red dat i donji raspon uz 10× jeftiniju jedinicu. Zaključak
+mora da preživi i taj donji raspon.
+
+| Rang | Šta | Ko plaća | Računica (PROCENA, nije mereno) | Na tvojim veličinama | Lek |
+|---|---|---|---|---|---|
+| **1** | **OTK-1** popuna otkupnog lista | svako snimanje otkupa, u firmama bez malina režima | ≈ N_stavke² iteracija × 0,3–1 µs | 3.000 stavki: 3–9 s; 10.000: 30–100 s; 15.000: 70–225 s. **Uz 10× jeftiniju iteraciju i dalje 3–10 s pri 10.000.** Snimanje se usporava kako sezona odmiče. | lokalna izmena u `FillOtkupSablon` (jedan prolaz skupi redove tog otkupa); test u `modTest`. Malina firme: konfig, v. §3 korak 1 |
+| **2** | **HLD-1** `NevezaneOtpremnice` | **svako** snimanje otkupa na hladnjačkoj stanici (sve firme); izdavanje uz auto-zbirnu (`modScrDokumenti.bas:887`); lista NEVEZANE | ≈ N_otp × N_otp × 24 kopirane ćelije × 0,1–0,5 µs | 1.000 otpremnica: 2,4–12 s; 2.000: 10–48 s; 3.000: 22–108 s. **Uz 10× jeftiniju ćeliju: 0,2–1 s / 1–5 s / 2–11 s.** Raste kroz sezonu kao i #1. | lokalna izmena: indeks kolone statusa jednom, pa postojeći `IzdatoStatusJeIzdato(otp(i, cIzd))` umesto `LookupValue` po redu (`modDokumenta.bas:7660`, review #362); test `Test_ZBR_NevezaneSamoIzdateISlobodne` već meri ishod |
+| **3** | **Knjiga ambalaže** (OTK-2 i spojeni) | svako snimanje sa ambalažom; u hladnjačkom lancu još i otpremnica i prijemnica istog klika (nije prebrojano) | 10 čitanja po otkupu × (kopija 50.000×16 ćelija + `KnjigaIntegritet` 2 prolaza po 2–100 µs po redu) | **od oko 1 s do desetina sekundi po snimanju otkupa.** Raspon je 50× jer agenti različito cene integritet po redu. | **odluka D1.** Pri 50.000 redova integritet verovatno dominira, pa memo (OTK-2) vredi znatno više od prozora keša. Prvo izmeriti udeo `KnjigaIntegritet`, pa memo kroz `pre-flight` + `dokaz.py --izbor` |
+| 4 | **Ostatak hladnjačkog lanca**: HLD-2..5 i revalidacija u `CreateOtpremnicaIzIzvora_TX` | svako snimanje otkupa na hladnjači | 9 kopija `tblOtkup` (10.000×29) pre prvog upisa; 3 prolaza strogog čitača stavki; 4 TX sa snapshotima, `tblAmbalaza` (800.000 ćelija) još 2 puta | 0,5–3 s po kliku | prozor keša u glavi lanca (HLD-2), zatim D2 |
+| 5 | **Posle svakog snimanja** (UI-7, pa UI-1 i spojeni) | svako snimanje i radnja | `tblOtkup` 290.000 ćelija × 7–9 čitanja + KPI (`ReportSaldoOM` za godinu) + značke | 0,3–3 s po snimanju | prvo izmeriti UI-7, pa garda, pa prozor oko `RefreshFromData` |
+| 6 | **UI-8** sort zbirnih u combo-u | svako snimanje. U lancu svaki otkup pravi i zbirnu, pa N_zbr raste kao N_otp. | ≈ N_zbr²/2 poređenja i zamena × 0,1–0,5 µs | 1.000: 0,05–0,25 s; 3.000: 0,5–2 s | lokalna (`QuickSortIndex` postoji). **Pažnja:** zatečeni sort nije stabilan, pa redosled zbirnih sa istim datumom treba ugovoriti testom |
+| 7 | **AutoSave i warm** u istoj sekundi | jednom po pauzi | sveska raste sa 50.000 redova knjige | 2–12 s zamrznute forme | odluka D4 |
+| 8 | **Izveštaji**: IZV-1 (kontekst ide kroz pun refresh); **IZV-4** zbirna ambalaža | svaki klik konteksta; zbirni prikaz ambalaže | IZV-4: broj naloga × cela knjiga (50.000) sa integritetom i šemom | IZV-1: 0,3–2 s po kliku. **IZV-4: od nekoliko sekundi do više desetina sekundi** za zbirni prikaz, zavisno od broja naloga (nije dat) i od cene integriteta | IZV-1 lokalna; IZV-4 ide uz D1 |
+| 9 | Hover i pretraga na Dokumentima (UI-5, UI-9) | svaki prelaz miša i svaki otkucaj | v. §2 | 20–150 ms i 50–500 ms | lokalna |
+
+**Šta se promenilo u odnosu na §2:**
+- **HLD-1 je skočio sa 9. na 2. mesto.** Hladnjačku stanicu koriste sve firme,
+  pa kvadratni prolaz plaća svako snimanje otkupa, ne retki slučaj.
+- **Knjiga ambalaže je ojačala:** 50.000 redova je pet puta više od pretpostavke
+  sa kojom su agenti računali.
+- **PDF bez koda pomaže samo malina firmama.** Firmama bez malina režima
+  pojedinačni otkupni list ostaje, pa im OTK-1 mora da se ispravi u kodu.
+
+**Tajmer na 64-bitnom Office-u:** `Currency` trik i `PtrSafe` deklaracija rade.
+`LongLong` bi takođe radio, ali skica ostaje na `Currency`, da isti kod radi i
+na retkim 32-bitnim mašinama. Test `T_Perf_QpcMonoton` dovoljno je pustiti na
+64-bitnom.
+
+## 2. Rang po očekivanoj dobiti (opšti, pre podataka o veličinama; za tvoje veličine važi §1a)
 
 Rang je moja procena. Ulazi su učestalost akcije, rast sa veličinom podataka i
 cena po pozivu iz kataloga. **Konačan redosled zavisi od stvarnih veličina
@@ -114,11 +173,26 @@ dalje vraća **kopiju** celog niza (`GetTableData = mTableCache(tblName)`,
 1. **Bez ijedne linije koda, odmah** (#5):
    - **Podešavanja → „Otvori PDF posle izrade"** (`PDF_OTVORI_POSLE`) = NE
      (`modPodesavanja.bas:125`). PDF se i dalje pravi i arhivira, samo se ne
-     otvara i ne uzima fokus.
-   - Gde papir nije obavezan, mod štampe otkupnog ili grupnog lista
-     (`OTKUP_PRINT_MODE`, `GRUPNI_OTKUP_PRINT_MODE`; vrednosti
-     `PDF;PRINT;PREVIEW;OFF`, `modPodesavanja.bas:104-105`) = OFF. Dok se #1 ne
-     ispravi, OFF skida i kvadratnu petlju otkupnog lista.
+     otvara i ne uzima fokus. Važi za sve firme kojima ne treba da se čitač
+     otvara posle svakog snimanja.
+   - **Firme u malina režimu**, kojima pojedinačni otkupni list ne treba (§1a).
+     Redosled je bitan:
+     1. **prvo** `GRUPNI_OTKUP_PRINT_MODE` eksplicitno na `PDF` ili `PRINT`;
+     2. **tek onda** `OTKUP_PRINT_MODE` = `OFF`.
+
+     Grupni kad je prazan prati otkupni (`modPrint.bas:1196-1197`), pa bi
+     obrnut redosled ugasio i grupni list. Ovim se skidaju OTK-1, OTK-3,
+     OTK-14 i OTK-16 sa svakog snimanja otkupa.
+     **Cena:** `OFF` gasi i **ručnu ponovnu štampu** otkupnog lista iz
+     Izveštaja. Lanac je `modScrIzvestaji.bas:2956, 2963, 3012` →
+     `ReprintOtkupniListByOtkupID` (`modPrint.bas:518`) → `OutputOtkupniList`,
+     koji kod `OFF` ne radi ništa (`modPrint.bas:483-492`).
+     - Ako i malina firmi ponekad treba pojedinačni list, ovaj prekidač nije
+       besplatan, pa je bolji put ispravka OTK-1 u kodu.
+     - Grep ne nalazi drugog korisnika `OTKUP_PRINT_MODE` osim ova tri: otkupni
+       list, ponovna štampa i grupni kad je prazan.
+   - **Firme bez malina režima:** otkupni list ostaje. Kod njih bez koda pomaže
+     samo `PDF_OTVORI_POSLE`, a OTK-1 ide u korak 3 kao prvi rez.
    - **Pažnja:** grupni list nosi klauzulu PDV nadoknade (čl. 34 ZPDV,
      `modPrint.bas:1385-1392`). Da li je papir obavezan je tvoja poslovna i
      pravna odluka, ne tehnička.
@@ -129,7 +203,7 @@ dalje vraća **kopiju** celog niza (`GetTableData = mTableCache(tblName)`,
 3. **Lokalne algoritamske ispravke, bez promene ugovora,** svaka u svom rezu sa
    testom koji meri ponašanje:
    - #1 OTK-1;
-   - #9 HLD-1;
+   - #9 HLD-1 (po §1a drugi po dobiti, odmah posle OTK-1);
    - #12 UI-8;
    - IZV-7;
    - #11 UI-5 (hover boji samo stari i novi red; `PaintRow` postoji);
@@ -289,7 +363,18 @@ Navedeno da se ne izgubi. Ništa od ovoga nije provereno testom.
 
 ## 8. Pitanja za tebe
 
-Odgovori menjaju rang iz §2:
+**Odgovoreno 19.11.2026** (pitanja 1, 2, 3 i 5; preračun je u §1a):
+- otkup do oko 10.000 redova, stavke do 15.000, ambalaža do 50.000;
+- otpremnica i zbirna znatno manje od otkupa;
+- bez malina režima pojedinačni otkupni list je obavezan, a u malina režimu
+  grupni jeste, a pojedinačni nije;
+- sve firme koriste hladnjačku stanicu, neke malina režim;
+- Office je najčešće 64-bitni.
+
+**Otvoreno:** pitanje 4 (broj kooperanata u bloku isplata) i tačan broj
+otpremnica i zbirnih. §1a pretpostavlja 1.000–3.000.
+
+Pitanja kako su postavljena:
 
 1. Koliko redova otprilike imaju `tblOtkup`, `tblOtkupStavke`, `tblAmbalaza`,
    `tblOtpremnica`, `tblZbirna`, `tblKooperanti` i `tblNovac` u sezoni?
