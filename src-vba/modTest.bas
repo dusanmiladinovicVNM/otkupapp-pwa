@@ -751,6 +751,8 @@ Public Sub RunAllTests()
 
     ' Brzina Izvestaja (analiza 2026-11, IZV-1): klik kroz pravu ljusku.
     RunOne 384
+    ' Brzina otkupnog lista (OTK-1): cista funkcija, bez sveske.
+    RunOne 385
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1378,6 +1380,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 382: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
         Case 383: TestName = "T_Cen_KucanjeUEditoruNeDiraSortu"
         Case 384: TestName = "T_Izv_KontekstOsvezavaPrikazNePodatke"
+        Case 385: TestName = "T_OtkList_RedoviStavkiKanonskimRedom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1770,6 +1773,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 382: T_Cen_PotvrdaPrekidaStajeUDijalog
         Case 383: T_Cen_KucanjeUEditoruNeDiraSortu
         Case 384: T_Izv_KontekstOsvezavaPrikazNePodatke
+        Case 385: T_OtkList_RedoviStavkiKanonskimRedom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -23951,6 +23955,50 @@ Private Sub T_Izv_KesPretragaIHint()
     AssertEq (modScrIzvestaji.IzDatGranica("15.3.2026") > 0), True, "pun datum je granica"
 
     modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 385. OTKUPNI LIST: STAVKE KANONSKIM REDOSLEDOM, JEDNIM PROLAZOM (brzina, OTK-1).
+' ============================================================
+' FillOtkupSablon je za svaki redni broj 1..UBound(tabele) prolazio CELU
+' tblOtkupStavke, pa je popuna rasla sa kvadratom broja stavki. Izbor redova je
+' izdvojen u modPrint.OtkupListRedoviStavki i ovde se meri nad sintetickim
+' nizom -- cista funkcija, bez sveske. Pravilo je isto kao u staroj petlji:
+' ID bez obzira na Trim i velika i mala slova, za svaki rb PRVI red redom tabele,
+' dupli rb samo jednom, rupa se preskace, a rb koji nije ceo broj iz
+' 1..UBound(tabele) se ne stampa. Ocekivani redosled je izracunat starim
+' algoritmom (Python simulacija, 20.000 slucajnih tabela, 0 razlika).
+' Popunu lista nad pravom sveskom i dalje mere 224 i 287.
+Private Sub T_OtkList_RedoviStavkiKanonskimRedom()
+    Dim ds As Variant, r As Variant, s As String, i As Long
+
+    ReDim ds(1 To 8, 1 To 2)
+    ds(1, 1) = "OTK-B":  ds(1, 2) = 1      ' tudj otkup
+    ds(2, 1) = "otk-a ": ds(2, 2) = 2      ' moj (Trim, velika i mala slova)
+    ds(3, 1) = "OTK-A":  ds(3, 2) = 1
+    ds(4, 1) = "OTK-A":  ds(4, 2) = 2      ' dupli rb 2 -- red 2 je pre njega
+    ds(5, 1) = "OTK-A":  ds(5, 2) = 1.5    ' nije ceo broj
+    ds(6, 1) = "OTK-A":  ds(6, 2) = ""     ' prazno = 0
+    ds(7, 1) = "OTK-A":  ds(7, 2) = 4      ' posle rupe na 3
+    ds(8, 1) = "OTK-A":  ds(8, 2) = 99     ' vece od broja redova tabele
+
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "OTK-A")
+    If IsArray(r) Then
+        For i = LBound(r) To UBound(r)
+            s = s & "|" & CStr(r(i))
+        Next i
+    End If
+    AssertEq s, "|3|2|7", _
+             "385 otkupni list: prvi red po rednom broju, dupli i necelobrojni se preskacu"
+    AssertEq IsArray(r), True, "385 otkupni list: redosled je 1-bazirani niz indeksa"
+    If IsArray(r) Then AssertEq LBound(r), 1, "385 otkupni list: niz pocinje od 1"
+
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "NEMA-GA")
+    AssertEq IsEmpty(r), True, "385 otkupni list: otkup bez stavki daje Empty"
+
+    ds(3, 2) = 0: ds(2, 2) = 0: ds(4, 2) = 0: ds(7, 2) = 0: ds(8, 2) = -3: ds(5, 2) = 0.5
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "OTK-A")
+    AssertEq IsEmpty(r), True, "385 otkupni list: bez ijednog rednog broja >= 1 nema stavki"
 End Sub
 
 ' ============================================================

@@ -668,7 +668,13 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
     sBruto = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_BRUTO)
     sRb = GetColumnIndex(TBL_OTKUP_STAVKE, COL_OKS_RB)
 
-    Dim stavke() As Variant: ReDim stavke(0 To UBound(ds, 1), 0 To 6)
+    ' Redovi OVOG otkupa koji idu na papir, kanonskim redosledom (po rednom
+    ' broju). Jedan prolaz kroz tabelu -- v. OtkupListRedoviStavki.
+    Dim redosled As Variant, nSt As Long, j As Long
+    redosled = OtkupListRedoviStavki(ds, sOtk, sRb, otkupID)
+    If IsArray(redosled) Then nSt = UBound(redosled)
+
+    Dim stavke() As Variant: ReDim stavke(0 To nSt, 0 To 6)
     Dim cnt As Long: cnt = 0
     Dim osnovica As Double: osnovica = 0
     ' Cena uneta u formi je BRUTO (vec sadrzi PDV nadoknadu). U otkupnom listu
@@ -701,44 +707,37 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 
     ' --- stavke: po jedan red po klasi, kanonskim redosledom ------------------
 
-    Dim rb As Long
-    For rb = 1 To UBound(ds, 1)
-        For r = 1 To UBound(ds, 1)
-            If StrComp(Trim$(CStr(ds(r, sOtk))), otkupID, vbTextCompare) = 0 Then
-                If PrNz(ds(r, sRb)) = rb Then
-                    Dim kol As Double: kol = PrNz(ds(r, sKol))
-                    Dim cenBruto As Double: cenBruto = PrNz(ds(r, sCena))
-                    Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
-                    Dim ambStavke As Double: ambStavke = PrNz(ds(r, sAmb))
+    For j = 1 To nSt
+        r = redosled(j)
+        Dim kol As Double: kol = PrNz(ds(r, sKol))
+        Dim cenBruto As Double: cenBruto = PrNz(ds(r, sCena))
+        Dim cenNeto As Double: cenNeto = cenBruto / (1 + stopa / 100)
+        Dim ambStavke As Double: ambStavke = PrNz(ds(r, sAmb))
 
-                    ' BRUTO SE NE REKONSTRUISE. Zamrznut je ili ga nema.
-                    '
-                    ' Zatecena stampa je za neto unos racunala bruto iz TRENUTNE tare
-                    ' gajbice. To krsi S4.1d: promena tezine gajbice u sifarniku bi
-                    ' godinu dana kasnije dala DRUGI "istorijski" bruto na istom
-                    ' dokumentu. Kad unos nije bio bruto, ta cinjenica ne postoji --
-                    ' i prazno polje to kaze tacnije od izracunatog broja.
-                    Dim storedBruto As Double: storedBruto = PrNz(ds(r, sBruto))
+        ' BRUTO SE NE REKONSTRUISE. Zamrznut je ili ga nema.
+        '
+        ' Zatecena stampa je za neto unos racunala bruto iz TRENUTNE tare
+        ' gajbice. To krsi S4.1d: promena tezine gajbice u sifarniku bi
+        ' godinu dana kasnije dala DRUGI "istorijski" bruto na istom
+        ' dokumentu. Kad unos nije bio bruto, ta cinjenica ne postoji --
+        ' i prazno polje to kaze tacnije od izracunatog broja.
+        Dim storedBruto As Double: storedBruto = PrNz(ds(r, sBruto))
 
-                    stavke(cnt, 0) = vrstaSorta
-                    stavke(cnt, 1) = CStr(ds(r, sKlasa))
-                    stavke(cnt, 2) = cenNeto        ' Cena bez PDV
-                    stavke(cnt, 3) = cenBruto       ' Cena s PDV
-                    stavke(cnt, 4) = kol            ' Kolicina neto
-                    If storedBruto > 0 Then
-                        stavke(cnt, 5) = storedBruto    ' zamrznut bruto
-                    Else
-                        stavke(cnt, 5) = ""             ' neto unos: bruto ne postoji
-                    End If
-                    stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
-                    osnovica = osnovica + kol * cenNeto
-                    kolAmb = kolAmb + ambStavke
-                    cnt = cnt + 1
-                    Exit For
-                End If
-            End If
-        Next r
-    Next rb
+        stavke(cnt, 0) = vrstaSorta
+        stavke(cnt, 1) = CStr(ds(r, sKlasa))
+        stavke(cnt, 2) = cenNeto        ' Cena bez PDV
+        stavke(cnt, 3) = cenBruto       ' Cena s PDV
+        stavke(cnt, 4) = kol            ' Kolicina neto
+        If storedBruto > 0 Then
+            stavke(cnt, 5) = storedBruto    ' zamrznut bruto
+        Else
+            stavke(cnt, 5) = ""             ' neto unos: bruto ne postoji
+        End If
+        stavke(cnt, 6) = kol * cenNeto  ' Vrednost neto
+        osnovica = osnovica + kol * cenNeto
+        kolAmb = kolAmb + ambStavke
+        cnt = cnt + 1
+    Next j
     If cnt = 0 Then Exit Function
 
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
@@ -849,6 +848,66 @@ Public Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
 EH:
     Application.ScreenUpdating = oldScreen
     LogErr "modPrint.FillOtkupSablon"
+End Function
+
+' REDOVI STAVKI JEDNOG OTKUPA ZA PAPIR, kanonskim redosledom: 1-bazirani niz
+' indeksa redova ds, ili Empty kad otkup nema nijednu stavku za papir.
+'
+' Pravilo (isto kao petlja koja je ovde stajala do analize brzine 2026-11):
+'  - red pripada otkupu kad mu je OtkupID (Trim, bez obzira na velika i mala
+'    slova) jednak otkupID;
+'  - za svaki redni broj rb = 1, 2, ... redom ide PRVI red otkupa (redom
+'    tabele) ciji je RedniBroj tacno rb -- dupli rb se ne stampa dvaput;
+'  - RedniBroj koji nije ceo broj iz 1..UBound(ds) se ne stampa (rupa u nizu se
+'    preskace, a niz se ne prekida).
+'
+' ZASTO funkcija: stara petlja je za svaki rb = 1..UBound(ds) prolazila CELU
+' tblOtkupStavke, pa je posle poslednje klase svaki rb bio pun prolaz bez
+' pogotka -- popuna je rasla sa KVADRATOM broja stavki (OTK-1). Ovde ide jedan
+' prolaz kroz tabelu, a rb petlja samo preko redova ovog otkupa. Javna zbog
+' testa: pravilo se meri nad sintetickim nizom, bez sveske i bez lista.
+Public Function OtkupListRedoviStavki(ByRef ds As Variant, ByVal sOtk As Long, _
+                                      ByVal sRb As Long, _
+                                      ByVal otkupID As String) As Variant
+    Dim mojih() As Long, nMoj As Long, r As Long, j As Long
+    Dim maxRb As Double, rbKraj As Long, rb As Long
+    Dim izlaz() As Long, nIzlaz As Long
+
+    If Not IsArray(ds) Then Exit Function
+    otkupID = Trim$(otkupID)
+
+    ReDim mojih(1 To UBound(ds, 1))
+    For r = 1 To UBound(ds, 1)
+        If StrComp(Trim$(CStr(ds(r, sOtk))), otkupID, vbTextCompare) = 0 Then
+            nMoj = nMoj + 1
+            mojih(nMoj) = r
+            If PrNz(ds(r, sRb)) > maxRb Then maxRb = PrNz(ds(r, sRb))
+        End If
+    Next r
+    If nMoj = 0 Then Exit Function
+
+    ' rb ne ide dalje od najveceg postojeceg, ni dalje od UBound(ds) (granica
+    ' stare petlje).
+    If maxRb >= UBound(ds, 1) Then
+        rbKraj = UBound(ds, 1)
+    Else
+        rbKraj = Int(maxRb)
+    End If
+
+    ReDim izlaz(1 To nMoj)
+    For rb = 1 To rbKraj
+        For j = 1 To nMoj
+            If PrNz(ds(mojih(j), sRb)) = rb Then
+                nIzlaz = nIzlaz + 1
+                izlaz(nIzlaz) = mojih(j)
+                Exit For
+            End If
+        Next j
+    Next rb
+    If nIzlaz = 0 Then Exit Function
+
+    ReDim Preserve izlaz(1 To nIzlaz)
+    OtkupListRedoviStavki = izlaz
 End Function
 
 ' Ispisuje jedan kompaktan primerak od reda r0 i dopunjava ga filler-redom do
