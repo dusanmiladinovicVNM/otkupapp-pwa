@@ -215,20 +215,22 @@ commit):
 | IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **neverifikovano** |
 | OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **neverifikovano** |
 | HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **neverifikovano** |
+| IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **neverifikovano** |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
 - **Na Windows-u ostaje:**
   - Compile;
-  - suite `RunAllTests` sa testovima 384 i 385;
+  - suite `RunAllTests` sa testovima 384, 385 i 386;
   - BFP test iznad;
   - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane`, obavezno, jer
     je dirano sidro sabotaže.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
-- IZV-3 i IZV-5: zbirni saldo po stanici i po kupcu, uz odluku D3;
 - IZV-2 i IZV-9: naziv entiteta i dinamički čipovi van prozora keša;
-- IZV-7: bubble sort u RANG-u.
+- IZV-7: bubble sort u RANG-u;
+- ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
+  čita knjiga ambalaže; to ide uz D1 (knjiga) i D3 (rečnici).
 
 Zbirna ambalaža (IZV-4) ide uz D1.
 
