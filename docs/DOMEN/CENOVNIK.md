@@ -256,10 +256,15 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
    završena, novi cenovnik nije spreman za rad operatera:
    1. kopija sveske pre uvoza koda (`.xlsm` sa strane);
    2. Admin → Ensure; greška znači da migracija nije uspela i da je tabela vraćena;
-   3. u setup logu red `EnsureCenovnikSchema: stornirano N zatecenih duplikata`
-      (bez tog reda: duplikata nije bilo);
-   4. drugi Admin → Ensure ne sme da upiše taj red: drugi prolaz migracije ne
-      stornira ništa, pa aktivnih duplikata više nema.
+   3. u `tblCenovnik` (list „Cenovnik") redovi sa `StornoRazlog` koji sadrži
+      „(migracija CEN-ODL-04)" su tačno raniji redovi svakog para duplikata, sa
+      upisanim `StorniranoAt`; lista Matični → Cenovnik ih više ne prikazuje.
+      (`LogSetup` piše u list `SETUP_LOG`, koji nastaje samo kroz `SetupNewPC`;
+      na svesci bez tog lista broj migriranih nije zapisan nigde, pa se kapija
+      meri nad tabelom, ne nad logom -- utvrđeno 19.11.2026);
+   4. drugi Admin → Ensure ne sme da doda nijedan takav red niti da promeni
+      `StorniranoAt` postojećih: drugi prolaz migracije ne stornira ništa, pa
+      aktivnih duplikata više nema.
 
 ## 9) Sposobnosti i testovi
 
