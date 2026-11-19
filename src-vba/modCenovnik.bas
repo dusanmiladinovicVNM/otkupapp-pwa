@@ -808,9 +808,16 @@ Private Function JeStorno(ByVal v As Variant) As Boolean
     JeStorno = (NzToText(v) = STORNO_DA)
 End Function
 
-' Cena ima najvise dve decimale (pare).
+' Cena ima najvise dve decimale (pare). Racun ide u Decimal-u: CDec iz Double-a
+' zaokruzuje na 15 znacajnih cifara -- broj kakav je operater otkucao -- pa
+' gornja granica 9999999999.99 (CEN-04) ostaje u parama. Apsolutna tolerancija
+' nad Double-om (1e-6) je tu padala: razmak susednih Double-ova oko 1e10 je
+' oko 2e-6, a posle mnozenja sa 100 greska prelazi toleranciju (run 19.11.2026,
+' test 374; revizija K4/K5). Pozivalac pre ovoga odbija cenu van opsega.
 Private Function JeUParama(ByVal c As Double) As Boolean
-    JeUParama = (Abs(c * 100# - Int(c * 100# + 0.5)) < 0.000001)
+    Dim p As Variant
+    p = CDec(c) * 100
+    JeUParama = (p = Int(p))
 End Function
 
 Private Function UPare(ByVal c As Double) As Double

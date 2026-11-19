@@ -747,6 +747,7 @@ Public Sub RunAllTests()
     RunOne 380
     RunOne 381
     RunOne 382
+    RunOne 383
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1372,6 +1373,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 380: TestName = "T_Cen_PitanjaSuGejtovana"
         Case 381: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
         Case 382: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
+        Case 383: TestName = "T_Cen_KucanjeUEditoruNeDiraSortu"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1762,6 +1764,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 380: T_Cen_PitanjaSuGejtovana
         Case 381: T_Cen_UnosSeVracaPriPaduUpisa
         Case 382: T_Cen_PotvrdaPrekidaStajeUDijalog
+        Case 383: T_Cen_KucanjeUEditoruNeDiraSortu
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -26464,6 +26467,19 @@ Private Sub T_MatEkran_KaskadaZavisnogCombo()
         End If
     Next r
     AssertEq losMap, "", "kontrola -> polje vraca isto polje koje je dalo tu kontrolu"
+
+    ' Dogadjaj "chg:" ne nosi ime okvira nego UNUTRASNJE kontrole (nm & "T",
+    ' NewFieldG + WireInput) -- i taj oblik mora da nadje svoje polje (383).
+    losMap = ""
+    For Each r In a
+        k = modMaticniIzvor.PoljeF(CStr(r), 0)
+        nm = modMaticniEkran.MatKontrolaPoljaTest("CENOVNIK", k)
+        If Len(nm) > 0 Then
+            If modMaticniEkran.MatPoljeIzKontroleTest("CENOVNIK", nm & "T") <> k Then _
+                losMap = losMap & " " & k & "<>" & nm & "T"
+        End If
+    Next r
+    AssertEq losMap, "", "tag dogadjaja (unutrasnja kontrola) -> polje vraca isto polje"
 End Sub
 
 ' ============================================================
@@ -35106,4 +35122,99 @@ Private Sub T_Cen_PotvrdaPrekidaStajeUDijalog()
               InStr(1, kratak, Poruka("CEN_MSG_PREKID_JOS"), vbBinaryCompare) = 0), True, _
              "382 kratak spisak ide ceo, bez napomene o preostalim"
     AssertEq PorukaNedostaje("CEN_MSG_PREKID_JOS"), False, "382 napomena o preostalim je u katalogu poruka"
+End Sub
+
+' Da li combo nosi stavku sa tacno ovim tekstom (kolona 0).
+Private Function CenComboIma(ByVal cb As Object, ByVal stavka As String) As Boolean
+    Dim i As Long
+    For i = 0 To cb.ListCount - 1
+        If CStr(cb.List(i, 0)) = stavka Then
+            CenComboIma = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' ============================================================
+' 383. KUCANJE U EDITORU CENOVNIKA NE PUNI SORTU IZNOVA (prijava 19.11.2026).
+' ============================================================
+' Fixture: kultura FX_VRSTA / FX_SORTA iz fixture-a; nista se ne upisuje.
+' Prijava operatera: "kad unosim cenu, otvori se padajuca lista sorte".
+' Dogadjaj promene stize ekranu sa imenom UNUTRASNJE kontrole ("chg:scrMatT1T"),
+' a mapiranje kontrola -> polje je poredilo ime okvira ("scrMatT1"). Polje se
+' nije nalazilo, pa je SVAKA promena bilo kog polja ponovo punila sortu, a
+' vracanje izbora sorte okidalo Change koji ljuska cita kao kucanje: panel sorte
+' (suzen na izabranu sortu) se otvarao preko polja cene. Meri se:
+'   1) kucanje cene NE puni sortu iznova: marker dodat u spisak sorte ostaje
+'      (FillCmb bi ga obrisao) -- deterministicno, bez oslonca na dogadjaje MSForms;
+'   2) promena vrste i dalje puni sortu iznova (kaskada iz 176 radi): marker nestaje;
+'   3) posle kucanja cene panel izbora nije otvoren. Ova tvrdnja meri samo ako
+'      MSForms nad neprikazanom formom okida Change pri programskom upisu.
+Private Sub T_Cen_KucanjeUEditoruNeDiraSortu()
+    Const EKRAN As String = "MAT_ROBA"
+    Const MARKER As String = "ZZ-MARKER-383"
+    Dim f As frmOtkupUI, z As Object, m As Object, cbS As Object
+    Dim nmV As String, nmS As String, nmC As String, prevLista As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+    CenPripremi
+    Set m = CreateObject("Scripting.Dictionary")
+    prevLista = modScrMatRoba.Scr_Lista()
+    modMaticniEkran.ZatvoriEditor
+    nmV = modMaticniEkran.MatKontrolaPoljaTest("CENOVNIK", "vrsta")
+    nmS = modMaticniEkran.MatKontrolaPoljaTest("CENOVNIK", "sorta")
+    nmC = modMaticniEkran.MatKontrolaPoljaTest("CENOVNIK", "cena")
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.OtkupUI_SekcijaTest SEK_MATICNI
+    modScrMatRoba.Scr_MrTestSet "CENOVNIK"
+    modOtkupUI.IdiNaEkran EKRAN
+    modOtkupUI.UiEvent "scrMatNovi", "Click", Empty
+    m("editor") = modMaticniEkran.MatEditKljucTest()
+    Set z = modOtkupUI.ScreenZone(EKRAN)
+    Set cbS = z.Controls(nmS).Controls(nmS & "T")
+
+    CenUpisiPoljeEditora EKRAN, "vrsta", FX_VRSTA
+    modOtkupUI.UiEvent nmV & "T", "Change", Empty
+    CenUpisiPoljeEditora EKRAN, "sorta", FX_SORTA
+    modOtkupUI.UiEvent nmS & "T", "Change", Empty
+    m("sorte") = CenComboIma(cbS, FX_SORTA)
+
+    ' Klik u cenu: fokus zatvara panel koji je kucanje vrste i sorte otvorilo.
+    modOtkupUI.UiEvent nmC & "T", "Focus", Empty
+    cbS.AddItem MARKER
+    CenUpisiPoljeEditora EKRAN, "cena", "3"
+    modOtkupUI.UiEvent nmC & "T", "Change", Empty
+    CenUpisiPoljeEditora EKRAN, "cena", "30"
+    modOtkupUI.UiEvent nmC & "T", "Change", Empty
+    m("marker") = CenComboIma(cbS, MARKER)
+    m("sorta") = CStr(cbS.value)
+    m("panel") = CBool(f.Controls("zPop").Visible)
+
+    ' Promena vrste i dalje puni sortu iznova.
+    CenUpisiPoljeEditora EKRAN, "vrsta", FX_VRSTA
+    modOtkupUI.UiEvent nmV & "T", "Change", Empty
+    m("markerPosleVrste") = CenComboIma(cbS, MARKER)
+
+    modMaticniEkran.Deaktiviraj
+    ReleaseOtkupUIForm f
+    Set f = Nothing
+    modScrMatRoba.Scr_MrTestSet prevLista
+
+    AssertEq m("editor"), "CENOVNIK", "383 preduslov: otvoren je editor novog reda cenovnika"
+    AssertEq m("sorte"), True, "383 preduslov: izbor vrste napunio je spisak sorti"
+    AssertEq m("marker"), True, "383 kucanje cene ne puni spisak sorte iznova"
+    AssertEq m("sorta"), FX_SORTA, "383 kucanje cene ne dira izabranu sortu"
+    AssertEq m("panel"), False, "383 kucanje cene ne otvara panel izbora"
+    AssertEq m("markerPosleVrste"), False, "383 promena vrste i dalje puni spisak sorte iznova"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modMaticniEkran.Deaktiviraj
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrMatRoba.Scr_MrTestSet prevLista
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Cen_KucanjeUEditoruNeDiraSortu", errDesc
 End Sub

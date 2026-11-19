@@ -14312,6 +14312,25 @@ SABOTAZE = {
         "T_Cen_PotvrdaPrekidaStajeUDijalog",
         "382 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)",
     ),
+    # Prijava 19.11.2026: dogadjaj "chg:" nosi ime unutrasnje kontrole (nm & "T"),
+    # pa mapiranje samo po imenu okvira ne nalazi polje -- svaka promena ponovo
+    # puni sortu, a vracanje izbora otvara panel sorte dok operater kuca cenu.
+    "cen-chg-tag-bez-polja": (
+        "modMaticniEkran.bas",
+        "            If kp = nm Or kp & \"T\" = nm Then\n",
+        "            If kp = nm Then   ' SABOTAZA: tag dogadjaja (nm & T) ne nalazi polje\n",
+        "T_Cen_KucanjeUEditoruNeDiraSortu",
+        "383 kucanje cene ne puni spisak sorte iznova",
+    ),
+    # Run 19.11.2026 (test 374): apsolutna tolerancija nad Double-om odbija
+    # ispravnu cenu na gornjoj granici kao "vise od dve decimale".
+    "cen-pare-apsolutna-tolerancija": (
+        "modCenovnik.bas",
+        "    JeUParama = (p = Int(p))\n",
+        "    JeUParama = (Abs(c * 100# - Int(c * 100# + 0.5)) < 0.000001)   ' SABOTAZA: tolerancija nad Double-om\n",
+        "T_Cen_UnosOdbijaIPusta",
+        "374 cena tacno na gornjoj granici prolazi",
+    ),
     # K10: posle prefill-a bez cene predlog ostaje izracunat nad mestom koje je
     # forma imala PRE prepisa.
     "cen-prefill-bez-predloga": (

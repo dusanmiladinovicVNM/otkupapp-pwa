@@ -3,7 +3,7 @@
 > **Status (18.11.2026):** jezgro (`modCenovnik`, šema, Ensure, poruke) i ekran
 > (matični podaci, forma otkupa) su u kodu na grani
 > `claude/elegant-mccarthy-jqlkk6` (od `f154530`: `7d5e7f5`, `1338d9b`). Testovi
-> 372–382 (`T_Cen_*`, §9) su imenovani unapred. **Ništa nije izvršeno u Excelu:**
+> 372–383 (`T_Cen_*`, §9) su imenovani unapred. **U Excelu je pušten samo ciljani prolaz 19.11.2026** (11 od 12 zeleno; 374 ispravljen posle toga, 383 nov — oba nepuštena). Do punog prolaza važi:
 > `run_vba` i Compile nisu pušteni (Linux sesija), pa je svako ponašanje ovde
 > **neverifikovano**. Izvršena je samo statička kapija `python3 tools/vba_check.py`.
 
@@ -194,7 +194,7 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
 |---|---|---|---|
 | O175 | tabela `maticni.cenovnik` | §2, `schema/schema.json` | Nema `tenant_id`, RLS ni grant. ID je `CEN-…` iz `GetNextID`, ne UUIDv7. Autor je tekst (`AuditUser`), ne FK na članstvo. |
 | MAT-18 | red se ne menja (grant samo storno kolone i `zamenjen_sa_id`) | CEN-02 | Nema granta po koloni. Drže ga jedini pisac i `who_writes --check-ownership`; ručna izmena lista ostaje moguća. |
-| MAT-19, O185 | cena `numeric(12,2)` > 0, ne `NaN`; klasa I/II; din/kg sa PDV-om | CEN-01, CEN-04 | Cena je `Double`, ne `Novac` u parama. Dve decimale proverava `JeUParama:749` sa tolerancijom 1e-6, a upis je `Round(cena, 2)`. Red mimo pisca niko ne proverava; čitalac cenu ≤ 0 tumači kao „nema cene" (CEN-07). |
+| MAT-19, O185 | cena `numeric(12,2)` > 0, ne `NaN`; klasa I/II; din/kg sa PDV-om | CEN-01, CEN-04 | Cena je `Double`, ne `Novac` u parama. Dve decimale proverava `JeUParama` u Decimal-u (`CDec`, 15 značajnih cifara), a upis je `Round(cena, 2)`. Ranija apsolutna tolerancija 1e-6 nad Double-om odbijala je ispravnu cenu na gornjoj granici (izmereno u Excelu 19.11.2026, test 374). Red mimo pisca niko ne proverava; čitalac cenu ≤ 0 tumači kao „nema cene" (CEN-07). |
 | MAT-20 | jedan nestorniran red po (kultura, klasa, nivo, dan), jedinstveni indeks | CEN-03 | Ključ je tekst. Indeksa nema: pisac odbija, čitalac diže grešku. Zatečeni duplikati → CEN-ODL-04. |
 | MAT-21 | storno potpun: vreme, autor, razlog 1–500 bez belina | CEN-11 | Nema check-a „sve tri ili nijedna": četiri ćelije piše jedan pisac u jednoj transakciji. Skup belina je uži (razmak, tab, CR, LF, NBSP; AgriXSystems skida ceo JS skup). |
 | MAT-22 | storno jednokratan i konačan; drugi zid `update … where stornirano_at is null` | CEN-12 | Drugi zid je ponovno čitanje ćelije u istoj transakciji. Testa trke nema: svesku piše jedan Excel proces. |
@@ -289,6 +289,7 @@ Testovi (`modTest`, indeksi fiksirani unapred; nijedan nije pušten):
 | 380 | `T_Cen_PitanjaSuGejtovana` | seam: pitanje se zabeleži, ništa se ne upiše |
 | 381 | `T_Cen_UnosSeVracaPriPaduUpisa` | unos u svojoj transakciji: pad posle dodatog reda ne ostavlja red (CEN-REV-01) |
 | 382 | `T_Cen_PotvrdaPrekidaStajeUDijalog` | potvrda prekida staje u `MsgBox`: ukupan broj, broj preostalih i pitanje uvek vidljivi (CEN-ODL-03) |
+| 383 | `T_Cen_KucanjeUEditoruNeDiraSortu` | kucanje u editoru (cena) ne puni sortu iznova i ne otvara panel sorte; promena vrste i dalje puni sortu (prijava operatera 19.11.2026) |
 
 **Premisa postojećeg testa se menja:** `T_MatEkran_RadnjeIRezim` (indeks 149)
 tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
@@ -296,7 +297,8 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
 
 ## 10) Nije provereno
 
-- `run_vba` nije pušten (Linux sesija). Nijedan test 372–382 nije izvršen, a ni
+- Ciljani prolaz 19.11.2026 (operater, Windows): 11 od 12 zeleno; pao 374 na granici para
+  (ispravljeno, nije ponovo pušteno), 383 je dodat posle. Pune regresije, dokaz sabotaža i
   Compile (`Alt+F11 → Debug → Compile VBAProject`). Ponašanje je neverifikovano.
 - UI tokovi na pravom Excelu: InputBox za razlog, MsgBox pregleda, editor
   ispravke (datum kao `dd.mm.yyyy`, cena kao `CStr(Double)` — čitanje nazad uz
@@ -318,6 +320,16 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
 - Pregled pre upisa: grana rezerve (nova globalna cena sorte prekida posebnu
   cenu vrste bez sorte) i poziv sa `izuzmiID` (ispravka) nemaju svoj slučaj u
   378.
+- **Editor: panel sorte pri kucanju cene (prijava 19.11.2026, ispravljeno).**
+  Događaj promene stiže ekranu sa imenom unutrašnje kontrole (`scrMatT1T`), a
+  `modMaticniEkran.PoljeIzKontrole` je poredio ime okvira (`scrMatT1`). Svaka
+  promena bilo kog polja je zato ponovo punila sortu, a vraćanje izbora sorte je
+  ljuska čitala kao kucanje i otvarala panel sorte. Sada mapiranje prima oba
+  oblika, a programski upisi editora idu pod `modOtkupUI.PanelIzboraMiruj`
+  (isti obrazac kao `modScrDoplata`). Mere ga 176 (pravi tag) i 383. Tvrdnja
+  383 o zatvorenom panelu meri samo ako MSForms nad neprikazanom formom okida
+  `Change` pri programskom upisu; kvar je zatečen (od uvođenja kaskade sorte),
+  ne iz ovog reza.
 - **UX dug (CEN-REV-03, zapisan, nije rešen).** Kad cenovnik za nov kontekst
   (stanica, datum, režim) nema cenu, polje zadrži prethodni predlog (CEN-07: bez
   reda se polje ne dira, da ne bi pao ručni unos ili cena prepisana sa

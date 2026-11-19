@@ -1173,14 +1173,20 @@ Private Function CitajPolje(ByVal lista As String, ByVal poljeKljuc As String) A
     Err.Clear
 End Function
 
+' Programski upis nije kucanje: upis okida Change, a ljuska Change u combo-u
+' ekrana cita kao kucanje i otvara panel izbora. Zato upis ide pod
+' modOtkupUI.PanelIzboraMiruj (isti obrazac kao modScrDoplata), i pri otvaranju
+' editora (OtvoriIzmenu) i pri vracanju izbora posle punjenja zavisnog combo-a.
 Private Sub PostaviPolje(ByVal lista As String, ByVal poljeKljuc As String, ByVal v As String)
-    Dim z As Object, nm As String
+    Dim z As Object, nm As String, muk As Boolean
     On Error Resume Next
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     nm = KontrolaPolja(lista, poljeKljuc)
     If Len(nm) = 0 Then Exit Sub
+    muk = modOtkupUI.PanelIzboraMiruj(True)
     z.Controls(nm).Controls(nm & "T").value = v
+    modOtkupUI.PanelIzboraMiruj muk
     Err.Clear
 End Sub
 
@@ -1237,7 +1243,7 @@ End Sub
 ' vrednost, pa bi bez ovoga sorta ostala prazna i na izmeni i na novom unosu.
 Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
     Dim z As Object, a As Variant, r As Variant, izvor As String
-    Dim k As String, staro As String
+    Dim k As String, staro As String, muk As Boolean
     If mUZavisnima Then Exit Sub
     On Error Resume Next
     Set z = Zona()
@@ -1245,6 +1251,8 @@ Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
     a = modMaticniIzvor.MatPolja(lista)
     If Not IsArray(a) Then Exit Sub
     mUZavisnima = True
+    ' Punjenje i vracanje izbora nisu kucanje (v. PostaviPolje).
+    muk = modOtkupUI.PanelIzboraMiruj(True)
     BeginTableCache
     For Each r In a
         izvor = modMaticniIzvor.PoljeF(CStr(r), 5)
@@ -1263,21 +1271,32 @@ Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
         End If
     Next r
     EndTableCache
+    modOtkupUI.PanelIzboraMiruj muk
     mUZavisnima = False
     Err.Clear
 End Sub
 
 ' Kljuc polja koje nosi datu kontrolu bazena -- obrnut smer od KontrolaPolja.
 ' Racuna se iz istog opisa, pa se dva smera ne mogu razici.
+'
+' nm je ime okvira polja ("scrMatC1") ILI ime njegove unutrasnje kontrole
+' ("scrMatC1T"). Dogadjaj "chg:" nosi BAS unutrasnju: NewFieldG pravi kontrolu
+' nm & "T" i nju ozicava (WireInput). Dok se poredilo samo ime okvira, nijedna
+' promena nije nalazila svoje polje, pa je OsveziZavisne(lista, "") na SVAKU
+' promenu bilo kog polja ponovo punio sortu -- a vracanje izbora sorte je
+' otvaralo panel sorte dok operater kuca cenu (prijava 19.11.2026, test 383).
 Private Function PoljeIzKontrole(ByVal lista As String, ByVal nm As String) As String
-    Dim a As Variant, r As Variant, k As String
+    Dim a As Variant, r As Variant, k As String, kp As String
     a = modMaticniIzvor.MatPolja(lista)
     If Not IsArray(a) Then Exit Function
     For Each r In a
         k = modMaticniIzvor.PoljeF(CStr(r), 0)
-        If KontrolaPolja(lista, k) = nm Then
-            PoljeIzKontrole = k
-            Exit Function
+        kp = KontrolaPolja(lista, k)
+        If Len(kp) > 0 Then
+            If kp = nm Or kp & "T" = nm Then
+                PoljeIzKontrole = k
+                Exit Function
+            End If
         End If
     Next r
 End Function
