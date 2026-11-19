@@ -24027,6 +24027,11 @@ Private Sub T_KesIzvedeno_ZbirniIstiUzKes()
     Dim a As Variant, b As Variant, prviOrig As String, prviPosle As String
     Dim dubina As Long, otvoren As Boolean
     Dim errNum As Long, errDesc As String
+    Dim tx As clsTransaction, koopPre As String, koopPosle As String
+
+    ' Otisak tblKooperanti: upis iz koraka (4) ide u transakciji i vraca se
+    ' rollback-om u celosti, i audit koji UpdateCell pecatira (TEST390-REV-01).
+    koopPre = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
 
     ' (1) Bez prozora: put kakav je bio, kesa nema.
     bezOM = KesIzvPotpis(modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), IzvDoD()))
@@ -24059,11 +24064,16 @@ Private Sub T_KesIzvedeno_ZbirniIstiUzKes()
     hKopija = modDataAccess.IzvedenoPogodakaTest() - h0
     If IsArray(b) Then prviPosle = NzToText(b(1, 1))
 
-    ' (4) Upis kroz modDataAccess (ista vrednost, menja se samo audit) prazni kes.
+    ' (4) Upis kroz modDataAccess prazni kes. Upis je u transakciji, pa ga
+    ' rollback vraca u celosti (i ModifiedAt/ModifiedBy).
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_KOOPERANTI
     PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, COL_KOOP_ID, FX_KOOPERANT
     h0 = modDataAccess.IzvedenoPogodakaTest()
     b = modOtkup.StavkeOtkupaRedovi()
     hUpis = modDataAccess.IzvedenoPogodakaTest() - h0
+    tx.RollbackTx
 
     EndTableCache
     otvoren = False
@@ -24079,13 +24089,17 @@ CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
     If otvoren Then EndTableCache
+    koopPosle = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesIzvedeno_ZbirniIstiUzKes", errDesc
 
     AssertEq (Len(bezOM) > 0 And Len(bezKup) > 0 And Len(bezRob) > 0), True, _
              "386 preduslov: sva tri zbirna izvestaja imaju sadrzaj nad fixture-om"
     AssertEq (Len(prviOrig) > 0), True, "386 preduslov: stavke otkupa postoje"
+    AssertEq (Len(koopPre) > 0 And koopPosle = koopPre), True, _
+             "386 preduslov: tblKooperanti je posle testa ista kao pre, i audit"
     AssertEq saOM, bezOM, "386 zbirni saldo po OM je isti sa kesom izvedenih nizova"
     AssertEq saKup, bezKup, "386 zbirni saldo po kupcima je isti sa kesom izvedenih nizova"
     AssertEq saRob, bezRob, "386 zbirna roba po kupcima je ista sa kesom izvedenih nizova"
@@ -24117,16 +24131,22 @@ Private Sub T_Izv_NazivEntitetaJednomPoKontekstu()
     Dim d As Variant, imeOrig As String, od As Double
     Dim n1 As String, nPretraga As String, nPosleUpisa As String
     Dim errNum As Long, errDesc As String
+    Dim tx As clsTransaction, koopPre As String, koopPosle As String
 
     od = CDbl(DateSerial(2026, 1, 5))
     imeOrig = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+    koopPre = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
     On Error GoTo CleanUp
     modScrIzvestaji.Scr_IzTestReset
     modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, od, IzvDoS()
     d = modScrIzvestaji.Scr_Rows("sve", "")
     n1 = modScrIzvestaji.Scr_IzCtxNazivTest()
 
-    ' (a) Ime promenjeno mimo UI upisa; pretraga nad istim snimkom.
+    ' (a) Ime promenjeno mimo UI upisa; pretraga nad istim snimkom. Promena je
+    ' u transakciji, pa je rollback vraca u celosti, i audit (TEST390-REV-01).
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_KOOPERANTI
     PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", "ZZ-387"
     d = modScrIzvestaji.Scr_Rows("sve", "x")
     d = modScrIzvestaji.Scr_Rows("sve", "")
@@ -24141,9 +24161,10 @@ CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     On Error Resume Next
-    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", imeOrig
+    If Not tx Is Nothing Then tx.RollbackTx
     modUiData.ResetCache
     modScrIzvestaji.Scr_IzTestReset
+    koopPosle = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
     On Error GoTo 0
     If errNum <> 0 Then Err.Raise errNum, "modTest.T_Izv_NazivEntitetaJednomPoKontekstu", errDesc
 
@@ -24151,6 +24172,8 @@ CleanUp:
     AssertEq (InStr(1, n1, imeOrig, vbTextCompare) > 0 And _
               InStr(1, n1, FX_KOOPERANT, vbBinaryCompare) > 0), True, _
              "387 preduslov: kartica nosi ime i ID kooperanta"
+    AssertEq (Len(koopPre) > 0 And koopPosle = koopPre), True, _
+             "387 preduslov: tblKooperanti je posle testa ista kao pre, i audit"
     AssertEq nPretraga, n1, _
              "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo"
     AssertEq (InStr(1, nPosleUpisa, "ZZ-387", vbBinaryCompare) > 0), True, _
@@ -24227,9 +24250,10 @@ Private Sub T_Nevezane_DupliIdPadaPoImenu()
     Dim d As Variant, cId As Long, i As Long, n As Object
     Dim id1 As String, id2 As String, red2 As Long
     Dim cistoBroj As Long, padBroj As Long, padOpis As String
-    Dim vracen As String
+    Dim tx As clsTransaction, otpPre As String, otpPosle As String
 
     d = GetTableData(TBL_OTPREMNICA)
+    otpPre = KesIzvPotpis(d)
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     If IsArray(d) And cId > 0 Then
         For i = 1 To UBound(d, 1)
@@ -24249,23 +24273,31 @@ Private Sub T_Nevezane_DupliIdPadaPoImenu()
     cistoBroj = Err.Number
     Err.Clear
     If red2 > 0 Then
-        UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id1
-        Set n = modDokumenta.NevezaneOtpremnice()
-        padBroj = Err.Number
-        padOpis = Err.description
-        Err.Clear
+        ' Kvar ide u transakciji: rollback vraca CEO red, i ModifiedAt/ModifiedBy
+        ' koje UpdateCell pecatira -- dva UpdateCell-a bi vratila ID, ali ne i
+        ' audit (pregled 19.11.2026, TEST390-REV-01). Bez aktivne TX nema kvara.
+        Set tx = New clsTransaction
+        tx.BeginTx
+        If Err.Number = 0 Then tx.AddTableSnapshot TBL_OTPREMNICA
+        If Err.Number = 0 Then
+            UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id1
+            Set n = modDokumenta.NevezaneOtpremnice()
+            padBroj = Err.Number
+            padOpis = Err.description
+            Err.Clear
+        End If
         ' Fixture se vraca PRE tvrdnji.
-        UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id2
-        d = GetTableData(TBL_OTPREMNICA)
-        vracen = Trim$(NzToText(d(red2, cId)))
+        tx.RollbackTx
     End If
     Err.Clear
+    otpPosle = KesIzvPotpis(GetTableData(TBL_OTPREMNICA))
     On Error GoTo 0
 
     AssertEq (Len(id1) > 0 And Len(id2) > 0 And red2 > 0), True, _
              "390 preduslov: fixture ima bar dve otpremnice"
     AssertEq cistoBroj, 0, "390 preduslov: nad cistim stanjem citalac ne pada"
-    AssertEq vracen, id2, "390 preduslov: pokvaren ID je vracen"
+    AssertEq (Len(otpPre) > 0 And otpPosle = otpPre), True, _
+             "390 preduslov: tblOtpremnica je posle testa ista kao pre, i audit"
     AssertEq padBroj, vbObjectError + 1941, _
              "390 nevezane otpremnice: dupli OtpremnicaID pada po imenu"
     AssertEq (InStr(1, padOpis, id1, vbBinaryCompare) > 0), True, _
