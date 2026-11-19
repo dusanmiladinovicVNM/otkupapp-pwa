@@ -585,6 +585,65 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "MATU_ERR_CENOVNIK_APPEND", _
         "Cenovnik se ne menja " & ChrW(8212) & " nova cena se DODAJE kao nov va" & ChrW(382) & "e" & ChrW(263) & "i red."
     UpsertRow lo, existing, "MATU_ERR_CENA_NIJE_UPISANA", "Cena nije upisana."
+    ' --- cenovnik: model AgriXSystems (modCenovnik, docs/DOMEN/CENOVNIK.md CEN-01..13) ---
+    UpsertRow lo, existing, "CEN_ERR_VRSTA_OBAVEZNA", _
+        "Vrsta vo" & ChrW(263) & "a je obavezna."
+    UpsertRow lo, existing, "CEN_ERR_KULTURA_NEPOZNATA", _
+        "Vrsta i sorta nisu u " & ChrW(353) & "ifarniku kultura."
+    UpsertRow lo, existing, "CEN_ERR_KLASA", _
+        "Klasa mora biti I ili II."
+    UpsertRow lo, existing, "CEN_ERR_CENA_POZITIVNA", _
+        "Cena mora biti ve" & ChrW(263) & "a od nule."
+    UpsertRow lo, existing, "CEN_ERR_CENA_OPSEG", _
+        "Cena je van dozvoljenog opsega."
+    UpsertRow lo, existing, "CEN_ERR_CENA_DECIMALE", _
+        "Cena sme imati najvi" & ChrW(353) & "e dve decimale (pare)."
+    UpsertRow lo, existing, "CEN_ERR_STANICA_NEPOZNATA", _
+        "Stanica nije u " & ChrW(353) & "ifarniku stanica."
+    UpsertRow lo, existing, "CEN_ERR_DATUM", _
+        "Datum va" & ChrW(382) & "enja nije ispravan."
+    UpsertRow lo, existing, "CEN_ERR_DATUM_GRANICA", _
+        "Datum va" & ChrW(382) & "enja mora biti od 31 dan unazad do 366 dana unapred od danas."
+    UpsertRow lo, existing, "CEN_ERR_DUPLIKAT", _
+        "Za ovu robu, klasu, stanicu i dan ve" & ChrW(263) & " postoji va" & ChrW(382) & "e" & ChrW(263) & "a cena " & ChrW(8212) & " ispravi je ili storniraj, pa unesi novu."
+    UpsertRow lo, existing, "CEN_ERR_NEMA_REDA", _
+        "Red cenovnika nije prona" & ChrW(273) & "en jednozna" & ChrW(269) & "no."
+    UpsertRow lo, existing, "CEN_ERR_STORNIRANA", _
+        "Red cenovnika je ve" & ChrW(263) & " storniran " & ChrW(8212) & " storno je kona" & ChrW(269) & "an."
+    UpsertRow lo, existing, "CEN_ERR_RAZLOG_OBAVEZAN", _
+        "Razlog je obavezan."
+    UpsertRow lo, existing, "CEN_ERR_RAZLOG_DUZINA", _
+        "Razlog sme imati najvi" & ChrW(353) & "e 500 znakova."
+    UpsertRow lo, existing, "CEN_ERR_ISPRAVKA_BEZ_PROMENE", _
+        "Ispravka ne menja ni" & ChrW(353) & "ta " & ChrW(8212) & " promeni bar jedno polje."
+    UpsertRow lo, existing, "CEN_ERR_STORNO_NIJE_UPISAN", _
+        "Storno cene nije upisan."
+    UpsertRow lo, existing, "CEN_ERR_ISPRAVKA_NIJE_UPISANA", _
+        "Ispravka cene nije upisana."
+    UpsertRow lo, existing, "CEN_ERR_MIGRACIJA", _
+        "Migracija duplikata cenovnika nije uspela; tabela je vra" & ChrW(263) & "ena. Detalji su u logu."
+    UpsertRow lo, existing, "CEN_ASK_RAZLOG_STORNO", _
+        "Razlog storna cene (obavezno). Storno je kona" & ChrW(269) & "an i ne poni" & ChrW(353) & "tava se."
+    UpsertRow lo, existing, "CEN_ASK_RAZLOG_ISPRAVKE", _
+        "Razlog ispravke cene (obavezno). Stari red se stornira, a nastaje nov red sa vezom na stari."
+    UpsertRow lo, existing, "CEN_ASK_PREKID_POSEBNIH", _
+        "Nova globalna cena od tog dana prekida posebnu cenu na:"
+    UpsertRow lo, existing, "CEN_ASK_NASTAVITI", _
+        "Upisati globalnu cenu?"
+    UpsertRow lo, existing, "CEN_MSG_PREKID_JOS", _
+        "... i jo" & ChrW(353) & " stanica:"
+    UpsertRow lo, existing, "CEN_MSG_OTKAZANO", _
+        "Otkazano " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano."
+    UpsertRow lo, existing, "CEN_OK_STORNIRANO", _
+        "Cena stornirana:"
+    UpsertRow lo, existing, "CEN_OK_ISPRAVLJENO", _
+        "Cena ispravljena, nov red:"
+    UpsertRow lo, existing, "CEN_MSG_ISPRAVKA_OTVORENA", _
+        "Ispravka: promeni polja pa Sa" & ChrW(269) & "uvaj " & ChrW(8212) & " stari red se stornira, nastaje nov."
+    UpsertRow lo, existing, "CEN_MSG_NAPOMENA", _
+        "Prazna stanica = globalna cena. Cena va" & ChrW(382) & "i od svog datuma do slede" & ChrW(263) & "e; istog dana posebna pobe" & ChrW(273) & "uje globalnu. Dvoklik = nova cena za istu robu."
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_ISPRAVI", "Ispravi"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_STORNO", "Storniraj"
     UpsertRow lo, existing, "MATU_ERR_UPIS", "Upis nije uspeo:"
     UpsertRow lo, existing, "MATU_OK_DODATO", "Dodato:"
     UpsertRow lo, existing, "MATU_OK_IZMENJENO", "Izmenjeno."

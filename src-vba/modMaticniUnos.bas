@@ -17,7 +17,9 @@ Attribute VB_Name = "modMaticniUnos"
 '   - ne crta i ne cita kontrole. Ulaz je RECNIK "kljuc polja -> vrednost", isti
 '     obrazac koji ljuska koristi za Scr_Save. Poruku o gresci prikazuje pozivalac;
 '     modul u recnik upise "fokus" = kljuc polja koje je odbijeno.
-'   - ne racuna sam: cene idu kroz modCenovnik.AddCena, ID kroz GetNextID, upis
+'   - ne racuna sam: cene idu kroz modCenovnik (provere CenaUnosProblem /
+'     CenaIspravkaProblem, pisci AddCena / IspraviCenu / StornirajCenu -- v.
+'     odeljak CENOVNIK ispod), ID kroz GetNextID, upis
 '     kroz AppendRow/RequireUpdateCell u clsTransaction, MALINA ogledalo kroz
 '     modMalina -- sve postojece rutine, iste koje je forma zvala.
 '   - NE dira Korisnike. tblKorisnici nosi matricu prava i PreparePin, i ide u
@@ -112,8 +114,8 @@ Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
         Exit Function
     End If
 
-    ' Cenovnik je append-only i ne ide kroz opsti upis: nova cena je nov vazeci
-    ' red, a racuna ga modCenovnik. Ista rutina koju je forma zvala.
+    ' Cenovnik ne ide kroz opsti upis: red se posle unosa ne menja (CEN-02),
+    ' a provere i upis drzi modCenovnik (DodajCenu -> AddCena).
     If kljuc = "CENOVNIK" Then
         MatDodaj = DodajCenu(polja, noviID)
         Exit Function
@@ -201,8 +203,10 @@ Public Function MatIzmeni(ByVal kljuc As String, ByVal red As Long, _
         Exit Function
     End If
     If kljuc = "CENOVNIK" Then
-        ' Istorija cena se ne menja -- nova cena je nov red. Isto sto legacy
-        ' forma kaze, i zato je "Izmeni" tamo sakriveno za Cenovnik.
+        ' Red cenovnika se ne menja na mestu (CEN-02). Pogresan red se
+        ' ISPRAVLJA (MatIspraviCenu: storno starog + nov red u jednoj
+        ' transakciji, CEN-13) ili STORNIRA (MatStornirajCenu) -- nikad kroz
+        ' izmenu celija, pa ovaj put i dalje odbija.
         MatIzmeni = Poruka("MATU_ERR_CENOVNIK_APPEND")
         Exit Function
     End If
@@ -309,6 +313,106 @@ EH:
     MatPromeniStatus = OdustaniUzGresku(tx, "MatPromeniStatus", kljuc)
 End Function
 
+'----------------------------------------------------------- CENOVNIK
+' Cenovnik ima svoj tok (docs/DOMEN/CENOVNIK.md): red se posle unosa ne menja
+' (CEN-02), pogresan se STORNIRA (CEN-11, CEN-12), a ISPRAVKA je storno starog
+' i nov red u jednoj transakciji (CEN-13). Pravila i upis drzi modCenovnik;
+' ovde je samo prevod recnika polja editora u argumente, i kljuca problema u
+' polje za fokus. Pravo je postojece MaticniPodaci kroz MatBranaUpisa -- bez
+' novog prava (odluka vlasnika).
+'
+' Recnik nosi kljuceve polja editora: vrsta, sorta, klasa, stanica, datum,
+' cena. Stanica stize u PRIKAZ obliku iz combo-a ("Naziv (ST-xxx)") ili
+' prazna (= globalna cena).
+
+' Provera unosa NOVE cene. "" ili poruka operateru, uz polja(MAT_FOKUS) = polje
+' koje ne valja. Ista provera koju DodajCenu pusta pre AddCena, a AddCena jos
+' jednom pre upisa -- jedna implementacija (CenaUnosProblem), vise pozivalaca.
+' Greska citanja je fail-closed: poruka, ne "prolazi".
+Public Function MatCenaProblem(ByVal polja As Object) As String
+    Dim dat As Date, vrsta As String, sorta As String, klasa As String
+    Dim cena As Double, stanicaID As String, tx As clsTransaction
+    On Error GoTo EH
+    MatCenaProblem = CenaUnosOdbija(polja, dat, vrsta, sorta, klasa, cena, stanicaID)
+    Exit Function
+EH:
+    MatCenaProblem = OdustaniUzGresku(tx, "MatCenaProblem", "CENOVNIK")
+End Function
+
+' Pregled pre upisa GLOBALNE cene (ADR 0019, odluka vlasnika): spisak stanica
+' cija ranija POSEBNA cena od tog dana prestaje, ili "". Posebna cena (stanica
+' izabrana) ne prekida nista, pa je odgovor "". izuzmiID je red koji ispravka
+' stornira u istoj transakciji. Zove se POSLE provere; recnik koji ne prolazi
+' proveru nema sta da pokaze ("").
+'
+' Greska citanja se NAMERNO ne guta: "" bi znacilo "nista ne prestaje", pa bi
+' se globalna cena upisala bez pitanja. Ekran je pod branom Scr_Event (KI-016),
+' pa pad zaustavlja potez i nista se ne upisuje.
+Public Function MatCenaPregled(ByVal polja As Object, _
+                               Optional ByVal izuzmiID As String = "") As String
+    Dim dat As Date, vrsta As String, sorta As String, klasa As String
+    Dim cena As Double, stanicaID As String
+    If Len(CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, _
+                       Len(izuzmiID) > 0)) > 0 Then Exit Function
+    If Len(stanicaID) > 0 Then Exit Function
+    MatCenaPregled = modCenovnik.PrekinutePosebneCene(dat, vrsta, sorta, klasa, izuzmiID)
+End Function
+
+' Provera ISPRAVKE reda staraID (CEN-13): "" ili poruka, uz fokus kao kod
+' unosa. Ispravka bez ijedne promene se odbija PRE storna, a ispravka koja
+' zadrzava stari Datum nije pod granicom datuma (CEN-09) -- oba pravila drzi
+' modCenovnik.CenaIspravkaProblem.
+Public Function MatIspravkaCeneProblem(ByVal staraID As String, ByVal polja As Object) As String
+    Dim dat As Date, vrsta As String, sorta As String, klasa As String
+    Dim cena As Double, stanicaID As String, k As String, tx As clsTransaction
+    On Error GoTo EH
+    MatIspravkaCeneProblem = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, True)
+    If Len(MatIspravkaCeneProblem) > 0 Then Exit Function
+    k = modCenovnik.CenaIspravkaProblem(staraID, dat, vrsta, sorta, klasa, cena, stanicaID)
+    If Len(k) > 0 Then MatIspravkaCeneProblem = CenaOdbij(polja, k, sorta)
+    Exit Function
+EH:
+    MatIspravkaCeneProblem = OdustaniUzGresku(tx, "MatIspravkaCeneProblem", "CENOVNIK")
+End Function
+
+' Ispravka reda staraID (CEN-13) u modCenovnik.IspraviCenu: storno starog i nov
+' red u JEDNOJ transakciji, veza u oba smera. "" = uspeh i noviID = ID novog
+' reda; inace poruka i noviID prazan. Pisac sam ponovo pusta sve provere
+' (razlog, red, kljuc dana, granica), pa poziv mimo ekrana ne zaobilazi nijednu.
+Public Function MatIspraviCenu(ByVal staraID As String, ByVal polja As Object, _
+                               ByVal razlog As String, ByRef noviID As String) As String
+    Dim dat As Date, vrsta As String, sorta As String, klasa As String
+    Dim cena As Double, stanicaID As String, tx As clsTransaction
+    On Error GoTo EH
+    noviID = ""
+    MatIspraviCenu = MatBranaUpisa("CENOVNIK")
+    If Len(MatIspraviCenu) > 0 Then Exit Function
+    MatIspraviCenu = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID, True)
+    If Len(MatIspraviCenu) > 0 Then Exit Function
+    MatIspraviCenu = modCenovnik.IspraviCenu(staraID, dat, vrsta, sorta, klasa, cena, _
+                                             stanicaID, razlog, noviID)
+    ' "" bez novog ID-a nije uspeh -- ugovor pisca kaze da ga uspeh uvek nosi.
+    If Len(MatIspraviCenu) = 0 And Len(noviID) = 0 Then _
+        MatIspraviCenu = Poruka("CEN_ERR_ISPRAVKA_NIJE_UPISANA")
+    Exit Function
+EH:
+    noviID = ""
+    MatIspraviCenu = OdustaniUzGresku(tx, "MatIspraviCenu", "CENOVNIK")
+End Function
+
+' Storno reda cenaID (CEN-11, CEN-12): razlog obavezan, storno jednokratan i
+' konacan -- pravila drzi modCenovnik.StornirajCenu. "" = uspeh, inace poruka.
+Public Function MatStornirajCenu(ByVal cenaID As String, ByVal razlog As String) As String
+    Dim tx As clsTransaction
+    On Error GoTo EH
+    MatStornirajCenu = MatBranaUpisa("CENOVNIK")
+    If Len(MatStornirajCenu) > 0 Then Exit Function
+    MatStornirajCenu = modCenovnik.StornirajCenu(cenaID, razlog)
+    Exit Function
+EH:
+    MatStornirajCenu = OdustaniUzGresku(tx, "MatStornirajCenu", "CENOVNIK")
+End Function
+
 '------------------------------------------------------------ POMOCNE
 ' Red u tabeli po PK. Ovo je jedino mesto na kom se red bira -- i bira se po
 ' IDENTITETU. Legacy je birao po poziciji u listboxu (m_RowMap); u mrezi koja se
@@ -361,7 +465,17 @@ Public Function MatVrednostiReda(ByVal kljuc As String, ByVal red As Long) As Ob
         v = ""
         If Len(kol) > 0 Then
             c = GetColumnIndex(tbl, kol)
-            If c > 0 Then v = Trim$(NzToText(data(red, c)))
+            If c > 0 Then
+                ' Datum ide u editor kao dd.mm.yyyy -- oblik koji TryParseDateValue
+                ' cita deterministicki (DMY), nezavisno od regionalnih podesavanja.
+                ' CStr(Date) je lokalni kratki datum: "11/18/2026" sa m/d/y masine
+                ' se ne cita nazad, pa bi ispravka cene tiho dobila danasnji datum.
+                If modMaticniIzvor.PoljeF(CStr(r), 2) = "date" Then
+                    v = DatumZaEditor(data(red, c))
+                Else
+                    v = Trim$(NzToText(data(red, c)))
+                End If
+            End If
         End If
         ' Strani kljuc se u editoru vidi kao prikaz, ne kao ID -- inace bi
         ' operater u polju "Stanica" video ST-003.
@@ -532,27 +646,124 @@ Private Function PrikazZaCombo(ByVal spec As String, ByVal v As String) As Strin
     End Select
 End Function
 
-' Nova cena kroz modCenovnik -- racun se ne prepisuje ovde.
+' Nova cena kroz modCenovnik -- racun se ne prepisuje ovde. Provera je ista
+' kao u MatCenaProblem (CenaUnosOdbija), pa operater dobija tacan razlog uz
+' polje; AddCena je pusta jos jednom pre upisa (drugi zid, ista funkcija).
 Private Function DodajCenu(ByVal polja As Object, ByRef noviID As String) As String
-    Dim cena As Double, dat As Date, res As String, greska As String
-    greska = Proveri("CENOVNIK", polja)
-    If Len(greska) > 0 Then
-        DodajCenu = greska
-        Exit Function
-    End If
-    If Not TryParseDouble(Vred(polja, "cena"), cena) Then
-        DodajCenu = Poruka("MATU_ERR_BROJ")
-        Exit Function
-    End If
-    ' Prazan ili neispravan datum znaci DANAS -- isto sto legacy forma radi.
-    If Not TryParseDateValue(Vred(polja, "datum"), dat) Then dat = Date
-    res = AddCena(dat, Vred(polja, "vrsta"), Vred(polja, "sorta"), _
-                  Vred(polja, "klasa"), cena)
+    Dim dat As Date, vrsta As String, sorta As String, klasa As String
+    Dim cena As Double, stanicaID As String, res As String
+    DodajCenu = CenaUnosOdbija(polja, dat, vrsta, sorta, klasa, cena, stanicaID)
+    If Len(DodajCenu) > 0 Then Exit Function
+    res = modCenovnik.AddCena(dat, vrsta, sorta, klasa, cena, stanicaID)
     If Len(res) = 0 Then
         DodajCenu = Poruka("MATU_ERR_CENA_NIJE_UPISANA")
         Exit Function
     End If
     noviID = res
+End Function
+
+' Recnik polja editora -> argumenti modCenovnik. "" kad se recnik moze
+' procitati, inace poruka uz polja(MAT_FOKUS):
+'   1) Proveri -- obaveznost i combo iz svog spiska (i stanica, u PRIKAZ obliku);
+'   2) cena je broj (MATU_ERR_BROJ, fokus na cenu);
+'   3) prazan ili neispravan datum znaci DANAS pri UNOSU -- isto sto legacy
+'      forma radi (PLT-52). ISPRAVKA (datumObavezan) ga odbija sa CEN_ERR_DATUM:
+'      AgriX trazi vaziOd za ispravku, a tiho "danas" bi stornirao stari red i
+'      preselio cenu na danas, bez povratka za red stariji od granice (CEN-09);
+'   4) stanica: prikaz "Naziv (ST-xxx)" -> ID, isti prevod koji opsti upis radi
+'      za combo stranog kljuca (IdZaCombo); prazno ostaje prazno (= globalna).
+Private Function CenaIzPolja(ByVal polja As Object, ByRef dat As Date, _
+                             ByRef vrsta As String, ByRef sorta As String, _
+                             ByRef klasa As String, ByRef cena As Double, _
+                             ByRef stanicaID As String, _
+                             Optional ByVal datumObavezan As Boolean = False) As String
+    CenaIzPolja = Proveri("CENOVNIK", polja)
+    If Len(CenaIzPolja) > 0 Then Exit Function
+    If Not TryParseDouble(Vred(polja, "cena"), cena) Then
+        CenaIzPolja = Odbij(polja, modMaticniIzvor.MatPolje("CENOVNIK", "cena"), _
+                            Poruka("MATU_ERR_BROJ"))
+        Exit Function
+    End If
+    vrsta = Vred(polja, "vrsta")
+    sorta = Vred(polja, "sorta")
+    If Not TryParseDateValue(Vred(polja, "datum"), dat) Then
+        If datumObavezan Then
+            CenaIzPolja = CenaOdbij(polja, "CEN_ERR_DATUM", sorta)
+            Exit Function
+        End If
+        dat = Date
+    End If
+    klasa = Vred(polja, "klasa")
+    stanicaID = IdZaCombo(modMaticniIzvor.MatPolje("CENOVNIK", "stanica"), _
+                          Vred(polja, "stanica"))
+End Function
+
+' Unos nove cene: recnik, pa pravilo unosa (modCenovnik.CenaUnosProblem).
+' Jedno telo za MatCenaProblem (editor) i DodajCenu (pisac).
+Private Function CenaUnosOdbija(ByVal polja As Object, ByRef dat As Date, _
+                                ByRef vrsta As String, ByRef sorta As String, _
+                                ByRef klasa As String, ByRef cena As Double, _
+                                ByRef stanicaID As String) As String
+    Dim k As String
+    CenaUnosOdbija = CenaIzPolja(polja, dat, vrsta, sorta, klasa, cena, stanicaID)
+    If Len(CenaUnosOdbija) > 0 Then Exit Function
+    k = modCenovnik.CenaUnosProblem(dat, vrsta, sorta, klasa, cena, stanicaID)
+    If Len(k) > 0 Then CenaUnosOdbija = CenaOdbij(polja, k, sorta)
+End Function
+
+' Kljuc problema iz modCenovnik -> poruka operateru i polje za fokus (ugovor
+' cenovnika, sekcija 2): VRSTA_OBAVEZNA -> vrsta; KULTURA_NEPOZNATA -> sorta
+' kad je sorta data, inace vrsta; KLASA -> klasa; CENA_* -> cena;
+' STANICA_NEPOZNATA -> stanica; DATUM, DATUM_GRANICA, DUPLIKAT -> datum. Kljuc
+' bez svog polja (red ne postoji, vec storniran, ispravka bez promene) ostaje
+' bez fokusa. Poruka je sam tekst kljuca: CEN_ERR_* su pune recenice koje
+' imenuju polje, isti tekst koji vracaju i StornirajCenu / IspraviCenu.
+Private Function CenaOdbij(ByVal polja As Object, ByVal kljucProblema As String, _
+                           ByVal sorta As String) As String
+    Dim poljeKljuc As String
+    On Error Resume Next
+    Select Case kljucProblema
+        Case "CEN_ERR_VRSTA_OBAVEZNA"
+            poljeKljuc = "vrsta"
+        Case "CEN_ERR_KULTURA_NEPOZNATA"
+            If Len(Trim$(sorta)) > 0 Then
+                poljeKljuc = "sorta"
+            Else
+                poljeKljuc = "vrsta"
+            End If
+        Case "CEN_ERR_KLASA"
+            poljeKljuc = "klasa"
+        Case "CEN_ERR_CENA_POZITIVNA", "CEN_ERR_CENA_OPSEG", "CEN_ERR_CENA_DECIMALE"
+            poljeKljuc = "cena"
+        Case "CEN_ERR_STANICA_NEPOZNATA"
+            poljeKljuc = "stanica"
+        Case "CEN_ERR_DATUM", "CEN_ERR_DATUM_GRANICA", "CEN_ERR_DUPLIKAT"
+            poljeKljuc = "datum"
+    End Select
+    If Len(poljeKljuc) > 0 Then polja(MAT_FOKUS) = poljeKljuc
+    CenaOdbij = Poruka(kljucProblema)
+End Function
+
+' Celija datuma -> tekst za editor, dd.mm.yyyy (v. MatVrednostiReda). Vrednost
+' koja nije citljiv datum ide kako jeste: editor ne sme da izmisli datum.
+Private Function DatumZaEditor(ByVal x As Variant) As String
+    Dim d As Date
+    On Error GoTo Sirovo
+    Select Case VarType(x)
+        Case vbDate
+            DatumZaEditor = Format$(x, "dd.mm.yyyy")
+        Case vbDouble, vbSingle, vbLong, vbInteger, vbCurrency, vbDecimal
+            If CDbl(x) >= 1 Then DatumZaEditor = Format$(CDate(CDbl(x)), "dd.mm.yyyy")
+        Case Else
+            If TryParseDateValue(NzToText(x), d) Then
+                DatumZaEditor = Format$(d, "dd.mm.yyyy")
+            Else
+                DatumZaEditor = Trim$(NzToText(x))
+            End If
+    End Select
+    Exit Function
+Sirovo:
+    DatumZaEditor = Trim$(NzToText(x))
 End Function
 
 ' Prva vrednost sekcije bez surogat kljuca (tip ambalaze, palete, kutije, kese,

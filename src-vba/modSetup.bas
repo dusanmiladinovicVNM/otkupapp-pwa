@@ -990,17 +990,38 @@ EH:
 End Sub
 
 ' ============================================================
-' Cenovnik (cene po proizvodu) -- jednokratni schema setup.
-' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone.
-' Pokrenuti na master workbook-u (deo je EnsurePaletniListSchema, a moze
-' i samostalno: Alt+F8 -> EnsureCenovnikSchema).
+' Cenovnik (otkupna cena voca) -- schema setup + migracija zatecenih
+' duplikata (docs/DOMEN/CENOVNIK.md, CEN-ODL-04).
+' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone NA
+' KRAJ, kanonskim redosledom (schema/schema.json). Zatim modCenovnik
+' stornira ranije od vise nestorniranih redova istog kljuca i dana (stari
+' model je birao kasniji red tabele; isti red ostaje vazeci). Drugi prolaz
+' ne upisuje nista. Red se ne pise ovde: pisac je modCenovnik (A11), a
+' migracija ide u svojoj transakciji -- EnsureRuntimeSchema je namerno ne
+' zove (tamo nema backfill-a).
+' Pozivaoci: EnsurePaletniListSchema, AdminEnsureEverything, Alt+F8.
 ' ============================================================
 Public Sub EnsureCenovnikSchema()
+    Dim migrirano As Long
     On Error GoTo EH
 
     EnsureDataTable TBL_CENOVNIK, "Cenovnik", _
         Array(COL_CEN_ID, COL_CEN_DATUM, COL_CEN_VRSTA, COL_CEN_SORTA, _
-              COL_CEN_KLASA, COL_CEN_CENA, COL_CEN_CREATED, COL_STORNIRANO)
+              COL_CEN_KLASA, COL_CEN_CENA, COL_CEN_CREATED, COL_STORNIRANO, _
+              COL_AUDIT_CREATED_BY, COL_AUDIT_MODIFIED_AT, COL_AUDIT_MODIFIED_BY, _
+              COL_CEN_STANICA, COL_CEN_STORNIRANO_AT, COL_CEN_STORNIRANO_BY, _
+              COL_CEN_STORNO_RAZLOG, COL_TRACE_ISPRAVKA_OD_ID, COL_TRACE_ZAMENJEN_SA_ID)
+
+    migrirano = modCenovnik.MigrirajDupleCene()
+    If migrirano < 0 Then
+        ' Ne guta se: operater je Ensure pokrenuo bas kao lek za CEN-03, pa
+        ' "Ensure zavrsen" posle neuspele migracije bio bi lazan uspeh. EH ispod
+        ' loguje i dize dalje, pa je pozivaoci (Admin, PaletniList) prikazu.
+        Err.Raise modCenovnik.ERR_CEN_MIGRACIJA, "EnsureCenovnikSchema", _
+                  Poruka("CEN_ERR_MIGRACIJA")
+    ElseIf migrirano > 0 Then
+        LogSetup "OK", "EnsureCenovnikSchema: stornirano " & migrirano & " zatecenih duplikata (CEN-ODL-04)"
+    End If
 
     LogSetup "OK", "EnsureCenovnikSchema done"
     Exit Sub

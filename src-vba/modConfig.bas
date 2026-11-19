@@ -478,9 +478,16 @@ Public Const COL_VGP_TIP As String = "TipGotovogProizvoda"
 ' Prazno = globalni default GP_ROK_TRAJANJA_MESECI iz Podesavanja.
 Public Const COL_VGP_ROK As String = "RokMeseci"
 
-' tblCenovnik (cene po proizvodu -- append-only istorija)
-' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
-' je vazeci za otkup i dokumenta. Stari redovi ostaju radi kretanja cena.
+' tblCenovnik (otkupna cena voca -- red samo-dodavanje, docs/DOMEN/CENOVNIK.md)
+' Red = odluka firme o ceni (din/kg, sa PDV-om) za vrstu + sortu + klasu, od dana
+' Datum, za celu firmu (StanicaID prazno = globalna) ili za jednu stanicu
+' (posebna). Vazeca cena za (stanica, roba, klasa, dan) je najkasniji
+' nestorniran Datum <= dan; istog dana posebna pobedjuje globalnu; sorta bez
+' reda koristi rezervu: istu vrstu bez sorte (CEN-05..07, modCenovnik).
+' Red se ne menja: pogresan se stornira (razlog, autor, vreme), ispravka je
+' storno + nov red sa vezom u oba smera (COL_TRACE_ISPRAVKA_OD_ID /
+' COL_TRACE_ZAMENJEN_SA_ID). Nove kolone su NA KRAJU kanona (AppendRow je
+' pozicioni).
 Public Const TBL_CENOVNIK As String = "tblCenovnik"
 Public Const COL_CEN_ID As String = "CenaID"
 Public Const COL_CEN_DATUM As String = "Datum"
@@ -489,6 +496,15 @@ Public Const COL_CEN_SORTA As String = "SortaVoca"
 Public Const COL_CEN_KLASA As String = "Klasa"
 Public Const COL_CEN_CENA As String = "Cena"
 Public Const COL_CEN_CREATED As String = "CreatedAt"
+Public Const COL_CEN_STANICA As String = "StanicaID"          ' prazno = globalna cena (cela firma)
+Public Const COL_CEN_STORNIRANO_AT As String = "StorniranoAt"  ' trag storna: vreme (Now)
+Public Const COL_CEN_STORNIRANO_BY As String = "StorniranoBy"  ' trag storna: korisnik
+Public Const COL_CEN_STORNO_RAZLOG As String = "StornoRazlog"  ' obavezan, 1..CEN_RAZLOG_MAX znakova
+' Granica Datuma od danas (CEN-09): zastita od greske u godini, ne pravilo
+' starog sistema. Ispravka koja zadrzava stari Datum nije pod granicom.
+Public Const CEN_DANA_UNAZAD As Long = 31
+Public Const CEN_DANA_UNAPRED As Long = 366
+Public Const CEN_RAZLOG_MAX As Long = 500
 
 ' tblDoplata / tblDoplataStavke -- DOPLATA KOOPERANTU (knjizno odobrenje,
 ' docs/DOMEN/DOPLATA.md). Zaglavlje = JEDAN KO za JEDNOG kooperanta; ObracunID
