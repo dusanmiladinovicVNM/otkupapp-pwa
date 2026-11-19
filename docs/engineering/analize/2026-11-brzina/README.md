@@ -219,6 +219,8 @@ commit):
 | IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **neverifikovano** |
 | IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **neverifikovano** |
 | IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **neverifikovano** |
+| PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **neverifikovano** |
+| PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **neverifikovano** |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -227,11 +229,16 @@ commit):
   `dokaz.py --izbor zbirna-nevezane` 2/2 DOKAZANO.
 - **Na Windows-u ostaje:**
   - Compile;
-  - testovi 387–389;
+  - testovi 387–391;
   - `python tools/dokaz.py --izbor --radnika 4 izvestaji-pretraga-puni-iznova
     izvestaji-rang-kontekst-prazan`, obavezno, jer su dirana sidra sabotaža;
   - pun prolaz `python tools/run_vba.py`, jer izbor testova ne upisuje GREEN
-    marker, a dirani su zajednički moduli (`modDataAccess`, `modArrayUtils`).
+    marker, a dirani su zajednički moduli (`modDataAccess`, `modArrayUtils`,
+    `clsTransaction`);
+  - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
+    cena, bruto/neto, ambalaža) i hladnjački lanac nad kopijom prave sveske;
+  - merenje vremena pre i posle (tajmer, §5) — sva vremena iz analize su
+    procene.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
