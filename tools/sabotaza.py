@@ -13851,9 +13851,9 @@ SABOTAZE = {
     # upise broj SA opisom, a p("brojZbirne") cita bas taj tekst.
     "zbr-opis-u-koloni-0": (
         "modOtkupUI.bas",
-        "        cmb.List(i, 2) = ZbirnaOpisTekst(CStr(cmb.List(i, 1)), st, mesta)\n",
-        "        cmb.List(i, 0) = CStr(cmb.List(i, 0)) & \" \" & "
-        "ZbirnaOpisTekst(CStr(cmb.List(i, 1)), st, mesta)   ' SABOTAZA: opis u koloni 0\n",
+        "            cmb.List(i, 2) = ZbirnaOpisRed(CStr(cmb.List(i, 0)), kol(i), w)\n",
+        "            cmb.List(i, 0) = CStr(cmb.List(i, 0)) & "
+        "ZbirnaOpisRed(CStr(cmb.List(i, 0)), kol(i), w)   ' SABOTAZA: opis u koloni 0\n",
         "T_Zbirne_PickerOpisMestaKgAmb",
         "370 F4: izbor iz panela upisuje u polje SAMO broj zbirne",
     ),
@@ -13865,6 +13865,38 @@ SABOTAZE = {
         "        PopImaOpis = True   ' SABOTAZA: opis i van prijemnice\n",
         "T_Zbirne_PickerOpisMestaKgAmb",
         "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj",
+    ),
+    # 370 (19.11.2026): vozac je kolona pre mesta, kolone su poravnate i crtaju
+    # se u fontu jednake sirine znaka -- svaki deo sa svojom sabotazom.
+    "zbr-opis-bez-vozaca": (
+        "modOtkupUI.bas",
+        "                If zbrVoz.Exists(z) Then\n",
+        "                If False Then   ' SABOTAZA: opis bez vozaca\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F4: vozac zbirne je kolona pre otkupnih mesta",
+    ),
+    "zbr-opis-bez-poravnanja": (
+        "modOtkupUI.bas",
+        "                If Len(CStr(kol(i)(c))) > w(c + 1) Then w(c + 1) = Len(CStr(kol(i)(c)))\n",
+        "                w(c + 1) = 0   ' SABOTAZA: kolone bez poravnanja\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F4: kolone opisa (vozac, kg, amb) pocinju na istom mestu u svakom redu",
+    ),
+    "zbr-opis-font-proporcionalan": (
+        "modOtkupUI.bas",
+        "    If PopImaOpis() Then PopFont = F_NUM Else PopFont = F_UI\n",
+        "    PopFont = F_UI   ' SABOTAZA: kolone u proporcionalnom fontu\n",
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F4: kolone se crtaju u fontu jednake sirine znaka",
+    ),
+    # Redovi panela su zajednicki za sve combo-e: font se ne vraca, pa Consolas
+    # izbora zbirne ostaje i u sledecem panelu.
+    "zbr-opis-font-ostaje": (
+        "modOtkupUI.bas",
+        '            z.Controls("popT" & i).Font.Name = fnt\n',
+        '            If fnt = F_NUM Then z.Controls("popT" & i).Font.Name = fnt   \' SABOTAZA: font se ne vraca\n',
+        "T_Zbirne_PickerOpisMestaKgAmb",
+        "370 F1: izbor zbirne van prijemnice je u obicnom fontu",
     ),
     # 371 (review 18.11.2026): dvoklik po ozicenom Label-u van mreze opet radi
     # nad zaostalim izabranim redom -- u F3 zapamti tu zbirnu, na drugom ekranu

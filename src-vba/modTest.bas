@@ -33413,27 +33413,36 @@ Private Sub GasiZapamcenuZbirnuTest(f As frmOtkupUI)
 End Sub
 
 ' ============================================================
-' 370. IZBOR ZBIRNE U PRIJEMNICI POKAZUJE MESTA, KG I AMB (zahtev 18.11.2026)
+' 370. IZBOR ZBIRNE U PRIJEMNICI: VOZAC, KG, AMB I MESTA U KOLONAMA
+'      (zahtev 18.11.2026; vozac i poravnanje kolona 19.11.2026)
 '
 ' "Kad se radi prijemnica, u izboru zbirne bi bilo korisno da pored broja
 ' zbirne stoje i mesta koja su dala otpremnice zbirnoj, kao i KG i AMB zbirne."
-' U polju posle izbora ostaje SAM broj -- njega cita p("brojZbirne").
+' Dopuna: "pre OM vozac kao posebna kolona, i kolone iste sirine". U polju posle
+' izbora ostaje SAM broj -- njega cita p("brojZbirne").
 '
-' Lanac se seje kroz kanonske pisce (dva bloka, dve otpremnice, jedna zbirna)
-' u transakciji testa, po obrascu S9-1. Drugo otkupno mesto i gajbe se podmecu
-' SIROVO: SledOtpremnica pise samo FX_STANICA, a SledZbirna stavku bez gajbi.
-' Filter se vozi KUCANJEM (UiEvent Change -> PopFromTyping), ne strelicom: on
-' je taj koji mora da vidi opis, a strelica nudi punu listu (test 367).
-' Tvrdnje se mere u F4 i u F1 (isti combo, opis samo u prijemnici).
+' Dva lanca kroz kanonske pisce u transakciji testa (obrazac S9-1): zbirna 1
+' (dva bloka, dve otpremnice, vozac 1) i zbirna 2 (duzi broj, vozac 2, veca
+' kilaza) -- da kolone razlicitih sirina moraju da se poravnaju. Drugo otkupno
+' mesto i gajbe se podmecu SIROVO: SledOtpremnica pise samo FX_STANICA, a
+' SledZbirna stavku bez gajbi. Filter se vozi KUCANJEM (UiEvent Change), ne
+' strelicom: on je taj koji mora da vidi opis, a strelica nudi punu listu (367).
+'
+' Poravnanje se meri po poziciji znaka u redu, a font posebno: u proporcionalnom
+' fontu iste pozicije znaka nisu ista sirina, pa bez tvrdnje o fontu poravnanje
+' ne bi bilo dokazano.
 ' ============================================================
 Private Sub T_Zbirne_PickerOpisMestaKgAmb()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
-    Dim t As String, broj As String, c As Collection
-    Dim blokA As String, blokB As String, otpA As String, otpB As String, zbr As String
-    Dim nazA As String, nazB As String
+    Dim t As String, broj As String, broj2 As String, c As Collection
+    Dim blokA As String, blokB As String, blokC As String
+    Dim otpA As String, otpB As String, otpC As String, zbr As String, zbr2 As String
+    Dim nazA As String, nazB As String, voz1 As String, voz2 As String
     Dim f As frmOtkupUI, zf As Object, z As Object, CB As Object, pre As Boolean
-    Dim vidF4 As Boolean, capF4 As String, uPolju As String
-    Dim vidF1 As Boolean, capF1 As String
+    Dim vidF4 As Boolean, capF4 As String, capF4n As String, uPolju As String
+    Dim nRed2 As Long, r0 As String, r1 As String, fontF4 As String
+    Dim kgPoz As Boolean, ambPoz As Boolean, vozPoz As Boolean
+    Dim vidF1 As Boolean, capF1 As String, fontF1 As String
 
     redoviPre = SledBrojRedova()
     On Error GoTo CleanUp
@@ -33444,6 +33453,7 @@ Private Sub T_Zbirne_PickerOpisMestaKgAmb()
 
     t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
     broj = "ZB-OPIS-" & t
+    broj2 = broj & "-DUG"
     blokA = SledBlok("OA", FX_STANICA, 60, 0)
     blokB = SledBlok("OB", FX_STANICA, 40, 0)
     Set c = New Collection
@@ -33456,11 +33466,22 @@ Private Sub T_Zbirne_PickerOpisMestaKgAmb()
     c.Add otpA
     c.Add otpB
     zbr = SledZbirna(broj, c, FX_VOZAC, FX_KUPAC, 100, 0)
-    ' sirovo: druga otpremnica je sa DRUGOG otkupnog mesta, a stavka nosi gajbe
+    blokC = SledBlok("OC", FX_STANICA, 1234.5, 0)
+    Set c = New Collection
+    c.Add blokC
+    otpC = SledOtpremnica(c, FX_VOZAC2)
+    Set c = New Collection
+    c.Add otpC
+    zbr2 = SledZbirna(broj2, c, FX_VOZAC2, FX_KUPAC, 1234.5, 0)
+    ' sirovo: druga otpremnica zbirne 1 je sa DRUGOG otkupnog mesta, a stavka nosi gajbe
     PostaviPoljePoPK TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_STANICA, FX_STANICA_B
     PostaviPoljePoPK TBL_ZBIRNA_STAVKE, COL_ZBS_ZBIRNA_ID, zbr, COL_ZBS_KOL_AMB, 7
     nazA = NzToText(LookupValue(TBL_STANICE, COL_STA_ID, FX_STANICA, "Naziv"))
     nazB = NzToText(LookupValue(TBL_STANICE, COL_STA_ID, FX_STANICA_B, "Naziv"))
+    voz1 = Trim$(NzToText(LookupValue(TBL_VOZACI, COL_VOZ_ID, FX_VOZAC, "Ime")) & " " & _
+                 NzToText(LookupValue(TBL_VOZACI, COL_VOZ_ID, FX_VOZAC, "Prezime")))
+    voz2 = Trim$(NzToText(LookupValue(TBL_VOZACI, COL_VOZ_ID, FX_VOZAC2, "Ime")) & " " & _
+                 NzToText(LookupValue(TBL_VOZACI, COL_VOZ_ID, FX_VOZAC2, "Prezime")))
 
     Set f = NewOtkupUIForm()
     Set zf = f.Controls("zForm")
@@ -33469,7 +33490,7 @@ Private Sub T_Zbirne_PickerOpisMestaKgAmb()
     modOtkupUI.SelectMode f, "F4"
     modOtkupUI.RefreshFromData
 
-    ' F4: kucanje IMENA MESTA nalazi zbirnu -- prikaz i filter su isti tekst
+    ' F4 (a): kucanje IMENA MESTA nalazi zbirnu 1 -- prikaz i filter su isti tekst
     pre = modOtkupUI.PanelIzboraMiruj(True)
     CB.text = nazB
     modOtkupUI.PanelIzboraMiruj pre
@@ -33479,33 +33500,69 @@ Private Sub T_Zbirne_PickerOpisMestaKgAmb()
     modOtkupUI.UiEvent "pop0", "Click", Empty
     uPolju = Polje(zf, "fgBrZbir")
 
-    ' F1: isti combo, bez opisa
-    modOtkupUI.SelectMode f, "F1"
+    ' F4 (b): zajednicki prefiks broja daje OBE zbirne -- kolone se porede red po red
     pre = modOtkupUI.PanelIzboraMiruj(True)
     CB.text = broj
     modOtkupUI.PanelIzboraMiruj pre
     modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
+    nRed2 = VidljivihRedovaPanela(z)
+    r0 = CStr(z.Controls("popT0").caption)
+    r1 = CStr(z.Controls("popT1").caption)
+    fontF4 = CStr(z.Controls("popT0").Font.Name)
+    kgPoz = (InStr(1, r0, " " & Poruka("OTKUI_UNIT_KG")) = InStr(1, r1, " " & Poruka("OTKUI_UNIT_KG")))
+    ambPoz = (InStr(1, r0, Poruka("OTKUI_OTP_AMB")) = InStr(1, r1, Poruka("OTKUI_OTP_AMB")))
+    vozPoz = (InStr(1, r0, IIf(InStr(1, r0, broj2) > 0, voz2, voz1)) = _
+              InStr(1, r1, IIf(InStr(1, r1, broj2) > 0, voz2, voz1)))
+    ZatvoriPanelTest z
+
+    ' F1: isti combo, bez opisa i u obicnom fontu
+    modOtkupUI.SelectMode f, "F1"
+    pre = modOtkupUI.PanelIzboraMiruj(True)
+    CB.text = broj2
+    modOtkupUI.PanelIzboraMiruj pre
+    modOtkupUI.UiEvent "fgBrZbirT", "Change", Empty
     vidF1 = z.Visible
     capF1 = CStr(z.Controls("popT0").caption)
+    fontF1 = CStr(z.Controls("popT0").Font.Name)
     ZatvoriPanelTest z
 
     GasiZapamcenuZbirnuTest f
     ReleaseOtkupUIForm f
     Set f = Nothing
 
-    AssertEq (Len(nazA) > 0 And Len(nazB) > 0 And nazA <> nazB), True, _
-             "370 preduslov: dva otkupna mesta sa razlicitim nazivom"
+    ' Razmaci se svode na jedan pre provere sadrzaja: kolone su dopunjene
+    ' razmacima, a tvrdnja o sadrzaju ne sme da zavisi od sirine kolone.
+    capF4n = capF4
+    Do While InStr(1, capF4n, "  ") > 0
+        capF4n = Replace(capF4n, "  ", " ")
+    Loop
+
+    AssertEq (Len(nazA) > 0 And Len(nazB) > 0 And nazA <> nazB And _
+              Len(voz1) > 0 And Len(voz2) > 0 And voz1 <> voz2), True, _
+             "370 preduslov: dva otkupna mesta i dva vozaca sa razlicitim imenom"
     AssertEq (vidF4 And InStr(1, capF4, broj, vbTextCompare) > 0), True, _
              "370 F4: kucanje imena mesta u izboru zbirne nalazi zbirnu sa tog mesta"
-    AssertEq CStr(InStr(1, capF4, nazA, vbTextCompare) > 0) & "|" & _
-             CStr(InStr(1, capF4, nazB, vbTextCompare) > 0) & "|" & _
-             CStr(InStr(1, capF4, "100 " & Poruka("OTKUI_UNIT_KG"), vbTextCompare) > 0) & "|" & _
-             CStr(InStr(1, capF4, Poruka("OTKUI_OTP_AMB") & " 7", vbTextCompare) > 0), _
+    AssertEq CStr(InStr(1, capF4n, nazA, vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4n, nazB, vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4n, "100 " & Poruka("OTKUI_UNIT_KG"), vbTextCompare) > 0) & "|" & _
+             CStr(InStr(1, capF4n, Poruka("OTKUI_OTP_AMB") & " 7", vbTextCompare) > 0), _
              CStr(True) & "|" & CStr(True) & "|" & CStr(True) & "|" & CStr(True), _
              "370 F4: stavka izbora zbirne nosi oba mesta, kg i amb zbirne"
+    AssertEq (InStr(1, capF4, voz1, vbTextCompare) > 0 And _
+              InStr(1, capF4, voz1, vbTextCompare) < InStr(1, capF4, nazA, vbTextCompare) And _
+              InStr(1, capF4, voz1, vbTextCompare) < InStr(1, capF4, nazB, vbTextCompare)), True, _
+             "370 F4: vozac zbirne je kolona pre otkupnih mesta"
     AssertEq uPolju, broj, "370 F4: izbor iz panela upisuje u polje SAMO broj zbirne"
+    AssertEq nRed2, 2, "370 preduslov: zajednicki prefiks broja daje obe zbirne"
+    AssertEq CStr(vozPoz) & "|" & CStr(kgPoz) & "|" & CStr(ambPoz), _
+             CStr(True) & "|" & CStr(True) & "|" & CStr(True), _
+             "370 F4: kolone opisa (vozac, kg, amb) pocinju na istom mestu u svakom redu"
+    AssertEq fontF4, modOtkupUI.F_NUM, _
+             "370 F4: kolone se crtaju u fontu jednake sirine znaka"
     AssertEq vidF1, True, "370 preduslov: u F1 kucanje broja otvara izbor zbirne"
-    AssertEq capF1, "   " & broj, "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj"
+    AssertEq capF1, "   " & broj2, "370 F1: izbor zbirne u otkupnom listu pokazuje samo broj"
+    AssertEq fontF1, modOtkupUI.F_UI, _
+             "370 F1: izbor zbirne van prijemnice je u obicnom fontu"
 
     Err.Clear
 CleanUp:

@@ -207,9 +207,12 @@ Public Const PAY_NEFAKT  As Long = 13
 Public Const PAY_DELIM_FAKT As Long = 14
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
-' Izbor zbirne u prijemnici nosi opis (mesta, kg, amb) -- siri od ostalih,
-' koji ostaju na 320pt. Panel se tada drzi unutar desne ivice forme.
-Private Const POP_W_ZBIRNA As Single = 480
+' Izbor zbirne u prijemnici nosi opis u kolonama (vozac, kg, amb, mesta) --
+' siri od ostalih, koji ostaju na 320pt. Panel se tada drzi unutar desne ivice
+' forme. Kolone su poravnate razmacima, pa se taj panel crta u F_NUM (Consolas):
+' u proporcionalnom fontu razmak nije iste sirine kao slovo i kolone beze.
+Private Const POP_W_ZBIRNA As Single = 640
+Private Const POP_KOL_RAZMAK As String = "    "
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
@@ -1767,8 +1770,10 @@ Private Function PopStavka(cmb As Object, ByVal i As Long) As String
     On Error Resume Next
     s = CStr(cmb.List(i, 0))
     If PopImaOpis() Then
+        ' Opis nosi SVOJE poravnanje: dopunu broja do najduzeg i razmake kolona
+        ' (ZbirnaOpisRed), pa se samo nadovezuje.
         o = CStr(cmb.List(i, 2))
-        If Len(o) > 0 Then s = s & "   " & ChrW(183) & "   " & o
+        If Len(o) > 0 Then s = s & o
     End If
     PopStavka = s
 End Function
@@ -1780,25 +1785,32 @@ Private Function PopImaOpis() As Boolean
     End If
 End Function
 
-' OPIS STAVKI IZBORA ZBIRNE (zahtev operatera 18.11.2026): uz broj zbirne
-' prijemnica pokazuje otkupna mesta koja su dala otpremnice zbirnoj, kg i
-' ambalazu zbirne. Sve iz POSTOJECIH kanonskih citaca, bez nove kopije pravila:
+' OPIS STAVKI IZBORA ZBIRNE (zahtev operatera 18.11.2026; kolone i vozac
+' 19.11.2026): uz broj zbirne prijemnica pokazuje vozaca, kg i ambalazu zbirne
+' i otkupna mesta koja su dala otpremnice zbirnoj -- u poravnatim kolonama.
+' Sve iz POSTOJECIH citaca, bez nove kopije pravila:
 '   kg i amb -- modDokumenta.ZbirStavkiPoZbirni (sadrzaj je na stavkama,
 '               ZBR-KANON-02; isti citac koji crta liniju manjka);
 '   mesta    -- modDokumenta.AktivnoClanstvoZbirni (clanstvo je zapis,
-'               ZBR-KANON-01) -> Otpremnica.StanicaID -> Stanice.Naziv.
-' Pise u kolonu 2 combo-a (kolona 1 je ZbirnaID iz FillZbirneCombo). Kvar
-' citaca ne sme da obori izbor: opis se tada brise i nudi se sam broj, kao pre.
+'               ZBR-KANON-01) -> Otpremnica.StanicaID -> Stanice.Naziv;
+'   vozac    -- Zbirna.VozacID -> Vozaci "Ime Prezime" (isti prikaz kao lista
+'               dokumenata, modScrDokumenti).
+' Pise u kolonu 2 combo-a (kolona 1 je ZbirnaID iz FillZbirneCombo). Sirine
+' kolona se mere preko CELE liste, pa su iste u svakom redu i pri suzavanju.
+' Kvar citaca ne sme da obori izbor: opis se tada brise i nudi se sam broj.
 ' mZbirnaFill: upis u listu nije izbor operatera.
 Private Sub ZbirneOpisUpisi(cmb As Object)
     Dim st As Object, cl As Object, otpSt As Object, stNaz As Object
+    Dim zbrVoz As Object, vozIme As Object
     Dim mesta As Object, k As Variant, zbr As String, sid As String, ime As String
-    Dim i As Long
+    Dim i As Long, c As Long, n As Long, kol() As Variant, w(0 To 3) As Long
     On Error GoTo EH
     Set st = modDokumenta.ZbirStavkiPoZbirni()
     Set cl = modDokumenta.AktivnoClanstvoZbirni()
     Set otpSt = PartnerMap(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_STANICA, "")
     Set stNaz = PartnerMap(TBL_STANICE, COL_STA_ID, "Naziv", "")
+    Set zbrVoz = PartnerMap(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_VOZAC, "")
+    Set vozIme = PartnerMap(TBL_VOZACI, COL_VOZ_ID, "Ime", "Prezime")
     Set mesta = CreateObject("Scripting.Dictionary")
     mesta.CompareMode = vbTextCompare
     For Each k In cl.keys
@@ -1817,9 +1829,29 @@ Private Sub ZbirneOpisUpisi(cmb As Object)
             End If
         End If
     Next k
+
+    ' Prvi prolaz: kolone svake stavke i najveca sirina svake kolone.
+    n = cmb.ListCount
+    If n = 0 Then Exit Sub
+    ReDim kol(0 To n - 1)
+    For i = 0 To n - 1
+        kol(i) = ZbirnaOpisKolone(CStr(cmb.List(i, 1)), st, mesta, zbrVoz, vozIme)
+        If IsArray(kol(i)) Then
+            If Len(CStr(cmb.List(i, 0))) > w(0) Then w(0) = Len(CStr(cmb.List(i, 0)))
+            For c = 0 To 2
+                If Len(CStr(kol(i)(c))) > w(c + 1) Then w(c + 1) = Len(CStr(kol(i)(c)))
+            Next c
+        End If
+    Next i
+
+    ' Drugi prolaz: red sa dopunom do tih sirina.
     mZbirnaFill = True
-    For i = 0 To cmb.ListCount - 1
-        cmb.List(i, 2) = ZbirnaOpisTekst(CStr(cmb.List(i, 1)), st, mesta)
+    For i = 0 To n - 1
+        If IsArray(kol(i)) Then
+            cmb.List(i, 2) = ZbirnaOpisRed(CStr(cmb.List(i, 0)), kol(i), w)
+        Else
+            cmb.List(i, 2) = ""
+        End If
     Next i
     mZbirnaFill = False
     Exit Sub
@@ -1833,15 +1865,17 @@ EH:
     mZbirnaFill = False
 End Sub
 
-' Opis jedne stavke izbora zbirne: "1.240 kg  .  amb 310  .  Mesto A, Mesto B".
-' zids su ZbirnaID-jevi stavke ("|" kad je dokument na dva reda) -- kg i gajbe
-' se sabiraju, mesta spajaju bez ponavljanja. Brojke idu PRE mesta: panel ima
-' granicu sirine, pa se dugacak spisak mesta odseca s kraja, a brojke ostaju.
-' Jedinice su postojeci kljucevi (OTKUI_UNIT_KG, OTKUI_OTP_AMB kao traka
-' otpremnice), kg kroz FmtKg (decimale kad ih ima). "" kad o zbirnoj nema nista.
-Private Function ZbirnaOpisTekst(ByVal zids As String, st As Object, mesta As Object) As String
+' Kolone jedne stavke izbora zbirne: Array(vozac, "1.240 kg", "310", mesta), ili
+' Empty kad o zbirnoj nema nista. zids su ZbirnaID-jevi stavke ("|" kad je
+' dokument na dva reda) -- kg i gajbe se sabiraju, mesta spajaju bez ponavljanja,
+' vozac je sa prvog zaglavlja (dva reda istog dokumenta dele vozaca). Jedinice
+' su postojeci kljucevi (OTKUI_UNIT_KG, OTKUI_OTP_AMB kao traka otpremnice), kg
+' kroz FmtKg (decimale kad ih ima).
+Private Function ZbirnaOpisKolone(ByVal zids As String, st As Object, mesta As Object, _
+                                  zbrVoz As Object, vozIme As Object) As Variant
     Dim p As Variant, i As Long, z As String, rec As Variant
     Dim kg As Double, amb As Double, ima As Boolean, ms As String, m As String
+    Dim voz As String, vid As String
     If Len(zids) = 0 Then Exit Function
     p = Split(zids, "|")
     For i = 0 To UBound(p)
@@ -1861,12 +1895,41 @@ Private Function ZbirnaOpisTekst(ByVal zids As String, st As Object, mesta As Ob
                     ms = ms & ", " & m
                 End If
             End If
+            If Len(voz) = 0 Then
+                If zbrVoz.Exists(z) Then
+                    vid = CStr(zbrVoz(z))
+                    voz = vid
+                    If vozIme.Exists(vid) Then voz = CStr(vozIme(vid))
+                End If
+            End If
         End If
     Next i
     If Not ima And Len(ms) = 0 Then Exit Function
-    ZbirnaOpisTekst = FmtKg(kg) & " " & Poruka("OTKUI_UNIT_KG") & "   " & ChrW(183) & "   " & _
-                      Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(amb, 0)
-    If Len(ms) > 0 Then ZbirnaOpisTekst = ZbirnaOpisTekst & "   " & ChrW(183) & "   " & ms
+    ZbirnaOpisKolone = Array(voz, FmtKg(kg) & " " & Poruka("OTKUI_UNIT_KG"), FmtBroj(amb, 0), ms)
+End Function
+
+' Red opisa posle broja: dopuna broja do najduzeg, pa kolone iste sirine u svakom
+' redu -- vozac ulevo, kg i broj gajbi udesno (brojke se citaju po desnoj
+' ivici), mesta poslednja: panel ima granicu sirine, pa se dugacak spisak mesta
+' odseca s kraja, a brojke ostaju. w = sirine (broj, vozac, kg, amb).
+Private Function ZbirnaOpisRed(ByVal broj As String, ByVal k As Variant, w() As Long) As String
+    Dim s As String
+    s = Space$(w(0) - Len(broj)) & POP_KOL_RAZMAK & PopKolona(CStr(k(0)), w(1), False) & _
+        POP_KOL_RAZMAK & PopKolona(CStr(k(1)), w(2), True) & _
+        POP_KOL_RAZMAK & Poruka("OTKUI_OTP_AMB") & " " & PopKolona(CStr(k(2)), w(3), True)
+    If Len(CStr(k(3))) > 0 Then s = s & POP_KOL_RAZMAK & CStr(k(3))
+    ZbirnaOpisRed = s
+End Function
+
+' Tekst dopunjen razmacima do sirine w: udesno poravnat (desno = True) ili ulevo.
+Private Function PopKolona(ByVal s As String, ByVal w As Long, ByVal desno As Boolean) As String
+    If Len(s) >= w Then
+        PopKolona = s
+    ElseIf desno Then
+        PopKolona = Space$(w - Len(s)) & s
+    Else
+        PopKolona = s & Space$(w - Len(s))
+    End If
 End Function
 
 ' Koje stavke panel prikazuje. Suzavanje je po PODNIZU, ne po pocetku reci -
@@ -1899,7 +1962,7 @@ End Sub
 Private Sub PopRender()
     Dim cmb As Object, z As Object, i As Long, vis As Long
     Dim ax As Single, ay As Single, h As Single, tw As Single
-    Dim scroll As Boolean
+    Dim scroll As Boolean, fnt As String
     On Error Resume Next
     If Len(mPopFor) = 0 Then Exit Sub
     Set cmb = FindCombo(mPopFor)
@@ -1919,6 +1982,9 @@ Private Sub PopRender()
     ' Panel mora da stane najduza stavka, ne sirina polja - "Willamette teren"
     ' je bio isecen jer je Sorta usko polje. Sire od polja je u redu; nas panel
     ' nije nativna lista pa nema ni horizontalnog skrolera da to prikrije.
+    ' Font se postavlja pri SVAKOM crtanju: redovi panela su zajednicki za sve
+    ' combo-e, pa bi Consolas izbora zbirne ostao i u sledecem panelu.
+    fnt = PopFont()
     z.width = cmb.width + INPUT_PAD * 2 + 20
     tw = PopTextW(z, cmb) + 26
     If tw > z.width Then z.width = tw
@@ -1941,6 +2007,7 @@ Private Sub PopRender()
             z.Controls("pop" & i).top = 1 + i * POP_ITEM_H
             z.Controls("pop" & i).width = z.width - 2
             z.Controls("pop" & i).Visible = True
+            z.Controls("popT" & i).Font.Name = fnt
             z.Controls("popT" & i).caption = "   " & PopStavka(cmb, mPopSrc(mPopTop + i))
             z.Controls("popT" & i).top = CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY)
             z.Controls("popT" & i).width = z.width - 2
@@ -1979,8 +2046,14 @@ Private Function PopTextW(z As Object, cmb As Object) As Single
             best = mPopSrc(i)
         End If
     Next i
+    z.Controls("popRul").Font.Name = PopFont()
     z.Controls("popRul").caption = "   " & PopStavka(cmb, best) & "   "
     PopTextW = z.Controls("popRul").width
+End Function
+
+' Font redova panela: Consolas samo kad stavke nose kolone (PopImaOpis).
+Private Function PopFont() As String
+    If PopImaOpis() Then PopFont = F_NUM Else PopFont = F_UI
 End Function
 
 Private Sub PopFooter(z As Object, ByVal vis As Long, ByVal scroll As Boolean)
