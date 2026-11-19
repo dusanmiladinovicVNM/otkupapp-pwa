@@ -6559,6 +6559,38 @@ Public Sub RefreshFromData()
     FillZbirneCombo mFrm      ' nove zbirne u picker
     RefillMaticniCombos mFrm  ' nova stanica / vozac u kontekst
     mPartnerFor = ""          ' partner lista se ponovo puni
+    OsveziPrikaz
+    ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
+    RefreshOtpTraka mFrm
+End Sub
+
+' OSVEZI PRIKAZ, NE PODATKE: za promenu konteksta koja ne menja tabele
+' (Izvestaji: tip, rezim, entitet, opseg). Radi isto sto RefreshFromData radi
+' POSLE resetovanja -- geometrija, sort, prekidac liste, naslov, mreza -- ali
+' bez ResetCache, Scr_ResetCache, KPI-ja, znacki menija i combo-a ljuske.
+' Ti delovi ne zavise od konteksta ekrana, a pun prolaz je pri svakom kliku
+' na Izvestajima brisao vec procitane snimke i ponovo racunao KPI i znacke
+' (analiza brzine 2026-11, IZV-1).
+'
+' Svezina ostaje na generaciji: svaki upis kroz novi UI ide kroz
+' RefreshFromData ili storno, oba podizu modUiData.DataGeneracija, a ekran
+' odbacuje kes starije generacije pri citanju.
+'
+' ekran: ko trazi osvezavanje. Ako ljuska vise nije na tom ekranu (ili forme
+' nema, npr. test koji zove Scr_Event direktno), nema sta da se osvezi.
+' noviIzbor: True kad promena znaci novu listu redova (tip, rezim) -- isto sto
+' je radila grana 'scr' u UiClick pre RefreshFromData.
+Public Sub OsveziPrikazEkrana(ByVal ekran As String, _
+                              Optional ByVal noviIzbor As Boolean = False)
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If StrComp(ekran, mScreen, vbTextCompare) <> 0 Then Exit Sub
+    If noviIzbor Then mSelRow = 0
+    OsveziPrikaz
+End Sub
+
+Private Sub OsveziPrikaz()
+    On Error Resume Next
     ' Skup lista (tabova) sme da zavisi od konteksta ekrana (Izvestaji: tip
     ' entiteta bira koje liste postoje) -- posle promene konteksta geometrija
     ' je zastarela (LayoutGrid crta tabove iz Scr_Liste), a natpis i boje
@@ -6572,8 +6604,6 @@ Public Sub RefreshFromData()
     RefreshListSeg mFrm
     RefreshGridTitle mFrm
     ReloadGrid
-    ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
-    RefreshOtpTraka mFrm
 End Sub
 
 '=====================================================================

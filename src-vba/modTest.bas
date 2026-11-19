@@ -749,6 +749,9 @@ Public Sub RunAllTests()
     RunOne 382
     RunOne 383
 
+    ' Brzina Izvestaja (analiza 2026-11, IZV-1): klik kroz pravu ljusku.
+    RunOne 384
+
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
@@ -1374,6 +1377,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 381: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
         Case 382: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
         Case 383: TestName = "T_Cen_KucanjeUEditoruNeDiraSortu"
+        Case 384: TestName = "T_Izv_KontekstOsvezavaPrikazNePodatke"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1765,6 +1769,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 381: T_Cen_UnosSeVracaPriPaduUpisa
         Case 382: T_Cen_PotvrdaPrekidaStajeUDijalog
         Case 383: T_Cen_KucanjeUEditoruNeDiraSortu
+        Case 384: T_Izv_KontekstOsvezavaPrikazNePodatke
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -23946,6 +23951,88 @@ Private Sub T_Izv_KesPretragaIHint()
     AssertEq (modScrIzvestaji.IzDatGranica("15.3.2026") > 0), True, "pun datum je granica"
 
     modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 384. IZVESTAJI: PROMENA KONTEKSTA OSVEZAVA PRIKAZ, NE PODATKE (brzina, IZV-1).
+' ============================================================
+' Operater: "sta god da se klikne u izvestaju traje neko vreme". Klik na tip
+' ili rezim i promena entiteta ili opsega su isli kroz pun RefreshFromData --
+' put "posle upisa": ResetCache podigne generaciju, pa ekran baci SVE snimke
+' (i povratak na vec vidjen kontekst cita tabele ispocetka), a uz to se
+' racunaju KPI, znacke menija i combo-i ljuske. 129 i 131 to ne vide: zovu
+' Scr_Rows direktno, mimo ljuske. Ovde klik ide kroz pravu ljusku (UiEvent ->
+' ScrAct -> Scr_Event), kao 352.
+'
+' A -> B -> A: SALDO pojedinacno (A), Zbirno (B), nazad Pojedinacno (A). Pre
+' ispravke: 2 punjenja i generacija +2; sada 1 punjenje i generacija +0.
+' Kljuc snimka posle svakog klika meri da je mreza STVARNO procitala nov
+' kontekst -- bez toga bi "nijedno punjenje" proslo i kad se prikaz uopste ne
+' osvezi. Opseg od 4.1 je jedinstven za ovaj test (v. 129, 131).
+Private Sub T_Izv_KontekstOsvezavaPrikazNePodatke()
+    Dim f As frmOtkupUI, od As Double
+    Dim ekran As String, kA As String, kZ As String, kP As String, kE As String
+    Dim g0 As Long, gZ As Long, gP As Long, gE As Long
+    Dim p0 As Long, pZ As Long, pP As Long, pE As Long
+    Dim listaZ As String
+    Dim errNum As Long, errDesc As String
+
+    od = CDbl(DateSerial(2026, 1, 4))
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", False, FX_STANICA, od, IzvDoS()
+    Set f = NewOtkupUIForm()
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    ekran = modOtkupUI.AktivanEkran()
+    kA = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    g0 = modUiData.DataGeneracija()
+    p0 = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    modOtkupUI.UiEvent "scrIzRezZ", "Click", Empty
+    kZ = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    listaZ = modScrIzvestaji.Scr_Lista()
+    gZ = modUiData.DataGeneracija()
+    pZ = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    modOtkupUI.UiEvent "scrIzRezP", "Click", Empty
+    kP = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    gP = modUiData.DataGeneracija()
+    pP = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    ' Entitet: u testu ga nosi seam (combo se ne cita), promena stize kao
+    ' Change polja zone -- isti put kao kucanje operatera.
+    modScrIzvestaji.Scr_IzTestSet "", "OM", False, FX_IZV_STANICA2, od, IzvDoS()
+    modOtkupUI.UiEvent "scrIzEntT", "Change", Empty
+    kE = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    gE = modUiData.DataGeneracija()
+    pE = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrIzvestaji.Scr_IzTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Izv_KontekstOsvezavaPrikazNePodatke", errDesc
+
+    AssertEq ekran, "IZVESTAJI", "384 preduslov: ljuska je na Izvestajima"
+    AssertEq (InStr(1, kA, "SALDO|OM|P|" & FX_STANICA & "|", vbBinaryCompare) = 1), True, _
+             "384 preduslov: ulazak na ekran prikazuje kontekst A"
+    AssertEq listaZ, "SALDO", "384 preduslov: saldo postoji i u zbirnom rezimu"
+    AssertEq (InStr(1, kZ, "SALDO|OM|Z|", vbBinaryCompare) = 1), True, _
+             "384 klik na Zbirno osvezava prikaz: mreza cita nov kontekst"
+    AssertEq pZ - p0, 1, "384 nov kontekst se cita jednom"
+    AssertEq kP, kA, "384 povratak na Pojedinacno prikazuje kontekst A"
+    AssertEq pP - p0, 1, _
+             "384 povratak na vec vidjen kontekst ide iz kesa, bez novog citanja tabela"
+    AssertEq gP - g0, 0, _
+             "384 klik na tip/rezim ne ide kroz pun RefreshFromData (generacija ista)"
+    AssertEq (InStr(1, kE, "SALDO|OM|P|" & FX_IZV_STANICA2 & "|", vbBinaryCompare) = 1), True, _
+             "384 promena entiteta osvezava prikaz"
+    AssertEq pE - p0, 2, "384 nov entitet se cita jednom"
+    AssertEq gE - g0, 0, _
+             "384 promena entiteta ne ide kroz pun RefreshFromData (generacija ista)"
 End Sub
 
 Private Sub T_ZonaIzv_PoljaIRaspored()
