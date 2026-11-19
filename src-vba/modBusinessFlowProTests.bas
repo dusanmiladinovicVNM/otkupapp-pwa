@@ -13413,9 +13413,13 @@ Private Sub Test_ZBR_KanonskaSmeDaSeRazveze()
 
     Dim res As Object
     Set res = modStornoFlow.RunZbirnaCorrection(broj, SV_MODE_DUPLI, True, zbrID)
-    AssertTrue CBool(res("success")), _
-               "ZBR razvez: DUPLI radi nad kanonskom zbirnom (bilo: " & _
-               CStr(res("message")) & ")"
+    ' VREDNOST IDE U SVOJU TVRDNJU. Ciljana tvrdnja mora da bude JEDAN statican
+    ' literal: dokaz.py je za BFP koristi kao KLJUC, pa poruka spojena uz nju
+    ' nikad ne moze da se poklopi ("NE OBARA SVOJ TEST").
+    Dim razlogDupli As String
+    If Not CBool(res("success")) Then razlogDupli = CStr(res("message"))
+    AssertTrue CBool(res("success")), "ZBR razvez: DUPLI radi nad kanonskom zbirnom"
+    AssertEquals "", razlogDupli, "ZBR razvez: DUPLI ne vraca razlog odbijanja"
     Exit Sub
 
 EH:
@@ -16493,9 +16497,14 @@ Private Sub Test_OTP_MalinaAutoZbirna()
     brZbr = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
     brOtp = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ)))
     AssertTrue Len(brZbr) > 0, "OTP malina: zbirna ima broj"
+    ' VREDNOSTI IDU U SVOJU TVRDNJU. Ciljana tvrdnja mora da bude JEDAN statican
+    ' literal: dokaz.py je za BFP koristi kao KLJUC, pa interpolirana poruka
+    ' nikad ne moze da se poklopi ("NE OBARA SVOJ TEST").
+    AssertTrue Len(brOtp) > 0, _
+               "OTP malina: broj otpremnice je procitan: [" & brZbr & "] vs [" & _
+               brOtp & "]"
     AssertTrue brZbr <> brOtp And brZbr <> "S" & brOtp, _
-               "OTP malina: broj zbirne je IZ NJENOG NIZA, ne nasledjen (" & _
-               brZbr & " vs " & brOtp & ")"
+               "OTP malina: broj zbirne je IZ NJENOG NIZA, ne nasledjen"
 
     ' Clanstvo je zapis, ne labela: otpremnica mora biti u tblZbirnaIzvori.
     Dim izv As Collection
@@ -16728,6 +16737,7 @@ Private Sub Test_OTP_ZaglavljeBezStavkiObaraCitaoce()
 
     Set tx = New clsTransaction
     tx.BeginTx
+    tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
 
     Dim rows As Collection
@@ -16742,6 +16752,22 @@ Private Sub Test_OTP_ZaglavljeBezStavkiObaraCitaoce()
 
     AssertTrue InStr(1, OtpMrezaGreska(broj), "nema nijednu stavku", vbTextCompare) > 0, _
                "OTP bez stavki: mreza pada po imenu, ne crta 0 kg"
+
+    ' DRUGA BRANA SAMA ZA SEBE (isto kao Test_OTK_ZaglavljeBezIDObaraCitaoce).
+    ' Za zaglavlje bez stavki pada vec IZVOR (StavkeOtpremniceRedovi), istom
+    ' porukom, pa tvrdnja iznad ne razlikuje citaoca mreze od izvora -- dokaz.py
+    ' je sabotazu nad citaocem prijavio kao NE OBARA NISTA (19.11.2026). Zaglavlje
+    ' BEZ OtpremnicaID-a izvor ne vidi, pa ga obara samo ZbirStavkiZaOtpremnicu
+    ' na mestu upotrebe. Redosled je deo testa: stavke su vec obrisane, pa nema
+    ' siroceta koje bi oborilo izvor.
+    Dim hdr As Collection
+    Set hdr = FindRows(TBL_OTPREMNICA, COL_OTP_ID, otpID)
+    AssertTrue Not hdr Is Nothing, "OTP bez ID: zaglavlje nadjeno"
+    If Not hdr Is Nothing Then
+        RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_ID, "", SRC
+        AssertTrue InStr(1, OtpMrezaGreska(broj), "bez OtpremnicaID-a", vbTextCompare) > 0, _
+                   "OTP bez ID: mreza pada po imenu, ne crta 0 kg"
+    End If
 
     tx.RollbackTx
     Set tx = Nothing
@@ -17693,8 +17719,10 @@ Private Sub Test_OTP_ClanstvoBulkStrogo()
     greska = SpecGreska(Pr3Izvor(otpID, ""))
     ' CISCENJE PRE TVRDNJI: korumpiran red truje svaki sledeci test.
     DeleteRow TBL_OTPREMNICA_IZVORI, red
+    ' Ciljana tvrdnja je CEO STATICAN literal (BFP kljuc u dokaz.py), a vrednost
+    ' nosi tvrdnja ispod nje.
     AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
-               "Bulk clanstvo: specifikacija pada na clanstvo bez otkupa (bilo: " & greska & ")"
+               "Bulk clanstvo: specifikacija pada na clanstvo bez otkupa"
     AssertTrue InStr(1, greska, "clanstvo", vbTextCompare) > 0, _
                "Bulk clanstvo: razlog imenuje clanstvo (bilo: " & greska & ")"
 
@@ -17704,8 +17732,9 @@ Private Sub Test_OTP_ClanstvoBulkStrogo()
     greska = NevezaniGreska()
     DeleteRow TBL_OTPREMNICA_IZVORI, red
     AssertTrue InStr(1, greska, "ne postoji", vbTextCompare) > 0, _
-               "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice (bilo: " & _
-               greska & ")"
+               "Bulk clanstvo: lista nevezanih pada na clanstvo bez otpremnice"
+    AssertTrue InStr(1, greska, "clanstvo", vbTextCompare) > 0, _
+               "Bulk clanstvo: razlog liste imenuje clanstvo (bilo: " & greska & ")"
 
     ' Kontrola POSLE ciscenja -- pad je bio zbog korupcije, ne zbog testa.
     AssertEquals "", SpecGreska(Pr3Izvor(otpID, "")), _
@@ -17877,7 +17906,11 @@ Private Sub Test_OTP_IspravkaIzdate()
     ' --- NACRT SE NE ISPRAVLJA: njega menja izmena nacrta, bez storna ---
     AssertEquals "", modDokumenta.IspravkaOtpremnice_TX(nacrt, gr), _
                  "Ispravka: nacrt se ne ispravlja"
-    AssertTrue InStr(1, gr, "IZDATA", vbTextCompare) > 0, _
+    ' Pun izraz pravila, ne rec "IZDATA": i tudja kapija ga sadrzi ("Izdata
+    ' otpremnica nema nijedan izvor"), a ovaj nacrt nema izvora -- pa je bez
+    ' pravila "samo izdata" ispravka svejedno padala, na sledecoj kapiji, a
+    ' tvrdnja nad recju "IZDATA" prolazila (dokaz 19.11.2026: NE OBARA NISTA).
+    AssertTrue InStr(1, gr, "samo IZDATA", vbTextCompare) > 0, _
                "Ispravka: razlog kaze da se ispravlja samo izdata"
     AssertEquals IZDATO_DRAFT, OtpPolje(nacrt, COL_TRACE_IZDATO_STATUS), _
                  "Ispravka: odbijen nacrt ostaje nacrt"
@@ -17901,7 +17934,10 @@ Private Sub Test_OTP_IspravkaIzdate()
     ' postoji i kad poziv padne -- rollback vrati staru u AKTIVNO -- pa tada cita
     ' "" umesto "Da" i puca PO IMENU, imenujuci tacno ono sto je ugaseno.
     AssertEquals "Da", OtpPolje(izdata, COL_STORNIRANO), "Ispravka: stara je stornirana"
-    If Len(nova) = 0 Then GoTo Kraj
+    ' Bez nove se preskace samo ono sto govori o njoj, ne i odeljak o padu: kad
+    ' rollback ne vrati zaglavlje, i OVA ispravka padne posle storna (AMB-INV-08
+    ' trazi tblOtpremnica u snimku), a tvrdnja o padu je jedina koja to imenuje.
+    If Len(nova) = 0 Then GoTo PadPosleStorna
 
     AssertEquals IZDATO_DRAFT, OtpPolje(nova, COL_TRACE_IZDATO_STATUS), _
                  "Ispravka: nova je NACRT"
@@ -17930,19 +17966,25 @@ Private Sub Test_OTP_IspravkaIzdate()
         AssertEquals "0", CStr(kl("preostalo")), "Ispravka: nova je odmah puna (isti izvori)"
     End If
 
+PadPosleStorna:
     ' --- PAD POSLE STORNA NE SME DA OSTAVI OBEZGLAVLJEN DOKUMENT ---
-    ' Stanica se kvari MIMO pisca, pa generator broja nema niz: ispravka pada
-    ' tek POSLE storna stare -- tacno na mestu gde je stari dvokorak ostavljao
-    ' storniranu otpremnicu bez zamene.
-    Dim izdata2 As String, hdr As Collection
+    ' Vozac se kvari MIMO pisca: zaglavlje nove verzije ga ne proverava, pa
+    ' ispravka pada tek u piscu nacrta, POSLE storna stare -- tacno na mestu gde
+    ' je stari dvokorak ostavljao storniranu otpremnicu bez zamene.
+    '
+    ' Ranije se kvarila STANICA. Od kad OtpIspravi sastavlja zaglavlje (i broj)
+    ' PRE storna, generator broja bez niza pukne pre storna, pa odeljak vise nije
+    ' merio rollback: stara je ostajala aktivna i bez njega (dokaz 19.11.2026).
+    Dim izdata2 As String, hdr As Collection, vozacPre As String
     izdata2 = CreateOtpremnicaIzIzvora_TX(OtpHeader(TEST_PREFIX & "-OTP-ISPP-" & scenario), _
                                           Pr3Izvor(b3, ""), g)
     AssertTrue Len(izdata2) > 0, "Ispravka: druga izdata napravljena (" & g & ")"
     If Len(izdata2) = 0 Then GoTo Kraj
 
     Set hdr = FindRows(TBL_OTPREMNICA, COL_OTP_ID, izdata2)
+    vozacPre = OtpPolje(izdata2, COL_OTP_VOZAC)
     If hdr.count = 1 Then
-        RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_STANICA, "STA-NEMA-CIFRE", _
+        RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_VOZAC, "VOZ-NEMA-" & scenario, _
                           "Test_OTP_IspravkaIzdate"
     End If
     AssertEquals "", modDokumenta.IspravkaOtpremnice_TX(izdata2, gr), _
@@ -17951,6 +17993,12 @@ Private Sub Test_OTP_IspravkaIzdate()
                "Ispravka: stara ostaje AKTIVNA kad ispravka padne"
     AssertEquals izdata2, modDokumenta.OtpremnicaZaOtkup(b3), _
                  "Ispravka: blok pale ispravke ostaje na svojoj otpremnici"
+    ' Ciscenje: pokvaren vozac aktivne otpremnice ne sme da ostane sledecem testu.
+    Set hdr = FindRows(TBL_OTPREMNICA, COL_OTP_ID, izdata2)
+    If hdr.count = 1 Then
+        RequireUpdateCell TBL_OTPREMNICA, CLng(hdr(1)), COL_OTP_VOZAC, vozacPre, _
+                          "Test_OTP_IspravkaIzdate"
+    End If
 
 Kraj:
     Exit Sub
@@ -18055,10 +18103,13 @@ Private Sub Test_OPO_IzgubljenBlok()
                  CStr(modScrOporavak.Scr_Brojac()), _
                  "Oporavak: brojac menija broji istu listu"
 
-    ' Korupcija clanstva se NE guta: red sa greskom je vidljiv ishod.
+    ' Korupcija clanstva se NE guta: red sa greskom je vidljiv ishod. Meri se
+    ' red BAS izgubljenih blokova: isto clanstvo cita i lista nedovrsenih lanaca
+    ' (S6 korak 7) i daje svoj red GRESKA, pa bi "ima ijedan" ostao tacan i kad
+    ' AddIzgubljeniBlokovi pad proguta (dokaz 19.11.2026: NE OBARA NISTA).
     Dim sirovi As Long, imaGresku As Boolean
     sirovi = OtpUpisiSirovoClanstvo(nacrt, "OTK-NEMA-" & scenario)
-    imaGresku = NedImaStatus("GRESKA")
+    imaGresku = NedImaStatus("GRESKA", "IZGUBLJEN_BLOK")
     DeleteRow TBL_OTPREMNICA_IZVORI, sirovi
     AssertTrue imaGresku, "Oporavak: pokvareno clanstvo daje vidljiv red, ne kracu listu"
     AssertTrue Not NedImaStatus("GRESKA"), "Oporavak: posle ciscenja greske nema"
@@ -18335,9 +18386,12 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
     ' "veze ga za prvu otvorenu otpremnicu" -- inace se obavezan lanac zaobilazi
     ' jednim klikom iz liste "Bez otpremnice". Kapija je na granici radnje.
     Dim rucni As String, hldSlobodan As String, obicanSlobodan As String, razlog As String
-    Dim prjSlob As String
+    Dim prjSlob As String, rucniObican As String
     modOtkupUI.ActiveMode = "F1"
-    rucni = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDR-" & scenario, TEST_ST_ID), _
+    ' Rucni nacrt je na ISTOJ hladnjackoj stanici kao blok. Nacrt druge stanice bi
+    ' blok odbio i bez ove kapije -- pisac ne prima izvor sa drugog mesta (S4.2a)
+    ' -- pa tvrdnja ne bi merila hladnjacu (dokaz 19.11.2026: NE OBARA NISTA).
+    rucni = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDR-" & scenario, TEST_HLAD2_ST_ID), _
                                      OtpOcek(100#, 10#, 0#, 0#), g)
     aktiv = "<nema nacrta>"
     If Len(rucni) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(rucni)
@@ -18350,6 +18404,12 @@ Private Sub Test_HLD_AutoLanacOtpremnica()
     AssertEquals "", HldOtp(hldSlobodan), "Lanac: odbijen blok nije zavrsio u rucnom nacrtu"
 
     ' Kontrola: obican blok se vezuje normalno -- kapija gadja bas hladnjacu.
+    ' Obican blok ide u rucni nacrt SVOJE stanice, iz istog razloga.
+    rucniObican = CreateOtpremnicaDraft_TX(OtpHeaderNaStanici(TEST_PREFIX & "-OTP-HLDS-" & scenario, TEST_ST_ID), _
+                                           OtpOcek(100#, 10#, 0#, 0#), g)
+    aktiv = "<nema nacrta>"
+    If Len(rucniObican) > 0 Then aktiv = modScrDokumenti.AktivirajOtpremnicu(rucniObican)
+    AssertEquals "", aktiv, "Lanac: rucni nacrt obicne stanice je aktivan (kontrola)"
     obicanSlobodan = CreateOtkup_TX(OtkHeader(TEST_PREFIX & "-OTK-HLDJ-" & scenario), _
                                     OtkStavke(9#, 100#, 1, 0#, 0#, 0))
     AssertEquals "", modScrDokumenti.VeziZaAktivnu(obicanSlobodan), _
@@ -18451,7 +18511,10 @@ Private Sub Test_OTK_IspravkaBlokaUNacrtu()
 
     novi = modOtkup.IspravkaOtkupa_TX(blok, OtkHeader(TEST_PREFIX & "-OTK-ISBB-" & scenario), _
                                       OtkStavke(55#, 110#, 5, 0#, 0#, 0), g, upoz)
-    AssertTrue Len(novi) > 0, "Ispravka bloka: ispravka je prosla (" & g & ")"
+    ' Ciljana tvrdnja je CEO STATICAN literal (BFP kljuc u dokaz.py); razlog
+    ' pada nosi tvrdnja ispod nje (pisac prazni outGreska na ulazu).
+    AssertTrue Len(novi) > 0, "Ispravka bloka: ispravka je prosla"
+    AssertEquals "", g, "Ispravka bloka: ispravka nije vratila razlog pada"
     If Len(novi) = 0 Then GoTo Kraj
 
     AssertEquals "Da", OtkPolje(blok, COL_STORNIRANO), "Ispravka bloka: stari je storniran"
@@ -20207,16 +20270,22 @@ Private Function NedRedZaRef(ByVal ref As String) As Object
     Next i
 End Function
 
-' Da li lista Nedovrseno ima ijedan red datog statusa.
-Private Function NedImaStatus(ByVal status As String) As Boolean
+' Da li lista Nedovrseno ima ijedan red datog statusa (i, kad je dat, te vrste).
+' Vrsta postoji zato sto isti kvar vide DVA citaoca: pokvareno clanstvo
+' otpremnice obara i izgubljene blokove i nedovrsene lance (S6 korak 7), pa red
+' GRESKA bez vrste ne kaze ciji je -- i ostaje i kad jedan od njih pad proguta.
+Private Function NedImaStatus(ByVal status As String, _
+                              Optional ByVal kind As String = "") As Boolean
     Dim c As Collection, i As Long, d As Object
     Set c = modStornoRecovery.GetNedovrseno()
     If c Is Nothing Then Exit Function
     For i = 1 To c.count
         Set d = c(i)
         If StrComp(CStr(d("status")), status, vbTextCompare) = 0 Then
-            NedImaStatus = True
-            Exit Function
+            If Len(kind) = 0 Or StrComp(CStr(d("kind")), kind, vbTextCompare) = 0 Then
+                NedImaStatus = True
+                Exit Function
+            End If
         End If
     Next i
 End Function
@@ -21458,9 +21527,19 @@ EH:
 End Sub
 
 ' Broj redova AKTIVNE liste ekrana, citan direktno -- bez gutaca iz ljuske.
+'
+' PAD LISTE JE -1, NE NULA. Od KI-016 Scr_Rows ne dize gresku nego je upise u
+' kanal pada (UI-PAD-01) i vrati Empty -- pa bi "Not IsArray -> 0" pad citao kao
+' praznu listu, a bas to razlikuje tvrdnja "nula redova, ne gresku". Kanal se
+' prazni pre poziva, da tudj zaostao pad ne obori ovo citanje.
 Private Function ZbrBrojRedovaListe() As Long
     Dim d As Variant
+    modUiScreens.ScrPadPreuzmi
     d = modScrDokumenti.Scr_Rows("sve", "")
+    If Len(modUiScreens.ScrPadPreuzmi()) > 0 Then
+        ZbrBrojRedovaListe = -1
+        Exit Function
+    End If
     If Not IsArray(d) Then Exit Function
     ZbrBrojRedovaListe = CLng(d(2))
 End Function

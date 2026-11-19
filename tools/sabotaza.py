@@ -398,6 +398,11 @@ SABOTAZE = {
     # --- writer se brani sam ------------------------------------------------
     # Jedina sabotaza koja ne dira UI put: dokazuje da kapija postoji i kad
     # pozivalac nije nas ekran (legacy forma, uvoz, bilo ko).
+    #
+    # `Dim blokErr` OSTAJE u zameni. Ista promenljiva nosi i kapiju KO i kapiju
+    # gotovine nize u SaveOMUlaz_TX, pa je zamena koja je brisala i Dim davala
+    # mutant koji se NE KOMPAJLIRA (Option Explicit) -- dokaz 19.11.2026: EXCEL
+    # UBIJEN, Compile error, umesto pada tvrdnje.
     "writer-bez-kapije": (
         "modDokumenta.bas",
         "        Dim blokErr As String\n"
@@ -405,6 +410,7 @@ SABOTAZE = {
         "        If Len(blokErr) > 0 Then\n"
         '            Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr\n'
         "        End If\n",
+        "        Dim blokErr As String\n"
         "        ' SABOTAZA: writer opet veruje parametrima\n",
         "T_WriterGuard_OdbijaTudjBlok",
         "writer odbija blok sa drugog otkupnog mesta i bez UI provere",
@@ -515,10 +521,20 @@ SABOTAZE = {
         "ZBR negativna ambalaza: nacrt je odbijen",
     ),
     # --- S4-2c: kapija nacrta (izmena najave, zivot izvedene cinjenice)
+    #
+    # Sidro je STATUS u RequireZbrDraft, ne poziv na vrhu ZbrIzmeniDraft. Taj
+    # poziv je od revalidacije clanstva (review #381) DVOSTRUK: petlja na kraju
+    # ZbrIzmeniDraft zove ZbrRequireIzvorValjan, a on opet RequireZbrDraft. Izdata
+    # zbirna uvek ima bar jedan izvor (ZbrIzdaj odbija praznu), pa je skidanje
+    # samo gornjeg poziva bilo ekvivalentan mutant: ista greska "nije nacrt",
+    # isti rollback -- dokaz 19.11.2026: NE OBARA NISTA. Pravilo "izdata se ne
+    # menja" zivi u statusu, pa se tamo i kvari.
     "zbirna-nacrt-se-menja-i-posle-izdavanja": (
         "modDokumenta.bas",
-        "    RequireZbrDraft zbirnaID, rZbr, SRC\n\n    HdrProveriKljuceve h, SRC\n",
-        "    ' SABOTAZA: izmena ne pita da li je jos nacrt\n\n    HdrProveriKljuceve h, SRC\n",
+        "    If status <> UCase$(IZDATO_DRAFT) Then\n"
+        "        Err.Raise vbObjectError + 1349, src, _\n",
+        "    If False Then   ' SABOTAZA: kapija nacrta ne gleda status\n"
+        "        Err.Raise vbObjectError + 1349, src, _\n",
         "Test_ZBR_NacrtSeMenjaDokNijeIzdat",
         "ZBR izmena: izdata zbirna se NE menja",
     ),
@@ -638,12 +654,18 @@ SABOTAZE = {
         "ZBR adapter: prazna II klasa NE postaje jednoklasna zbirna",
     ),
     # --- S4-2c/2b-2: ekran F3
+    #
+    # Tvrdnja je "izmena je pogodila SVOJ dokument", ne "NE pravi nov nacrt".
+    # Izmena zadrzava SVOJ broj, pa mutant koji je salje u ZbirnaUpisi staje na
+    # RequireBrojSlobodanUNizu (broj drzi bas taj nacrt) -- nov red ne nastaje i
+    # brojac redova ostaje zelen. Vidi se ono sto mutant stvarno radi: potez ne
+    # stize do svog dokumenta (dokaz 19.11.2026: NE OBARA SVOJ TEST).
     "zbirna-ekran-izmena-pravi-nov": (
         "modScrDokumenti.bas",
         "    If Len(mIzmenaZbrID) > 0 Then\n",
         "    If False Then   ' SABOTAZA: izmena zbirne pravi nov nacrt\n",
         "Test_ZBR_EkranPraviIMenjaNacrt",
-        "ZBR ekran: izmena NE pravi nov nacrt",
+        "ZBR ekran: izmena je pogodila SVOJ dokument",
     ),
     "zbirna-ekran-otvara-izdatu": (
         "modScrDokumenti.bas",
@@ -659,12 +681,14 @@ SABOTAZE = {
         "Test_ZBR_EkranPraviIMenjaNacrt",
         "ZBR ekran: izmena nacrta prolazi kroz ekran",
     ),
+    # Bez kolone identiteta pada tvrdnja o KOLONI (identKol = 0), koja stoji pre
+    # tvrdnje o redu -- dokaz 19.11.2026: PALA DRUGA TVRDNJA.
     "zbirna-mreza-bez-identiteta": (
         "modScrDokumenti.bas",
         "    Scr_Rows = RedoviZaTip(mk, filter, q, _\n                           (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\"))\n",
         "    Scr_Rows = RedoviZaTip(mk, filter, q, _\n                           (mk = \"OTKUP\" Or mk = \"OTPREMNICA\"))\n",
         "T_ZbirnaKlik_OtvaraSvojDokument",
-        "red je nadjen po ZbirnaID-u iz te kolone",
+        "F3 klik: mreza F3 nosi nevidljivu kolonu identiteta",
     ),
     "zbirna-klik-po-broju": (
         "modScrDokumenti.bas",
@@ -680,6 +704,10 @@ SABOTAZE = {
         "T_ZbirnaRadniSto_BiraSvojNacrt",
         "radni sto bira BAS taj nacrt",
     ),
+    # Od KI-016 Scr_Rows pad ne dize nego ga upise u kanal i vrati Empty, a
+    # pomocnik testa je Empty brojao kao nula redova -- pa je tvrdnja "nula
+    # redova, ne gresku" bila zelena i nad padom (dokaz 19.11.2026: NE OBARA
+    # NISTA). Pomocnik sada cita kanal pada (ZbrBrojRedovaListe vraca -1).
     "zbirna-sto-cita-strogog-citaoca": (
         "modScrDokumenti.bas",
         "        Set c = modDokumenta.ZbrClanovi(mZbrID)\n",
@@ -687,10 +715,15 @@ SABOTAZE = {
         "Test_ZBR_PrazanNacrtNeRusiListu",
         "ZBR prazna lista: prazan nacrt daje nula redova, ne gresku",
     ),
+    # Mutant RAZRESAVA broj u prvi dokument tog broja. Ranija zamena je slala
+    # sam BROJ kao OtpremnicaID: pisac ga ne nalazi i odbija, pa je padala
+    # "radnja nad redom je izvrsena", a ciljana tvrdnja (pod If clanovi.count
+    # = 1) nije ni dolazila na red (dokaz 19.11.2026: NE OBARA SVOJ TEST).
+    # Opasan oblik greske nije odbijen klik nego TUDJA otpremnica u sastavu.
     "zbirna-sto-veze-po-broju": (
         "modScrDokumenti.bas",
         "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, IdentKolonaIndeks(\"OTPREMNICA\"))))\n",
-        "            Case Else\n                otkupID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))   ' SABOTAZA: po broju\n",
+        "            Case Else\n                otkupID = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID)))   ' SABOTAZA: prvi dokument tog broja\n",
         "Test_ZBR_RadniStoVezePoIdentitetu",
         "ZBR identitet: vezana je BAS izabrana otpremnica, ne prva sa tim brojem",
     ),
@@ -701,19 +734,29 @@ SABOTAZE = {
         "Test_ZBR_SpisakKojiSeNudiNeLaze",
         "ZBR ponuda: sveobuhvatna lista NE nudi vezivanje ni uz aktivan nacrt",
     ),
+    # Bag iz review-a #379: skriven je ceo OKVIR, a segKlasa2 sam ostaje
+    # Visible. Zato pada tvrdnja o okviru (prva), ne o prekidacu -- test tvrdi
+    # vidljivost roditelja posebno bas zbog toga. Dokaz 19.11.2026: PALA DRUGA
+    # TVRDNJA.
     "zbirna-forma-krije-prekidac-klase": (
         "modOtkupUI.bas",
         "            FldShow z, \"fgCena\", True\n",
         "            FldShow z, \"fgCena\", (mode <> \"F3\")\n",
         "T_ZbirnaForma_KlasaOstajeBezCene",
-        "prekidac druge klase je dostupan operateru",
+        "F3: okvir klase i cene OSTAJE vidljiv",
     ),
     # --- S4-2b: nacrt zbirne ------------------------------------------------
     # Tri kapije, tri tvrdnje: najava mora biti pokrivena, izvor mora biti
     # IZDATA otpremnica, i ista otpremnica ne sme u dve zbirne.
+    #
+    # Pokrivenost su DVE jednakosti (kolicina i gajbe), a test je nepokriven u
+    # obe (300/15 prema 400/20). Skidanje samo kolicine je ostavljalo da odbije
+    # jednakost gajbi, sa istom recju "najavljeno" (dokaz 19.11.2026: NE OBARA
+    # NISTA). Zato sabotaza skida obe -- to i jeste "pokrivenost se ne proverava".
     "zbirna-izdaje-nepokriven-nacrt": (
         "modDokumenta.bas",
-        "    ZbrRequireJednakost zbirnaID, ocek, pov, \"Kolicina\", SRC\n",
+        "    ZbrRequireJednakost zbirnaID, ocek, pov, \"Kolicina\", SRC\n"
+        "    ZbrRequireJednakost zbirnaID, ocekAmb, povAmb, \"KolAmbalaze\", SRC\n",
         "    ' SABOTAZA: pokrivenost se ne proverava\n",
         "Test_ZBR_NepokrivenNacrtSeNeIzdaje",
         "ZBR nepokriven: nepokrivena zbirna se NE izdaje",
@@ -782,10 +825,16 @@ SABOTAZE = {
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
         "prefill otkupa nije prazan",
     ),
+    # Broj stornirane opet ulazi u prefill. Sidro je u grani OTKUPA, jer test
+    # meri bas otkup: od S1b-2 otkup izlazi iz PrefillIzStorniranog svojim
+    # Exit Function, pa je ranije sidro (zavrsni `fokus` na 4 razmaka) stajalo
+    # samo na putu prijemnice -- mutacija nije imala dejstva na tvrdnju
+    # (dokaz 19.11.2026: NE OBARA NISTA).
     "prefill-broj": (
         "modStornoDok.bas",
-        '    res = Spoji(res, "fokus", "kolicina")\n',
-        '    res = Spoji(res, "brdok", NzToText(d(base, cBroj)))   \' SABOTAZA\n',
+        '        res = Spoji(res, "ambpr", BrojUTekst(CeliBroj(d, base, GetColumnIndex(tbl, ColAmbPrZaPrefill(tip)))))\n',
+        '        res = Spoji(res, "ambpr", BrojUTekst(CeliBroj(d, base, GetColumnIndex(tbl, ColAmbPrZaPrefill(tip)))))\n'
+        '        res = Spoji(res, "brdok", NzToText(d(base, cBroj)))   \' SABOTAZA\n',
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
         "broj dokumenta se NE preuzima",
     ),
@@ -866,19 +915,30 @@ SABOTAZE = {
         "Test_ZBR_TrakaNatpisi",
         "ZBR natpisi: prazan spec daje NIZ, ne prazno",
     ),
+    # Vraca BAS bag iz review-a #381: IIf u ARGUMENTU cita p(13) i kad ga F1 ne
+    # salje, pa Resume Next preskoci CELU dodelu i kljucevi ostanu Empty.
+    #
+    # Ranija verzija je samo skinula uslov sa "spec = CStr(p(13))". To je od
+    # LNC-ODL-37 (spec je zasebna lokalna, a TrakaNatpisi uvek vraca niz)
+    # EKVIVALENTAN mutant: preskocena je samo dodela spec-u, spec ostaje "" i
+    # natpisi su podrazumevani -- dokaz 19.11.2026: NE OBARA NISTA. Pada prva
+    # tvrdnja o F1, jer nova forma natpise jos nema (traka ostaje BEZ natpisa).
     "traka-cita-polje-koje-f1-ne-salje": (
         "modOtkupUI.bas",
-        "    If UBound(p) >= 13 Then spec = CStr(p(13))\n",
-        "    spec = CStr(p(13))   ' SABOTAZA: cita polje koje F1 ne salje\n",
+        "    If UBound(p) >= 13 Then spec = CStr(p(13))\n"
+        "    kljucevi = TrakaNatpisi(spec, imaKlj)\n",
+        "    kljucevi = TrakaNatpisi(IIf(UBound(p) >= 13, p(13), \"\"), imaKlj)   ' SABOTAZA: cita polje koje F1 ne salje\n",
         "T_Traka_NatpisiPoRezimu",
-        "Nazad u F1: prvi natpis je VRACEN, nije ostao ZBR",
+        "F1: prva mera nosi podrazumevani natpis",
     ),
+    # Natpisi ekrana se ignorisu u CELINI, pa pada PRVA tvrdnja o F2 (prva
+    # mera), a ne cetvrta -- dokaz 19.11.2026: PALA DRUGA TVRDNJA.
     "traka-ne-uzima-natpise-ekrana": (
         "modOtkupUI.bas",
         "    TrakaNatpisi = svoji\n",
         "    ' SABOTAZA: natpisi ekrana se ignorisu\n",
         "T_Traka_NatpisiPoRezimu",
-        "F2: cetvrta mera je BROJ IZVORA, jer zbirna nema cenu",
+        "F2: prvu meru preimenuje ekran zbirne",
     ),
     "zbirna-traka-ne-gleda-izvore": (
         "modScrDokumenti.bas",
@@ -949,12 +1009,18 @@ SABOTAZE = {
         "RS liste: nacrt je u otvorenima, ID u poslednjoj koloni",
     ),
     # Otvorena izmena nacrta u F2 opet pravi NOV nacrt umesto izmene.
+    #
+    # Tvrdnja "nov nacrt NIJE napravljen" ovu sabotazu ne vidi (dokaz
+    # 19.11.2026: NE OBARA SVOJ TEST): pisac nacrta sam drzi broj niza
+    # (OtpNapraviDraft -> RequireBrojSlobodanUNizu), pa nov nacrt sa brojem
+    # otvorenog ne nastaje ni bez ove grane. Ono sto se gubi je IZMENA -- nacrt
+    # zadrzi staro ocekivanje (100 uz 110 povezano) i ne izdaje se.
     "izmena-nacrta-pravi-nov": (
         "modScrDokumenti.bas",
         "    If Len(mIzmenaOtpID) > 0 Then\n",
         "    If False Then   ' SABOTAZA: izmena pravi nov nacrt\n",
         "Test_OTP_IzmenaNacrtaF2",
-        "F2 izmena: nov nacrt NIJE napravljen",
+        "F2 izmena: posle izmene izdavanje prolazi",
     ),
     # Otkazivanje izmene opet ne zatvara izmenu -- sledeci nov unos bi menjao nacrt.
     "izmena-nacrta-ne-otkazuje": (
@@ -1047,13 +1113,21 @@ SABOTAZE = {
     ),
     # Ocekivanje nacrta se tiho prepisuje po nasledniku, pa razlika izmedju
     # prijavljenog i donetog nestaje -- a bas ona zaustavlja izdavanje.
+    #
+    # PREPISUJE, ne dopisuje: OtpUpisiOcekivano samo DODAJE stavke, pa je
+    # zamena bez brisanja ostavljala dve stavke klase I. Strogi citalac
+    # (GetOtpremnicaProgress) na to pukne, test ode u LogFatal pre ciljane
+    # tvrdnje (dokaz 19.11.2026: NE OBARA SVOJ TEST) -- meri se korupcija, ne
+    # prepisano ocekivanje.
     "ispravka-prepisuje-ocekivanje": (
         "modDokumenta.bas",
         "    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True\n"
         "    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC\n",
         "    OtpRequireIzvorValjan otpremnicaID, Trim$(otkupID), SRC, True\n"
         "    OtpUpisiClanstvo otpremnicaID, Trim$(otkupID), SRC\n"
-        "    OtpUpisiOcekivanjeIzIzvora otpremnicaID   ' SABOTAZA: ocekivanje po detetu\n",
+        "    ' SABOTAZA: ocekivanje nacrta se prepisuje po detetu\n"
+        "    OtpObrisiOcekivano otpremnicaID, SRC\n"
+        "    OtpUpisiOcekivanjeIzIzvora otpremnicaID\n",
         "Test_OTK_IspravkaBlokaUNacrtu",
         "Ispravka bloka: ocekivanje nacrta se ne prepisuje",
     ),
@@ -1162,13 +1236,19 @@ SABOTAZE = {
     ),
     # Ispravka opet prima NACRT (S3c): nacrt se menja, a ne stornira -- inace
     # svaka izmena trosi jos jedan broj niza i ostavlja storniran dokument.
+    #
+    # Nacrt u testu nema izvora, pa ga i bez ove kapije zaustavi sledeca
+    # ("Izdata otpremnica nema nijedan izvor") -- "nacrt se ne ispravlja" zato
+    # ne pada (dokaz 19.11.2026: NE OBARA NISTA). Pada tvrdnja o RAZLOGU, od
+    # kad trazi pun izraz pravila ("samo IZDATA"), a ne rec koju nosi i ta
+    # druga kapija.
     "ispravka-nacrt-prolazi": (
         "modDokumenta.bas",
         "    If Not IzdatoStatusJeIzdato(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, staraID, _\n"
         "                                            COL_TRACE_IZDATO_STATUS)) Then\n",
         "    If False Then   ' SABOTAZA: i nacrt ulazi u ispravku\n",
         "Test_OTP_IspravkaIzdate",
-        "Ispravka: nacrt se ne ispravlja",
+        "Ispravka: razlog kaze da se ispravlja samo izdata",
     ),
     # Nova otpremnica ostaje bez sastava: blokovi stare vise ne prelaze na nju,
     # pa ispravka pravi prazan nacrt a blokove ostavlja nevezane.
@@ -1197,6 +1277,14 @@ SABOTAZE = {
     ),
     # Zaglavlje nije u snimku transakcije: pad posle storna ostavlja storniranu
     # otpremnicu bez zamene -- tacno prozor zbog kog je stari tok pamtio pending.
+    #
+    # Dokaz 19.11.2026 (NE OBARA SVOJ TEST) je imao dva uzroka, oba u testu:
+    # odeljak o padu je kvario STANICU, a generator broja bez niza od tada pukne
+    # PRE storna (OtpIspravi sastavlja zaglavlje pre njega), pa rollback niko
+    # nije merio; a ova sabotaza obara vec PRVU ispravku (AMB-INV-08 trazi
+    # tblOtpremnica u snimku), posle cega je test izlazio pre tog odeljka.
+    # Test sada kvari vozaca (pad u piscu nacrta, posle storna) i do odeljka
+    # stize i bez nove otpremnice.
     "ispravka-pad-ostavlja-storniranu": (
         "modDokumenta.bas",
         "    tx.AddTableSnapshot TBL_OTPREMNICA\n"
@@ -1304,12 +1392,18 @@ SABOTAZE = {
     ),
     # Storno otpremnice opet ide po broju -- pisac tada ne zna koju od dve
     # otpremnice istog broja da uzme.
+    #
+    # Mutant razresava broj kao stari put: PRVI red tog broja (LookupValue), sto
+    # je u testu otpremnica A, a ne izabrana B. Ranija zamena je zvala
+    # StornoOtpremnicaByBroj_TX, kog u src-vba vise nema -- mutant se nije
+    # kompajlirao (dokaz 19.11.2026). Tvrdnja je CEO STATICAN literal (BFP kljuc):
+    # "storno B prosao" nosi '& poruka', pa nijedan pad nije mogao da je poklopi.
     "otp-f8-storno-po-broju": (
         "modStornoDok.bas",
         "            ok = StornoOtpremnica_TX(Trim$(docID))\n",
-        "            ok = StornoOtpremnicaByBroj_TX(broj, docID)   ' SABOTAZA\n",
+        "            ok = StornoOtpremnica_TX(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID)))   ' SABOTAZA: prvi red broja\n",
         "Test_OTP_F8StornoPoID",
-        "storno B prosao",
+        "OTP F8: storno dira OTP-B",
     ),
     # --- identitet dokumenta i fail-closed grane (hardening posle review-a) ---
     "prefill-fallback-po-broju": (
@@ -1451,7 +1545,11 @@ SABOTAZE = {
         "T_StornoImpact_SchemaDriftJeInvalidan",
         # Prethodna tvrdnja (drift PrijemnicaID) meri modStornoFlow.CountActive,
         # koji ide ranije i pukne prvi -- zato je ova sabotaza bila MRTVA. Drift
-        # PaletaID cita jedino paletna sekcija, pa se tek tu meri njena strogost.
+        # PaletaID od S6 koraka 4 cita i LANAC (PrijemnicaNaPreradjenojPaleti,
+        # isti strogi citac), ali samo nad dokumentom koji palete IMA -- pa je
+        # nad Z2 opet bila mrtva (dokaz 19.11.2026). Test zato drift PaletaID
+        # meri nad dokumentom BEZ paleta (PRJ-FAK-3), gde ga cita samo paletna
+        # sekcija.
         "...i kad nedostaje kolona koju cita SAMO paletna sekcija",
     ),
     # Zadat docID koji se ne moze razresiti mora da OBORI uvid. Tihi povratak na
@@ -1468,6 +1566,13 @@ SABOTAZE = {
     # kroz celu tabelu, a PrijemniceIDPoIdentitetu trazi broj I generaciju. Zato
     # postoji stanje u kome prva prodje a druga ne -- generacija koja pripada
     # DRUGOM broju -- i tu se meri bas ova kapija.
+    #
+    # ZASTARELO od S6 koraka 4 (v. POZNATI_NALAZI_DOKAZ): identitet je
+    # PrijemnicaID, a par (broj, ID) proverava modStornoFlow.PrijemnicaIDZaStorno.
+    # Zaglavlje i lanac uvida ga zovu STROGO i pre paletne sekcije, a
+    # PrijemniceIDPoIdentitetu zove istu funkciju meko nad istim podacima -- pa
+    # kad ona vrati prazno, uvid je vec oboren. Kapija ispod je nedostizna kroz
+    # BuildStornoImpact; zivu kapiju para meri s6k4-f8-bez-provere-para.
     "identitet-degradira-na-broj": (
         "modStornoImpact.bas",
         "                If strict And Len(Trim$(docID)) > 0 Then\n",
@@ -1520,7 +1625,11 @@ SABOTAZE = {
         "        broj = RequireZbirnaPar(Trim$(zbirnaID), broj, MOD_NAME & \".ScanZbirna\")\n",
         "        ' SABOTAZA: par broj/identitet se ne proverava\n",
         "T_StornoImpact_NestaoIdentitetJeInvalidan",
-        "nestao identitet ZBIRNE obara uvid",
+        # Ne "nestao identitet ZBIRNE obara uvid": tu tvrdnju od S4-2 obara
+        # zaglavlje uvida (ZbrIdUvid), koje ide pre lanca, pa ova sabotaza nije
+        # obarala nista (dokaz 19.11.2026). Kapija para u ScanZbirna se meri
+        # direktno, kroz GetChainFlags.
+        "nestao identitet ZBIRNE obara i lanac, ne samo zaglavlje uvida",
     ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
@@ -1529,7 +1638,19 @@ SABOTAZE = {
     "uvid-palete-po-broju": (
         "modStornoImpact.bas",
         "            Set ids = PrijemniceIDPoIdentitetu(broj, docID)\n",
-        "            Set ids = Nothing   ' SABOTAZA: palete se traze po broju\n",
+        # Mutant STVARNO trazi po broju: skup su svi PrijemnicaID tog broja. Ranije
+        # je ovde stajalo `Set ids = Nothing` -- od S8 reza 2a-1 (R4) to vise nije
+        # "po broju" nego "bez paleta", pa je padao preduslov (PALA DRUGA TVRDNJA,
+        # dokaz 19.11.2026). Preduslov testa se zato meri iz tabele, ne uvidom.
+        "            ' SABOTAZA: palete se traze po broju -- svi PrijemnicaID tog broja\n"
+        "            Dim sabD As Variant, sabI As Long, sabB As Long, sabP As Long\n"
+        "            sabD = GetTableData(TBL_PRIJEMNICA)\n"
+        "            sabB = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)\n"
+        "            sabP = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)\n"
+        "            Set ids = CreateObject(\"Scripting.Dictionary\")\n"
+        "            For sabI = 1 To UBound(sabD, 1)\n"
+        "                If Trim$(CStr(sabD(sabI, sabB))) = Trim$(broj) Then ids(Trim$(CStr(sabD(sabI, sabP)))) = 1\n"
+        "            Next sabI\n",
         "T_StornoImpact_PoIdentitetu",
         "sa identitetom uvid nosi SAMO palete izabranog dokumenta",
     ),
@@ -1664,16 +1785,25 @@ SABOTAZE = {
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n",
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n",
         "T_ZamenaZbirne_NeDiraDecuTudje",
-        "DUPLI staje dok broj nose dva aktivna dokumenta",
+        # Ne "DUPLI staje...": bez kapije moda DUPLI i dalje staje, na kapiji u
+        # transakciji (StornoZbirnaIDetach_TX), samo posle zapisa konteksta i uz
+        # genericku poruku. Test je do 19.11.2026 slao generaciju umesto ZbirnaID-a,
+        # pa je padao na proveri para pre obe kapije (NE OBARA SVOJ TEST).
+        "razlog se IMENUJE -- staje kapija moda, ne genericki neuspeh transakcije",
     ),
     # Storno otkupa po BROJU umesto po OtkupID-u izabranog reda (S1e): broj je
     # scoped po otkupnom mestu, pa prvi red broja moze biti tudji dokument.
+    #
+    # PRVI red je LookupValue. LookupActiveID vraca POSLEDNJI aktivan red tog
+    # broja, a to je u fixture-u bas izabran B (OTK-KOL-A pa OTK-KOL-B) -- mutant
+    # je stornirao tacan dokument i nista nije palo (dokaz 19.11.2026). Sa A
+    # umesto B prva pada tvrdnja o B; tvrdnja o A stoji iza nje (AssertEq).
     "otkup-storno-po-broju": (
         "modStornoDok.bas",
         "            ok = StornoOtkup_TX(Trim$(docID))\n",
-        "            ok = StornoOtkup_TX(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID))   ' SABOTAZA: po broju\n",
+        "            ok = StornoOtkup_TX(NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)))   ' SABOTAZA: prvi red broja\n",
         "T_OtkupStornoPoID_NeDiraTudjeOM",
-        "prvi red istog broja sa drugog otkupnog mesta (A) OSTAJE aktivan",
+        "storniran je izabran dokument (B)",
     ),
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
@@ -1746,7 +1876,11 @@ SABOTAZE = {
         "T_F8_IzabranRedOstajeIzabran",
         "recovery zapis pokazuje na IZABRAN dokument",
     ),
-    # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
+    # Kljuc grupisanja u ciljnoj listi kad generacije NEMA. Nije "zatecen zapis":
+    # kanonski pisac zbirne generaciju ne pise (A20), pa je to put svake nove
+    # zbirne. Fixture zbirne generaciju nose, pa je ovaj kljuc bio neizvrsen i
+    # sabotaza nije obarala nista (dokaz 19.11.2026); test sada brise generaciju
+    # para ZB-TEST-DUPL i meri listu i bez nje.
     # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
     # cine vlasnika, ova sam kljuc.
     "oporavak-cilj-po-broju": (
@@ -1754,7 +1888,7 @@ SABOTAZE = {
         "            kljuc = broj & Chr$(1) & vlasnik\n",
         "            kljuc = broj   ' SABOTAZA: dva vlasnika istog broja postaju jedan cilj\n",
         "T_Oporavak_CiljneListe",
-        "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta",
+        "i bez generacije isti broj kod dva vozaca daje DVA cilja -- kljuc je broj + vlasnik",
     ),
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
@@ -1782,12 +1916,16 @@ SABOTAZE = {
         "isti broj a razliciti dokumenti PROLAZI",
     ),
     # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
+    # Nad fixture-om (zbirne nose generaciju) red grupise identitet, pa par
+    # ZB-TEST-DUPL ostaje DVA reda i pada tvrdnja o VIDLJIVOM vozacu (dokaz
+    # 19.11.2026: PALA DRUGA TVRDNJA). To je i tacna tvrdnja ove sabotaze: kljuc
+    # meri oporavak-cilj-po-broju, a ova KOJE kolone cine vlasnika.
     "zbirna-vlasnik-samo-kupac": (
         "modScrOporavak.bas",
         "                                    Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _\n",
         "                                    Array(COL_ZBR_KUPAC), _\n",
         "T_Oporavak_CiljneListe",
-        "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta",
+        "drugi vozac je vidljiv u listi",
     ),
     "vlasnik-broji-stornirane": (
         "modStorno.bas",
@@ -2070,14 +2208,19 @@ SABOTAZE = {
         "izbor reda ne trazi ponovno citanje mreze",
     ),
     # Zona koje nema je odgovor, ne greska. Ako ScreenZone ostavi Err postavljen,
-    # ScrGridData ga procita kao pad ekrana i mreza se isprazni iako su podaci
-    # procitani ispravno.
+    # pozivalac ga nasledi kao da je SAM pao.
+    #
+    # Tvrdnja je ranije bila "procitana lista se ne prijavljuje kao pad ekrana"
+    # (ScrGridData). Od KI-014 je citalac zasticen sam -- vracena lista uz
+    # zaostao Err je ZAOSTATAK (ScrRunIshod), ne pad -- a test pusten sam nema
+    # formu, pa ScreenZone izadje pre citanja zone. Dokaz 19.11.2026: NE OBARA
+    # NISTA. Test sada meri ScreenZone direktno, nad izgradjenom formom.
     "zona-curi-gresku": (
         "modOtkupUI.bas",
         "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    If Err.Number <> 0 Then Err.Clear\n",
         "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\n",
         "T_PaletaDvoklik_OtvaraStavke",
-        "procitana lista se ne prijavljuje kao pad ekrana",
+        "zona koje nema ne ostavlja gresku u Err pozivaoca",
     ),
     # Cip mora STVARNO da suzava listu. Ako filter ne stigne do reda, svi cipovi
     # daju istu punu listu -- operater bira 'Zatvorene' i gleda sve palete.
@@ -2855,10 +2998,17 @@ SABOTAZE = {
     # Poruka() na nepoznat kljuc vraca "[KLJUC]", NIKAD prazno -- pa je provera
     # 'Len(Poruka(k)) = 0' bila provera koja ne moze da padne. Ova sabotaza je i
     # nasla taj placebo: pre ispravke nije obarala nista.
+    #
+    # Ranije je preimenovala KLJUC u modPoruke (OTKUI_OBL_PALETE -> PALETX).
+    # To nad fixture-om ne dejstvuje: UpsertRow dodaje i menja, a NIKAD ne brise,
+    # pa stari red ostaje u tblPoruke i Poruka ga nalazi -- dokaz 19.11.2026:
+    # NE OBARA NISTA. Sada kvari stvarni oblik propusta iz komentara u modPoruke:
+    # nova oblast u modAuth.OblastiList bez svog reda u katalogu. Takav red ne
+    # moze da postoji ni u jednoj svesci.
     "oblast-prava-bez-naziva": (
-        "modPoruke.bas",
-        '    UpsertRow lo, existing, "OTKUI_OBL_PALETE", "Palete"\n',
-        '    UpsertRow lo, existing, "OTKUI_OBL_PALETX", "Palete"\n',
+        "modAuth.bas",
+        "                        OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA)\n",
+        "                        OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA, \"BezNaziva\")   ' SABOTAZA: oblast bez reda u katalogu\n",
         "T_MatKor_RecnikDaNeIPrava",
         "svaka oblast prava ima naziv u katalogu poruka",
     ),
@@ -3250,6 +3400,11 @@ SABOTAZE = {
     # Kapija u samom piscu naloga. Do v6-ui-203 su se KorDodaj/KorIzmeni/
     # KorPromeniStatus oslanjali iskljucivo na to da ih svi pozivaoci zovu kroz
     # modMaticniUnos -- jedan nov pozivalac je zaobilazio branu.
+    #
+    # Dokaz 19.11.2026: PALA DRUGA TVRDNJA (promena statusa). Test je tvrdio
+    # samo "odbijeno", a polja u tom trenutku nose recnik ambalaze, pa su
+    # KorDodaj i KorIzmeni odbijeni VALIDACIJOM i bez kapije -- placebo. Test
+    # sada tvrdi poruku kapije (MATU_ERR_BEZ_PRAVA).
     "korisnici-pisac-bez-kapije": (
         "modMaticniKorisnici.bas",
         "    Brana = modMaticniUnos.MatBranaUpisa(\"KORISNICI\")\n",
@@ -3320,10 +3475,19 @@ SABOTAZE = {
     ),
     # Kvar pri citanju spiska i prazan spisak se vracaju ISTO (prazan niz), pa
     # provera koja ih ne razlikuje propusta proizvoljan strani kljuc.
+    #
+    # Ranije je grana kvara bila UKLONJENA ("If False"). Od v6-ui-205 to je
+    # ekvivalentan mutant: svaki put kvara u MatComboStavke vraca Array(), a
+    # prazan spisak odbija pravilo odmah ispod -- dokaz 19.11.2026: NE OBARA
+    # NISTA. Sada grana ostaje, ali kvar PUSTA vrednost (oblik do v6-ui-203:
+    # greska u proveri postaje odobrenje). Grana ide pre pravila praznog
+    # spiska, pa njena odluka vazi.
     "combo-kvar-izvora-prolazi": (
         "modMaticniUnos.bas",
-        "    If Len(modMaticniIzvor.MatComboGreska()) > 0 Then\n",
-        "    If False Then   ' SABOTAZA: kvar pri citanju spiska se ne razlikuje\n",
+        "                \") -- vrednost odbijena\"\n"
+        "        ComboVrednostPostoji = False\n",
+        "                \") -- vrednost odbijena\"\n"
+        "        ComboVrednostPostoji = True   ' SABOTAZA: kvar pri citanju spiska prolazi\n",
         "T_Maticni_KapijeUpisaIZivotniCiklus",
         "kvar pri citanju spiska ODBIJA vrednost",
     ),
@@ -5690,12 +5854,17 @@ SABOTAZE = {
     # Ista druga brana, drugi dokument (S3b): mreza otpremnica cita stavke, pa
     # otpremnica bez ijedne stavke mora da padne po imenu umesto da se nacrta
     # kao 0 kg. Grana je svoja, pa joj treba svoje sidro.
+    #
+    # Meri se nad zaglavljem BEZ OtpremnicaID-a, isto kao otkup gore. Za
+    # zaglavlje bez stavki pada vec izvor (StavkeOtpremniceRedovi ->
+    # RequireZaglavljaOtpremniceSaStavkama), istom porukom, pa ova brana tamo
+    # nije sama (dokaz 19.11.2026: NE OBARA NISTA).
     "otp-kapija-mreza-tiha-nula": (
         "modScrDokumenti.bas",
         "                zStav = modDokumenta.ZbirStavkiZaOtpremnicu(dStav, CellS(src, r, iStavID), _\n                            \"modScrDokumenti.RedoviZaTip\")\n",
         "                If dStav.Exists(CellS(src, r, iStavID)) Then\n                    zStav = dStav(CellS(src, r, iStavID))\n                Else\n                    zStav = Array(0#, 0#, 0#, \"\")   ' SABOTAZA: tiha nula\n                End If\n",
         "Test_OTP_ZaglavljeBezStavkiObaraCitaoce",
-        "OTP bez stavki: mreza pada po imenu, ne crta 0 kg",
+        "OTP bez ID: mreza pada po imenu, ne crta 0 kg",
     ),
     # Preskok u GetOpenOtkupi je posle ove izmene NEDOSTIZAN -- izvor
     # (StavkeOtkupaRedovi) pada pre njega, pa sabotaza nad tom granom ne moze
@@ -5753,11 +5922,62 @@ SABOTAZE = {
     # --- S3b: citaoci otpremnice citaju stavke -------------------------------
     # Izvestaj po otkupnom mestu spaja klase u jedan red: prijem obe klase se
     # tada sabere i pripise jednoj (u malina modu duplo).
+    #
+    # Mutant SPAJA, ne odseca: jedan red po zaglavlju (broj redova i punjenje
+    # zajedno), sa zbirom kilaze. Ranija zamena (`For s = 1 To 1`) je menjala
+    # samo punjenje, a broj redova ostajao po stavkama -- red bez zaglavlja
+    # (mapRed = 0) je dizao gresku 9, izvestaj pucao i test odlazio u LogFatal
+    # (dokaz 19.11.2026: NE OBARA SVOJ TEST).
     "otp-izvestaj-om-spaja-klase": (
         "modIzvestaj.bas",
-        "            For s = 1 To stavke.count\n                stavka = stavke(s)\n                nPar = nPar + 1\n",
-        "            For s = 1 To 1                       ' SABOTAZA: samo prva klasa\n"
-        + "                stavka = stavke(s)\n                nPar = nPar + 1\n",
+        "            rowCount = rowCount + stavke.count\n"
+        "        End If\n"
+        "    Next h\n"
+        "\n"
+        "    If rowCount = 0 Then\n"
+        "        ReportOtkupRobaOM = Empty\n"
+        "        Exit Function\n"
+        "    End If\n"
+        "\n"
+        "    ReDim mapRed(1 To rowCount)\n"
+        "    ReDim mapKlasa(1 To rowCount)\n"
+        "    ReDim mapKg(1 To rowCount)\n"
+        "\n"
+        "    Dim nPar As Long\n"
+        "    For h = 1 To UBound(otpData, 1)\n"
+        "        If modDokumenta.IzdatoStatusJeIzdato(otpData(h, colIzd)) Then\n"
+        "            Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _\n"
+        "                             Trim$(NzToText(otpData(h, colOtpID))), SRC)\n"
+        "            For s = 1 To stavke.count\n"
+        "                stavka = stavke(s)\n"
+        "                nPar = nPar + 1\n"
+        "                mapRed(nPar) = h\n"
+        "                mapKlasa(nPar) = KlasaOrDefault(stavka(3))\n"
+        "                mapKg(nPar) = CDbl(stavka(4))\n",
+        "            rowCount = rowCount + 1   ' SABOTAZA: jedan red po zaglavlju\n"
+        "        End If\n"
+        "    Next h\n"
+        "\n"
+        "    If rowCount = 0 Then\n"
+        "        ReportOtkupRobaOM = Empty\n"
+        "        Exit Function\n"
+        "    End If\n"
+        "\n"
+        "    ReDim mapRed(1 To rowCount)\n"
+        "    ReDim mapKlasa(1 To rowCount)\n"
+        "    ReDim mapKg(1 To rowCount)\n"
+        "\n"
+        "    Dim nPar As Long\n"
+        "    For h = 1 To UBound(otpData, 1)\n"
+        "        If modDokumenta.IzdatoStatusJeIzdato(otpData(h, colIzd)) Then\n"
+        "            Set stavke = modDokumenta.StavkeZaOtpremnicu(stavkeDok, _\n"
+        "                             Trim$(NzToText(otpData(h, colOtpID))), SRC)\n"
+        "            For s = 1 To stavke.count\n"
+        "                stavka = stavke(s)\n"
+        "                If s = 1 Then nPar = nPar + 1\n"
+        "                mapRed(nPar) = h\n"
+        "                mapKlasa(nPar) = KlasaOrDefault(stavka(3))\n"
+        "                mapKg(nPar) = mapKg(nPar) + CDbl(stavka(4))\n",
         "Test_OTP_IzvestajOMRedPoKlasi",
         "OTP izvestaj OM: dvoklasna otpremnica daje DVA reda",
     ),
@@ -5772,12 +5992,16 @@ SABOTAZE = {
     ),
     # Prefill ispravke opet uzima kolicinu sa zaglavlja: operater dobija formu
     # bez kilaze i bez klase, pa "ispravka" cuva nesto sto original nije bio.
+    #
+    # Tvrdnja o klasi I nosi '& spec' (dijagnostika), pa za BFP nije kljuc koji
+    # se moze poklopiti. Mutant obara i klasu II, ciji je naziv CEO STATICAN
+    # literal -- ista mutacija, isti razlog.
     "otp-prefill-bez-stavki": (
         "modStornoDok.bas",
         "        res = StavkeOtpremniceZaPrefill(res, CelijaAko(d, base, cId))\n",
         "        res = Spoji(res, \"dveklase\", \"1\")   ' SABOTAZA: bez stavki\n",
         "Test_OTP_PrefillIspravkeCitaStavke",
-        "klasa I nosi svoju kilazu",
+        "OTP prefill: klasa II nosi svoju kilazu",
     ),
 
 
@@ -5786,7 +6010,7 @@ SABOTAZE = {
         "    brZbirne = modBrojevi.SuggestNextBroj(KIND_ZBR, vozacID, datum, False)\n",
         "    brZbirne = modBrojevi.ApplyMirrorPrefix(vozacID, Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, COL_OTP_BROJ))))   ' SABOTAZA: nasledjen broj\n",
         "Test_OTP_MalinaAutoZbirna",
-        "broj zbirne je IZ NJENOG NIZA, ne nasledjen",
+        "OTP malina: broj zbirne je IZ NJENOG NIZA, ne nasledjen",
     ),
     "malina-zbirna-nije-idempotentna": (
         "modMasterSync.bas",
@@ -5829,10 +6053,17 @@ SABOTAZE = {
         "bez potvrde se NE knjizi nista",
     ),
 
+    # Blok bez otkupnog mesta dobija MATICNO mesto kooperanta umesto da stane --
+    # tacno ono sto komentar testa zove pogadjanjem, i model pre S2 (OM iz
+    # tblKooperanti). Golo "If False" nema dejstva: prazan blokOmID ide u
+    # SaveNovac kao prazan partner i PartnerID, pa ValidateNovacInput odbije upis
+    # drugom porukom -- ishod (n = 0) je isti (dokaz 19.11.2026: NE OBARA NISTA).
     "banka-writer-blok-bez-om": (
         "modBankaMapiranje.bas",
         "    If Len(outStanica) = 0 Then\n",
-        "    If False Then   ' SABOTAZA: blok bez otkupnog mesta prolazi\n",
+        "    ' SABOTAZA: blok bez OM dobija maticno mesto kooperanta, kapije nema\n"
+        "    If Len(outStanica) = 0 Then outStanica = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, kooperantID, COL_KOOP_STANICA), \"\"))\n"
+        "    If False Then\n",
         "T24_BlokTudjegKooperantaIStorniran",
         "blok bez otkupnog mesta se NE knjizi",
     ),
@@ -6661,12 +6892,21 @@ SABOTAZE = {
         "Test_ZBR_KanonskoPonistenjeStorniraIzvore",
         "ZBR pon: IZVORNA OTPREMNICA je stornirana -- lanac je stvarno oboren",
     ),
+    # S4-3b reprodukcija: kanonska zbirna (bez GeneracijaID-a) je padala na
+    # "prazan identitet = integritetska greska", pa DUPLI nije radio ni nad
+    # jednim dokumentom koji aplikacija pravi. Mutant vraca bas taj kvar.
+    #
+    # Ranije "uvek dvosmisleno" (activeLogicalCount + 1) ne dira ovaj put: test
+    # salje ZbirnaID, pa je DUPLI scoped i ZbirnaMutacijaPoBrojuRazlog izlazi
+    # PRE grane activeLogicalCount (Faza 4). Integritet se pita pre toga.
+    # Isto sidro ima i zbirna-ident-opet-po-generaciji (modTest); zamena je
+    # namerno drugacija (zamka 11).
     "kanonska-zbirna-ne-sme-da-se-razveze": (
         "modDokumenta.bas",
-        "    res.activeLogicalCount = aktIds.Count\n",
-        "    res.activeLogicalCount = aktIds.Count + 1   ' SABOTAZA: uvek dvosmisleno\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)\n",
+        "    cIdent = RequireColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID, SRC)   ' SABOTAZA: kanonska zbirna bez identiteta\n",
         "Test_ZBR_KanonskaSmeDaSeRazveze",
-        "DUPLI radi nad kanonskom zbirnom",
+        "ZBR razvez: DUPLI radi nad kanonskom zbirnom",
     ),
     "zbirna-broj-bez-normalizacije": (
         "modDokumenta.bas",
@@ -6675,6 +6915,9 @@ SABOTAZE = {
         "T_ZbirnaIdent_BrojSeRazresavaUDokument",
         "A16: razmaci se normalizuju",
     ),
+    # Tvrdnja A18 ide PRVA medju tvrdnjama kapije: i rInteg (aktivan red bez
+    # generacije) meri ISTOG vlasnika, pa je ova sabotaza do 19.11.2026 padala
+    # tamo (PALA DRUGA TVRDNJA).
     "zbirna-kapija-pusta-istog-vlasnika": (
         "modDokumenta.bas",
         "    If id.activeLogicalCount > 0 Then\n"
@@ -9804,10 +10047,19 @@ SABOTAZE = {
         "S6 citaoci: izvestaj kupca daje red po stavci dokumenta",
     ),
     # F4 lista: prijemnica je u grani stavki; bez nje red cita prazno zaglavlje.
+    #
+    # iStavID (kolona identiteta) se postavlja SAMO u grani stavki, a od S6
+    # koraka 5 ga cita i fakturisanost (FaktRecPrijemnice). Bez drugog reda
+    # mutant obara celu listu greskom "Prijemnica bez izvedene fakturisanosti"
+    # -- dokaz 19.11.2026: PALA DRUGA TVRDNJA. Drugi red cuva SAMO identitet,
+    # pa je jedino dejstvo ono koje se meri: celije iz praznog zaglavlja.
     "s6k3-f4-lista-mimo-stavki": (
         "modScrDokumenti.bas",
-        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\" Or mk = \"PRIJEMNICA\")\n",
-        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\")   ' SABOTAZA: prijemnica cita zaglavlje\n",
+        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\" Or mk = \"PRIJEMNICA\")\n"
+        "    If otkStav Then\n",
+        "    otkStav = (mk = \"OTKUP\" Or mk = \"OTPREMNICA\" Or mk = \"ZBIRNA\")   ' SABOTAZA: prijemnica cita zaglavlje\n"
+        "    If mk = \"PRIJEMNICA\" Then iStavID = ColIdx(tblName, COL_PRJ_ID)\n"
+        "    If otkStav Then\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: F4 lista -- red dokumenta nosi zbir stavki i obe klase",
     ),
@@ -14545,35 +14797,24 @@ POZNATI_NALAZI = {
     # otpremnice DRAFT: pisac odbija storno izvora"), a katalog je cuvao samo
     # njegov rep. Grupni dokaz ju je video kao 15/15 crvenu, a NE OBARA SVOJ TEST.
     #
-    # Ovih sedam trazi izmenu TUDJEG testa, pa stoje imenovane:
+    # Ostalih sedam je trazilo izmenu TUDJEG testa, pa su stajale imenovane:
     #   literal pa & VREDNOST  -> vrednost u svoju tvrdnju, ciljana ostaje
     #                             staticna (obrazac: "X je izracunat: [..]" pa
     #                             "X nije Y")
     #   dva literala spojena & -> spoji u JEDAN literal
-    # Popis je zatvoren: kapija ih i dalje meri, pa nova ne moze da se ubaci
-    # tiho.
-    "clanstvo-bulk-dete":
-        "tvrdnja nije CEO STATICAN literal",
-    "clanstvo-bulk-roditelj":
-        "tvrdnja nije CEO STATICAN literal",
-    "ispravka-bloka-bez-vadjenja":
-        "tvrdnja nije CEO STATICAN literal",
-    "otp-f8-storno-po-broju":
-        "tvrdnja nije CEO STATICAN literal",
-    "otp-prefill-bez-stavki":
-        "tvrdnja nije CEO STATICAN literal",
-    "malina-zbirna-nasledjuje-broj":
-        "tvrdnja nije CEO STATICAN literal",
-    "kanonska-zbirna-ne-sme-da-se-razveze":
-        "tvrdnja nije CEO STATICAN literal",
-
-    # Ista klasa, nadjena zetvom tvrdnji: OBE sabotaze obore BAS istu poruku
-    # ("isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"), pa test
-    # ne moze da kaze koja je od njih pala. Razdvajanje trazi novu tvrdnju u
-    # T_Oporavak_CiljneListe -- jedna nad ciljem (broj + vlasnik), druga nad
-    # brojem redova. Nije deo ovog posla: ovde se popravlja KATALOG, ne testovi.
-    "zbirna-vlasnik-samo-kupac":
-        "deli tvrdnju sa 'oporavak-cilj-po-broju'",
+    #
+    # Svih sedam je zatvoreno 19.11.2026 (dokaz nad PR #491 ih je video kao NE
+    # OBARA SVOJ TEST): clanstvo-bulk-dete, clanstvo-bulk-roditelj,
+    # ispravka-bloka-bez-vadjenja, malina-zbirna-nasledjuje-broj i
+    # kanonska-zbirna-ne-sme-da-se-razveze receptom iznad, u testu;
+    # otp-prefill-bez-stavki i otp-f8-storno-po-broju u katalogu, na tvrdnju
+    # koja je vec pun literal. Kapija ih i dalje meri, pa nova ne moze da se
+    # ubaci tiho.
+    #
+    # zbirna-vlasnik-samo-kupac je delila tvrdnju sa oporavak-cilj-po-broju.
+    # Razdvojene su istog dana: oporavak-cilj-po-broju meri kljuc nad zbirnom
+    # BEZ generacije (nov blok u T_Oporavak_CiljneListe), a ova KOJE kolone cine
+    # vlasnika ("drugi vozac je vidljiv u listi").
 
     # Mrtva sabotaza, ne zastareo tekst: PostaviRez pise pa CITA NAZAD do tri
     # puta, a sabotaza svodi na jedan upis -- sto se u testu ne vidi, jer tamo
@@ -14645,6 +14886,19 @@ POZNATI_NALAZI_DOKAZ = {
     # generacijom koju vise niko ne pise. Ovi upisi se tada brisu -- dokaz sam
     # prijavi upis koji vise nista ne pokriva.
 
+    # NEDOSTIZNA KAPIJA, ne slab test (dokaz 19.11.2026, nad PR #491 i nad
+    # main-om isto). Od S6 koraka 4 identitet prijemnice je PrijemnicaID, a par
+    # (broj, ID) proverava modStornoFlow.PrijemnicaIDZaStorno. Zaglavlje i lanac
+    # uvida ga zovu STROGO, pre paletne sekcije; PrijemniceIDPoIdentitetu zove
+    # istu funkciju MEKO nad istim podacima. Kad meka vrati prazno, stroga je
+    # vec oborila uvid -- pa grana koju sabotaza gasi (ImpactPalete, strict i
+    # prazan skup) kroz BuildStornoImpact ne moze da se dosegne. Zivu kapiju
+    # para meri s6k4-f8-bez-provere-para.
+    #
+    # Vlasnik: rez koji tu granu uklanja kao suvisnu (uz ovu sabotazu) ili joj
+    # daje pozivaoca mimo zaglavlja. Test se ne menja: nema ulaza koji bi je
+    # dosegao a da ga zaglavlje ne obori prvo.
+    "identitet-degradira-na-broj": "NE OBARA NISTA",
 }
 
 
