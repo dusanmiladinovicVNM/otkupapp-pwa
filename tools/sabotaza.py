@@ -14616,6 +14616,102 @@ SABOTAZE = {
         "T_Cen_UnosOdbijaIPusta",
         "374 kljucevi odbijanja cenovnika su u katalogu poruka",
     ),
+    # --- Analiza brzine 2026-11 (docs/engineering/analize/2026-11-brzina) ---
+    # IZV-1: promena konteksta Izvestaja opet ide kroz pun RefreshFromData --
+    # generacija skace, pa povratak na vec vidjen kontekst cita tabele ponovo.
+    "izv1-kontekst-pun-refresh": (
+        "modScrIzvestaji.bas",
+        '    modOtkupUI.OsveziPrikazEkrana "IZVESTAJI", noviIzbor\n',
+        "    modOtkupUI.RefreshFromData   ' SABOTAZA: promena konteksta kao upis\n",
+        "T_Izv_KontekstOsvezavaPrikazNePodatke",
+        "384 povratak na vec vidjen kontekst ide iz kesa, bez novog citanja tabela",
+    ),
+    # IZV-1: promena konteksta ne osvezava prikaz uopste -- "nijedno punjenje"
+    # bi proslo i bez osvezavanja; kljuc snimka meri da je mreza procitana.
+    "izv1-kontekst-bez-osvezavanja": (
+        "modScrIzvestaji.bas",
+        '    modOtkupUI.OsveziPrikazEkrana "IZVESTAJI", noviIzbor\n',
+        "    ' SABOTAZA: promena konteksta ne osvezava prikaz\n",
+        "T_Izv_KontekstOsvezavaPrikazNePodatke",
+        "384 klik na Zbirno osvezava prikaz: mreza cita nov kontekst",
+    ),
+    # OTK-1: posle pogotka rb petlja ne izlazi, pa dupli redni broj ide na
+    # papir dvaput (stara petlja je uzimala PRVI red redom tabele).
+    "otk1-dupli-rb-dvaput": (
+        "modPrint.bas",
+        "                izlaz(nIzlaz) = mojih(j)\n"
+        "                Exit For\n",
+        "                izlaz(nIzlaz) = mojih(j)   ' SABOTAZA: dupli rb se stampa dvaput\n",
+        "T_OtkList_RedoviStavkiKanonskimRedom",
+        "385 otkupni list: prvi red po rednom broju, dupli i necelobrojni se preskacu",
+    ),
+    # IZV-3/IZV-5: kes izvedenih nizova nista ne pamti -- zbirni izvestaj opet
+    # gradi stavke po entitetu (sadrzaj isti, brojac pogodaka nula).
+    "izv3-kes-ne-pamti": (
+        "modDataAccess.bas",
+        "    mIzvCache(kljuc) = data\n",
+        "    ' SABOTAZA: izveden niz se ne pamti\n",
+        "T_KesIzvedeno_ZbirniIstiUzKes",
+        "386 zbirni saldo po OM gradi stavke jednom, ostalo iz kesa",
+    ),
+    # IZV-3/IZV-5: upis ne prazni kes izvedenih nizova -- citac posle upisa
+    # dobija niz izgradjen pre njega.
+    "izv3-upis-ne-prazni": (
+        "modDataAccess.bas",
+        "    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll\n",
+        "    ' SABOTAZA: upis ne prazni kes izvedenih nizova\n",
+        "T_KesIzvedeno_ZbirniIstiUzKes",
+        "386 upis kroz modDataAccess prazni kes izvedenih nizova",
+    ),
+    # IZV-2: naziv entiteta se opet cita iz sifarnika na svaki Scr_Rows.
+    "izv2-naziv-na-svaki-otkucaj": (
+        "modScrIzvestaji.bas",
+        "    noviNaziv = puni Or (k <> mSnimakKljuc)\n",
+        "    noviNaziv = True   ' SABOTAZA: naziv na svaki otkucaj\n",
+        "T_Izv_NazivEntitetaJednomPoKontekstu",
+        "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo",
+    ),
+    # IZV-9: cipovi opet citaju tabele sa lista, mimo kesa ljuske.
+    "izv9-cipovi-mimo-kesa": (
+        "modScrIzvestaji.bas",
+        "    d = modUiData.CachedTable(tblName)\n",
+        "    d = GetTableData(tblName)   ' SABOTAZA: cipovi mimo kesa ljuske\n",
+        "T_Izv_CipoviCitajuKesLjuske",
+        "388 cipovi vrste citaju tblOtkup kroz kes ljuske",
+    ),
+    # IZV-7: spajanje bez >= nije stabilno -- jednaki iznosi menjaju mesta.
+    "izv7-rang-nestabilan": (
+        "modArrayUtils.bas",
+        "        If vals(idx(i)) >= vals(idx(j)) Then\n",
+        "        If vals(idx(i)) > vals(idx(j)) Then   ' SABOTAZA: nestabilno\n",
+        "T_Rang_StabilnoOpadajuce",
+        "389 rang: opadajuce po iznosu, jednaki iznosi redom prve pojave",
+    ),
+    # PERF-REV-02: nevezane otpremnice ponovo pustaju dupli OtpremnicaID.
+    "hld1-dupli-id-prolazi": (
+        "modDokumenta.bas",
+        "    RequireJedinstvenoZaglavljeOtpremnice ZaglavljaOtpremnicePoID(SRC), SRC\n"
+        "\n"
+        "    Dim aktivno As Object, bila As Object\n",
+        "    ' SABOTAZA: dupli OtpremnicaID se ne proverava\n"
+        "\n"
+        "    Dim aktivno As Object, bila As Object\n",
+        "T_Nevezane_DupliIdPadaPoImenu",
+        "390 nevezane otpremnice: dupli OtpremnicaID pada po imenu",
+    ),
+    # PERF-REV-03: rollback vraca list mimo modDataAccess i ne javlja kesu --
+    # otvoren prozor citanja vraca kopiju sa ponistenim upisom.
+    "kes-rollback-ostavlja-kopiju": (
+        "clsTransaction.cls",
+        "    ' sazna da je tabela promenjena (PERF-REV-03).\n"
+        "    modDataAccess.KesTabeleZastareo tableName\n"
+        "End Sub\n",
+        "    ' sazna da je tabela promenjena (PERF-REV-03).\n"
+        "    ' SABOTAZA: rollback ne javlja kesu\n"
+        "End Sub\n",
+        "T_KesTabele_RollbackZastareva",
+        "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
+    ),
 }
 
 
