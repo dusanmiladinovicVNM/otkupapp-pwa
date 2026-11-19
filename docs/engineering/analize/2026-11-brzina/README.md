@@ -207,6 +207,31 @@ dalje vraća **kopiju** celog niza (`GetTableData = mTableCache(tblName)`,
 
 ## 3. Predloženi redosled
 
+**Urađeno 19.11.2026** (grana `claude/funny-turing-xc1u31`, svaki rez svoj
+commit):
+
+| Rez | Šta | Test | Status |
+|---|---|---|---|
+| IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **neverifikovano** |
+| OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **neverifikovano** |
+| HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **neverifikovano** |
+
+- **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
+  `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
+- **Na Windows-u ostaje:**
+  - Compile;
+  - suite `RunAllTests` sa testovima 384 i 385;
+  - BFP test iznad;
+  - `python tools/dokaz.py --izbor --radnika 4 zbirna-nevezane`, obavezno, jer
+    je dirano sidro sabotaže.
+
+**Sledeće za Izveštaje** (ne zavise od D1):
+- IZV-3 i IZV-5: zbirni saldo po stanici i po kupcu, uz odluku D3;
+- IZV-2 i IZV-9: naziv entiteta i dinamički čipovi van prozora keša;
+- IZV-7: bubble sort u RANG-u.
+
+Zbirna ambalaža (IZV-4) ide uz D1.
+
 1. **Bez ijedne linije koda, odmah** (#5):
    - **Podešavanja → „Otvori PDF posle izrade"** (`PDF_OTVORI_POSLE`) = NE
      (`modPodesavanja.bas:125`). PDF se i dalje pravi i arhivira, samo se ne
