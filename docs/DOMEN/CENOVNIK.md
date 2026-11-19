@@ -3,9 +3,10 @@
 > **Status (18.11.2026):** jezgro (`modCenovnik`, šema, Ensure, poruke) i ekran
 > (matični podaci, forma otkupa) su u kodu na grani
 > `claude/elegant-mccarthy-jqlkk6` (od `f154530`: `7d5e7f5`, `1338d9b`). Testovi
-> 372–383 (`T_Cen_*`, §9) su imenovani unapred. **U Excelu je pušten samo ciljani prolaz 19.11.2026** (11 od 12 zeleno; 374 ispravljen posle toga, 383 nov — oba nepuštena). Do punog prolaza važi:
-> `run_vba` i Compile nisu pušteni (Linux sesija), pa je svako ponašanje ovde
-> **neverifikovano**. Izvršena je samo statička kapija `python3 tools/vba_check.py`.
+> 372–383 (`T_Cen_*`, §9). **Izmereno u Excelu 19.11.2026** (operater, Windows,
+> grana na `f3215a0f`): FULL `run_vba` ZELENO (12 suita, `RunAllTests` 383/0,
+> BFP 3492/0); dokaz sabotaža cenovnika 45/45. Ručni Compile, kapija migracije
+> nad pravom sveskom i ručni UI smoke nisu potvrđeni (§10).
 
 ## 1) Svrha i izvor
 
@@ -297,9 +298,18 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
 
 ## 10) Nije provereno
 
-- Ciljani prolaz 19.11.2026 (operater, Windows): 11 od 12 zeleno; pao 374 na granici para
-  (ispravljeno, nije ponovo pušteno), 383 je dodat posle. Pune regresije, dokaz sabotaža i
-  Compile (`Alt+F11 → Debug → Compile VBAProject`). Ponašanje je neverifikovano.
+- Izmereno 19.11.2026 (operater, Windows): ciljani prolaz 11/12 (pao 374 na granici
+  para, ispravljeno); posle ispravki FULL `run_vba` ZELENO na 12 suita, dokaz `cen-` 45/45
+  (dve sabotaže CEN-REV-02 su prvo bile pogrešno napisane, ispravljene u `f3215a0f`).
+- Dokaz u rezu `--od origin/main` meri CEO katalog (grana dira `schema.json`, pravilo
+  `FIXTURE`): 1449 crvenih + 4 priznata od 1472, **NIJE DOKAZANO** zbog 41 stavke koje ne
+  obaraju svoju tvrdnju. Nisu iz ovog reza: 35 ima sidro u fajlovima koje grana ne dira, dve
+  su mutanti koji se ne kompajliraju ni na `main`-u (`writer-bez-kapije`: `blokErr` se
+  koristi i posle obrisanog `Dim`; `otp-f8-storno-po-broju`: `StornoOtpremnicaByBroj_TX`
+  više ne postoji), a 8 najbližih grani dalo je **isti ishod nad `main`-om** (`207e31c6`,
+  sopstveni fixture, 19.11.2026). Zatečeno propadanje kataloga; popravka ide posebnim
+  rezom. Ostalih 33 nad `main`-om nije mereno (zaključak je iz statičke analize `--od`).
+- Ručni Compile (`Alt+F11 → Debug → Compile VBAProject`) nije potvrđen.
 - UI tokovi na pravom Excelu: InputBox za razlog, MsgBox pregleda, editor
   ispravke (datum kao `dd.mm.yyyy`, cena kao `CStr(Double)` — čitanje nazad uz
   drugačiji decimalni separator nije izmereno), toast poruke, širina kolone
