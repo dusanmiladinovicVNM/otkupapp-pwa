@@ -13926,10 +13926,10 @@ SABOTAZE = {
         "T_Ljuska_DvoklikVanRedaNeUcitava",
         "371 F3: dvoklik na zbirnu je pamti za prijemnicu",
     ),
-    # ------------------------------------------ CENOVNIK (model AgriXSystems, testovi 366-374)
+    # ------------------------------------------ CENOVNIK (model AgriXSystems, testovi 372-382)
     # Pravilo vazece cene ima JEDNOG vlasnika (modCenovnik.CenPobednik /
-    # CenVazeciRed), pa sabotaze pravila obaraju tabelu C1-C19 (366) i
-    # preduslov (367) nad cistim nizom, bez sveske. AssertEq prekida test na
+    # CenVazeciRed), pa sabotaze pravila obaraju tabelu C1-C19 (372) i
+    # preduslov (373) nad cistim nizom, bez sveske. AssertEq prekida test na
     # prvom padu, pa je tvrdnja svake stavke PRVI slucaj tabele koji ta
     # mutacija menja -- izracunat simulacijom pravila nad fixture-om C, ne
     # Excelom. Dve stavke ne smeju deliti tvrdnju (zamka 5): kad dve mutacije
@@ -13942,7 +13942,7 @@ SABOTAZE = {
         "                            If Len(st) > 0 Then best = i\n",
         "                            ' SABOTAZA: istog dana ostaje raniji red tabele (posebna ne pobedjuje)\n",
         "T_Cen_VazecaCenaTabelaC1C19",
-        "366 C7: istog dana posebna pobedjuje globalnu (r5)",
+        "372 C7: istog dana posebna pobedjuje globalnu (r5)",
     ),
     # Buduca cena vazi pre svog dana (stari bag ne sme da predje). Prvi slucaj
     # sa buducim redom je C1: upit 06-30, a sorta ima samo redove od 07-01 --
@@ -13952,7 +13952,7 @@ SABOTAZE = {
         "            If d > 0 And d <= danUpita Then\n",
         "            If d > 0 Then   ' SABOTAZA: i buduca cena vazi pre svog dana\n",
         "T_Cen_VazecaCenaTabelaC1C19",
-        "366 C1: sorta bez reda -> rezerva M0, posebna na A (r8)",
+        "372 C1: sorta bez reda -> rezerva M0, posebna na A (r8)",
     ),
     # Sorta pobedjuje i NOVIJU rezervu (CEN-06); mutant bira noviji od dva
     # reda. Prvi slucaj sa rezervom novijom od reda sorte je C5 (r3 od 07-10,
@@ -13972,7 +13972,7 @@ SABOTAZE = {
         "        Exit Function\n"
         "    End If\n",
         "T_Cen_VazecaCenaTabelaC1C19",
-        "366 C5: posebna i dalje vazi (r3)",
+        "372 C5: posebna i dalje vazi (r3)",
     ),
     # Storniran red ucestvuje u pravilu. Prvi storniran red na putu upita je
     # r6 (globalna 09-01), pa pada C8.
@@ -13981,7 +13981,7 @@ SABOTAZE = {
         "        If Not CBool(redovi(i, CEN_R_STORNO)) Then\n",
         "        If True Then   ' SABOTAZA: i storniran red ucestvuje u pravilu\n",
         "T_Cen_VazecaCenaTabelaC1C19",
-        "366 C8: storniran r6 ne vazi (r4)",
+        "372 C8: storniran r6 ne vazi (r4)",
     ),
     # Prekrsen CEN-03 se ne prijavljuje: citalac bi tiho izabrao jedan od dva
     # reda istog kljuca, nivoa i dana.
@@ -13990,7 +13990,7 @@ SABOTAZE = {
         "                        If nivoDan.Exists(k) Then\n",
         "                        If False Then   ' SABOTAZA: dva reda istog kljuca i dana se ne prijavljuju\n",
         "T_Cen_PreduslovIBezCene",
-        "367 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC",
+        "373 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC",
     ),
     # CEN-REV-02 (review PR #491): duplikat se poredi samo sa nivoom trenutnog
     # pobednika -- stari oblik, kod koga je globalna-posebna-globalna prolazila.
@@ -13999,7 +13999,7 @@ SABOTAZE = {
         "                        If nivoDan.Exists(k) Then\n",
         "                        If nivoDan.Exists(k) And ((Len(st) = 0) = (Len(Trim$(CStr(redovi(best, CEN_R_STANICA)))) = 0)) Then   ' SABOTAZA: samo uz nivo pobednika\n",
         "T_Cen_PreduslovIBezCene",
-        "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice",
+        "373 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice",
     ),
     # CEN-REV-02: par starijeg dana koji kasnija cena zaklanja se ne prijavljuje.
     "cen-dupli-skriven-kasnijom-cenom": (
@@ -14007,35 +14007,35 @@ SABOTAZE = {
         "                        If nivoDan.Exists(k) Then\n",
         "                        If nivoDan.Exists(k) And d >= CLng(redovi(best, CEN_R_DAN)) Then   ' SABOTAZA: stariji par se ne prijavljuje\n",
         "T_Cen_PreduslovIBezCene",
-        "367 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC",
+        "373 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC",
     ),
-    # Sorta bez reda nema rezervu (CEN-06). U 366 bi pala C1, koju vec nosi
-    # cen-buduca-cena-vazi, pa se meri na prvoj tvrdnji 367 koja trazi rezervu.
+    # Sorta bez reda nema rezervu (CEN-06). U 372 bi pala C1, koju vec nosi
+    # cen-buduca-cena-vazi, pa se meri na prvoj tvrdnji 373 koja trazi rezervu.
     "cen-sorta-bez-rezerve": (
         "modCenovnik.bas",
         "    CenVazeciRed = CenPobednik(redovi, vrsta, \"\", klasa, stanicaID, dan)\n",
         "    CenVazeciRed = 0   ' SABOTAZA: sorta bez reda nema rezervu\n",
         "T_Cen_PreduslovIBezCene",
-        "367 prazna stanica upita: rezerva je globalna r1, ne posebna r8",
+        "373 prazna stanica upita: rezerva je globalna r1, ne posebna r8",
     ),
     # Prazna stanica upita vidi i posebne cene: forma bez otkupnog mesta bi
-    # predlagala cenu neke stanice. 366 uvek pita stanicu, pa pada tek 367.
+    # predlagala cenu neke stanice. 372 uvek pita stanicu, pa pada tek 373.
     "cen-prazna-stanica-vidi-posebne": (
         "modCenovnik.bas",
         "                    If Len(st) = 0 Or IstiTekst(st, stanicaID) Then\n",
         "                    If Len(st) = 0 Or IstiTekst(st, stanicaID) Or Len(Trim$(stanicaID)) = 0 Then"
         "   ' SABOTAZA: prazna stanica vidi i posebne\n",
         "T_Cen_PreduslovIBezCene",
-        "367 prazna stanica upita ne vidi posebnu r3 (vazi globalna r2)",
+        "373 prazna stanica upita ne vidi posebnu r3 (vazi globalna r2)",
     ),
-    # UNOS (368): jedna provera za editor i pisca. Svaka stavka gadja svoj
+    # UNOS (374): jedna provera za editor i pisca. Svaka stavka gadja svoj
     # kljuc; tvrdnje pre nje mere druge kljuceve i ostaju zelene.
     "cen-unos-duplikat-prolazi": (
         "modCenovnik.bas",
         "                    CenaUnosProblem = \"CEN_ERR_DUPLIKAT\"\n",
         "                    CenaUnosProblem = \"\"   ' SABOTAZA: isti kljuc i dan prolazi\n",
         "T_Cen_UnosOdbijaIPusta",
-        "368 isti kljuc i dan posle upisa je duplikat (CEN_ERR_DUPLIKAT)",
+        "374 isti kljuc i dan posle upisa je duplikat (CEN_ERR_DUPLIKAT)",
     ),
     "cen-granica-unazad-sira": (
         "modCenovnik.bas",
@@ -14043,7 +14043,7 @@ SABOTAZE = {
         "        If dan < danas - CEN_DANA_UNAZAD - 1 Or dan > danas + CEN_DANA_UNAPRED Then"
         "   ' SABOTAZA: granica unazad dan sira\n",
         "T_Cen_UnosOdbijaIPusta",
-        "368 datum 32 dana unazad se odbija (CEN_ERR_DATUM_GRANICA)",
+        "374 datum 32 dana unazad se odbija (CEN_ERR_DATUM_GRANICA)",
     ),
     "cen-granica-unapred-sira": (
         "modCenovnik.bas",
@@ -14051,7 +14051,7 @@ SABOTAZE = {
         "        If dan < danas - CEN_DANA_UNAZAD Or dan > danas + CEN_DANA_UNAPRED + 1 Then"
         "   ' SABOTAZA: granica unapred dan sira\n",
         "T_Cen_UnosOdbijaIPusta",
-        "368 datum 367 dana unapred se odbija (CEN_ERR_DATUM_GRANICA)",
+        "374 datum 367 dana unapred se odbija (CEN_ERR_DATUM_GRANICA)",
     ),
     # Drugi zid: pisac ne pusta proveru unosa. Editor je pusta pre poziva, pa
     # se rupa vidi tek kad AddCena zove neko drugi (test, uvoz, makro).
@@ -14060,12 +14060,12 @@ SABOTAZE = {
         "    If Len(problem) > 0 Then Err.Raise ERR_CEN_UNOS, SRC, Poruka(problem)\n",
         "    ' SABOTAZA: pisac ne pusta proveru unosa (drugi zid)\n",
         "T_Cen_UnosOdbijaIPusta",
-        "368 pisac odbija cenu 0 praznim ID-em",
+        "374 pisac odbija cenu 0 praznim ID-em",
     ),
-    # STORNO (369). Drugi storno se gadja na CenaStornoProblem, ne na drugom
+    # STORNO (375). Drugi storno se gadja na CenaStornoProblem, ne na drugom
     # zidu u StornirajRedNaIndeksu: tvrdnja "drugi storno se odbija" meri
     # proveru, a drugi zid je zaklonjen njome -- sabotaza samo na njemu ne
-    # obara nijednu tvrdnju 369.
+    # obara nijednu tvrdnju 375.
     "cen-storno-bez-razloga": (
         "modCenovnik.bas",
         "    If Len(t) = 0 Then\n"
@@ -14073,7 +14073,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: storno bez razloga prolazi\n"
         "        RazlogProblem = \"CEN_ERR_RAZLOG_OBAVEZAN\"\n",
         "T_Cen_StornoJednokratanSaRazlogom",
-        "369 storno bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)",
+        "375 storno bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)",
     ),
     "cen-drugi-storno-prolazi": (
         "modCenovnik.bas",
@@ -14082,7 +14082,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: storniran red se stornira ponovo\n"
         "        CenaStornoProblem = \"CEN_ERR_STORNIRANA\"\n",
         "T_Cen_StornoJednokratanSaRazlogom",
-        "369 drugi storno se odbija (CEN_ERR_STORNIRANA)",
+        "375 drugi storno se odbija (CEN_ERR_STORNIRANA)",
     ),
     # Trim$ skida samo razmak: razlog iz InputBox-a ili nalepljen tekst bi
     # ostao sa tabom i NBSP na krajevima.
@@ -14092,7 +14092,7 @@ SABOTAZE = {
         "    RequireUpdateCell TBL_CENOVNIK, r, COL_CEN_STORNO_RAZLOG, Trim$(razlog), src"
         "   ' SABOTAZA: Trim$ ne skida tab ni NBSP\n",
         "T_Cen_StornoJednokratanSaRazlogom",
-        "369 razlog je bez belina na krajevima, a unutrasnje ostaju",
+        "375 razlog je bez belina na krajevima, a unutrasnje ostaju",
     ),
     # Storniran red i dalje drzi kljuc dana u proveri unosa (CEN-03): posle
     # storna se ista roba istog dana vise ne bi mogla uneti.
@@ -14101,23 +14101,23 @@ SABOTAZE = {
         "            If Not CBool(redovi(i, CEN_R_STORNO)) Then\n",
         "            If True Then   ' SABOTAZA: i storniran red drzi kljuc dana\n",
         "T_Cen_StornoJednokratanSaRazlogom",
-        "369 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti",
+        "375 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti",
     ),
-    # ISPRAVKA (370). Veza u oba smera ima dve tvrdnje, pa i dve stavke.
+    # ISPRAVKA (376). Veza u oba smera ima dve tvrdnje, pa i dve stavke.
     "cen-ispravka-bez-promene-prolazi": (
         "modCenovnik.bas",
         "    If istiDan And _\n",
         "    ' SABOTAZA: ispravka bez ijedne promene prolazi\n"
         "    If False And istiDan And _\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 ispravka bez promene se odbija (CEN_ERR_ISPRAVKA_BEZ_PROMENE)",
+        "376 ispravka bez promene se odbija (CEN_ERR_ISPRAVKA_BEZ_PROMENE)",
     ),
     "cen-ispravka-bez-zamenjen-sa": (
         "modCenovnik.bas",
         "    RequireUpdateCell TBL_CENOVNIK, rStari, COL_TRACE_ZAMENJEN_SA_ID, noviID, SRC\n",
         "    ' SABOTAZA: stari red ne dobija ZamenjenSaID (veza samo u jednom smeru)\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 stari red nosi ZamenjenSaID = nov",
+        "376 stari red nosi ZamenjenSaID = nov",
     ),
     "cen-ispravka-bez-ispravka-od": (
         "modCenovnik.bas",
@@ -14125,7 +14125,7 @@ SABOTAZE = {
         "    noviID = UpisiCenu(datum, vrsta, sorta, klasa, cena, stanicaID, granica, staraID, \"\")"
         "   ' SABOTAZA: nov red ne nosi IspravkaOdID\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 nov red nosi IspravkaOdID = stari",
+        "376 nov red nosi IspravkaOdID = stari",
     ),
     # CEN-09: ispravka koja ZADRZAVA stari Datum nije pod granicom. Mutant je
     # stavlja pod granicu, pa red van granice vise ne moze da se ispravi.
@@ -14135,14 +14135,14 @@ SABOTAZE = {
         "                                          True, staraID)"
         "   ' SABOTAZA: i ispravka koja zadrzava stari Datum je pod granicom\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 ispravka koja zadrzava stari datum van granice prolazi",
+        "376 ispravka koja zadrzava stari datum van granice prolazi",
     ),
     "cen-ispravka-bez-provere-razloga": (
         "modCenovnik.bas",
         "    problem = CenaStornoProblem(staraID, razlog)\n",
         "    problem = \"\"   ' SABOTAZA: ispravka ne pusta proveru storna starog reda (razlog)\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)",
+        "376 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)",
     ),
     # Citalac ne vidi storno (CenovnikRedovi). Stari red ispravke tada ostaje
     # "nestorniran" uz nov red istog kljuca i dana -- citanje prijavi CEN-03 i
@@ -14153,9 +14153,9 @@ SABOTAZE = {
         "        res(i, CEN_R_STORNO) = JeStorno(data(i, cSto))\n",
         "        res(i, CEN_R_STORNO) = False   ' SABOTAZA: citalac ne vidi storno\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 posle ispravke vazi nov red",
+        "376 posle ispravke vazi nov red",
     ),
-    # MIGRACIJA (371). Pobednik je KASNIJI red tabele (pravilo starog
+    # MIGRACIJA (377). Pobednik je KASNIJI red tabele (pravilo starog
     # citaoca); kljuc je bez razlike u velicini slova; storniran red ne
     # ucestvuje, inace drugi prolaz udari u drugi zid storna i vrati -1.
     "cen-migracija-cuva-raniji": (
@@ -14164,29 +14164,29 @@ SABOTAZE = {
         "        If JeAktivanSaDanom(redovi, i) And Not zadnji.Exists(KljucDana(redovi, i)) Then"
         " zadnji(KljucDana(redovi, i)) = i   ' SABOTAZA: vazeci ostaje RANIJI red tabele\n",
         "T_Cen_MigracijaDuplikataIdempotentna",
-        "371 kasniji red tabele ostaje vazeci",
+        "377 kasniji red tabele ostaje vazeci",
     ),
     "cen-migracija-kljuc-case": (
         "modCenovnik.bas",
         "    zadnji.CompareMode = vbTextCompare\n",
         "    zadnji.CompareMode = vbBinaryCompare   ' SABOTAZA: kljuc migracije razlikuje velicinu slova\n",
         "T_Cen_MigracijaDuplikataIdempotentna",
-        "371 migracija stornira dva ranija reda istog kljuca i dana",
+        "377 migracija stornira dva ranija reda istog kljuca i dana",
     ),
     "cen-migracija-vidi-stornirane": (
         "modCenovnik.bas",
         "    If CBool(redovi(i, CEN_R_STORNO)) Then Exit Function\n",
         "    ' SABOTAZA: i storniran red ucestvuje u migraciji\n",
         "T_Cen_MigracijaDuplikataIdempotentna",
-        "371 drugi prolaz migracije ne stornira nista (idempotentno)",
+        "377 drugi prolaz migracije ne stornira nista (idempotentno)",
     ),
-    # PREGLED PRE UPISA (372, ADR 0019).
+    # PREGLED PRE UPISA (378, ADR 0019).
     "cen-pregled-ne-prijavljuje": (
         "modCenovnik.bas",
         "                    If rPosle = n + 1 Then\n",
         "                    If False Then   ' SABOTAZA: pregled ne prijavljuje posebnu koja prestaje\n",
         "T_Cen_PregledPrekidaPosebne",
-        "372 nova globalna posle posebne imenuje stanicu cija posebna prestaje",
+        "378 nova globalna posle posebne imenuje stanicu cija posebna prestaje",
     ),
     "cen-pregled-i-za-posebnu": (
         "modMaticniUnos.bas",
@@ -14195,9 +14195,9 @@ SABOTAZE = {
         "    ' SABOTAZA: i posebna cena dobija pregled prekida posebnih\n"
         "    MatCenaPregled = modCenovnik.PrekinutePosebneCene(dat, vrsta, sorta, klasa, izuzmiID)\n",
         "T_Cen_PregledPrekidaPosebne",
-        "372 pregled iz editora za posebnu cenu (stanica izabrana) je prazan",
+        "378 pregled iz editora za posebnu cenu (stanica izabrana) je prazan",
     ),
-    # PREDLOG CENE NA FORMI (373, odluka vlasnika). Ulaz AutoFillCena je datum
+    # PREDLOG CENE NA FORMI (379, odluka vlasnika). Ulaz AutoFillCena je datum
     # DOKUMENTA i otkupno mesto. Okidaci (AutoFillCena u OnDatumChanged i na
     # kraju normalne grane OnStanicaChanged) bi prvo oborili iste dve tvrdnje
     # kao prve dve stavke ispod (c1, c3), a dve stavke ne smeju deliti
@@ -14210,14 +14210,14 @@ SABOTAZE = {
         "    dat = Date   ' SABOTAZA: predlog cene po danasnjem danu, ne po datumu dokumenta\n"
         "    If CenaPoStanici(ActiveMode) Then stID = SelectedStanicaID(mFrm)\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 datum od dana globalne cene, bez OM, daje globalnu cenu",
+        "379 datum od dana globalne cene, bez OM, daje globalnu cenu",
     ),
     "cen-predlog-bez-stanice": (
         "modOtkupUI.bas",
         "    If CenaPoStanici(ActiveMode) Then stID = SelectedStanicaID(mFrm)\n",
         "    stID = \"\"   ' SABOTAZA: predlog cene ne vidi otkupno mesto\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 izbor otkupnog mesta uz datum posebne cene daje posebnu cenu",
+        "379 izbor otkupnog mesta uz datum posebne cene daje posebnu cenu",
     ),
     "cen-predlog-om-brisanje-ne-vraca": (
         "modOtkupUI.bas",
@@ -14226,7 +14226,7 @@ SABOTAZE = {
         "        ' SABOTAZA: brisanje otkupnog mesta ne vraca globalnu cenu\n"
         "        Exit Sub\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 brisanje otkupnog mesta vraca globalnu cenu",
+        "379 brisanje otkupnog mesta vraca globalnu cenu",
     ),
     # Prazan cenovnik brise unetu cenu: predlog pise i kad TryVazecaCena kaze
     # da cene nema (CEN-07: bez reda NEMA cene, nije 0).
@@ -14236,9 +14236,9 @@ SABOTAZE = {
         "    zf.Controls(\"fgCena\").Controls(\"fgCena1T\").text = Format$(cI, \"0.######\")"
         "   ' SABOTAZA: predlog pise i kad cene nema\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 datum pre prve cene ne dira unetu cenu",
+        "379 datum pre prve cene ne dira unetu cenu",
     ),
-    # SEAM PITANJA (374). Seam sme samo da POSMATRA i ODBIJE: odgovor "da" iz
+    # SEAM PITANJA (380). Seam sme samo da POSMATRA i ODBIJE: odgovor "da" iz
     # test grane bi upisao red bez operatera. Mutant koji potvrdi prekid upise
     # red u transakciji testa; rollback ga vraca.
     "cen-seam-potvrdi-prekid": (
@@ -14249,7 +14249,7 @@ SABOTAZE = {
         "        PotvrdiPrekidPosebnih = True   ' SABOTAZA: seam potvrdjuje prekid posebnih cena\n"
         "        Exit Function\n",
         "T_Cen_PitanjaSuGejtovana",
-        "374 bez potvrde se globalna cena ne upisuje",
+        "380 bez potvrde se globalna cena ne upisuje",
     ),
     "cen-seam-daje-razlog": (
         "modMaticniEkran.bas",
@@ -14259,14 +14259,14 @@ SABOTAZE = {
         "        PitajRazlogCene = \"sabotaza\"   ' SABOTAZA: seam vraca razlog, pa se red stornira\n"
         "        Exit Function\n",
         "T_Cen_PitanjaSuGejtovana",
-        "374 storno bez razloga ne stornira red",
+        "380 storno bez razloga ne stornira red",
     ),
     "cen-seam-reset-ne-brise": (
         "modMaticniEkran.bas",
         "    mCenPitanjeTest = \"\"\n",
         "    ' SABOTAZA: reset ne brise zabelezena pitanja\n",
         "T_Cen_PitanjaSuGejtovana",
-        "374 reset seam-a brise zabelezena pitanja",
+        "380 reset seam-a brise zabelezena pitanja",
     ),
     # Prazan razlog (Cancel) je odustajanje, ne crvena greska pisca.
     "cen-storno-prazan-razlog-greska": (
@@ -14276,7 +14276,7 @@ SABOTAZE = {
         "    razlog = PitajRazlogCene(Poruka(\"CEN_ASK_RAZLOG_STORNO\") & vbCrLf & vbCrLf & id)\n"
         "    If False Then   ' SABOTAZA: prazan razlog storna ide piscu kao greska\n",
         "T_Cen_PitanjaSuGejtovana",
-        "374 odustajanje od storna je javljeno kao otkazano, ne kao greska",
+        "380 odustajanje od storna je javljeno kao otkazano, ne kao greska",
     ),
     # Revizija 18.11.2026 (K0): ispravka sa necitljivim datumom bi tiho postala
     # ispravka na danas -- stari red storniran, cena preseljena.
@@ -14285,7 +14285,7 @@ SABOTAZE = {
         "        If datumObavezan Then\n",
         "        If False Then   ' SABOTAZA: ispravka sa necitljivim datumom postaje danas\n",
         "T_Cen_IspravkaVezaUObaSmera",
-        "370 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas",
+        "376 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas",
     ),
     # K13: StornoRazlog bez ugovora formata -- "=duplo" Excel upise kao formulu.
     "cen-razlog-bez-text-formata": (
@@ -14293,7 +14293,7 @@ SABOTAZE = {
         '    k("StornoRazlog") = "text"\n',
         "    ' SABOTAZA: StornoRazlog ostaje General (bez ugovora formata)\n",
         "T_Cen_StornoJednokratanSaRazlogom",
-        "369 razlog koji pocinje sa = ostaje doslovan tekst, ne formula",
+        "375 razlog koji pocinje sa = ostaje doslovan tekst, ne formula",
     ),
     # CEN-REV-01 (review PR #491): unos bez rollback-a -- pad posle dodatog reda
     # ostavlja delimican red u cenovniku.
@@ -14302,7 +14302,7 @@ SABOTAZE = {
         "    If Not tx Is Nothing Then tx.RollbackTx   ' unos: vraca dodat red\n",
         "    ' SABOTAZA: neuspeo unos cene se ne vraca\n",
         "T_Cen_UnosSeVracaPriPaduUpisa",
-        "375 pad posle dodatog reda ne ostavlja red u cenovniku",
+        "381 pad posle dodatog reda ne ostavlja red u cenovniku",
     ),
     # Review PR #491: potvrda bez granice duzine -- MsgBox odsece pitanje.
     "cen-potvrda-bez-granice": (
@@ -14310,7 +14310,7 @@ SABOTAZE = {
         "        If Len(prikaz) + Len(linije(i)) + 2 > CEN_PREKID_MAX_ZNAKOVA Then Exit For\n",
         "        ' SABOTAZA: spisak potvrde se ne skracuje\n",
         "T_Cen_PotvrdaPrekidaStajeUDijalog",
-        "376 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)",
+        "382 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)",
     ),
     # K10: posle prefill-a bez cene predlog ostaje izracunat nad mestom koje je
     # forma imala PRE prepisa.
@@ -14319,7 +14319,7 @@ SABOTAZE = {
         "    If Len(cenaSpec) = 0 Or (mKlasa = 2 And Len(cena2Spec) = 0) Then AutoFillCena False\n",
         "    ' SABOTAZA: prefill bez cene ne racuna predlog nad konacnim mestom i datumom\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a",
+        "379 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a",
     ),
     # K11: promena rezima ne racuna predlog, pa cena iz F1 prelazi u F4.
     "cen-rezim-bez-predloga": (
@@ -14327,7 +14327,7 @@ SABOTAZE = {
         "        If StrComp(stariRezim, key, vbTextCompare) <> 0 Then AutoFillCena False\n",
         "        ' SABOTAZA: promena rezima ne racuna predlog cene\n",
         "T_Cen_PredlogCenePratiDatumIOM",
-        "373 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)",
+        "379 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)",
     ),
     # K9: kljuc odbijanja stize do Poruka() kroz promenljivu; bez reda u
     # katalogu operater bi video "[CEN_ERR_DUPLIKAT]".
@@ -14336,7 +14336,7 @@ SABOTAZE = {
         '    UpsertRow lo, existing, "CEN_ERR_DUPLIKAT", _\n',
         '    UpsertRow lo, existing, "CEN_ERR_DUPLIKAX", _\n',
         "T_Cen_UnosOdbijaIPusta",
-        "368 kljucevi odbijanja cenovnika su u katalogu poruka",
+        "374 kljucevi odbijanja cenovnika su u katalogu poruka",
     ),
 }
 

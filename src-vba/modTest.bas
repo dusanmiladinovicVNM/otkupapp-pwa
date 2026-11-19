@@ -733,20 +733,20 @@ Public Sub RunAllTests()
     RunOne 370
     RunOne 371
 
-    ' Cenovnik (docs/DOMEN/CENOVNIK.md, CEN-01..13). 366-367 su ciste funkcije
-    ' bez sveske; 368-374 rade nad SVOJIM praznim tblCenovnik u transakciji
-    ' testa i vracaju ga (373-374 i nad formom), pa redosled nije nosec.
-    RunOne 366
-    RunOne 367
-    RunOne 368
-    RunOne 369
-    RunOne 370
-    RunOne 371
+    ' Cenovnik (docs/DOMEN/CENOVNIK.md, CEN-01..13). 372-373 su ciste funkcije
+    ' bez sveske; 374-381 rade nad SVOJIM praznim tblCenovnik u transakciji
+    ' testa i vracaju ga (379-380 i nad formom), pa redosled nije nosec.
     RunOne 372
     RunOne 373
     RunOne 374
     RunOne 375
     RunOne 376
+    RunOne 377
+    RunOne 378
+    RunOne 379
+    RunOne 380
+    RunOne 381
+    RunOne 382
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -984,10 +984,10 @@ Private Sub ResetSeamova()
     ' Beleska fokusa ljuske (271, 368): zaostalo ime polja bi sledecem testu
     ' izgledalo kao fokus koji je SAM trazio.
     modOtkupUI.FokusTestReset
-    ' Zabelezena pitanja cenovnika (374): zaostao tekst bi sledecem testu
+    ' Zabelezena pitanja cenovnika (380): zaostao tekst bi sledecem testu
     ' izgledao kao pitanje koje je SAM postavio.
     modMaticniEkran.CenPitanjeTestReset
-    ' Podmetnut pad upisa cene (375): zaostao seam bi oborio svaki sledeci unos.
+    ' Podmetnut pad upisa cene (381): zaostao seam bi oborio svaki sledeci unos.
     modCenovnik.CenUpisPadaTestSet False
     Err.Clear
 End Sub
@@ -1361,17 +1361,17 @@ Private Function TestName(ByVal idx As Long) As String
         Case 369: TestName = "T_RezimZbirne_F1NeNasledjuje"
         Case 370: TestName = "T_Zbirne_PickerOpisMestaKgAmb"
         Case 371: TestName = "T_Ljuska_DvoklikVanRedaNeUcitava"
-        Case 366: TestName = "T_Cen_VazecaCenaTabelaC1C19"
-        Case 367: TestName = "T_Cen_PreduslovIBezCene"
-        Case 368: TestName = "T_Cen_UnosOdbijaIPusta"
-        Case 369: TestName = "T_Cen_StornoJednokratanSaRazlogom"
-        Case 370: TestName = "T_Cen_IspravkaVezaUObaSmera"
-        Case 371: TestName = "T_Cen_MigracijaDuplikataIdempotentna"
-        Case 372: TestName = "T_Cen_PregledPrekidaPosebne"
-        Case 373: TestName = "T_Cen_PredlogCenePratiDatumIOM"
-        Case 374: TestName = "T_Cen_PitanjaSuGejtovana"
-        Case 375: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
-        Case 376: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
+        Case 372: TestName = "T_Cen_VazecaCenaTabelaC1C19"
+        Case 373: TestName = "T_Cen_PreduslovIBezCene"
+        Case 374: TestName = "T_Cen_UnosOdbijaIPusta"
+        Case 375: TestName = "T_Cen_StornoJednokratanSaRazlogom"
+        Case 376: TestName = "T_Cen_IspravkaVezaUObaSmera"
+        Case 377: TestName = "T_Cen_MigracijaDuplikataIdempotentna"
+        Case 378: TestName = "T_Cen_PregledPrekidaPosebne"
+        Case 379: TestName = "T_Cen_PredlogCenePratiDatumIOM"
+        Case 380: TestName = "T_Cen_PitanjaSuGejtovana"
+        Case 381: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
+        Case 382: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1751,17 +1751,17 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 369: T_RezimZbirne_F1NeNasledjuje
         Case 370: T_Zbirne_PickerOpisMestaKgAmb
         Case 371: T_Ljuska_DvoklikVanRedaNeUcitava
-        Case 366: T_Cen_VazecaCenaTabelaC1C19
-        Case 367: T_Cen_PreduslovIBezCene
-        Case 368: T_Cen_UnosOdbijaIPusta
-        Case 369: T_Cen_StornoJednokratanSaRazlogom
-        Case 370: T_Cen_IspravkaVezaUObaSmera
-        Case 371: T_Cen_MigracijaDuplikataIdempotentna
-        Case 372: T_Cen_PregledPrekidaPosebne
-        Case 373: T_Cen_PredlogCenePratiDatumIOM
-        Case 374: T_Cen_PitanjaSuGejtovana
-        Case 375: T_Cen_UnosSeVracaPriPaduUpisa
-        Case 376: T_Cen_PotvrdaPrekidaStajeUDijalog
+        Case 372: T_Cen_VazecaCenaTabelaC1C19
+        Case 373: T_Cen_PreduslovIBezCene
+        Case 374: T_Cen_UnosOdbijaIPusta
+        Case 375: T_Cen_StornoJednokratanSaRazlogom
+        Case 376: T_Cen_IspravkaVezaUObaSmera
+        Case 377: T_Cen_MigracijaDuplikataIdempotentna
+        Case 378: T_Cen_PregledPrekidaPosebne
+        Case 379: T_Cen_PredlogCenePratiDatumIOM
+        Case 380: T_Cen_PitanjaSuGejtovana
+        Case 381: T_Cen_UnosSeVracaPriPaduUpisa
+        Case 382: T_Cen_PotvrdaPrekidaStajeUDijalog
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -33742,13 +33742,13 @@ EH:
 End Sub
 
 ' ============================================================
-' CENOVNIK (docs/DOMEN/CENOVNIK.md, CEN-01..13) -- testovi 366-376.
+' CENOVNIK (docs/DOMEN/CENOVNIK.md, CEN-01..13) -- testovi 372-382.
 ' ============================================================
 ' Model je preuzet iz AgriXSystems (packages/domain/src/maticni/cena.ts), pa i
 ' tabela slucajeva C1-C19 ide 1:1 iz packages/domain/test/maticni/cena.test.ts.
 '
-' 366-367 mere CISTO pravilo (modCenovnik.CenPobednik / CenVazeciRed) nad
-' sintetickim nizom, bez sveske. 368-374 rade nad tblCenovnik u transakciji
+' 372-373 mere CISTO pravilo (modCenovnik.CenPobednik / CenVazeciRed) nad
+' sintetickim nizom, bez sveske. 374-381 rade nad tblCenovnik u transakciji
 ' testa: snimak, pa PRAZNA tabela (CenIsprazniTabelu), pa samo redovi koje test
 ' sam upise -- tvrdnja ne zavisi od zatecenog cenovnika sveske, pa test prolazi
 ' i pusten sam (S-4a) -- i rollback PRE tvrdnji (obrazac
@@ -33946,7 +33946,7 @@ Private Function CenPrikazStanice(ByVal stanicaID As String) As String
 End Function
 
 ' ============================================================
-' 366. VAZECA CENA: TABELA SLUCAJEVA C1-C19 (CEN-05..07), 1:1 IZ AGRIXSYSTEMS.
+' 372. VAZECA CENA: TABELA SLUCAJEVA C1-C19 (CEN-05..07), 1:1 IZ AGRIXSYSTEMS.
 ' ============================================================
 ' Fixture: synthetic (niz CEN_R_*, bez sveske). Firma sa stanicama A i B; vrsta
 ' Malina bez sorte (M0), Polka (MP) i Miker (MM); godina 2026:
@@ -33965,69 +33965,69 @@ Private Sub T_Cen_VazecaCenaTabelaC1C19()
 
     c = CenTestRedovi(CenFixC(False))
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 6, 30), "r8 (rezerva)", _
-             "366 C1: sorta bez reda -> rezerva M0, posebna na A (r8)"
+             "372 C1: sorta bez reda -> rezerva M0, posebna na A (r8)"
     AssertEq CenVazi(c, "B", "Polka", KLASA_I, 6, 30), "r1 (rezerva)", _
-             "366 C2: rezerva M0 na B je globalna (r1)"
+             "372 C2: rezerva M0 na B je globalna (r1)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 1), "r2", _
-             "366 C3: prva globalna sorte (r2)"
+             "372 C3: prva globalna sorte (r2)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 10), "r3", _
-             "366 C4: posebna sa kasnijim danom (r3)"
+             "372 C4: posebna sa kasnijim danom (r3)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 7, 31), "r3", _
-             "366 C5: posebna i dalje vazi (r3)"
+             "372 C5: posebna i dalje vazi (r3)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 8, 1), "r4", _
-             "366 C6: nova globalna prekida raniju posebnu (r4)"
+             "372 C6: nova globalna prekida raniju posebnu (r4)"
     AssertEq CenVazi(c, "B", "Polka", KLASA_I, 8, 1), "r5", _
-             "366 C7: istog dana posebna pobedjuje globalnu (r5)"
+             "372 C7: istog dana posebna pobedjuje globalnu (r5)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 15), "r4", _
-             "366 C8: storniran r6 ne vazi (r4)"
+             "372 C8: storniran r6 ne vazi (r4)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 10, 1), "r7", _
-             "366 C9: posebna od svog dana (r7)"
+             "372 C9: posebna od svog dana (r7)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 30), "r4", _
-             "366 C10: buduca r7 ne vazi pre svog dana (r4)"
+             "372 C10: buduca r7 ne vazi pre svog dana (r4)"
     AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 15), "r8 (rezerva)", _
-             "366 C11: sorta bez reda -> rezerva M0 na A (r8)"
+             "372 C11: sorta bez reda -> rezerva M0 na A (r8)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_II, 7, 15), "r9", _
-             "366 C12: klasa II odvojeno od I (r9)"
+             "372 C12: klasa II odvojeno od I (r9)"
     AssertEq CenVazi(c, "A", "Polka", KLASA_II, 6, 15), "bez cene", _
-             "366 C13: ni sorta ni rezerva nemaju II (bez cene)"
+             "372 C13: ni sorta ni rezerva nemaju II (bez cene)"
     AssertEq CenVazi(c, "A", "", KLASA_I, 5, 31), "bez cene", _
-             "366 C14: pre prve cene (bez cene)"
+             "372 C14: pre prve cene (bez cene)"
     AssertEq CenVazi(c, "B", "Miker", KLASA_I, 7, 25), "r11 (rezerva)", _
-             "366 C15: samo posebna na A -> na B rezerva (r11)"
+             "372 C15: samo posebna na A -> na B rezerva (r11)"
     AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 25), "r10", _
-             "366 C16: sorta pobedjuje i noviju rezervu (r10)"
+             "372 C16: sorta pobedjuje i noviju rezervu (r10)"
     AssertEq CenVazi(c, "A", "", KLASA_I, 7, 25), "r11", _
-             "366 C17: bez sorte nema rezervu, globalna novija (r11)"
+             "372 C17: bez sorte nema rezervu, globalna novija (r11)"
 
     c4 = CenTestRedovi(CenFixC(True))
     AssertEq CenVazi(c4, "A", "Polka", KLASA_I, 8, 15), "r3", _
-             "366 C18: storno globalne r4 vraca raniju posebnu na A (r3)"
+             "372 C18: storno globalne r4 vraca raniju posebnu na A (r3)"
     AssertEq CenVazi(c4, "B", "Polka", KLASA_I, 8, 15), "r5", _
-             "366 C19: posle storna r4 posebna na B ostaje (r5)"
+             "372 C19: posle storna r4 posebna na B ostaje (r5)"
 
     ' PREGLED PRE UPISA 1: nova globalna MP/I od 09-01 prekida posebnu na B (r5),
     ' a na A ne prekida nista posebno (tamo vec vazi globalna r4).
     AssertEq CenVazi(c, "A", "Polka", KLASA_I, 9, 1), "r4", _
-             "366 P1: pre nove globalne MP/I od 09-01 na A vazi r4"
+             "372 P1: pre nove globalne MP/I od 09-01 na A vazi r4"
     AssertEq CenVazi(c, "B", "Polka", KLASA_I, 9, 1), "r5", _
-             "366 P1: pre nove globalne MP/I od 09-01 na B vazi posebna r5"
+             "372 P1: pre nove globalne MP/I od 09-01 na B vazi posebna r5"
     p1 = CenTestRedovi(CenSpecSa(CenFixC(False), CenR("r12", "Polka", "", 9, 1, 335)))
     AssertEq CenVazi(p1, "B", "Polka", KLASA_I, 9, 1), "r12", _
-             "366 P1: nova globalna od svog dana prekida posebnu r5 na B"
+             "372 P1: nova globalna od svog dana prekida posebnu r5 na B"
     AssertEq CenVazi(p1, "A", "Polka", KLASA_I, 9, 1), "r12", _
-             "366 P1: nova globalna od svog dana vazi i na A"
+             "372 P1: nova globalna od svog dana vazi i na A"
 
     ' PREGLED PRE UPISA 2: nova globalna MM/I od 07-15 na A prekida posebnu
     ' preko rezerve (r8), i sama nije rezerva.
     AssertEq CenVazi(c, "A", "Miker", KLASA_I, 7, 15), "r8 (rezerva)", _
-             "366 P2: pre nove globalne MM/I od 07-15 na A vazi posebna rezerva r8"
+             "372 P2: pre nove globalne MM/I od 07-15 na A vazi posebna rezerva r8"
     p2 = CenTestRedovi(CenSpecSa(CenFixC(False), CenR("r13", "Miker", "", 7, 15, 390)))
     AssertEq CenVazi(p2, "A", "Miker", KLASA_I, 7, 15), "r13", _
-             "366 P2: nova globalna sorte prekida posebnu rezervu r8 na A (nije rezerva)"
+             "372 P2: nova globalna sorte prekida posebnu rezervu r8 na A (nije rezerva)"
 End Sub
 
 ' ============================================================
-' 367. PREDUSLOV CEN-03 I "BEZ CENE" (CEN-03, CEN-05, CEN-07).
+' 373. PREDUSLOV CEN-03 I "BEZ CENE" (CEN-03, CEN-05, CEN-07).
 ' ============================================================
 ' Fixture: synthetic (niz CEN_R_*, bez sveske). Citalac prekrsen preduslov
 ' (dva nestornirana reda istog kljuca, NIVOA i dana) PRIJAVLJUJE greskom
@@ -34092,43 +34092,43 @@ Private Sub T_Cen_PreduslovIBezCene()
     On Error GoTo 0
 
     AssertEq errG, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
+             "373 dve globalne istog kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
     AssertEq errP, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 dve posebne iste stanice, kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
-    AssertEq errGP, 0, "367 globalna i posebna istog dana nisu duplikat"
+             "373 dve posebne iste stanice, kljuca i dana dizu ERR_CEN_DUPLI_KLJUC"
+    AssertEq errGP, 0, "373 globalna i posebna istog dana nisu duplikat"
     AssertEq errGpgA, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice"
+             "373 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit stanice"
     AssertEq errGpg0, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit bez stanice"
+             "373 globalna-posebna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC i za upit bez stanice"
     AssertEq errPgg, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 posebna-globalna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC (ne zavisi od redosleda)"
+             "373 posebna-globalna-globalna istog dana dize ERR_CEN_DUPLI_KLJUC (ne zavisi od redosleda)"
     AssertEq errSkriven, modCenovnik.ERR_CEN_DUPLI_KLJUC, _
-             "367 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC"
+             "373 par starijeg dana iza kasnije cene dize ERR_CEN_DUPLI_KLJUC"
     AssertEq CenVazi(gp, "B", "Polka", KLASA_I, 8, 1), "r5", _
-             "367 istog dana posebna pobedjuje globalnu i kad globalna stoji prva"
+             "373 istog dana posebna pobedjuje globalnu i kad globalna stoji prva"
     AssertEq CenVazi(pg, "B", "Polka", KLASA_I, 8, 1), "r5", _
-             "367 istog dana posebna pobedjuje globalnu i kad posebna stoji prva"
+             "373 istog dana posebna pobedjuje globalnu i kad posebna stoji prva"
     AssertEq CenVazi(gp, "A", "Polka", KLASA_I, 8, 1), "r4", _
-             "367 posebna jedne stanice ne vazi na drugoj"
+             "373 posebna jedne stanice ne vazi na drugoj"
 
     rPrazan = modCenovnik.CenPobednik(Array(), "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
     rEmpty = modCenovnik.CenPobednik(Empty, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2))
     rVazeci = modCenovnik.CenVazeciRed(Empty, "Malina", "Polka", KLASA_I, "A", DateSerial(2026, 7, 2), rez)
-    AssertEq rPrazan, 0, "367 prazan niz nema pobednika (0)"
-    AssertEq rEmpty, 0, "367 prazna tabela (Empty) nema pobednika (0)"
-    AssertEq (rVazeci = 0 And Not rez), True, "367 bez ijednog reda nema cene ni rezerve"
+    AssertEq rPrazan, 0, "373 prazan niz nema pobednika (0)"
+    AssertEq rEmpty, 0, "373 prazna tabela (Empty) nema pobednika (0)"
+    AssertEq (rVazeci = 0 And Not rez), True, "373 bez ijednog reda nema cene ni rezerve"
 
     c = CenTestRedovi(CenFixC(False))
     AssertEq CenVazi(c, "", "Polka", KLASA_I, 7, 15), "r2", _
-             "367 prazna stanica upita ne vidi posebnu r3 (vazi globalna r2)"
+             "373 prazna stanica upita ne vidi posebnu r3 (vazi globalna r2)"
     AssertEq CenVazi(c, "", "Miker", KLASA_I, 6, 20), "r1 (rezerva)", _
-             "367 prazna stanica upita: rezerva je globalna r1, ne posebna r8"
+             "373 prazna stanica upita: rezerva je globalna r1, ne posebna r8"
     AssertEq CenVazi(c, "A", "Duke", KLASA_I, 10, 1, "Borovnica"), "bez cene", _
-             "367 druga vrsta bez reda nema cene (Malina nije njena rezerva)"
+             "373 druga vrsta bez reda nema cene (Malina nije njena rezerva)"
 End Sub
 
 ' ============================================================
-' 368. UNOS CENE: PROVERA ODBIJA I PUSTA, PISAC UPISUJE KANONSKI RED (CEN-01..04, CEN-09).
+' 374. UNOS CENE: PROVERA ODBIJA I PUSTA, PISAC UPISUJE KANONSKI RED (CEN-01..04, CEN-09).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
 ' FX_SORTA i stanice FX_STANICA / FX_STANICA_B iz fixture-a, FX_STANICA2 je
@@ -34205,47 +34205,47 @@ Private Sub T_Cen_UnosOdbijaIPusta()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("cena0"), "CEN_ERR_CENA_POZITIVNA", "368 cena 0 se odbija (CEN_ERR_CENA_POZITIVNA)"
-    AssertEq m("decimale"), "CEN_ERR_CENA_DECIMALE", "368 cena sa tri decimale se odbija (CEN_ERR_CENA_DECIMALE)"
-    AssertEq m("opseg"), "CEN_ERR_CENA_OPSEG", "368 cena preko gornje granice se odbija (CEN_ERR_CENA_OPSEG)"
-    AssertEq m("granicaCene"), "", "368 cena tacno na gornjoj granici prolazi"
-    AssertEq m("klasa"), "CEN_ERR_KLASA", "368 klasa III se odbija (CEN_ERR_KLASA)"
-    AssertEq m("klasaMala"), "", "368 klasa malim slovima je klasa (ii prolazi)"
-    AssertEq m("stanica"), "CEN_ERR_STANICA_NEPOZNATA", "368 nepoznata stanica se odbija (CEN_ERR_STANICA_NEPOZNATA)"
-    AssertEq m("vrsta"), "CEN_ERR_KULTURA_NEPOZNATA", "368 nepoznata vrsta se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
-    AssertEq m("sorta"), "CEN_ERR_KULTURA_NEPOZNATA", "368 nepoznata sorta poznate vrste se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
-    AssertEq m("bezVrste"), "CEN_ERR_VRSTA_OBAVEZNA", "368 prazna vrsta se odbija (CEN_ERR_VRSTA_OBAVEZNA)"
-    AssertEq m("bezSorte"), "", "368 vrsta bez sorte prolazi kad vrsta postoji"
-    AssertEq m("datum"), "CEN_ERR_DATUM", "368 nevazeci datum se odbija (CEN_ERR_DATUM)"
-    AssertEq m("unazad32"), "CEN_ERR_DATUM_GRANICA", "368 datum 32 dana unazad se odbija (CEN_ERR_DATUM_GRANICA)"
-    AssertEq m("unapred367"), "CEN_ERR_DATUM_GRANICA", "368 datum 367 dana unapred se odbija (CEN_ERR_DATUM_GRANICA)"
-    AssertEq m("unazad31"), "", "368 datum tacno 31 dan unazad prolazi"
-    AssertEq m("unapred366"), "", "368 datum tacno 366 dana unapred prolazi"
-    AssertEq m("bezCene"), True, "368 bez reda nema cene (False, ne cena 0)"
+    AssertEq m("cena0"), "CEN_ERR_CENA_POZITIVNA", "374 cena 0 se odbija (CEN_ERR_CENA_POZITIVNA)"
+    AssertEq m("decimale"), "CEN_ERR_CENA_DECIMALE", "374 cena sa tri decimale se odbija (CEN_ERR_CENA_DECIMALE)"
+    AssertEq m("opseg"), "CEN_ERR_CENA_OPSEG", "374 cena preko gornje granice se odbija (CEN_ERR_CENA_OPSEG)"
+    AssertEq m("granicaCene"), "", "374 cena tacno na gornjoj granici prolazi"
+    AssertEq m("klasa"), "CEN_ERR_KLASA", "374 klasa III se odbija (CEN_ERR_KLASA)"
+    AssertEq m("klasaMala"), "", "374 klasa malim slovima je klasa (ii prolazi)"
+    AssertEq m("stanica"), "CEN_ERR_STANICA_NEPOZNATA", "374 nepoznata stanica se odbija (CEN_ERR_STANICA_NEPOZNATA)"
+    AssertEq m("vrsta"), "CEN_ERR_KULTURA_NEPOZNATA", "374 nepoznata vrsta se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
+    AssertEq m("sorta"), "CEN_ERR_KULTURA_NEPOZNATA", "374 nepoznata sorta poznate vrste se odbija (CEN_ERR_KULTURA_NEPOZNATA)"
+    AssertEq m("bezVrste"), "CEN_ERR_VRSTA_OBAVEZNA", "374 prazna vrsta se odbija (CEN_ERR_VRSTA_OBAVEZNA)"
+    AssertEq m("bezSorte"), "", "374 vrsta bez sorte prolazi kad vrsta postoji"
+    AssertEq m("datum"), "CEN_ERR_DATUM", "374 nevazeci datum se odbija (CEN_ERR_DATUM)"
+    AssertEq m("unazad32"), "CEN_ERR_DATUM_GRANICA", "374 datum 32 dana unazad se odbija (CEN_ERR_DATUM_GRANICA)"
+    AssertEq m("unapred367"), "CEN_ERR_DATUM_GRANICA", "374 datum 367 dana unapred se odbija (CEN_ERR_DATUM_GRANICA)"
+    AssertEq m("unazad31"), "", "374 datum tacno 31 dan unazad prolazi"
+    AssertEq m("unapred366"), "", "374 datum tacno 366 dana unapred prolazi"
+    AssertEq m("bezCene"), True, "374 bez reda nema cene (False, ne cena 0)"
 
-    AssertEq m("seme"), True, "368 preduslov: AddCena upisuje globalnu i posebnu cenu"
-    AssertEq m("dup"), "CEN_ERR_DUPLIKAT", "368 isti kljuc i dan posle upisa je duplikat (CEN_ERR_DUPLIKAT)"
-    AssertEq m("dupSlova"), "CEN_ERR_DUPLIKAT", "368 duplikat se trazi bez razlike u velicini slova"
-    AssertEq m("posebnaNijeDup"), "", "368 posebna cena istog kljuca i dana nije duplikat globalne"
-    AssertEq m("drugiDan"), "", "368 isti kljuc drugog dana nije duplikat"
-    AssertEq m("drugaKlasa"), "", "368 druga klasa istog dana nije duplikat"
-    AssertEq m("dupPosebne"), "CEN_ERR_DUPLIKAT", "368 druga posebna iste stanice i dana je duplikat"
-    AssertEq m("drugaStanica"), "", "368 posebna druge stanice istog dana nije duplikat"
+    AssertEq m("seme"), True, "374 preduslov: AddCena upisuje globalnu i posebnu cenu"
+    AssertEq m("dup"), "CEN_ERR_DUPLIKAT", "374 isti kljuc i dan posle upisa je duplikat (CEN_ERR_DUPLIKAT)"
+    AssertEq m("dupSlova"), "CEN_ERR_DUPLIKAT", "374 duplikat se trazi bez razlike u velicini slova"
+    AssertEq m("posebnaNijeDup"), "", "374 posebna cena istog kljuca i dana nije duplikat globalne"
+    AssertEq m("drugiDan"), "", "374 isti kljuc drugog dana nije duplikat"
+    AssertEq m("drugaKlasa"), "", "374 druga klasa istog dana nije duplikat"
+    AssertEq m("dupPosebne"), "CEN_ERR_DUPLIKAT", "374 druga posebna iste stanice i dana je duplikat"
+    AssertEq m("drugaStanica"), "", "374 posebna druge stanice istog dana nije duplikat"
 
-    AssertEq m("stP"), FX_STANICA, "368 posebna cena nosi StanicaID u svojoj koloni"
-    AssertEq m("stG"), "", "368 globalna cena ima praznu StanicaID"
-    AssertEq m("dan"), CLng(dan), "368 Datum je u svojoj koloni (dan cene)"
+    AssertEq m("stP"), FX_STANICA, "374 posebna cena nosi StanicaID u svojoj koloni"
+    AssertEq m("stG"), "", "374 globalna cena ima praznu StanicaID"
+    AssertEq m("dan"), CLng(dan), "374 Datum je u svojoj koloni (dan cene)"
     AssertEq m("roba"), FX_VRSTA & "|" & FX_SORTA & "|" & KLASA_I, _
-             "368 VrstaVoca, SortaVoca i Klasa su u svojim kolonama"
-    AssertEq m("cena"), Format$(260, "0.00"), "368 Cena je u svojoj koloni"
-    AssertEq m("bezStorna"), "", "368 nov red nije storniran i nema trag storna"
-    AssertEq m("bezVeze"), "", "368 nov red nema vezu ispravke"
-    AssertEq m("created"), True, "368 CreatedAt je upisan"
+             "374 VrstaVoca, SortaVoca i Klasa su u svojim kolonama"
+    AssertEq m("cena"), Format$(260, "0.00"), "374 Cena je u svojoj koloni"
+    AssertEq m("bezStorna"), "", "374 nov red nije storniran i nema trag storna"
+    AssertEq m("bezVeze"), "", "374 nov red nema vezu ispravke"
+    AssertEq m("created"), True, "374 CreatedAt je upisan"
 
-    AssertEq m("losaCena"), "", "368 pisac odbija cenu 0 praznim ID-em"
-    AssertEq m("losDup"), "", "368 pisac odbija duplikat praznim ID-em (drugi zid)"
-    AssertEq m("losaStanica"), "", "368 pisac odbija nepoznatu stanicu praznim ID-em"
-    AssertEq m("nLosih"), 0, "368 odbijen upis ne dodaje red"
+    AssertEq m("losaCena"), "", "374 pisac odbija cenu 0 praznim ID-em"
+    AssertEq m("losDup"), "", "374 pisac odbija duplikat praznim ID-em (drugi zid)"
+    AssertEq m("losaStanica"), "", "374 pisac odbija nepoznatu stanicu praznim ID-em"
+    AssertEq m("nLosih"), 0, "374 odbijen upis ne dodaje red"
 
     ' Kljucevi odbijanja stizu do Poruka() kroz PROMENLJIVU (CenaUnosProblem ->
     ' CenaOdbij), pa ih staticki PORUKA ne vidi -- postojanje u katalogu meri
@@ -34258,7 +34258,7 @@ Private Sub T_Cen_UnosOdbijaIPusta()
                         "CEN_ERR_ISPRAVKA_BEZ_PROMENE")
         If PorukaNedostaje(CStr(k)) Then bez = bez & " " & k
     Next k
-    AssertEq bez, "", "368 kljucevi odbijanja cenovnika su u katalogu poruka"
+    AssertEq bez, "", "374 kljucevi odbijanja cenovnika su u katalogu poruka"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34267,7 +34267,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 369. STORNO CENE JE JEDNOKRATAN, SA RAZLOGOM I TRAGOM (CEN-11, CEN-12).
+' 375. STORNO CENE JE JEDNOKRATAN, SA RAZLOGOM I TRAGOM (CEN-11, CEN-12).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
 ' FX_SORTA iz fixture-a). Razlog je obavezan: prazan i od samih belina (razmak,
@@ -34335,29 +34335,29 @@ Private Sub T_Cen_StornoJednokratanSaRazlogom()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("pre"), True, "369 preduslov: upisana cena vazi pre storna"
-    AssertEq m("kBez"), "CEN_ERR_RAZLOG_OBAVEZAN", "369 storno bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
-    AssertEq m("pBez"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), "369 pisac odbija storno bez razloga porukom iz kataloga"
-    AssertEq m("kBeline"), "CEN_ERR_RAZLOG_OBAVEZAN", "369 razlog od samih belina je prazan razlog"
-    AssertEq (Len(m("pBeline")) > 0), True, "369 pisac odbija storno sa razlogom od samih belina"
-    AssertEq m("kDug"), "CEN_ERR_RAZLOG_DUZINA", "369 razlog duzi od 500 znakova se odbija (CEN_ERR_RAZLOG_DUZINA)"
-    AssertEq m("netaknut"), "|", "369 odbijen storno ne dira red"
-    AssertEq m("kNema"), "CEN_ERR_NEMA_REDA", "369 storno nepostojeceg reda se odbija (CEN_ERR_NEMA_REDA)"
-    AssertEq m("pOk"), "", "369 storno sa razlogom uspeva"
-    AssertEq m("sto"), "Da", "369 storniran red nosi Stornirano = Da"
-    AssertEq m("at"), True, "369 vreme storna je upisano"
-    AssertEq m("by"), True, "369 autor storna je upisan"
+    AssertEq m("pre"), True, "375 preduslov: upisana cena vazi pre storna"
+    AssertEq m("kBez"), "CEN_ERR_RAZLOG_OBAVEZAN", "375 storno bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
+    AssertEq m("pBez"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), "375 pisac odbija storno bez razloga porukom iz kataloga"
+    AssertEq m("kBeline"), "CEN_ERR_RAZLOG_OBAVEZAN", "375 razlog od samih belina je prazan razlog"
+    AssertEq (Len(m("pBeline")) > 0), True, "375 pisac odbija storno sa razlogom od samih belina"
+    AssertEq m("kDug"), "CEN_ERR_RAZLOG_DUZINA", "375 razlog duzi od 500 znakova se odbija (CEN_ERR_RAZLOG_DUZINA)"
+    AssertEq m("netaknut"), "|", "375 odbijen storno ne dira red"
+    AssertEq m("kNema"), "CEN_ERR_NEMA_REDA", "375 storno nepostojeceg reda se odbija (CEN_ERR_NEMA_REDA)"
+    AssertEq m("pOk"), "", "375 storno sa razlogom uspeva"
+    AssertEq m("sto"), "Da", "375 storniran red nosi Stornirano = Da"
+    AssertEq m("at"), True, "375 vreme storna je upisano"
+    AssertEq m("by"), True, "375 autor storna je upisan"
     AssertEq m("razlog"), "pogresna" & ChrW(160) & "cena", _
-             "369 razlog je bez belina na krajevima, a unutrasnje ostaju"
-    AssertEq m("kDrugi"), "CEN_ERR_STORNIRANA", "369 drugi storno se odbija (CEN_ERR_STORNIRANA)"
-    AssertEq m("pDrugi"), Poruka("CEN_ERR_STORNIRANA"), "369 pisac odbija drugi storno porukom iz kataloga"
-    AssertEq m("trag"), True, "369 drugi storno ne menja trag prvog"
-    AssertEq m("posle"), True, "369 stornirana cena vise ne vazi (nema cene)"
-    AssertEq m("kPonovo"), "", "369 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti"
-    AssertEq m("novi"), True, "369 pisac upisuje novu cenu istog kljuca i dana posle storna"
-    AssertEq m("vaziNova"), True, "369 posle storna i novog unosa vazi nova cena"
-    AssertEq m("pFormula"), "", "369 storno sa razlogom koji pocinje sa = uspeva"
-    AssertEq m("rFormula"), "=duplo", "369 razlog koji pocinje sa = ostaje doslovan tekst, ne formula"
+             "375 razlog je bez belina na krajevima, a unutrasnje ostaju"
+    AssertEq m("kDrugi"), "CEN_ERR_STORNIRANA", "375 drugi storno se odbija (CEN_ERR_STORNIRANA)"
+    AssertEq m("pDrugi"), Poruka("CEN_ERR_STORNIRANA"), "375 pisac odbija drugi storno porukom iz kataloga"
+    AssertEq m("trag"), True, "375 drugi storno ne menja trag prvog"
+    AssertEq m("posle"), True, "375 stornirana cena vise ne vazi (nema cene)"
+    AssertEq m("kPonovo"), "", "375 storno oslobadja kljuc: isti kljuc i dan se moze ponovo uneti"
+    AssertEq m("novi"), True, "375 pisac upisuje novu cenu istog kljuca i dana posle storna"
+    AssertEq m("vaziNova"), True, "375 posle storna i novog unosa vazi nova cena"
+    AssertEq m("pFormula"), "", "375 storno sa razlogom koji pocinje sa = uspeva"
+    AssertEq m("rFormula"), "=duplo", "375 razlog koji pocinje sa = ostaje doslovan tekst, ne formula"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34366,7 +34366,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 370. ISPRAVKA CENE: STORNO + NOV RED, VEZA U OBA SMERA (CEN-09, CEN-13).
+' 376. ISPRAVKA CENE: STORNO + NOV RED, VEZA U OBA SMERA (CEN-09, CEN-13).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
 ' FX_SORTA iz fixture-a). Red sa Datumom VAN granice se kroz pisca ne moze
@@ -34459,48 +34459,48 @@ Private Sub T_Cen_IspravkaVezaUObaSmera()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("seme"), True, "370 preduslov: AddCena upisuje red koji se ispravlja"
+    AssertEq m("seme"), True, "376 preduslov: AddCena upisuje red koji se ispravlja"
     AssertEq m("pBez"), Poruka("CEN_ERR_ISPRAVKA_BEZ_PROMENE"), _
-             "370 ispravka bez promene se odbija (CEN_ERR_ISPRAVKA_BEZ_PROMENE)"
-    AssertEq m("noviBez"), "", "370 ispravka bez promene ne daje nov red"
+             "376 ispravka bez promene se odbija (CEN_ERR_ISPRAVKA_BEZ_PROMENE)"
+    AssertEq m("noviBez"), "", "376 ispravka bez promene ne daje nov red"
     AssertEq m("kSlova"), "CEN_ERR_ISPRAVKA_BEZ_PROMENE", _
-             "370 velicina slova vrste, sorte i klase nije promena"
+             "376 velicina slova vrste, sorte i klase nije promena"
     AssertEq m("pEditor"), Poruka("CEN_ERR_ISPRAVKA_BEZ_PROMENE"), _
-             "370 ispravka iz editora: 310.00 i 310 su ista cena"
-    AssertEq m("netaknut"), "|0", "370 odbijena ispravka nista ne stornira i ne dodaje red"
+             "376 ispravka iz editora: 310.00 i 310 su ista cena"
+    AssertEq m("netaknut"), "|0", "376 odbijena ispravka nista ne stornira i ne dodaje red"
     AssertEq m("pDatPrazan"), Poruka("CEN_ERR_DATUM"), _
-             "370 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas"
-    AssertEq m("fDatPrazan"), "datum", "370 odbijen prazan datum ispravke nosi fokus na datum"
+             "376 ispravka sa praznim datumom se odbija (CEN_ERR_DATUM), ne postaje danas"
+    AssertEq m("fDatPrazan"), "datum", "376 odbijen prazan datum ispravke nosi fokus na datum"
     AssertEq m("pDatLos"), Poruka("CEN_ERR_DATUM"), _
-             "370 ispravka sa necitljivim datumom (31.11.) se odbija (CEN_ERR_DATUM)"
-    AssertEq (Len(m("wDatLos")) > 0), True, "370 pisac editora odbija ispravku sa necitljivim datumom"
+             "376 ispravka sa necitljivim datumom (31.11.) se odbija (CEN_ERR_DATUM)"
+    AssertEq (Len(m("wDatLos")) > 0), True, "376 pisac editora odbija ispravku sa necitljivim datumom"
     AssertEq m("datLosNetaknut"), "|0|", _
-             "370 ispravka sa necitljivim datumom ne stornira stari red i ne dodaje nov"
+             "376 ispravka sa necitljivim datumom ne stornira stari red i ne dodaje nov"
     AssertEq m("pBezRazloga"), Poruka("CEN_ERR_RAZLOG_OBAVEZAN"), _
-             "370 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
-    AssertEq m("bezRazlogaNetaknut"), "|0|", "370 ispravka bez razloga ne upisuje nista"
-    AssertEq m("pOk"), "", "370 prava ispravka uspeva"
-    AssertEq m("noviID"), True, "370 ispravka vraca ID novog reda"
-    AssertEq m("n"), 1, "370 ispravka dodaje tacno jedan red"
-    AssertEq m("odID"), id, "370 nov red nosi IspravkaOdID = stari"
-    AssertEq m("zamID"), novi, "370 stari red nosi ZamenjenSaID = nov"
-    AssertEq m("staroSto"), "Da", "370 stari red je storniran u istoj ispravci"
-    AssertEq m("razlog"), "greska u unosu", "370 razlog ispravke je trag storna starog reda"
-    AssertEq m("staroTrag"), True, "370 storno starog reda nosi vreme i autora"
-    AssertEq m("novSto"), "", "370 nov red nije storniran"
-    AssertEq m("novCena"), Format$(320, "0.00"), "370 nov red nosi ispravljenu cenu"
-    AssertEq m("vazi"), True, "370 posle ispravke vazi nov red"
+             "376 ispravka bez razloga se odbija (CEN_ERR_RAZLOG_OBAVEZAN)"
+    AssertEq m("bezRazlogaNetaknut"), "|0|", "376 ispravka bez razloga ne upisuje nista"
+    AssertEq m("pOk"), "", "376 prava ispravka uspeva"
+    AssertEq m("noviID"), True, "376 ispravka vraca ID novog reda"
+    AssertEq m("n"), 1, "376 ispravka dodaje tacno jedan red"
+    AssertEq m("odID"), id, "376 nov red nosi IspravkaOdID = stari"
+    AssertEq m("zamID"), novi, "376 stari red nosi ZamenjenSaID = nov"
+    AssertEq m("staroSto"), "Da", "376 stari red je storniran u istoj ispravci"
+    AssertEq m("razlog"), "greska u unosu", "376 razlog ispravke je trag storna starog reda"
+    AssertEq m("staroTrag"), True, "376 storno starog reda nosi vreme i autora"
+    AssertEq m("novSto"), "", "376 nov red nije storniran"
+    AssertEq m("novCena"), Format$(320, "0.00"), "376 nov red nosi ispravljenu cenu"
+    AssertEq m("vazi"), True, "376 posle ispravke vazi nov red"
     AssertEq m("kDatumVan"), "CEN_ERR_DATUM_GRANICA", _
-             "370 ispravka koja pomera datum van granice se odbija"
+             "376 ispravka koja pomera datum van granice se odbija"
     AssertEq m("pDatumVan"), Poruka("CEN_ERR_DATUM_GRANICA"), _
-             "370 pisac odbija ispravku koja pomera datum van granice"
-    AssertEq m("stariPosleOdbijene"), "|", "370 odbijena ispravka datuma ne stornira stari red"
-    AssertEq m("pZadrzi"), "", "370 ispravka koja zadrzava stari datum van granice prolazi"
-    AssertEq m("n3Dan"), CLng(Date - 60), "370 nov red zadrzava stari datum"
-    AssertEq m("n3Veza"), STARI, "370 nov red ispravke van granice nosi vezu na stari"
-    AssertEq m("kStorniran"), "CEN_ERR_STORNIRANA", "370 storniran red se ne ispravlja (CEN_ERR_STORNIRANA)"
-    AssertEq m("pStorniran"), Poruka("CEN_ERR_STORNIRANA"), "370 pisac odbija ispravku storniranog reda"
-    AssertEq m("n4"), "", "370 odbijena ispravka storniranog reda ne daje nov red"
+             "376 pisac odbija ispravku koja pomera datum van granice"
+    AssertEq m("stariPosleOdbijene"), "|", "376 odbijena ispravka datuma ne stornira stari red"
+    AssertEq m("pZadrzi"), "", "376 ispravka koja zadrzava stari datum van granice prolazi"
+    AssertEq m("n3Dan"), CLng(Date - 60), "376 nov red zadrzava stari datum"
+    AssertEq m("n3Veza"), STARI, "376 nov red ispravke van granice nosi vezu na stari"
+    AssertEq m("kStorniran"), "CEN_ERR_STORNIRANA", "376 storniran red se ne ispravlja (CEN_ERR_STORNIRANA)"
+    AssertEq m("pStorniran"), Poruka("CEN_ERR_STORNIRANA"), "376 pisac odbija ispravku storniranog reda"
+    AssertEq m("n4"), "", "376 odbijena ispravka storniranog reda ne daje nov red"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34509,7 +34509,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 371. MIGRACIJA ZATECENIH DUPLIKATA JE IDEMPOTENTNA (CEN-03, CEN-ODL-04).
+' 377. MIGRACIJA ZATECENIH DUPLIKATA JE IDEMPOTENTNA (CEN-03, CEN-ODL-04).
 ' ============================================================
 ' Fixture: synthetic anomaly -- stari model je dozvoljavao vise nestorniranih
 ' redova istog kljuca i dana, a pisac to danas odbija, pa se redovi upisuju
@@ -34561,16 +34561,16 @@ Private Sub T_Cen_MigracijaDuplikataIdempotentna()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("preMig"), True, "371 pre migracije prekrsen CEN-03 znaci nema cene, ne izbor"
-    AssertEq m("n1"), 2, "371 migracija stornira dva ranija reda istog kljuca i dana"
-    AssertEq m("pob"), "", "371 kasniji red tabele ostaje vazeci"
-    AssertEq m("rani"), "Da|Da", "371 raniji redovi istog kljuca su stornirani (i sorta malim slovima)"
-    AssertEq m("razlogImenuje"), True, "371 razlog storna imenuje pobednika"
-    AssertEq m("trag"), True, "371 migracija ostavlja pun trag storna (vreme i autor)"
-    AssertEq m("drugiDan"), "", "371 red drugog dana se ne dira"
-    AssertEq m("posebna"), "", "371 posebna cena istog dana nije duplikat globalne"
-    AssertEq m("n2"), 0, "371 drugi prolaz migracije ne stornira nista (idempotentno)"
-    AssertEq m("vazi"), True, "371 posle migracije vazi cena pobednika"
+    AssertEq m("preMig"), True, "377 pre migracije prekrsen CEN-03 znaci nema cene, ne izbor"
+    AssertEq m("n1"), 2, "377 migracija stornira dva ranija reda istog kljuca i dana"
+    AssertEq m("pob"), "", "377 kasniji red tabele ostaje vazeci"
+    AssertEq m("rani"), "Da|Da", "377 raniji redovi istog kljuca su stornirani (i sorta malim slovima)"
+    AssertEq m("razlogImenuje"), True, "377 razlog storna imenuje pobednika"
+    AssertEq m("trag"), True, "377 migracija ostavlja pun trag storna (vreme i autor)"
+    AssertEq m("drugiDan"), "", "377 red drugog dana se ne dira"
+    AssertEq m("posebna"), "", "377 posebna cena istog dana nije duplikat globalne"
+    AssertEq m("n2"), 0, "377 drugi prolaz migracije ne stornira nista (idempotentno)"
+    AssertEq m("vazi"), True, "377 posle migracije vazi cena pobednika"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34579,7 +34579,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 372. PREGLED PRE UPISA: NOVA GLOBALNA CENA PREKIDA POSEBNU (ADR 0019).
+' 378. PREGLED PRE UPISA: NOVA GLOBALNA CENA PREKIDA POSEBNU (ADR 0019).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA /
 ' FX_SORTA i stanice FX_STANICA / FX_STANICA_B iz fixture-a). Posebna cena na
@@ -34632,18 +34632,18 @@ Private Sub T_Cen_PregledPrekidaPosebne()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("seme"), True, "372 preduslov: posebne cene na dve stanice su upisane"
-    AssertEq m("saA"), True, "372 nova globalna posle posebne imenuje stanicu cija posebna prestaje"
-    AssertEq m("odDana"), True, "372 spisak nosi dan od kog je posebna vazila"
-    AssertEq m("cenaPosebne"), True, "372 spisak nosi cenu posebne koja prestaje"
-    AssertEq m("bezB"), True, "372 buduca posebna druge stanice se ne prijavljuje"
-    AssertEq m("istiDan"), "", "372 nova globalna istog dana kao posebna ne prekida nista"
-    AssertEq m("drugaKlasa"), "", "372 nova globalna druge klase ne prekida posebnu"
-    AssertEq m("bezSorte"), "", "372 nova globalna bez sorte ne prekida posebnu cenu sorte"
-    AssertEq m("posleB"), True, "372 posebna druge stanice se prijavljuje kad vec vazi"
-    AssertEq m("prikaz"), True, "372 preduslov: combo nudi otkupno mesto iz fixture-a"
-    AssertEq m("edPosebna"), "", "372 pregled iz editora za posebnu cenu (stanica izabrana) je prazan"
-    AssertEq m("edGlobalna"), True, "372 pregled iz editora za globalnu cenu imenuje stanicu"
+    AssertEq m("seme"), True, "378 preduslov: posebne cene na dve stanice su upisane"
+    AssertEq m("saA"), True, "378 nova globalna posle posebne imenuje stanicu cija posebna prestaje"
+    AssertEq m("odDana"), True, "378 spisak nosi dan od kog je posebna vazila"
+    AssertEq m("cenaPosebne"), True, "378 spisak nosi cenu posebne koja prestaje"
+    AssertEq m("bezB"), True, "378 buduca posebna druge stanice se ne prijavljuje"
+    AssertEq m("istiDan"), "", "378 nova globalna istog dana kao posebna ne prekida nista"
+    AssertEq m("drugaKlasa"), "", "378 nova globalna druge klase ne prekida posebnu"
+    AssertEq m("bezSorte"), "", "378 nova globalna bez sorte ne prekida posebnu cenu sorte"
+    AssertEq m("posleB"), True, "378 posebna druge stanice se prijavljuje kad vec vazi"
+    AssertEq m("prikaz"), True, "378 preduslov: combo nudi otkupno mesto iz fixture-a"
+    AssertEq m("edPosebna"), "", "378 pregled iz editora za posebnu cenu (stanica izabrana) je prazan"
+    AssertEq m("edGlobalna"), True, "378 pregled iz editora za globalnu cenu imenuje stanicu"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34679,7 +34679,7 @@ Private Sub CenVratiLock(ByVal prevSt As String, ByVal prevDat As Date)
 End Sub
 
 ' ============================================================
-' 373. PREDLOG CENE NA FORMI PRATI DATUM I OTKUPNO MESTO (CEN-05, odluka vlasnika).
+' 379. PREDLOG CENE NA FORMI PRATI DATUM I OTKUPNO MESTO (CEN-05, odluka vlasnika).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; kultura FX_VRSTA i
 ' stanica FX_STANICA iz fixture-a). Globalna cena od d1 i posebna za
@@ -34797,26 +34797,26 @@ Private Sub T_Cen_PredlogCenePratiDatumIOM()
     ReleaseOtkupUIForm f
     Set f = Nothing
 
-    AssertEq m("seme"), True, "373 preduslov: globalna i posebna cena su upisane"
-    AssertEq m("rezim"), "F1", "373 preduslov: forma je u rezimu otkupa (F1)"
-    AssertEq m("vrsta"), FX_VRSTA, "373 preduslov: vrsta je izabrana"
-    AssertEq m("c0"), Format$(777, "0.00"), "373 datum pre prve cene ne dira unetu cenu"
-    AssertEq m("c1"), Format$(250, "0.00"), "373 datum od dana globalne cene, bez OM, daje globalnu cenu"
+    AssertEq m("seme"), True, "379 preduslov: globalna i posebna cena su upisane"
+    AssertEq m("rezim"), "F1", "379 preduslov: forma je u rezimu otkupa (F1)"
+    AssertEq m("vrsta"), FX_VRSTA, "379 preduslov: vrsta je izabrana"
+    AssertEq m("c0"), Format$(777, "0.00"), "379 datum pre prve cene ne dira unetu cenu"
+    AssertEq m("c1"), Format$(250, "0.00"), "379 datum od dana globalne cene, bez OM, daje globalnu cenu"
     AssertEq m("c2"), Format$(250, "0.00"), _
-             "373 bez OM ni dan posebne cene ne daje posebnu (prazna stanica vidi samo globalne)"
-    AssertEq m("om"), FX_STANICA, "373 preduslov: otkupno mesto je izabrano po ID-u"
-    AssertEq m("c3"), Format$(270, "0.00"), "373 izbor otkupnog mesta uz datum posebne cene daje posebnu cenu"
-    AssertEq m("c4"), Format$(250, "0.00"), "373 povratak datuma pre posebne cene vraca globalnu"
-    AssertEq m("c5"), Format$(270, "0.00"), "373 datum ponovo na dan posebne vraca posebnu"
-    AssertEq m("c6"), Format$(250, "0.00"), "373 brisanje otkupnog mesta vraca globalnu cenu"
-    AssertEq m("omPrefill"), FX_STANICA, "373 preduslov: prefill postavlja otkupno mesto iz spec-a"
+             "379 bez OM ni dan posebne cene ne daje posebnu (prazna stanica vidi samo globalne)"
+    AssertEq m("om"), FX_STANICA, "379 preduslov: otkupno mesto je izabrano po ID-u"
+    AssertEq m("c3"), Format$(270, "0.00"), "379 izbor otkupnog mesta uz datum posebne cene daje posebnu cenu"
+    AssertEq m("c4"), Format$(250, "0.00"), "379 povratak datuma pre posebne cene vraca globalnu"
+    AssertEq m("c5"), Format$(270, "0.00"), "379 datum ponovo na dan posebne vraca posebnu"
+    AssertEq m("c6"), Format$(250, "0.00"), "379 brisanje otkupnog mesta vraca globalnu cenu"
+    AssertEq m("omPrefill"), FX_STANICA, "379 preduslov: prefill postavlja otkupno mesto iz spec-a"
     AssertEq m("c7"), Format$(270, "0.00"), _
-             "373 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a"
-    AssertEq m("c8"), Format$(555, "0.00"), "373 prefill sa cenom zadrzava cenu dokumenta"
-    AssertEq m("datF4"), Format$(d2, "dd.mm.yyyy"), "373 preduslov: promena rezima ne menja datum"
-    AssertEq m("vrstaF4"), FX_VRSTA, "373 preduslov: promena rezima ne menja robu"
+             "379 prefill bez cene predlaze cenu za otkupno mesto i datum iz spec-a"
+    AssertEq m("c8"), Format$(555, "0.00"), "379 prefill sa cenom zadrzava cenu dokumenta"
+    AssertEq m("datF4"), Format$(d2, "dd.mm.yyyy"), "379 preduslov: promena rezima ne menja datum"
+    AssertEq m("vrstaF4"), FX_VRSTA, "379 preduslov: promena rezima ne menja robu"
     AssertEq m("c9"), Format$(250, "0.00"), _
-             "373 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)"
+             "379 promena rezima F1 -> F4 racuna predlog iznova (prijemnica vidi samo globalnu)"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -34856,7 +34856,7 @@ Private Sub CenUpisiPoljeEditora(ByVal ekran As String, ByVal poljeKljuc As Stri
 End Sub
 
 ' ============================================================
-' 374. PITANJA CENOVNIKA SU GEJTOVANA: ZABELEZE SE, NISTA SE NE UPISE.
+' 380. PITANJA CENOVNIKA SU GEJTOVANA: ZABELEZE SE, NISTA SE NE UPISE.
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji; globalna i posebna
 ' cena za FX_STANICA od d1, kultura FX_VRSTA / FX_SORTA iz fixture-a).
@@ -34959,31 +34959,31 @@ Private Sub T_Cen_PitanjaSuGejtovana()
     Set f = Nothing
     modScrMatRoba.Scr_MrTestSet prevLista
 
-    AssertEq m("seme"), True, "374 preduslov: globalna i posebna cena su upisane"
-    AssertEq m("ekran"), EKRAN & "/CENOVNIK", "374 preduslov: ljuska je na listi cenovnika ekrana MAT_ROBA"
-    AssertEq m("uMrezi"), True, "374 preduslov: upisana cena je u mrezi"
-    AssertEq m("radnje"), True, "374 preduslov: cenovnik nudi radnje ispravi i storno"
+    AssertEq m("seme"), True, "380 preduslov: globalna i posebna cena su upisane"
+    AssertEq m("ekran"), EKRAN & "/CENOVNIK", "380 preduslov: ljuska je na listi cenovnika ekrana MAT_ROBA"
+    AssertEq m("uMrezi"), True, "380 preduslov: upisana cena je u mrezi"
+    AssertEq m("radnje"), True, "380 preduslov: cenovnik nudi radnje ispravi i storno"
     AssertEq (InStr(1, m("pitStorno"), Poruka("CEN_ASK_RAZLOG_STORNO"), vbBinaryCompare) > 0), True, _
-             "374 storno u test rezimu pita za razlog, a pitanje se belezi"
+             "380 storno u test rezimu pita za razlog, a pitanje se belezi"
     AssertEq (InStr(1, m("pitStorno"), idG, vbTextCompare) > 0), True, _
-             "374 pitanje storna imenuje izabran red"
-    AssertEq m("stornoRed"), "", "374 storno bez razloga ne stornira red"
+             "380 pitanje storna imenuje izabran red"
+    AssertEq m("stornoRed"), "", "380 storno bez razloga ne stornira red"
     AssertEq m("toastStorno"), Poruka("CEN_MSG_OTKAZANO"), _
-             "374 odustajanje od storna je javljeno kao otkazano, ne kao greska"
-    AssertEq m("posleReseta"), "", "374 reset seam-a brise zabelezena pitanja"
-    AssertEq m("editID"), idG, "374 preduslov: radnja ispravi otvara ispravku izabranog reda"
+             "380 odustajanje od storna je javljeno kao otkazano, ne kao greska"
+    AssertEq m("posleReseta"), "", "380 reset seam-a brise zabelezena pitanja"
+    AssertEq m("editID"), idG, "380 preduslov: radnja ispravi otvara ispravku izabranog reda"
     AssertEq (InStr(1, m("pitIspr"), Poruka("CEN_ASK_RAZLOG_ISPRAVKE"), vbBinaryCompare) > 0), True, _
-             "374 ispravka u test rezimu pita za razlog, a pitanje se belezi"
-    AssertEq m("isprRed"), "|0", "374 ispravka bez razloga ne stornira stari red i ne dodaje nov"
-    AssertEq m("editPosle"), idG, "374 otkazana ispravka ostavlja editor otvoren (otkucano se ne gubi)"
+             "380 ispravka u test rezimu pita za razlog, a pitanje se belezi"
+    AssertEq m("isprRed"), "|0", "380 ispravka bez razloga ne stornira stari red i ne dodaje nov"
+    AssertEq m("editPosle"), idG, "380 otkazana ispravka ostavlja editor otvoren (otkucano se ne gubi)"
     AssertEq (InStr(1, m("pitPrekid"), Poruka("CEN_ASK_PREKID_POSEBNIH"), vbBinaryCompare) > 0), True, _
-             "374 unos globalne koja prekida posebnu trazi potvrdu, a potvrda se belezi"
+             "380 unos globalne koja prekida posebnu trazi potvrdu, a potvrda se belezi"
     AssertEq (InStr(1, m("pitPrekid"), "(" & FX_STANICA & ")", vbTextCompare) > 0), True, _
-             "374 potvrda prekida imenuje stanicu cija posebna prestaje"
+             "380 potvrda prekida imenuje stanicu cija posebna prestaje"
     AssertEq (InStr(1, m("pitPrekid"), Poruka("CEN_ASK_NASTAVITI"), vbBinaryCompare) > 0), True, _
-             "374 potvrda prekida pita da li da se upise"
-    AssertEq m("unosRed"), "0", "374 bez potvrde se globalna cena ne upisuje"
-    AssertEq m("katalog"), True, "374 pitanja cenovnika su iz kataloga poruka"
+             "380 potvrda prekida pita da li da se upise"
+    AssertEq m("unosRed"), "0", "380 bez potvrde se globalna cena ne upisuje"
+    AssertEq m("katalog"), True, "380 pitanja cenovnika su iz kataloga poruka"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -35014,7 +35014,7 @@ Private Function CenOtisakTabele() As String
 End Function
 
 ' ============================================================
-' 375. UNOS CENE SE VRACA PRI PADU UPISA (CEN-REV-01).
+' 381. UNOS CENE SE VRACA PRI PADU UPISA (CEN-REV-01).
 ' ============================================================
 ' Fixture: synthetic (prazan tblCenovnik u transakciji testa; kultura
 ' FX_VRSTA / FX_SORTA iz fixture-a). AppendRow doda red PRE nego sto upise
@@ -35059,12 +35059,12 @@ Private Sub T_Cen_UnosSeVracaPriPaduUpisa()
     tx.RollbackTx
     txZapoceta = False
 
-    AssertEq m("seme"), True, "375 preduslov: AddCena upisuje prvi red"
-    AssertEq m("idPad"), "", "375 pad posle dodatog reda: AddCena vraca prazan ID"
-    AssertEq m("n"), 0, "375 pad posle dodatog reda ne ostavlja red u cenovniku"
-    AssertEq m("sadrzaj"), True, "375 pad posle dodatog reda ne menja sadrzaj tabele"
-    AssertEq m("upis"), True, "375 rollback unosa je potpun (upis ostaje dozvoljen)"
-    AssertEq m("posle"), True, "375 sledeci unos istog kljuca posle vracenog pada prolazi"
+    AssertEq m("seme"), True, "381 preduslov: AddCena upisuje prvi red"
+    AssertEq m("idPad"), "", "381 pad posle dodatog reda: AddCena vraca prazan ID"
+    AssertEq m("n"), 0, "381 pad posle dodatog reda ne ostavlja red u cenovniku"
+    AssertEq m("sadrzaj"), True, "381 pad posle dodatog reda ne menja sadrzaj tabele"
+    AssertEq m("upis"), True, "381 rollback unosa je potpun (upis ostaje dozvoljen)"
+    AssertEq m("posle"), True, "381 sledeci unos istog kljuca posle vracenog pada prolazi"
     Exit Sub
 EH:
     errNum = Err.Number: errDesc = Err.description
@@ -35076,7 +35076,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 376. POTVRDA PREKIDA POSEBNIH CENA STAJE U DIJALOG (CEN-ODL-03).
+' 382. POTVRDA PREKIDA POSEBNIH CENA STAJE U DIJALOG (CEN-ODL-03).
 ' ============================================================
 ' Fixture: synthetic (sam tekst, bez sveske i bez dijaloga). MsgBox odseca
 ' tekst duzi od oko 1024 znaka, pa bi kod mnogo stanica nestali poslednje
@@ -35095,15 +35095,15 @@ Private Sub T_Cen_PotvrdaPrekidaStajeUDijalog()
     t = modMaticniEkran.TekstPrekidaPosebnih(dug)
     kratak = modMaticniEkran.TekstPrekidaPosebnih("Mesto A (STA-001): posebna 270,00 od 01.07.2026")
 
-    AssertEq (Len(t) <= 1000), True, "376 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)"
+    AssertEq (Len(t) <= 1000), True, "382 potvrda sa 40 stanica staje u MsgBox (najvise 1000 znakova)"
     AssertEq (InStr(1, t, Poruka("CEN_ASK_NASTAVITI"), vbBinaryCompare) > 0), True, _
-             "376 potvrda sa 40 stanica i dalje nosi pitanje"
-    AssertEq (InStr(1, t, "(40)", vbBinaryCompare) > 0), True, "376 potvrda nosi ukupan broj stanica"
+             "382 potvrda sa 40 stanica i dalje nosi pitanje"
+    AssertEq (InStr(1, t, "(40)", vbBinaryCompare) > 0), True, "382 potvrda nosi ukupan broj stanica"
     AssertEq (InStr(1, t, Poruka("CEN_MSG_PREKID_JOS"), vbBinaryCompare) > 0), True, _
-             "376 skracen spisak kaze koliko stanica nije prikazano"
-    AssertEq (InStr(1, t, "(STA-001)", vbBinaryCompare) > 0), True, "376 skracen spisak pocinje prvom stanicom"
+             "382 skracen spisak kaze koliko stanica nije prikazano"
+    AssertEq (InStr(1, t, "(STA-001)", vbBinaryCompare) > 0), True, "382 skracen spisak pocinje prvom stanicom"
     AssertEq (InStr(1, kratak, "(STA-001)", vbBinaryCompare) > 0 And _
               InStr(1, kratak, Poruka("CEN_MSG_PREKID_JOS"), vbBinaryCompare) = 0), True, _
-             "376 kratak spisak ide ceo, bez napomene o preostalim"
-    AssertEq PorukaNedostaje("CEN_MSG_PREKID_JOS"), False, "376 napomena o preostalim je u katalogu poruka"
+             "382 kratak spisak ide ceo, bez napomene o preostalim"
+    AssertEq PorukaNedostaje("CEN_MSG_PREKID_JOS"), False, "382 napomena o preostalim je u katalogu poruka"
 End Sub

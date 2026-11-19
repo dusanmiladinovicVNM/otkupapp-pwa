@@ -451,7 +451,7 @@ stornira migracija iz Ensure (`MigrirajDupleCene`, CEN-ODL-04).
 Nov red nosi `IspravkaOdID`, stari `ZamenjenSaID`. Storno nosi razlog, autora i
 vreme zajedno, jednokratan je i ne poništava se (CEN-11, CEN-12).
 
-Mere ih `modTest` 366–374 (`T_Cen_*`), još nepušteni. Pun spisak CEN-01..13 i
+Mere ih `modTest` 372–382 (`T_Cen_*`), još nepušteni. Pun spisak CEN-01..13 i
 odluke CEN-ODL-01..13: `CENOVNIK.md`.
 
 ## 3) Ko šta piše

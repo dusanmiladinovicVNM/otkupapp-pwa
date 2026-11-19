@@ -1064,7 +1064,7 @@ End Function
 
 ' Tekst potvrde: naslov sa UKUPNIM brojem stanica, spisak skracen na
 ' CEN_PREKID_MAX_ZNAKOVA (uz broj preostalih), pa pitanje. Javno da bi se
-' granica merila bez dijaloga (test 376).
+' granica merila bez dijaloga (test 382).
 Public Function TekstPrekidaPosebnih(ByVal spisak As String) As String
     Dim linije As Variant, i As Long, n As Long, prikaz As String, prikazano As Long
     linije = Split(spisak, vbCrLf)
