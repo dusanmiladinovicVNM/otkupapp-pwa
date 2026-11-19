@@ -8544,7 +8544,7 @@ End Function
 ' Da li kolona DOZVOLJAVA namerno praznu celiju: sesto polje opisa je "prazno"
 ' ("KLJUC||kg|82|1|prazno"). Opis bez sestog polja (svi ostali ekrani) daje
 ' False, pa prazan string tamo ostaje kvar prikaza (v. CelijaTekst). Javno jer
-' ga deli stampa izvestaja i meri test 350.
+' ga deli stampa izvestaja i meri test 384.
 Public Function CelijaPraznoDozvoljeno(ByVal spec As String) As Boolean
     CelijaPraznoDozvoljeno = (StrComp(Trim$(ColF(spec, 5)), "prazno", vbTextCompare) = 0)
 End Function

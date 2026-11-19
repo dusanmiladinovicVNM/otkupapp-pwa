@@ -12355,7 +12355,7 @@ SABOTAZE = {
         "                outA(n, 2) = vbNullString\n",
         "                outA(n, 2) = NzD(src(i, 2))   ' SABOTAZA: nula umesto praznog\n",
         "T_AmbPoslovno_StanjeOMUSaldu",
-        "ekran: kg, vrednost i saldo reda Stanje OM su prazni, ne nula",
+        "ekran: kg, vrednost, saldo i doplata reda Stanje OM su prazni, ne nula",
     ),
     # Ljuska prazan string i u koloni koja ga DOZVOLJAVA broji kao kvar prikaza.
     "amb-posl-04-prazno-je-kvar": (
@@ -12383,12 +12383,12 @@ SABOTAZE = {
         "T_AmbPoslovno_StanjeOMUSaldu",
         "mreza crta red Stanje OM bez ijednog kvara prikaza",
     ),
-    # Test 350 commit-uje umesto da vrati: knjizenja ostaju za sledece testove
+    # Test 384 commit-uje umesto da vrati: knjizenja ostaju za sledece testove
     # (AMB457-REV-02). Meri tvrdnju o izolaciji, ne proizvod.
     "amb-posl-04-test-ne-vraca": (
         "modTest.bas",
-        "    tx.RollbackTx   ' 350: knjiga, dokumenti, tipovi i kooperant nestaju\n",
-        "    tx.CommitTx   ' SABOTAZA: 350 ne vraca knjigu\n",
+        "    tx.RollbackTx   ' 384: knjiga, dokumenti, tipovi i kooperant nestaju\n",
+        "    tx.CommitTx   ' SABOTAZA: 384 ne vraca knjigu\n",
         "T_AmbPoslovno_StanjeOMUSaldu",
         "test ne ostavlja knjizenja: knjiga, dokumenti, tipovi, kooperanti i AMB po OM kao pre",
     ),
