@@ -212,15 +212,15 @@ commit):
 
 | Rez | Šta | Test | Status |
 |---|---|---|---|
-| IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **zeleno 19.11.** (izbor testova + FULL) |
-| OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **zeleno 19.11.** (izbor testova + FULL) |
-| HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **zeleno 19.11.** (izbor testova + FULL; dokaz `zbirna-nevezane` 2/2) |
-| IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **zeleno 19.11.** (izbor testova + FULL) |
-| IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **zeleno 19.11.** (izbor testova + FULL; dokaz 2 sidra 2/2) |
-| IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **zeleno 19.11.** (izbor testova + FULL) |
-| IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **zeleno 19.11.** (izbor testova + FULL) |
-| PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (izbor testova) |
-| PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (izbor testova) |
+| IZV-1 | Promena tipa, režima, entiteta i opsega na Izveštajima osvežava samo prikaz (`modOtkupUI.OsveziPrikazEkrana`), bez punog `RefreshFromData`. Povratak na viđen kontekst ide iz keša. | `modTest` 384 `T_Izv_KontekstOsvezavaPrikazNePodatke` (klik kroz pravu ljusku) | **zeleno 19.11.** (FULL + dokaz) |
+| OTK-1 | Popuna otkupnog lista bira stavke jednim prolazom (`modPrint.OtkupListRedoviStavki`) umesto kvadratne petlje. Jednakost sa starim algoritmom je proverena Python simulacijom nad 20.000 tabela. | `modTest` 385 `T_OtkList_RedoviStavkiKanonskimRedom` (čista funkcija) | **zeleno 19.11.** (FULL + dokaz) |
+| HLD-1 | `NevezaneOtpremnice` čita status iz svog reda umesto `LookupValue` po redu. Sidro sabotaže `zbirna-nevezane-nude-nacrt` je pomereno na novu liniju. | BFP `Test_ZBR_NevezaneSamoIzdateISlobodne` | **zeleno 19.11.** (FULL + dokaz) |
+| IZV-3, IZV-5 | Keš izvedenih nizova u prozoru čitanja (`modDataAccess.IzvedenoTryGet`/`IzvedenoPut`): `StavkeOtkupaRedovi`, `DoplataStavkeRedovi` i `StavkePrijemniceRedovi` se u jednom zbirnom prikazu grade jednom, a ne po stanici ili kupcu. Upis prazni keš; rečnici se ne keširaju (D3). | `modTest` 386 `T_KesIzvedeno_ZbirniIstiUzKes` (isti sadržaj sa i bez keša) | **zeleno 19.11.** (FULL + dokaz) |
+| IZV-2 | Naziv entiteta se čita iz šifarnika samo kad se prikazani kontekst promeni, ne na svaki otkucaj pretrage i klik čipa. Pomerena sidra `izvestaji-pretraga-puni-iznova` i `izvestaji-rang-kontekst-prazan`. | `modTest` 387 `T_Izv_NazivEntitetaJednomPoKontekstu` | **zeleno 19.11.** (FULL + dokaz) |
+| IZV-9 | Dinamički čipovi vrste i sorte čitaju keš ljuske (`modUiData.CachedTable`) umesto tabela sa lista. | `modTest` 388 `T_Izv_CipoviCitajuKesLjuske` | **zeleno 19.11.** (FULL + dokaz) |
+| IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **zeleno 19.11.** (FULL + dokaz) |
+| PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (FULL + dokaz) |
+| PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (FULL + dokaz) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -233,15 +233,15 @@ commit):
   `izvestaji-rang-kontekst-prazan` 2/2 DOKAZANO. Compile je u prolazu preskočen.
 - **Posle ojačanja 19.11.:** testovi 387–391 zeleni (izbor), dokaz dva pomerena
   sidra Izveštaja ponovljen 2/2.
-- **Na Windows-u ostaje:**
-  - Compile;
-  - dokaz u oba smera za nove testove 384–391 (10 sabotaža u katalogu):
-    `python tools/dokaz.py --izbor --radnika 4 izv1- otk1- izv3- izv2-naziv
-    izv9- izv7- hld1- kes-rollback`;
-  - još jedan pun prolaz `python tools/run_vba.py` posle ojačanja, jer su
-    dirani `clsTransaction` (rollback) i `modStanicaLock`;
+- **Dokaz novih testova 19.11.:** `dokaz.py --izbor` nad 10 novih sabotaža
+  (384–391) 10/10 DOKAZANO.
+- **FULL posle ojačanja 19.11.:** svih 12 suite-ova zeleno, BFP 3.499/3.499,
+  GREEN marker upisan nad konačnim `src-vba/` grane.
+- **Ostaje pred merge** (ručno, nad kopijom prave sveske):
+  - ručni Compile (`run_vba` ga preskače uz suite);
   - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
-    cena, bruto/neto, ambalaža) i hladnjački lanac nad kopijom prave sveske;
+    cena, bruto/neto, ambalaža);
+  - hladnjački lanac i lista NEVEZANE nad pravim podacima;
   - merenje vremena pre i posle (tajmer, §5) — sva vremena iz analize su
     procene.
 
