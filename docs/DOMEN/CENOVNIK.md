@@ -5,8 +5,9 @@
 > `claude/elegant-mccarthy-jqlkk6` (od `f154530`: `7d5e7f5`, `1338d9b`). Testovi
 > 372–383 (`T_Cen_*`, §9). **Izmereno u Excelu 19.11.2026** (operater, Windows,
 > grana na `f3215a0f`): FULL `run_vba` ZELENO (12 suita, `RunAllTests` 383/0,
-> BFP 3492/0); dokaz sabotaža cenovnika 45/45. Ručni Compile, kapija migracije
-> nad pravom sveskom i ručni UI smoke nisu potvrđeni (§10).
+> BFP 3492/0); dokaz sabotaža cenovnika 45/45; ručni Compile prošao; migracija
+> na kopiji prave sveske stornirala je tačno zatečeni par (CEN-00001 uz
+> CEN-00003). Ručni UI smoke nije potvrđen (§10).
 
 ## 1) Svrha i izvor
 
@@ -255,7 +256,11 @@ u kodu: migracija je `CEN-ODL-04` u `modCenovnik.bas:22`, `:66-69` i
    `modMigracija.MigrirajPodatkeIzStarog`. Dok ova četiri koraka nisu
    završena, novi cenovnik nije spreman za rad operatera:
    1. kopija sveske pre uvoza koda (`.xlsm` sa strane);
-   2. Admin → Ensure; greška znači da migracija nije uspela i da je tabela vraćena;
+   2. Admin → Ensure (ili `Alt+F8 → EnsureCenovnikSchema`); greška znači da
+      migracija nije uspela i da je tabela vraćena. **`EnsureRuntimeSchema` i
+      `EnsurePoruke` NE migriraju**: prvi samo dopuni kolone, pa sveska posle
+      njega ima novu šemu i stare duplikate (19.11.2026 baš tako zatečeno na
+      kopiji);
    3. u `tblCenovnik` (list „Cenovnik") redovi sa `StornoRazlog` koji sadrži
       „(migracija CEN-ODL-04)" su tačno raniji redovi svakog para duplikata, sa
       upisanim `StorniranoAt`; lista Matični → Cenovnik ih više ne prikazuje.
@@ -314,7 +319,11 @@ tvrdi `Radnje("CENOVNIK") = ""` („cenovnik nema radnji nad redom"). Sada
   više ne postoji), a 8 najbližih grani dalo je **isti ishod nad `main`-om** (`207e31c6`,
   sopstveni fixture, 19.11.2026). Zatečeno propadanje kataloga; popravka ide posebnim
   rezom. Ostalih 33 nad `main`-om nije mereno (zaključak je iz statičke analize `--od`).
-- Ručni Compile (`Alt+F11 → Debug → Compile VBAProject`) nije potvrđen.
+- Ručni Compile (`Alt+F11 → Debug → Compile VBAProject`): prošao (operater, 19.11.2026).
+- Kapija migracije na kopiji prave sveske (19.11.2026): `MigrirajDupleCene` je
+  stornirao jedan red, CEN-00001 (Višnja Oblačinska, I, 19.06.), razlogom koji
+  imenuje CEN-00003, sa `StorniranoAt` / `StorniranoBy`; ostali redovi netaknuti.
+  Idempotentnost nad pravom sveskom nije posebno izmerena; meri je test 377 (zelen).
 - UI tokovi na pravom Excelu: InputBox za razlog, MsgBox pregleda, editor
   ispravke (datum kao `dd.mm.yyyy`, cena kao `CStr(Double)` — čitanje nazad uz
   drugačiji decimalni separator nije izmereno), toast poruke, širina kolone
