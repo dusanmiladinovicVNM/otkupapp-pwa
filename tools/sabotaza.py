@@ -598,7 +598,7 @@ SABOTAZE = {
     # --- S4-2c/2b-1: citaoci za ekrane zbirne
     "zbirna-nevezane-nude-nacrt": (
         "modDokumenta.bas",
-        "                If OtpremnicaJeIzdata(oidRaw) Then\n",
+        "                If IzdatoStatusJeIzdato(izdRaw) Then\n",
         "                If True Then   ' SABOTAZA: i nacrt se nudi kao izvor\n",
         "Test_ZBR_NevezaneSamoIzdateISlobodne",
         "ZBR nevezane: NACRT otpremnice se ne nudi",
@@ -4754,9 +4754,11 @@ SABOTAZE = {
         "        If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll\n"
         "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
         "        mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "        puni = True\n"
         "    End If\n",
         "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
-        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n",
+        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "    puni = True\n",
         "T_Izv_KesPretragaIHint",
         "tri citanja mreze = JEDNO punjenje snimka (pretraga ne placa pun prolaz)",
     ),
@@ -5054,8 +5056,8 @@ SABOTAZE = {
     # pojedinacnom ne sme da ispise prazan entitet "()".
     "izvestaji-rang-kontekst-prazan": (
         "modScrIzvestaji.bas",
-        "    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
-        "    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
+        "    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
+        "    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
         "T_Izv_RangSortIKontekst",
         "rang kontekst nije prazan entitet '()'",
     ),
@@ -14613,6 +14615,186 @@ SABOTAZE = {
         '    UpsertRow lo, existing, "CEN_ERR_DUPLIKAX", _\n',
         "T_Cen_UnosOdbijaIPusta",
         "374 kljucevi odbijanja cenovnika su u katalogu poruka",
+    ),
+    # --- Analiza brzine 2026-11 (docs/engineering/analize/2026-11-brzina) ---
+    # IZV-1: promena konteksta Izvestaja opet ide kroz pun RefreshFromData --
+    # generacija skace, pa povratak na vec vidjen kontekst cita tabele ponovo.
+    "izv1-kontekst-pun-refresh": (
+        "modScrIzvestaji.bas",
+        '    modOtkupUI.OsveziPrikazEkrana "IZVESTAJI", noviIzbor\n',
+        "    modOtkupUI.RefreshFromData   ' SABOTAZA: promena konteksta kao upis\n",
+        "T_Izv_KontekstOsvezavaPrikazNePodatke",
+        "384 povratak na vec vidjen kontekst ide iz kesa, bez novog citanja tabela",
+    ),
+    # IZV-1: promena konteksta ne osvezava prikaz uopste -- "nijedno punjenje"
+    # bi proslo i bez osvezavanja; kljuc snimka meri da je mreza procitana.
+    "izv1-kontekst-bez-osvezavanja": (
+        "modScrIzvestaji.bas",
+        '    modOtkupUI.OsveziPrikazEkrana "IZVESTAJI", noviIzbor\n',
+        "    ' SABOTAZA: promena konteksta ne osvezava prikaz\n",
+        "T_Izv_KontekstOsvezavaPrikazNePodatke",
+        "384 klik na Zbirno osvezava prikaz: mreza cita nov kontekst",
+    ),
+    # OTK-1: posle pogotka rb petlja ne izlazi, pa dupli redni broj ide na
+    # papir dvaput (stara petlja je uzimala PRVI red redom tabele).
+    "otk1-dupli-rb-dvaput": (
+        "modPrint.bas",
+        "                izlaz(nIzlaz) = mojih(j)\n"
+        "                Exit For\n",
+        "                izlaz(nIzlaz) = mojih(j)   ' SABOTAZA: dupli rb se stampa dvaput\n",
+        "T_OtkList_RedoviStavkiKanonskimRedom",
+        "385 otkupni list: prvi red po rednom broju, dupli i necelobrojni se preskacu",
+    ),
+    # IZV-3/IZV-5: kes izvedenih nizova nista ne pamti -- zbirni izvestaj opet
+    # gradi stavke po entitetu (sadrzaj isti, brojac pogodaka nula).
+    "izv3-kes-ne-pamti": (
+        "modDataAccess.bas",
+        "    mIzvCache(kljuc) = data\n",
+        "    ' SABOTAZA: izveden niz se ne pamti\n",
+        "T_KesIzvedeno_ZbirniIstiUzKes",
+        "386 zbirni saldo po OM gradi stavke jednom, ostalo iz kesa",
+    ),
+    # IZV-3/IZV-5: upis ne prazni kes izvedenih nizova -- citac posle upisa
+    # dobija niz izgradjen pre njega.
+    "izv3-upis-ne-prazni": (
+        "modDataAccess.bas",
+        "    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll\n",
+        "    ' SABOTAZA: upis ne prazni kes izvedenih nizova\n",
+        "T_KesIzvedeno_ZbirniIstiUzKes",
+        "386 upis kroz modDataAccess prazni kes izvedenih nizova",
+    ),
+    # IZV-2: naziv entiteta se opet cita iz sifarnika na svaki Scr_Rows.
+    "izv2-naziv-na-svaki-otkucaj": (
+        "modScrIzvestaji.bas",
+        "    noviNaziv = puni Or (k <> mSnimakKljuc)\n",
+        "    noviNaziv = True   ' SABOTAZA: naziv na svaki otkucaj\n",
+        "T_Izv_NazivEntitetaJednomPoKontekstu",
+        "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo",
+    ),
+    # IZV-9: cipovi opet citaju tabele sa lista, mimo kesa ljuske.
+    "izv9-cipovi-mimo-kesa": (
+        "modScrIzvestaji.bas",
+        "    d = modUiData.CachedTable(tblName)\n",
+        "    d = GetTableData(tblName)   ' SABOTAZA: cipovi mimo kesa ljuske\n",
+        "T_Izv_CipoviCitajuKesLjuske",
+        "388 cipovi vrste citaju tblOtkup kroz kes ljuske",
+    ),
+    # IZV-7: spajanje bez >= nije stabilno -- jednaki iznosi menjaju mesta.
+    "izv7-rang-nestabilan": (
+        "modArrayUtils.bas",
+        "        If vals(idx(i)) >= vals(idx(j)) Then\n",
+        "        If vals(idx(i)) > vals(idx(j)) Then   ' SABOTAZA: nestabilno\n",
+        "T_Rang_StabilnoOpadajuce",
+        "389 rang: opadajuce po iznosu, jednaki iznosi redom prve pojave",
+    ),
+    # PERF-REV-02: nevezane otpremnice ponovo pustaju dupli OtpremnicaID.
+    "hld1-dupli-id-prolazi": (
+        "modDokumenta.bas",
+        "    RequireJedinstvenoZaglavljeOtpremnice ZaglavljaOtpremnicePoID(SRC), SRC\n"
+        "\n"
+        "    Dim aktivno As Object, bila As Object\n",
+        "    ' SABOTAZA: dupli OtpremnicaID se ne proverava\n"
+        "\n"
+        "    Dim aktivno As Object, bila As Object\n",
+        "T_Nevezane_DupliIdPadaPoImenu",
+        "390 nevezane otpremnice: dupli OtpremnicaID pada po imenu",
+    ),
+    # PERF-REV-03: rollback vraca list mimo modDataAccess i ne javlja kesu --
+    # otvoren prozor citanja vraca kopiju sa ponistenim upisom.
+    "kes-rollback-ostavlja-kopiju": (
+        "clsTransaction.cls",
+        "    ' sazna da je tabela promenjena (PERF-REV-03).\n"
+        "    modDataAccess.KesTabeleZastareo tableName\n"
+        "End Sub\n",
+        "    ' sazna da je tabela promenjena (PERF-REV-03).\n"
+        "    ' SABOTAZA: rollback ne javlja kesu\n"
+        "End Sub\n",
+        "T_KesTabele_RollbackZastareva",
+        "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
+    ),
+    # D1 (merenje 20.11.2026): dokaz integriteta knjige ambalaze se u prozoru
+    # citanja ne cita iz kesa -- svaki citalac dokazuje iznova (stanje pre reza).
+    "kes-knjiga-dokaz-gluv": (
+        "modAmbalaza.bas",
+        "    If Not modDataAccess.IzvedenoTryGet(KNJIGA_DOKAZ_KLJUC & CStr(UBound(data, 1)), memo) Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: dokaz knjige se ne cita iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 drugo citanje knjige u prozoru ide iz kesa",
+    ),
+    # D1: upis ne prazni kes izvedenih nizova -- zapamcen dokaz integriteta
+    # nadzivi upis kvara u knjigu, pa pokvarena knjiga prolazi citanje
+    # (AMB-INV-11). Isto sidro kao izv3-upis-ne-prazni, druga tvrdnja: 392 meri
+    # bas knjigu.
+    "kes-knjiga-upis-ne-obara-dokaz": (
+        "modDataAccess.bas",
+        "    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll\n",
+        "    ' SABOTAZA: upis ne obara dokaz knjige iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 upis kvara u prozoru obara zapamcen dokaz",
+    ),
+    # D1-UPIS (merenje 20.11.2026): zapamcen dokaz knjige se nikad ne nastavlja --
+    # svako citanje van prozora dokazuje celu knjigu (stanje pre reza).
+    "knjiga-nastavak-gluv": (
+        "modAmbalaza.bas",
+        "    If mDokazN = 0 Or mDokazVrste Is Nothing Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: dokaz knjige se uvek ponavlja ceo\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 dva citanja zaredom: pun dokaz samo prvi put",
+    ),
+    # D1-UPIS: dokazani prefiks se ne poredi -- izmena u njemu (ne dodavanje)
+    # prolazi sa starim dokazom, pa pokvarena knjiga ulazi u kapije upisa.
+    "knjiga-nastavak-ne-poredi-dokazano": (
+        "modAmbalaza.bas",
+        "    For j = 1 To UBound(mDokazIdx)\n",
+        "    For j = 1 To 0   ' SABOTAZA: dokazani deo se ne poredi\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 izmena u dokazanom delu obara nastavak",
+    ),
+    # D1-UPIS: dodati redovi se ne dokazuju -- nastavak samo prepise zapamcen
+    # recnik, pa duplikat AmbID-a u novom redu prolazi (AMB-INV-11).
+    "knjiga-nastavak-ne-dokazuje-nove": (
+        "modAmbalaza.bas",
+        "        Set vrste = KnjigaIntegritet(data, kol, sourceName, Nothing, mDokazN + 1, KopijaRecnika(mDokazVrste))\n",
+        "        Set vrste = KopijaRecnika(mDokazVrste)   ' SABOTAZA: novi redovi se ne dokazuju\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 dodat red sa duplim AmbID-em pada i kroz nastavak",
+    ),
+    # UI-7 (merenje 20.11.2026): liste konteksta bez garda -- programski Change
+    # posle svakog upisa pokrece ceo handler otkupnog mesta (stanje pre reza).
+    "ui7-liste-bez-garda": (
+        "modOtkupUI.bas",
+        '            Case "cbOM", "cbVozac", "cbVrsta", "cbSorta", "fgTipAmbT": Exit Sub\n',
+        '            Case "_SABOTAZA_": Exit Sub   \' SABOTAZA: liste konteksta bez garda\n',
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja",
+    ),
+    # UI-7: izbor koji punjenje stvarno promeni ne ide kroz handler -- lock i
+    # broj deaktiviranog otkupnog mesta ostaju, KPI pokazuje staro mesto.
+    "ui7-nestao-izbor-bez-handlera": (
+        "modOtkupUI.bas",
+        '    If StrComp(GetComboID(ctx.Controls("cbOM")), omPre, vbTextCompare) <> 0 Then UiChange "cbOM"\n',
+        "    ' SABOTAZA: promenjen izbor otkupnog mesta ne ide kroz handler\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom",
+    ),
+    # UI-7: osvezavanje ostavlja praznu formu "Nesacuvan unos" (terenski simptom).
+    "ui7-osvezavanje-prlja-formu": (
+        "modOtkupUI.bas",
+        "    If bioCist And mDirty Then MarkClean\n",
+        "    ' SABOTAZA: osvezavanje ostavlja formu prljavom\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane",
+    ),
+    # UI-1: RefreshFromData bez prozora citanja -- iste tabele se citaju sa lista
+    # po vise puta (tblKooperanti ~190 po snimanju, merenje 20.11.2026).
+    "ui1-osvezavanje-bez-prozora": (
+        "modOtkupUI.bas",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    BeginTableCache\n",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    ' SABOTAZA: osvezavanje bez prozora citanja\n",
+        "T_Refresh_CitaTabeluJednom",
+        "395 osvezavanje cita svaku tabelu sa lista najvise jednom",
     ),
 }
 

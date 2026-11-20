@@ -739,6 +739,14 @@ Public Function DoplataStavkeRedovi() As Variant
     Const SRC As String = "modDoplata.DoplataStavkeRedovi"
 
     DoplataStavkeRedovi = Empty
+    ' Kes izvedenog niza u prozoru citanja (zbirni izvestaji zovu ovaj citac
+    ' po entitetu; IZV-3/IZV-5). Van prozora ne radi nista. Pamti se samo
+    ' uspesan niz, na jedinom izlazu koji ga vraca (dole).
+    Dim izvMemo As Variant
+    If modDataAccess.IzvedenoTryGet("modDoplata.DoplataStavkeRedovi", izvMemo) Then
+        DoplataStavkeRedovi = izvMemo
+        Exit Function
+    End If
 
     ' Sveska PRE NADOGRADNJE: obe tabele jos ne postoje (pravi ih EnsureAllTables
     ' na startu), pa KO nema -- prazno, isti obrazac kao modUtovar.UtovarenoPoPreradi.
@@ -953,6 +961,7 @@ Public Function DoplataStavkeRedovi() As Variant
     Next i
 
     DoplataStavkeRedovi = res
+    modDataAccess.IzvedenoPut "modDoplata.DoplataStavkeRedovi", res
 End Function
 
 ' Iznos AKTIVNIH KO po kooperantu: KooperantID -> din (zbir stavki).

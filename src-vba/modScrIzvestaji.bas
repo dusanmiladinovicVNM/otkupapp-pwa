@@ -30,9 +30,11 @@ Attribute VB_Name = "modScrIzvestaji"
 ' KES SNIMKA (par. 22.9/N7 -- pun prolaz po otkucaju je placen kvar): sirov
 ' Report* povratak se kesira po KLJUCU KONTEKSTA (lista|tip|rezim|entitet|
 ' od|do). Pretraga i cipovi su re-filter nad snimkom (nula citanja tabela);
-' promena konteksta legitimno cita ponovo. Invalidira ga Scr_ResetCache
-' (ljuska ga zove posle svakog upisa). Broj stvarnih citanja meri
-' mSnimakPunjenja (obrazac mCiljPunjenja / Diag_BnRedovi).
+' NOV kontekst legitimno cita ponovo, a povratak na vec vidjen ide iz mape --
+' promena konteksta osvezava samo prikaz (OsveziKontekst), ne podatke.
+' Invalidira ga Scr_ResetCache (ljuska ga zove posle svakog upisa) i
+' generacija podataka. Broj stvarnih citanja meri mSnimakPunjenja (obrazac
+' mCiljPunjenja / Diag_BnRedovi).
 '
 ' SPECIJALNI REDOVI Report* povratka ("OM AVANS (nerasporedjen)",
 ' "AGROHEMIJA (nerasporedjena, van UKUPNO)", tri kontrolna reda isplate) NE
@@ -371,7 +373,12 @@ End Function
 Private Sub IzvDistinctU(ByVal dict As Object, ByVal tblName As String, _
                          ByVal kolona As String)
     Dim d As Variant, i As Long, c As Long, cStorno As Long, k As String
-    d = GetTableData(tblName)
+    ' Kes ljuske, ne citanje sa lista (analiza brzine 2026-11, IZV-9): posle
+    ' upisa RefreshFromData vec puni CachedTable za tblOtkup i tblPrijemnica
+    ' (KPI) pre naslova mreze, a tblPrijemnica se ovde cita dvaput (vrste i
+    ' sorte). CachedTable prazni isti ResetCache koji pomera generaciju po
+    ' kojoj se cipovi kesiraju (mCipVrsteGen), pa ne moze biti stariji od njih.
+    d = modUiData.CachedTable(tblName)
     If Not IsArray(d) Then Exit Sub
     c = GetColumnIndex(tblName, kolona)
     If c = 0 Then Exit Sub
@@ -588,30 +595,44 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     End Select
 End Function
 
-' Povratna vrednost True = ljuska zove RefreshFromData, pa mreza dobija nov
-' kontekst kroz redovan Scr_Rows (kljuc snimka se promenio -> novo citanje).
+' Promena tipa je promena PRIKAZA, ne podataka: ekran sam trazi osvezavanje
+' prikaza (OsveziKontekst) i vraca False, pa ljuska ne radi pun
+' RefreshFromData. Mreza dobija nov kontekst kroz redovan Scr_Rows (kljuc
+' snimka se promenio -> novo citanje), a vec vidjen kontekst ide iz kesa.
 ' Aktivna lista koje za novi tip NEMA (tab joj nestaje) prelazi na prvu
-' postojecu -- highlight i naslov osvezava ljuska u istom RefreshFromData.
+' postojecu -- highlight i naslov osvezava ljuska u istom prolazu.
 Private Function PostaviTip(ByVal tip As String) As Boolean
     If mTip = tip Then Exit Function
     mTip = tip
     If Not IzListaDostupna(Scr_Lista(), tip, mZbirni) Then
         mLista = PrvaListaZaKontekst(tip, mZbirni)
     End If
-    PostaviTip = True
+    OsveziKontekst True
 End Function
 
 ' Klik na Pojedinacno/Zbirno sa liste koje u novom rezimu nema prelazi na
 ' prvu dostupnu -- nikad prazan ekran sa hintom kao prvi utisak (krug 9,
-' isto pravilo kao prelaz tipa iz S9).
+' isto pravilo kao prelaz tipa iz S9). Osvezavanje kao kod PostaviTip.
 Private Function PostaviRezim(ByVal zbirni As Boolean) As Boolean
     If mZbirni = zbirni And Len(mTip) > 0 Then Exit Function
     mZbirni = zbirni
     If Not IzListaDostupna(Scr_Lista(), TrenutniTip(), zbirni) Then
         mLista = PrvaListaZaKontekst(TrenutniTip(), zbirni)
     End If
-    PostaviRezim = True
+    OsveziKontekst True
 End Function
+
+' JEDNO mesto kroz koje promena konteksta (tip, rezim, entitet, opseg) trazi
+' osvezavanje. Do analize brzine 2026-11 (IZV-1) sve cetiri su isle kroz pun
+' RefreshFromData -- put "posle upisa" -- koji je pri SVAKOM kliku brisao kes
+' snimaka (generacija), pa i povratak na vec vidjen kontekst citao tabele
+' ispocetka, i uz to racunao KPI, znacke menija i combo-e ljuske. Nista od
+' toga ne zavisi od konteksta Izvestaja. Upis i dalje ide kroz RefreshFromData
+' i podize generaciju, pa svezina snimaka ostaje ista.
+' noviIzbor: nova lista redova (tip, rezim) brise izabran red, kao pre.
+Private Sub OsveziKontekst(ByVal noviIzbor As Boolean)
+    modOtkupUI.OsveziPrikazEkrana "IZVESTAJI", noviIzbor
+End Sub
 
 ' Prva lista dostupna bas za (tip, rezim); fallback prva za tip pa SALDO.
 Private Function PrvaListaZaKontekst(ByVal tip As String, _
@@ -633,14 +654,14 @@ End Function
 ' Entitet iz comboa: PRAZAN ID je nerazresen unos, ne "drugi entitet"
 ' (par. 8.10/R2 -- prvo otkucano slovo ne sme da isprazni prikaz). Programsko
 ' punjenje comboa (mFill) nije unos operatera -- bez guarda bi refill usred
-' Scr_Rows okinuo UGNEZDJEN RefreshFromData i dupli Report* prolaz (prvi
+' Scr_Rows okinuo UGNEZDJENO osvezavanje i dupli Report* prolaz (prvi
 ' smoke: "sve je sporo").
 Private Sub EntitetPromenjen()
     Dim iD As String
     If mFill Then Exit Sub
     iD = SiroviEntitet()
     If Len(iD) = 0 Then Exit Sub
-    If iD <> mCtxId Then modOtkupUI.RefreshFromData
+    If iD <> mCtxId Then OsveziKontekst False
 End Sub
 
 ' Opseg: refresh SAMO kad se RAZRESENA granica promeni. Nepotpun datum tokom
@@ -659,7 +680,7 @@ Private Sub OpsegPromenjen()
     ' Nepotpun unos (tekst ima, granice nema) ne dira prikaz.
     If odN = 0 And Len(Trim$(odTxt)) > 0 And doN = mCtxDo Then Exit Sub
     If doN = 0 And Len(Trim$(doTxt)) > 0 And odN = mCtxOd Then Exit Sub
-    modOtkupUI.RefreshFromData
+    OsveziKontekst False
 End Sub
 
 Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
@@ -1034,6 +1055,7 @@ End Function
 Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As String, _
                         ByVal zbirni As Boolean, ByVal iD As String, _
                         ByVal odN As Double, ByVal doN As Double) As Variant
+    Dim puni As Boolean, noviNaziv As Boolean
     ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija podataka
     ' je deljeni signal da je snimljeno stanje mozda staro (blocker 1).
     If mSnimakGen <> modUiData.DataGeneracija() Then
@@ -1048,7 +1070,16 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
         If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll
         mSnimakPunjenja = mSnimakPunjenja + 1
         mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)
+        puni = True
     End If
+
+    ' Naziv entiteta se cita iz sifarnika (LookupValue, van prozora kesa) samo
+    ' kad se prikazani kontekst PROMENI ili je snimak upravo napunjen -- ne na
+    ' svaki otkucaj pretrage i klik cipa nad istim snimkom (analiza brzine
+    ' 2026-11, IZV-2). Kljuc k nosi listu, tip, rezim i entitet, dakle sve od
+    ' cega naziv zavisi; preimenovanje u sifarniku je upis, pa prazni mapu
+    ' (Scr_ResetCache ili generacija) i sledece citanje ide sa puni = True.
+    noviNaziv = puni Or (k <> mSnimakKljuc)
 
     ' Kontekst STVARNO prikazanih podataka -- za naslov stampe i hint.
     mSnimakKljuc = k
@@ -1061,7 +1092,7 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
     ' trazi entitet (svi zbirni oblici, i RANG cak i u pojedinacnom) je
     ' preko svih -- "Kooperanti: ()" za rang u P je bio nedovrsen UX.
     ' Lista koja entitet trazi nosi njegovo ime.
-    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))
+    If noviNaziv Then mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))
 
     Snimak = mSnimci(k)
 End Function

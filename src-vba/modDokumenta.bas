@@ -3080,21 +3080,39 @@ Public Function NevezaneOtpremnice() As Object
     otp = GetTableData(TBL_OTPREMNICA)
     If Not IsArray(otp) Then Exit Function
 
+    ' JEDAN LOGICKI DOKUMENT = JEDAN ID, isto pravilo kao StavkeOtpremniceRedovi.
+    ' Dupli OtpremnicaID pada PO IMENU pre ponude: stara verzija je za njega
+    ' citala status PRVOG reda sa tim ID-em, a citanje iz svog reda (HLD-1)
+    ' svakog -- oba bi o identitetu odlucivala po slucajnom redosledu pokvarene
+    ' tabele (pregled 19.11.2026, PERF-REV-02).
+    RequireJedinstvenoZaglavljeOtpremnice ZaglavljaOtpremnicePoID(SRC), SRC
+
     Dim aktivno As Object, bila As Object
     Set aktivno = AktivnoClanstvoPoKanonu(SRC)
     Set bila = BivseZbirneIzvora(SRC)
 
-    Dim cId As Long, cSto As Long, i As Long
-    Dim oidRaw As String, oid As String
+    Dim cId As Long, cSto As Long, cIzd As Long, i As Long
+    Dim oidRaw As String, oid As String, izdRaw As Variant
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     cSto = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
+    ' STATUS IZDAVANJA IZ REDA KOJI VEC DRZIMO, istim pravilom
+    ' (IzdatoStatusJeIzdato, review #362). Ranije je ovde stajao
+    ' OtpremnicaJeIzdata(oidRaw), dakle LookupValue -- puna kopija tblOtpremnica
+    ' ZA SVAKI RED tblOtpremnica, kvadratno po broju otpremnica. To se placalo
+    ' pri svakom snimanju otkupa na hladnjackoj stanici (auto-lanac ->
+    ' AutoZbirnaZaOtpremnicu), pri izdavanju uz auto-zbirnu i na listi NEVEZANE
+    ' (analiza brzine 2026-11, HLD-1). Bez kolone statusa vazi isto sto je
+    ' LookupValue vracao: prazno, dakle nije izdata.
+    cIzd = GetColumnIndex(TBL_OTPREMNICA, COL_TRACE_IZDATO_STATUS)
 
     For i = 1 To UBound(otp, 1)
         oidRaw = Trim$(NzToText(otp(i, cId)))
         oid = UCase$(oidRaw)
         If Len(oid) > 0 Then
             If StrComp(Trim$(NzToText(otp(i, cSto))), "Da", vbTextCompare) <> 0 Then
-                If OtpremnicaJeIzdata(oidRaw) Then
+                izdRaw = Empty
+                If cIzd > 0 Then izdRaw = otp(i, cIzd)
+                If IzdatoStatusJeIzdato(izdRaw) Then
                     If Not aktivno.Exists(oid) Then
                         If bila.Exists(oid) Then
                             res(oid) = CStr(bila(oid))
@@ -9264,6 +9282,14 @@ Public Function StavkePrijemniceRedovi() As Variant
     Const SRC As String = "StavkePrijemniceRedovi"
 
     StavkePrijemniceRedovi = Empty
+    ' Kes izvedenog niza u prozoru citanja (zbirni izvestaji zovu ovaj citac
+    ' po entitetu; IZV-3/IZV-5). Van prozora ne radi nista. Pamti se samo
+    ' uspesan niz, na jedinom izlazu koji ga vraca (dole).
+    Dim izvMemo As Variant
+    If modDataAccess.IzvedenoTryGet("modDokumenta.StavkePrijemniceRedovi", izvMemo) Then
+        StavkePrijemniceRedovi = izvMemo
+        Exit Function
+    End If
 
     Dim zagl As Object
     Set zagl = ZaglavljaPrijemnicePoID(SRC)
@@ -9348,6 +9374,7 @@ Public Function StavkePrijemniceRedovi() As Variant
     Next i
 
     StavkePrijemniceRedovi = res
+    modDataAccess.IzvedenoPut "modDokumenta.StavkePrijemniceRedovi", res
 End Function
 
 Private Function PrsBrutoIliPrazno(ByVal v As Variant) As Variant

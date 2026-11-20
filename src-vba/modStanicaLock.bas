@@ -529,6 +529,9 @@ Public Function BulkPushPendingForStanica(ByVal stanicaID As String, _
             If iSource > 0 Then
                 lo.DataBodyRange.cells(r, iSource).value = "VBA"
             End If
+            ' Upis ide pravo u list, mimo modDataAccess -- kes citanja mora da
+            ' sazna da je tblOtkup promenjen (PERF-REV-03).
+            modDataAccess.KesTabeleZastareo TBL_OTKUP
             pushed = pushed + 1
         Else
             LogWarn SRC, "Push failed za OtkupID=" & otkupID & _

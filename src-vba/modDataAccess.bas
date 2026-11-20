@@ -18,6 +18,17 @@ Private mTableCache As Object
 Private mTableCacheDepth As Long
 Private mExclCache As Object        ' kes ExcludeStornirano rezultata (po tblName), isti prozor
 Private mColCache As Object         ' kes GetColumnIndex ("tbl|col" -> index), isti prozor
+' Kes IZVEDENIH NIZOVA (strogi citaci stavki: "modul.funkcija" -> 2D niz), isti
+' prozor. Zbirni izvestaji zovu pojedinacni Report* PO ENTITETU, a svaki od njih
+' iznova gradi i validira iste stavke cele tabele (analiza brzine 2026-11,
+' IZV-3/IZV-5) -- kes tabela stedi samo citanje lista, ne gradnju. Cuvaju se
+' SAMO nizovi (kopija po vrednosti, nema deljenog objekta) i SAMO uspeh; svaki
+' upis kroz ovaj modul prazni CEO kes, jer izveden niz zavisi od vise tabela.
+Private mIzvCache As Object
+Private mIzvPogodaka As Long        ' koliko puta je citac dobio niz iz kesa (test ga cita)
+' TEST SEAM: tabela -> broj citanja SA LISTA (promasaj kesa). Postoji samo dok ga
+' test ukljuci (CitanjaSaListaTestPocni); van test rezima se ne puni.
+Private mCitanjaLista As Object
 
 ' Test seam: NewEntityID se ponasa kao da je CoCreateGuid pao.
 '
@@ -61,6 +72,7 @@ Public Sub BeginTableCache()
         Set mTableCache = CreateObject("Scripting.Dictionary")
         Set mExclCache = CreateObject("Scripting.Dictionary")
         Set mColCache = CreateObject("Scripting.Dictionary")
+        Set mIzvCache = CreateObject("Scripting.Dictionary")
     End If
     mTableCacheDepth = mTableCacheDepth + 1
 End Sub
@@ -80,6 +92,7 @@ Public Sub EndTableCache()
         Set mTableCache = Nothing
         Set mExclCache = Nothing
         Set mColCache = Nothing
+        Set mIzvCache = Nothing
     End If
 End Sub
 
@@ -90,6 +103,43 @@ Private Sub InvalidateTableCache(ByVal tblName As String)
     If Not mExclCache Is Nothing Then
         If mExclCache.Exists(tblName) Then mExclCache.Remove tblName
     End If
+    ' Izveden niz zavisi od vise tabela -- upis u BILO KOJU ga obara.
+    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll
+End Sub
+
+' UPIS MIMO OVOG MODULA mora da javi da je tabela promenjena. AppendRow,
+' UpdateCell i DeleteRow to rade sami; pisac koji ide pravo u list (rollback
+' transakcije, oznaka sinhronizacije) zove ovo posle upisa. Bez toga bi
+' otvoren prozor citanja vracao staru kopiju tabele i izvedene nizove iz nje.
+' Van prozora ne radi nista. Ugovor je danas i dalje "prozori su samo
+' citanje" -- ovo je mreza ispod njega (pregled 19.11.2026, PERF-REV-03).
+Public Sub KesTabeleZastareo(ByVal tblName As String)
+    InvalidateTableCache tblName
+End Sub
+
+' --- Kes izvedenih nizova (v. mIzvCache) ---
+' Citac pita na ulazu i upise na JEDINOM uspesnom izlazu; van prozora oba ne
+' rade nista, pa je ponasanje bez Begin/End nepromenjeno. Empty i sve sto nije
+' niz se ne pamti (kes ne memoise neuspeh ni "nema redova").
+Public Function IzvedenoTryGet(ByVal kljuc As String, ByRef outData As Variant) As Boolean
+    If mIzvCache Is Nothing Then Exit Function
+    If Not mIzvCache.Exists(kljuc) Then Exit Function
+    outData = mIzvCache(kljuc)
+    mIzvPogodaka = mIzvPogodaka + 1
+    IzvedenoTryGet = True
+End Function
+
+' TEST SEAM: broj pogodaka u kesu izvedenih nizova od starta sesije. Tvrdo
+' gejtovan; test meri RAZLIKU pre i posle (obrazac Scr_IzSnimakPunjenjaTest).
+Public Function IzvedenoPogodakaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    IzvedenoPogodakaTest = mIzvPogodaka
+End Function
+
+Public Sub IzvedenoPut(ByVal kljuc As String, ByRef data As Variant)
+    If mIzvCache Is Nothing Then Exit Sub
+    If Not IsArray(data) Then Exit Sub
+    mIzvCache(kljuc) = data
 End Sub
 
 ' --- ExcludeStornirano kes (koristi modHelpers.ExcludeStornirano) ---
@@ -150,6 +200,35 @@ Public Function GetTableData(ByVal tblName As String) As Variant
     End If
     GetTableData = lo.DataBodyRange.value
     If Not mTableCache Is Nothing Then mTableCache(tblName) = GetTableData
+    If Not mCitanjaLista Is Nothing Then
+        If IsTestMode() Then mCitanjaLista(tblName) = mCitanjaLista(tblName) + 1
+    End If
+End Function
+
+' TEST SEAM: brojanje citanja sa lista po tabeli, od ukljucenja. Samo posmatra;
+' tvrdo gejtovan. Gasi ga i modTest.ResetSeamova (seam nosi stanje).
+Public Sub CitanjaSaListaTestPocni()
+    If Not IsTestMode() Then Exit Sub
+    Set mCitanjaLista = CreateObject("Scripting.Dictionary")
+End Sub
+
+Public Sub CitanjaSaListaTestKraj()
+    Set mCitanjaLista = Nothing
+End Sub
+
+' Najvise citanja sa lista JEDNE tabele od ukljucenja, i koje tabele (tabela izlazi
+' kroz outTabela). 0 kad seam nije ukljucen.
+Public Function CitanjaSaListaTestMax(Optional ByRef outTabela As String) As Long
+    Dim k As Variant
+    outTabela = ""
+    If Not IsTestMode() Then Exit Function
+    If mCitanjaLista Is Nothing Then Exit Function
+    For Each k In mCitanjaLista.keys
+        If CLng(mCitanjaLista(k)) > CitanjaSaListaTestMax Then
+            CitanjaSaListaTestMax = CLng(mCitanjaLista(k))
+            outTabela = CStr(k)
+        End If
+    Next k
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant

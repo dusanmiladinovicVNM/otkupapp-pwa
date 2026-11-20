@@ -464,6 +464,16 @@ Private mZbirnaFill As Boolean
 ' Isto za listu partnera: FillFormPartner radi CB.Clear, sto polje javi kao
 ' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
 Private mPartnerFill As Boolean
+' Isto za liste konteksta (OM, vozac, vrsta, sorta, tip ambalaze): RefillMaticniCombos
+' ih posle SVAKOG upisa puni ispocetka (Clear + vracanje izbora), sto svaka javi kao
+' promenu. Izmereno 20.11.2026 (UI-7): 3 Change na OM-u po snimanju, svaki sa
+' OnStanicaChanged, saldom, otvorenim blokovima i KPI-jem (~0,5 s), a forma posle
+' snimanja ostaje "Nesacuvan unos". Izbor koji se punjenjem STVARNO promeni ide kroz
+' handler jednom, posle punjenja (v. RefillMaticniCombos).
+Private mMaticniFill As Boolean
+' TEST SEAM (samo posmatra): koliko puta je handler otkupnog mesta (UiChange cbOM)
+' radio od starta sesije. Test meri RAZLIKU oko jednog poteza (UI-7).
+Private mOmPromenaBroj As Long
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
 ' Izabran smer reversa (1..4); NULA znaci "operater jos nije izabrao" i tako se
 ' i predaje ekranu. Nijedan segment nije unapred obelezen namerno: legacy
@@ -5456,6 +5466,11 @@ Private Sub UiChange(ByVal tag As String)
     ' operatera - ne diraju ni zapamcenu zbirnu ni "dokument je menjan".
     If mZbirnaFill And tag = "fgBrZbirT" Then Exit Sub
     If mPartnerFill And tag = "cbKupac" Then Exit Sub
+    If mMaticniFill Then
+        Select Case tag
+            Case "cbOM", "cbVozac", "cbVrsta", "cbSorta", "fgTipAmbT": Exit Sub
+        End Select
+    End If
     ' Kucanje u combo otvara nas panel i suzava listu. Programski upisi
     ' (punjenje lista, ClearForm, izbor iz panela) su pod mPopMute - bez toga
     ' bi se panel otvarao sam od sebe pri svakoj promeni rezima.
@@ -5514,6 +5529,7 @@ Private Sub UiChange(ByVal tag As String)
         Case "cbSorta"
             AutoFillCena
         Case "cbOM"
+            mOmPromenaBroj = mOmPromenaBroj + 1
             OnStanicaChanged
             RefreshSaldoOM              ' avans se vodi po otkupnom mestu
             ' Lista otvorenih blokova je suzena na OM, pa promena OM menja i nju.
@@ -6545,8 +6561,20 @@ Private Function BrojacTekst(ByVal n As Long) As String
 End Function
 
 Public Sub RefreshFromData()
+    Dim bioCist As Boolean
     On Error Resume Next
+    ' OSVEZAVANJE PODATAKA NIJE IZMENA OPERATERA: forma koja je bila cista ostaje
+    ' cista. Punjenje lista (konteksta, otvorenih blokova) okida Change, a do UI-7 je
+    ' prazna forma posle snimanja i posle Sync-a stajala kao "Nesacuvan unos".
+    bioCist = Not mDirty
     modUiData.ResetCache
+    ' PROZOR CITANJA za ceo prolaz (UI-1, katalog analize brzine 2026-11): KPI,
+    ' znacke menija, liste i mreza citaju iste tabele -- izmereno 20.11.2026 npr.
+    ' tblKooperanti ~190 puta po snimanju. Kes je ispravan i kad se usput pise: svaki
+    ' upis kroz modDataAccess, rollback i direktan pisac (KesTabeleZastareo) ga
+    ' brisu. Kaskada iz RefillMaticniCombos je pod gardom (UI-7). Zatvara se na
+    ' kraju bez obzira na gresku (On Error Resume Next).
+    BeginTableCache
     ' i izvedene mape aktivnog ekrana - kasno vezano, ekran ne mora da ima
     Application.Run modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), _
                                           SCR_MODUL) & ".Scr_ResetCache"
@@ -6558,7 +6586,45 @@ Public Sub RefreshFromData()
     OsveziNavBrojace
     FillZbirneCombo mFrm      ' nove zbirne u picker
     RefillMaticniCombos mFrm  ' nova stanica / vozac u kontekst
+    ' Otvoreni blokovi za isplatu su lista PODATAKA: upis isplate ili otkupa je
+    ' menja. Do UI-7 ju je posle upisa osvezavala usputna kaskada Change na OM-u
+    ' (ClearForm osvezava saldo i fakture, ne blokove); sada jednom, ovde.
+    FillOpenBlokovi mFrm
     mPartnerFor = ""          ' partner lista se ponovo puni
+    OsveziPrikaz
+    ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
+    RefreshOtpTraka mFrm
+    If bioCist And mDirty Then MarkClean
+    EndTableCache
+End Sub
+
+' OSVEZI PRIKAZ, NE PODATKE: za promenu konteksta koja ne menja tabele
+' (Izvestaji: tip, rezim, entitet, opseg). Radi isto sto RefreshFromData radi
+' POSLE resetovanja -- geometrija, sort, prekidac liste, naslov, mreza -- ali
+' bez ResetCache, Scr_ResetCache, KPI-ja, znacki menija i combo-a ljuske.
+' Ti delovi ne zavise od konteksta ekrana, a pun prolaz je pri svakom kliku
+' na Izvestajima brisao vec procitane snimke i ponovo racunao KPI i znacke
+' (analiza brzine 2026-11, IZV-1).
+'
+' Svezina ostaje na generaciji: svaki upis kroz novi UI ide kroz
+' RefreshFromData ili storno, oba podizu modUiData.DataGeneracija, a ekran
+' odbacuje kes starije generacije pri citanju.
+'
+' ekran: ko trazi osvezavanje. Ako ljuska vise nije na tom ekranu (ili forme
+' nema, npr. test koji zove Scr_Event direktno), nema sta da se osvezi.
+' noviIzbor: True kad promena znaci novu listu redova (tip, rezim) -- isto sto
+' je radila grana 'scr' u UiClick pre RefreshFromData.
+Public Sub OsveziPrikazEkrana(ByVal ekran As String, _
+                              Optional ByVal noviIzbor As Boolean = False)
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If StrComp(ekran, mScreen, vbTextCompare) <> 0 Then Exit Sub
+    If noviIzbor Then mSelRow = 0
+    OsveziPrikaz
+End Sub
+
+Private Sub OsveziPrikaz()
+    On Error Resume Next
     ' Skup lista (tabova) sme da zavisi od konteksta ekrana (Izvestaji: tip
     ' entiteta bira koje liste postoje) -- posle promene konteksta geometrija
     ' je zastarela (LayoutGrid crta tabove iz Scr_Liste), a natpis i boje
@@ -6572,8 +6638,6 @@ Public Sub RefreshFromData()
     RefreshListSeg mFrm
     RefreshGridTitle mFrm
     ReloadGrid
-    ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
-    RefreshOtpTraka mFrm
 End Sub
 
 '=====================================================================
@@ -7407,10 +7471,20 @@ Private Sub RefillMaticniCombos(frm As Object)
     Dim cbVrsta As MSForms.ComboBox, cbAmb As MSForms.ComboBox
     Dim cbSorta As MSForms.ComboBox
     Dim sortaPre As String
+    Dim omPre As String, vozPre As String, vrstaPre As String, ambPre As String
     If frm Is Nothing Then Exit Sub
     On Error GoTo EH
     mPopMute = True
     st = "zCtx":     Set ctx = frm.Controls("zCtx")
+    ' UI-7: zatecen izbor svih pet lista, pa punjenje pod mMaticniFill (njihov Change
+    ' tada nije izmena operatera). Posle punjenja handler dobija SAMO izbor koji se
+    ' stvarno promenio -- npr. deaktivirano otkupno mesto: lock se pusta i broj brise
+    ' kao i do sada. Cistocu forme cuva RefreshFromData.
+    omPre = GetComboID(ctx.Controls("cbOM"))
+    vozPre = GetComboID(ctx.Controls("cbVozac"))
+    vrstaPre = CStr(ctx.Controls("cbVrsta").value)
+    ambPre = CStr(frm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").value)
+    mMaticniFill = True
     st = "cbOM":     RefillUzIzbor ctx.Controls("cbOM"), TBL_STANICE, "Naziv", "StanicaID"
     st = "cbVozac":  RefillUzIzbor ctx.Controls("cbVozac"), TBL_VOZACI, "Ime", "VozacID"
 
@@ -7449,12 +7523,23 @@ Private Sub RefillMaticniCombos(frm As Object)
     st = "fgTipAmb"
     Set cbAmb = frm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT")
     RefillTekstUzIzbor cbAmb, GetTipAmbalazeOptions()
+    mMaticniFill = False
+
+    ' Promenjen izbor ide kroz handler JEDNOM, jos pod mPopMute (panel se ne otvara),
+    ' istim redom kojim su liste punjene.
+    st = "posle punjenja"
+    If StrComp(GetComboID(ctx.Controls("cbOM")), omPre, vbTextCompare) <> 0 Then UiChange "cbOM"
+    If StrComp(GetComboID(ctx.Controls("cbVozac")), vozPre, vbTextCompare) <> 0 Then UiChange "cbVozac"
+    If StrComp(CStr(ctx.Controls("cbVrsta").value), vrstaPre, vbBinaryCompare) <> 0 Then UiChange "cbVrsta"
+    If StrComp(CStr(cbSorta.value), sortaPre, vbBinaryCompare) <> 0 Then UiChange "cbSorta"
+    If StrComp(CStr(cbAmb.value), ambPre, vbBinaryCompare) <> 0 Then UiChange "fgTipAmbT"
 
     mPopMute = False
     Exit Sub
 EH:
     ' NE gutati tiho -- isti razlog kao u FillCombos: prazan combo bez poruke je
     ' bio glavni razlog zasto je izgledalo da "nista nije povezano".
+    mMaticniFill = False
     mPopMute = False
     Debug.Print "modOtkupUI.RefillMaticniCombos PAO na koraku [" & st & "]: " & _
                 Err.Number & " " & Err.description
@@ -8944,6 +9029,12 @@ End Function
 Public Function FokusTest() As String
     If Not IsTestMode() Then Exit Function
     FokusTest = mFokusTest
+End Function
+
+' TEST SEAM: broj prolaza handlera otkupnog mesta (v. mOmPromenaBroj). Tvrdo gejtovan.
+Public Function OmPromenaBrojTest() As Long
+    If Not IsTestMode() Then Exit Function
+    OmPromenaBrojTest = mOmPromenaBroj
 End Function
 
 ' TEST SEAM: isprazni belesku fokusa. Beleska je modulska i prezivi tudji test,

@@ -4388,7 +4388,7 @@ zato **prikaz nad postojećim računima**; nijedan `Report*`, matrica ni
 | `tglPojedinacni/tglZbirni` | 2 seg prekidača režima |
 | `cmbEntitet` + `LoadEntiteti` (po tipu) | polje zone `scrIzEnt` (obrazac `PuniPartnerCombo` iz §9: 2 kolone, čist ID u drugoj, prikaz sa ID-jem; kooperanti samo aktivni, kao legacy) |
 | `txtDatumOd/Do` (default 1.1. — danas) | polja zone `scrIzOd`/`scrIzDo`; parsiranje = `DatGranica` pravilo iz `modScrDokumenta` (nepotpun unos = „još nema granice") |
-| `AutoRefresh` + lazy `m_genTabs` po tabu | keš snimka po ključu konteksta (§23.5) + `RefreshFromData` koju ekran sam zove (§8.2 — sve liste zavise od polja zone) |
+| `AutoRefresh` + lazy `m_genTabs` po tabu | keš snimka po ključu konteksta (§23.5) + osvežavanje koje ekran sam traži (§8.2 — sve liste zavise od polja zone): od 11/2026 `modOtkupUI.OsveziPrikazEkrana` (prikaz, ne podaci), ne `RefreshFromData` |
 | matrica `UpdateReportMode` → `IzvestajTabDostupan` | `IzListaDostupna` — pita **istu matricu**; runtime tabovi preslikan legacy uslov (§23.3) |
 | `btnStampaj` (tabelarni PDF aktivnog taba) | dugme zone „Štampaj izveštaj" → `PrintIzvestaj` (nepromenjen) |
 | `btnStampajKarticu` (tab-aware) | dugme zone „Štampaj karticu (PDF)", vidljivo samo na listama kartica → `PrintKarticaPDF` / `PrintKarticaAmbalazePDF` (nepromenjeni) |
@@ -4622,6 +4622,17 @@ plaćao pun prolaz ispočetka — a šetnja po 10 lista je osnovni tok ekrana.
 Sada: guard u oba `chg:` handlera + **mapa snimaka po ključu konteksta**
 (kapa 16; `Scr_ResetCache` prazni sve) — povratak na viđenu listu je
 trenutan, upis i dalje invalidira sve.
+
+> **Dopuna 11/2026 (analiza brzine, IZV-1):** mapa snimaka je i posle S2 pomagala
+> samo prekidaču liste, čipu i pretrazi. Tip, režim, entitet i opseg su i dalje
+> išli kroz pun `RefreshFromData` — put „posle upisa": `ResetCache` je podizao
+> generaciju, pa je mapa bila bačena na **svaki** takav klik, a uz to su se
+> računali KPI, značke menija i combo-i ljuske. Sada sve četiri promene idu kroz
+> `modScrIzvestaji.OsveziKontekst` → `modOtkupUI.OsveziPrikazEkrana` (rep
+> `RefreshFromData` bez resetovanja: geometrija, sort, prekidač liste, naslov,
+> mreža), a tip i režim vraćaju `False` — isto načelo kao editor matičnih
+> („promene prikaza, ne podataka"). Upis i dalje ide kroz `RefreshFromData` i
+> podiže generaciju. Meri ga `modTest` 384 (klik kroz pravu ljusku, A → B → A).
 
 **S3 — „na kartici nema gde da se izabere kooperant."** Posledica S1
 (combo je delovao mrtav) + hint je govorio samo zašto, ne i kuda. Hint na

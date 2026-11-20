@@ -749,6 +749,26 @@ Public Sub RunAllTests()
     RunOne 382
     RunOne 383
 
+    ' Brzina Izvestaja (analiza 2026-11, IZV-1): klik kroz pravu ljusku.
+    RunOne 384
+    ' Brzina otkupnog lista (OTK-1): cista funkcija, bez sveske.
+    RunOne 385
+    ' Brzina zbirnih izvestaja (IZV-3/IZV-5): kes izvedenih nizova.
+    RunOne 386
+    RunOne 387
+    RunOne 388
+    RunOne 389
+    ' Pregled 19.11.2026: PERF-REV-02 (dupli ID) i PERF-REV-03 (rollback u prozoru).
+    RunOne 390
+    RunOne 391
+    ' Merenje 20.11.2026: dokaz integriteta knjige ambalaze jednom po prozoru (D1).
+    RunOne 392
+    ' Merenje 20.11.2026: snimanje otkupa dokazuje knjigu ambalaze 15 puta (D1-UPIS).
+    RunOne 393
+    ' Merenje 20.11.2026: osvezavanje posle snimanja (UI-7 kaskada, UI-1 prozor).
+    RunOne 394
+    RunOne 395
+
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
 
@@ -990,6 +1010,8 @@ Private Sub ResetSeamova()
     modMaticniEkran.CenPitanjeTestReset
     ' Podmetnut pad upisa cene (381): zaostao seam bi oborio svaki sledeci unos.
     modCenovnik.CenUpisPadaTestSet False
+    ' Brojac citanja sa lista (395): zaostao bi brojao tudje citanje.
+    modDataAccess.CitanjaSaListaTestKraj
     Err.Clear
 End Sub
 
@@ -1374,6 +1396,18 @@ Private Function TestName(ByVal idx As Long) As String
         Case 381: TestName = "T_Cen_UnosSeVracaPriPaduUpisa"
         Case 382: TestName = "T_Cen_PotvrdaPrekidaStajeUDijalog"
         Case 383: TestName = "T_Cen_KucanjeUEditoruNeDiraSortu"
+        Case 384: TestName = "T_Izv_KontekstOsvezavaPrikazNePodatke"
+        Case 385: TestName = "T_OtkList_RedoviStavkiKanonskimRedom"
+        Case 386: TestName = "T_KesIzvedeno_ZbirniIstiUzKes"
+        Case 387: TestName = "T_Izv_NazivEntitetaJednomPoKontekstu"
+        Case 388: TestName = "T_Izv_CipoviCitajuKesLjuske"
+        Case 389: TestName = "T_Rang_StabilnoOpadajuce"
+        Case 390: TestName = "T_Nevezane_DupliIdPadaPoImenu"
+        Case 391: TestName = "T_KesTabele_RollbackZastareva"
+        Case 392: TestName = "T_KesKnjiga_DokazJednomUProzoru"
+        Case 393: TestName = "T_KnjigaDokaz_NastavakIstiSud"
+        Case 394: TestName = "T_Refresh_MaticneListeBezKaskade"
+        Case 395: TestName = "T_Refresh_CitaTabeluJednom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1765,6 +1799,18 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 381: T_Cen_UnosSeVracaPriPaduUpisa
         Case 382: T_Cen_PotvrdaPrekidaStajeUDijalog
         Case 383: T_Cen_KucanjeUEditoruNeDiraSortu
+        Case 384: T_Izv_KontekstOsvezavaPrikazNePodatke
+        Case 385: T_OtkList_RedoviStavkiKanonskimRedom
+        Case 386: T_KesIzvedeno_ZbirniIstiUzKes
+        Case 387: T_Izv_NazivEntitetaJednomPoKontekstu
+        Case 388: T_Izv_CipoviCitajuKesLjuske
+        Case 389: T_Rang_StabilnoOpadajuce
+        Case 390: T_Nevezane_DupliIdPadaPoImenu
+        Case 391: T_KesTabele_RollbackZastareva
+        Case 392: T_KesKnjiga_DokazJednomUProzoru
+        Case 393: T_KnjigaDokaz_NastavakIstiSud
+        Case 394: T_Refresh_MaticneListeBezKaskade
+        Case 395: T_Refresh_CitaTabeluJednom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -23946,6 +23992,900 @@ Private Sub T_Izv_KesPretragaIHint()
     AssertEq (modScrIzvestaji.IzDatGranica("15.3.2026") > 0), True, "pun datum je granica"
 
     modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 386. KES IZVEDENIH NIZOVA: ZBIRNI IZVESTAJI ISTI, STAVKE SE GRADE JEDNOM
+'      (brzina, IZV-3 / IZV-5).
+' ============================================================
+' Zbirni saldo po OM i saldo/roba po kupcima zovu pojedinacni Report* PO
+' ENTITETU, a svaki iznova gradi i validira stavke cele tabele
+' (StavkeOtkupaRedovi, DoplataStavkeRedovi, StavkePrijemniceRedovi). U prozoru
+' citanja (BeginTableCache -- PuniSnimak ga otvara za svaki snimak) se taj niz
+' sada pamti po imenu citaca.
+'
+' Mera je JEDNAKOST: isti izvestaj bez prozora (nema kesa, put kakav je bio) i u
+' prozoru mora dati isti sadrzaj, celiju po celiju -- a brojac pogodaka
+' dokazuje da je kes stvarno korisceni put, ne zaobidjen. Uz to: vracen niz je
+' kopija (izmena ne dira kes), upis kroz modDataAccess prazni kes, a van
+' prozora kesa nema. Brojke se ne zakucavaju (relacije, ne golden).
+Private Sub T_KesIzvedeno_ZbirniIstiUzKes()
+    Dim bezOM As String, saOM As String, bezKup As String, saKup As String
+    Dim bezRob As String, saRob As String
+    Dim h0 As Long, hOM As Long, hKup As Long, hRob As Long
+    Dim hKopija As Long, hUpis As Long, hVan As Long
+    Dim a As Variant, b As Variant, prviOrig As String, prviPosle As String
+    Dim dubina As Long, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+    Dim tx As clsTransaction, koopPre As String, koopPosle As String
+
+    ' Otisak tblKooperanti: upis iz koraka (4) ide u transakciji i vraca se
+    ' rollback-om u celosti, i audit koji UpdateCell pecatira (TEST390-REV-01).
+    koopPre = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
+
+    ' (1) Bez prozora: put kakav je bio, kesa nema.
+    bezOM = KesIzvPotpis(modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), IzvDoD()))
+    bezKup = KesIzvPotpis(modIzvestaj.ReportSaldoKupciZbirni(IzvOdD(), IzvDoD()))
+    bezRob = KesIzvPotpis(modIzvestaj.ReportRobaKupciZbirni(IzvOdD(), IzvDoD()))
+
+    On Error GoTo CleanUp
+    BeginTableCache
+    otvoren = True
+
+    ' (2) Isti izvestaji u prozoru.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saOM = KesIzvPotpis(modIzvestaj.ReportSaldoOMZbirni(IzvOdD(), IzvDoD()))
+    hOM = modDataAccess.IzvedenoPogodakaTest() - h0
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saKup = KesIzvPotpis(modIzvestaj.ReportSaldoKupciZbirni(IzvOdD(), IzvDoD()))
+    hKup = modDataAccess.IzvedenoPogodakaTest() - h0
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    saRob = KesIzvPotpis(modIzvestaj.ReportRobaKupciZbirni(IzvOdD(), IzvDoD()))
+    hRob = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    ' (3) Kopija po vrednosti: izmena vracenog niza ne dira zapamcen.
+    a = modOtkup.StavkeOtkupaRedovi()
+    If IsArray(a) Then
+        prviOrig = NzToText(a(1, 1))
+        a(1, 1) = "ZZ-386"
+    End If
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hKopija = modDataAccess.IzvedenoPogodakaTest() - h0
+    If IsArray(b) Then prviPosle = NzToText(b(1, 1))
+
+    ' (4) Upis kroz modDataAccess prazni kes. Upis je u transakciji, pa ga
+    ' rollback vraca u celosti (i ModifiedAt/ModifiedBy).
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_KOOPERANTI
+    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, COL_KOOP_ID, FX_KOOPERANT
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hUpis = modDataAccess.IzvedenoPogodakaTest() - h0
+    tx.RollbackTx
+
+    EndTableCache
+    otvoren = False
+    dubina = modDataAccess.TableCacheDepth()
+
+    ' (5) Van prozora kesa nema.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    b = modOtkup.StavkeOtkupaRedovi()
+    b = modOtkup.StavkeOtkupaRedovi()
+    hVan = modDataAccess.IzvedenoPogodakaTest() - h0
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If otvoren Then EndTableCache
+    koopPosle = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesIzvedeno_ZbirniIstiUzKes", errDesc
+
+    AssertEq (Len(bezOM) > 0 And Len(bezKup) > 0 And Len(bezRob) > 0), True, _
+             "386 preduslov: sva tri zbirna izvestaja imaju sadrzaj nad fixture-om"
+    AssertEq (Len(prviOrig) > 0), True, "386 preduslov: stavke otkupa postoje"
+    AssertEq (Len(koopPre) > 0 And koopPosle = koopPre), True, _
+             "386 preduslov: tblKooperanti je posle testa ista kao pre, i audit"
+    AssertEq saOM, bezOM, "386 zbirni saldo po OM je isti sa kesom izvedenih nizova"
+    AssertEq saKup, bezKup, "386 zbirni saldo po kupcima je isti sa kesom izvedenih nizova"
+    AssertEq saRob, bezRob, "386 zbirna roba po kupcima je ista sa kesom izvedenih nizova"
+    AssertEq (hOM > 0), True, "386 zbirni saldo po OM gradi stavke jednom, ostalo iz kesa"
+    AssertEq (hKup > 0), True, "386 zbirni saldo po kupcima gradi stavke prijemnica jednom"
+    AssertEq (hRob > 0), True, "386 zbirna roba po kupcima gradi stavke prijemnica jednom"
+    AssertEq hKopija, 1, "386 ponovljen citac u prozoru ide iz kesa"
+    AssertEq prviPosle, prviOrig, "386 izmena vracenog niza ne dira zapamcen niz (kopija)"
+    AssertEq hUpis, 0, "386 upis kroz modDataAccess prazni kes izvedenih nizova"
+    AssertEq dubina, 0, "386 prozor kesa je zatvoren"
+    AssertEq hVan, 0, "386 van prozora citac ne pamti nista"
+End Sub
+
+' ============================================================
+' 387. IZVESTAJI: NAZIV ENTITETA SE CITA JEDNOM PO KONTEKSTU (brzina, IZV-2).
+' ============================================================
+' Snimak je na SVAKI Scr_Rows -- svaki otkucaj pretrage i klik cipa -- citao
+' naziv entiteta iz sifarnika (LookupValue nad punom tabelom, van prozora
+' kesa), iako je snimak isti. Sada se naziv cita kad se prikazani kontekst
+' promeni ili je snimak tek napunjen.
+'
+' Mera sa dve strane. (a) Ime u sifarniku se menja MIMO upisa kroz UI (bez
+' ResetCache), pa pretraga nad istim snimkom mora da zadrzi naziv UCITANOG
+' konteksta -- da se sifarnik cita na otkucaj, novo ime bi se pojavilo. To je i
+' tacnije: naslov opisuje ucitane podatke (AUD-024 / FM-0029 #1). (b) Posle
+' upisa (ResetCache, isti poziv kao RefreshFromData) naziv prati novo ime.
+' Opseg od 5.1 je jedinstven za ovaj test (v. 129, 131, 384).
+Private Sub T_Izv_NazivEntitetaJednomPoKontekstu()
+    Dim d As Variant, imeOrig As String, od As Double
+    Dim n1 As String, nPretraga As String, nPosleUpisa As String
+    Dim errNum As Long, errDesc As String
+    Dim tx As clsTransaction, koopPre As String, koopPosle As String
+
+    od = CDbl(DateSerial(2026, 1, 5))
+    imeOrig = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+    koopPre = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, od, IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n1 = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+    ' (a) Ime promenjeno mimo UI upisa; pretraga nad istim snimkom. Promena je
+    ' u transakciji, pa je rollback vraca u celosti, i audit (TEST390-REV-01).
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_KOOPERANTI
+    PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", "ZZ-387"
+    d = modScrIzvestaji.Scr_Rows("sve", "x")
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    nPretraga = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+    ' (b) Upis kroz UI podize generaciju -- sledece citanje vidi novo ime.
+    modUiData.ResetCache
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    nPosleUpisa = modScrIzvestaji.Scr_IzCtxNazivTest()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    modUiData.ResetCache
+    modScrIzvestaji.Scr_IzTestReset
+    koopPosle = KesIzvPotpis(GetTableData(TBL_KOOPERANTI))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Izv_NazivEntitetaJednomPoKontekstu", errDesc
+
+    AssertEq (Len(imeOrig) > 0), True, "387 preduslov: kooperant ima ime u sifarniku"
+    AssertEq (InStr(1, n1, imeOrig, vbTextCompare) > 0 And _
+              InStr(1, n1, FX_KOOPERANT, vbBinaryCompare) > 0), True, _
+             "387 preduslov: kartica nosi ime i ID kooperanta"
+    AssertEq (Len(koopPre) > 0 And koopPosle = koopPre), True, _
+             "387 preduslov: tblKooperanti je posle testa ista kao pre, i audit"
+    AssertEq nPretraga, n1, _
+             "387 pretraga nad istim snimkom ne cita naziv iz sifarnika ponovo"
+    AssertEq (InStr(1, nPosleUpisa, "ZZ-387", vbBinaryCompare) > 0), True, _
+             "387 posle upisa naziv prati sifarnik"
+End Sub
+
+' ============================================================
+' 388. IZVESTAJI: DINAMICKI CIPOVI CITAJU KES LJUSKE (brzina, IZV-9).
+' ============================================================
+' Cipovi vrste i sorte su posle svakog upisa citali tblOtkup i dvaput
+' tblPrijemnica sa lista (GetTableData), iako ljuska u istom osvezavanju te
+' tabele vec drzi u modUiData.CachedTable. Sada idu kroz CachedTable. Posle
+' ResetCache (upis) kes ljuske je prazan, pa tabele u njemu posle cipova
+' dokazuju da su cipovi isli tim putem -- GetTableData ga zaobilazi.
+' Sadrzaj cipova meri 149.
+Private Sub T_Izv_CipoviCitajuKesLjuske()
+    Dim s1 As String, s2 As String, otkPre As Boolean
+    modUiData.ResetCache
+    otkPre = modUiData.KesImaKljuc(TBL_OTKUP)
+    s1 = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+    s2 = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+
+    AssertEq otkPre, False, "388 preduslov: posle ResetCache kes ljuske je prazan"
+    AssertEq (InStr(1, s1, "|vr", vbBinaryCompare) > 0), True, _
+             "388 preduslov: otkupni listovi nude cip vrste iz podataka"
+    AssertEq modUiData.KesImaKljuc(TBL_OTKUP), True, _
+             "388 cipovi vrste citaju tblOtkup kroz kes ljuske"
+    AssertEq modUiData.KesImaKljuc(TBL_PRIJEMNICA), True, _
+             "388 cipovi vrste i sorte citaju tblPrijemnica kroz kes ljuske"
+    AssertEq s2, s1, "388 ponovljen upit daje iste cipove"
+End Sub
+
+' ============================================================
+' 389. RANG KOOPERANATA: STABILNO OPADAJUCE SORTIRANJE (brzina, IZV-7).
+' ============================================================
+' Rang je sortiran mehurasto (O(K^2) nad svim kooperantima sa otkupom u
+' periodu). Zamena je stabilno spajanje po broju
+' (modArrayUtils.IndeksiPoBrojuOpadajuce). Poredak mora ostati ISTI: opadajuce
+' po iznosu, a od jednakih iznosa raniji (prva pojava u podacima) ide prvi --
+' to je bio poredak mehurastog sortiranja sa strogim "<". Ocekivani niz je
+' izracunat starim algoritmom (Python simulacija, 20.000 slucajnih nizova,
+' 0 razlika). Rang nad fixture-om i dalje mere T_Izv_RangKooperanata i
+' T_Izv_RangSortIKontekst.
+Private Sub T_Rang_StabilnoOpadajuce()
+    Dim v() As Double, p() As Long, s As String, i As Long
+    Dim jedan() As Double, p1() As Long
+
+    ReDim v(1 To 7)
+    v(1) = 5: v(2) = 7: v(3) = 5: v(4) = 9: v(5) = 7: v(6) = 0: v(7) = -2
+    p = modArrayUtils.IndeksiPoBrojuOpadajuce(v)
+    For i = LBound(p) To UBound(p)
+        s = s & "|" & CStr(p(i))
+    Next i
+    AssertEq s, "|4|2|5|1|3|6|7", _
+             "389 rang: opadajuce po iznosu, jednaki iznosi redom prve pojave"
+    AssertEq LBound(p) & ":" & UBound(p), "1:7", "389 rang: permutacija prati granice ulaza"
+
+    ReDim jedan(1 To 1)
+    jedan(1) = 3
+    p1 = modArrayUtils.IndeksiPoBrojuOpadajuce(jedan)
+    AssertEq CStr(p1(1)), "1", "389 rang: jedan kooperant ostaje na mestu"
+End Sub
+
+' ============================================================
+' 390. NEVEZANE OTPREMNICE: DUPLI OtpremnicaID PADA PO IMENU (PERF-REV-02).
+' ============================================================
+' Pregled 19.11.2026: posle HLD-1 NevezaneOtpremnice cita status iz SVOG reda,
+' a ranije je citala status PRVOG reda sa istim ID-em. Za nejedinstven ID oba
+' ponasanja odlucuju po slucajnom redosledu pokvarene tabele. Sada citalac
+' primenjuje isto pravilo kao StavkeOtpremniceRedovi (greska 1941): dva reda sa
+' istim ID-em nisu dokument. Kvar se pravi nad DVA POSTOJECA reda fixture-a i
+' vraca se pre tvrdnji; kontrolno citanje pre kvara meri da cisto stanje ne pada.
+Private Sub T_Nevezane_DupliIdPadaPoImenu()
+    Dim d As Variant, cId As Long, i As Long, n As Object
+    Dim id1 As String, id2 As String, red2 As Long
+    Dim cistoBroj As Long, padBroj As Long, padOpis As String
+    Dim tx As clsTransaction, otpPre As String, otpPosle As String
+
+    d = GetTableData(TBL_OTPREMNICA)
+    otpPre = KesIzvPotpis(d)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    If IsArray(d) And cId > 0 Then
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If Len(id1) = 0 Then
+                    id1 = Trim$(NzToText(d(i, cId)))
+                ElseIf Len(id2) = 0 Then
+                    id2 = Trim$(NzToText(d(i, cId)))
+                    red2 = i
+                End If
+            End If
+        Next i
+    End If
+
+    On Error Resume Next
+    Set n = modDokumenta.NevezaneOtpremnice()
+    cistoBroj = Err.Number
+    Err.Clear
+    If red2 > 0 Then
+        ' Kvar ide u transakciji: rollback vraca CEO red, i ModifiedAt/ModifiedBy
+        ' koje UpdateCell pecatira -- dva UpdateCell-a bi vratila ID, ali ne i
+        ' audit (pregled 19.11.2026, TEST390-REV-01). Bez aktivne TX nema kvara.
+        Set tx = New clsTransaction
+        tx.BeginTx
+        If Err.Number = 0 Then tx.AddTableSnapshot TBL_OTPREMNICA
+        If Err.Number = 0 Then
+            UpdateCell TBL_OTPREMNICA, red2, COL_OTP_ID, id1
+            Set n = modDokumenta.NevezaneOtpremnice()
+            padBroj = Err.Number
+            padOpis = Err.description
+            Err.Clear
+        End If
+        ' Fixture se vraca PRE tvrdnji.
+        tx.RollbackTx
+    End If
+    Err.Clear
+    otpPosle = KesIzvPotpis(GetTableData(TBL_OTPREMNICA))
+    On Error GoTo 0
+
+    AssertEq (Len(id1) > 0 And Len(id2) > 0 And red2 > 0), True, _
+             "390 preduslov: fixture ima bar dve otpremnice"
+    AssertEq cistoBroj, 0, "390 preduslov: nad cistim stanjem citalac ne pada"
+    AssertEq (Len(otpPre) > 0 And otpPosle = otpPre), True, _
+             "390 preduslov: tblOtpremnica je posle testa ista kao pre, i audit"
+    AssertEq padBroj, vbObjectError + 1941, _
+             "390 nevezane otpremnice: dupli OtpremnicaID pada po imenu"
+    AssertEq (InStr(1, padOpis, id1, vbBinaryCompare) > 0), True, _
+             "390 nevezane otpremnice: greska imenuje dupli ID"
+End Sub
+
+' ============================================================
+' 391. KES CITANJA: ROLLBACK U OTVORENOM PROZORU OBARA KOPIJE (PERF-REV-03).
+' ============================================================
+' Pregled 19.11.2026: invalidacija kesa je bila dokazana samo za upise kroz
+' modDataAccess (AppendRow/UpdateCell/DeleteRow). Rollback transakcije vraca
+' snimak PRAVO u list (clsTransaction.RestoreTable), mimo tih primitiva. Danas
+' se prozor ne otvara oko upisa, ali to je bio samo ugovor. Sada RestoreTable
+' javlja modDataAccess.KesTabeleZastareo, pa ni rollback u otvorenom prozoru ne
+' ostavlja staru kopiju tabele ni izveden niz. Mera: upis + citanje u prozoru,
+' rollback, ponovno citanje mora da vidi VRACENO stanje.
+Private Sub T_KesTabele_RollbackZastareva()
+    Dim tx As clsTransaction, rows As Collection, red As Long, cIme As Long
+    Dim imeOrig As String, uKesuPosleUpisa As String, uKesuPosleRollbacka As String
+    Dim naListu As String, d As Variant, b As Variant
+    Dim h0 As Long, hRollback As Long, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+
+    Set rows = FindRows(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT)
+    If Not rows Is Nothing Then
+        If rows.count > 0 Then red = rows(1)
+    End If
+    cIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
+    imeOrig = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+
+    On Error GoTo CleanUp
+    If red > 0 And cIme > 0 Then
+        BeginTableCache
+        otvoren = True
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_KOOPERANTI
+        UpdateCell TBL_KOOPERANTI, red, "Ime", "ZZ-391"
+        d = GetTableData(TBL_KOOPERANTI)
+        uKesuPosleUpisa = NzToText(d(red, cIme))
+        b = modOtkup.StavkeOtkupaRedovi()
+        tx.RollbackTx
+        d = GetTableData(TBL_KOOPERANTI)
+        uKesuPosleRollbacka = NzToText(d(red, cIme))
+        h0 = modDataAccess.IzvedenoPogodakaTest()
+        b = modOtkup.StavkeOtkupaRedovi()
+        hRollback = modDataAccess.IzvedenoPogodakaTest() - h0
+        EndTableCache
+        otvoren = False
+        naListu = NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime"))
+    End If
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If otvoren Then EndTableCache
+    If NzToText(LookupValue(TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime")) <> imeOrig Then
+        PostaviPoljePoPK TBL_KOOPERANTI, COL_KOOP_ID, FX_KOOPERANT, "Ime", imeOrig
+    End If
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesTabele_RollbackZastareva", errDesc
+
+    AssertEq (red > 0 And cIme > 0 And Len(imeOrig) > 0), True, _
+             "391 preduslov: kooperant fixture-a ima ime"
+    AssertEq uKesuPosleUpisa, "ZZ-391", "391 preduslov: prozor vidi upis kroz UpdateCell"
+    AssertEq naListu, imeOrig, "391 preduslov: rollback je vratio list"
+    AssertEq uKesuPosleRollbacka, imeOrig, _
+             "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele"
+    AssertEq hRollback, 0, "391 rollback prazni kes izvedenih nizova"
+    AssertEq modDataAccess.TableCacheDepth(), 0, "391 prozor kesa je zatvoren"
+End Sub
+
+' Potpis 2D niza celiju po celiju -- za poredjenje dva izvestaja.
+Private Function KesIzvPotpis(ByVal v As Variant) As String
+    Dim i As Long, j As Long, s As String
+    If Not IsArray(v) Then Exit Function
+    For i = LBound(v, 1) To UBound(v, 1)
+        For j = LBound(v, 2) To UBound(v, 2)
+            s = s & NzToText(v(i, j)) & "|"
+        Next j
+        s = s & vbLf
+    Next i
+    KesIzvPotpis = s
+End Function
+
+' ============================================================
+' 392. KNJIGA AMBALAZE: DOKAZ INTEGRITETA JEDNOM PO PROZORU CITANJA (brzina, D1).
+' ============================================================
+' Merenje 20.11.2026: zbirni saldo po OM je za svaku stanicu iznova dokazivao
+' integritet ISTE knjige (oko 325 ms po dokazu, 2,9 od 4,4 s klika). Dokaz se
+' sada pamti u kesu izvedenih nizova prozora citanja (modAmbalaza.KnjigaZaCitanje).
+'
+' Kriticna invarijanta je AMB-INV-11 i ugovor reda knjige: pokvarena knjiga ne
+' sme da prodje citanje. Mera sa tri strane:
+'  (a) u prozoru drugo citanje ne dokazuje iznova, a rezultat je isti kao bez
+'      prozora; van prozora se nista ne pamti;
+'  (b) upis kvara u knjigu (duplikat AmbID-a) u ISTOM prozoru obara zapamcen
+'      dokaz -- sledece citanje pada po imenu, i ponovo sledece (neuspeh se ne
+'      pamti);
+'  (c) posle rollback-a knjiga je opet dokazana, sa istim rezultatom.
+' Fixture: normal production state. Kvar je fault injection u transakciji koju
+' rollback vraca u celosti, i audit (obrazac TEST390-REV-01). Upis u otvorenom
+' prozoru krsi ugovor "prozor je samo citanje" namerno: meri se mreza ispod
+' ugovora, kao u 391.
+Private Sub T_KesKnjiga_DokazJednomUProzoru()
+    Dim d As Variant, cId As Long, r1 As Long, r2 As Long, i As Long
+    Dim id1 As String, bez As String, bez2 As String
+    Dim sa1 As String, sa2 As String, posle As String
+    Dim h0 As Long, hVan As Long, hDrugo As Long
+    Dim kvar1 As Long, kvar2 As Long, opis1 As String, opis2 As String
+    Dim knjigaPre As String, knjigaPosle As String
+    Dim tx As clsTransaction, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+
+    knjigaPre = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    d = GetTableData(TBL_AMBALAZA)
+    cId = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    If IsArray(d) And cId > 0 Then
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If r1 = 0 Then
+                    r1 = i
+                ElseIf r2 = 0 Then
+                    r2 = i
+                    Exit For
+                End If
+            End If
+        Next i
+    End If
+    If r1 > 0 Then id1 = Trim$(NzToText(d(r1, cId)))
+
+    ' (a0) Van prozora: put kakav je bio, kesa nema.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    bez = KesKnjigaPotpis()
+    bez2 = KesKnjigaPotpis()
+    hVan = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    On Error GoTo CleanUp
+    BeginTableCache
+    otvoren = True
+
+    ' (a) Prvo citanje dokazuje i pamti, drugo ide iz kesa.
+    sa1 = KesKnjigaPotpis()
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    sa2 = KesKnjigaPotpis()
+    hDrugo = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    ' (b) Kvar upisan u istom prozoru: dva reda sa istim AmbID-em.
+    If r2 > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        UpdateCell TBL_AMBALAZA, r2, COL_AMB_ID, id1
+        kvar1 = KesKnjigaKvar(opis1)
+        kvar2 = KesKnjigaKvar(opis2)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (c) Posle rollback-a: opet dokazana, isti rezultat.
+        posle = KesKnjigaPotpis()
+    End If
+
+    EndTableCache
+    otvoren = False
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If otvoren Then EndTableCache
+    knjigaPosle = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesKnjiga_DokazJednomUProzoru", errDesc
+
+    AssertEq (r2 > 0 And Len(id1) > 0), True, _
+             "392 preduslov: knjiga fixture-a ima bar dva reda sa AmbID-em"
+    AssertEq (Len(bez) > 1), True, "392 preduslov: saldo po nalogu ima sadrzaj nad fixture-om"
+    AssertEq (Len(knjigaPre) > 0 And knjigaPosle = knjigaPre), True, _
+             "392 preduslov: knjiga je posle testa ista kao pre, i audit"
+    AssertEq bez2, bez, "392 preduslov: dva citanja van prozora daju isto"
+    AssertEq hVan, 0, "392 van prozora dokaz knjige se ne pamti"
+    AssertEq sa1, bez, "392 prvo citanje u prozoru isto kao bez prozora"
+    AssertEq (hDrugo > 0), True, "392 drugo citanje knjige u prozoru ide iz kesa"
+    AssertEq sa2, bez, "392 rezultat iz kesa dokaza isti kao bez kesa"
+    AssertEq (kvar1 <> 0), True, "392 upis kvara u prozoru obara zapamcen dokaz"
+    AssertEq (InStr(1, opis1, "nose AmbID", vbTextCompare) > 0), True, _
+             "392 kvar u prozoru pada po imenu (duplikat AmbID-a)"
+    AssertEq (kvar2 <> 0), True, "392 neuspeh dokaza se ne pamti"
+    AssertEq posle, bez, "392 posle rollback-a knjiga je opet dokazana, isti rezultat"
+    AssertEq modDataAccess.TableCacheDepth(), 0, "392 prozor kesa je zatvoren"
+End Sub
+
+' Potpis dva citaoca knjige koji koriste i dokaz i recnik vrsta (poslovni saldo
+' sudi kontra-stav po vrsti originala): kooperanti i stanice.
+Private Function KesKnjigaPotpis() As String
+    KesKnjigaPotpis = KesRecnikPotpis(modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True)) & _
+                      "#" & KesRecnikPotpis(modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, True))
+End Function
+
+Private Function KesRecnikPotpis(ByVal o As Object) As String
+    Dim k As Variant, s As String
+    If o Is Nothing Then Exit Function
+    For Each k In o.keys
+        s = s & CStr(k) & "=" & CStr(o(k)) & ";"
+    Next k
+    KesRecnikPotpis = s
+End Function
+
+' Broj greske citanja knjige (0 = proslo) i njen opis.
+Private Function KesKnjigaKvar(ByRef opis As String) As Long
+    Dim o As Object
+    On Error Resume Next
+    Set o = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True)
+    KesKnjigaKvar = Err.Number
+    opis = Err.description
+    Err.Clear
+End Function
+
+' ============================================================
+' 393. KNJIGA AMBALAZE: DOKAZ SE NASTAVLJA, NE PONAVLJA (brzina, D1-UPIS).
+' ============================================================
+' Merenje 20.11.2026: jedno snimanje otkupa je 15 puta dokazivalo integritet iste
+' knjige (4,8 od 10,4 s) -- van prozora citanja, gde 392 ne pomaze. Sada
+' KnjigaZaCitanje pamti dokazan prefiks knjige; sledece citanje ga poredi celiju
+' po celiju, a ISTI sud (KnjigaIntegritet) prolaze samo dodati redovi.
+'
+' Kriticne su invarijante koje kapije upisa citaju kroz dokaz (AMB-INV-07, -11,
+' -16): pokvarena knjiga ne sme da prodje ni kroz nastavak. Mera, van prozora:
+'  (a) posle punog dokaza sledeca citanja ga ne ponavljaju, isti rezultat;
+'  (b) ispravan dodat red se dokazuje sam, a sud je isti kao pun dokaz;
+'  (c) dodat red sa duplim AmbID-em pada po imenu, i ponovo (neuspeh se ne pamti);
+'  (d) izmena u dokazanom delu (ne dodavanje) obara nastavak, po imenu;
+'  (e) posle rollback-a rezultat i knjiga su kao pre testa, i audit.
+' Fixture: normal production state. Kvarovi su fault injection u transakcijama
+' koje rollback vraca u celosti (obrazac TEST390-REV-01). Dodat red je kopija
+' originala iz fixture-a sa novim AmbID-em -- isti ugovor reda, drugi identitet.
+Private Sub T_KnjigaDokaz_NastavakIstiSud()
+    Dim d As Variant, nKol As Long, cId As Long, cSt As Long
+    Dim r1 As Long, r2 As Long, i As Long, j As Long
+    Dim id1 As String, red() As Variant
+    Dim a As String, b As String, c As String, cPun As String
+    Dim a2 As String, posle As String
+    Dim p0 As Long, pA As Long, pB As Long, pC As Long
+    Dim kvarDod1 As Long, kvarDod2 As Long, kvarIzm As Long
+    Dim opisDod1 As String, opisDod2 As String, opisIzm As String
+    Dim knjigaPre As String, knjigaPosle As String
+    Dim tx As clsTransaction
+    Dim errNum As Long, errDesc As String
+
+    knjigaPre = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    d = GetTableData(TBL_AMBALAZA)
+    cId = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
+    If IsArray(d) And cId > 0 And cSt > 0 Then
+        nKol = UBound(d, 2)
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If r1 = 0 And Len(Trim$(NzToText(d(i, cSt)))) = 0 Then
+                    r1 = i
+                ElseIf r2 = 0 Then
+                    r2 = i
+                End If
+            End If
+            If r1 > 0 And r2 > 0 Then Exit For
+        Next i
+    End If
+    If r1 > 0 Then
+        id1 = Trim$(NzToText(d(r1, cId)))
+        ReDim red(1 To nKol)
+        For j = 1 To nKol
+            red(j) = d(r1, j)
+        Next j
+    End If
+
+    On Error GoTo CleanUp
+
+    ' (a) Pun dokaz jednom, pa nastavak.
+    modAmbalaza.KnjigaDokazTestZaboravi
+    p0 = modAmbalaza.KnjigaDokazPunihTest()
+    a = KesKnjigaPotpis()
+    pA = modAmbalaza.KnjigaDokazPunihTest() - p0
+    p0 = modAmbalaza.KnjigaDokazPunihTest()
+    b = KesKnjigaPotpis()
+    pB = modAmbalaza.KnjigaDokazPunihTest() - p0
+
+    If r1 > 0 And r2 > 0 Then
+        ' (b) Ispravan dodat red, pa (c) dodat red sa duplim AmbID-em.
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        red(cId) = "ZZ-393-" & Format$(Now, "hhnnss")
+        AppendRow TBL_AMBALAZA, red
+        p0 = modAmbalaza.KnjigaDokazPunihTest()
+        c = KesKnjigaPotpis()
+        pC = modAmbalaza.KnjigaDokazPunihTest() - p0
+        modAmbalaza.KnjigaDokazTestZaboravi
+        cPun = KesKnjigaPotpis()
+
+        red(cId) = id1
+        AppendRow TBL_AMBALAZA, red
+        kvarDod1 = KesKnjigaKvar(opisDod1)
+        kvarDod2 = KesKnjigaKvar(opisDod2)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (d) Izmena u dokazanom delu: prvo dokaz nad vracenom knjigom.
+        a2 = KesKnjigaPotpis()
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        UpdateCell TBL_AMBALAZA, r2, COL_AMB_ID, id1
+        kvarIzm = KesKnjigaKvar(opisIzm)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (e)
+        posle = KesKnjigaPotpis()
+    End If
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    knjigaPosle = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KnjigaDokaz_NastavakIstiSud", errDesc
+
+    AssertEq (r1 > 0 And r2 > 0 And Len(id1) > 0), True, _
+             "393 preduslov: knjiga fixture-a ima original i jos jedan red sa AmbID-em"
+    AssertEq (Len(a) > 1), True, "393 preduslov: saldo po nalogu ima sadrzaj nad fixture-om"
+    AssertEq (Len(knjigaPre) > 0 And knjigaPosle = knjigaPre), True, _
+             "393 preduslov: knjiga je posle testa ista kao pre, i audit"
+    AssertEq pA, 1, "393 dva citanja zaredom: pun dokaz samo prvi put"
+    AssertEq pB, 0, "393 ponovljeno citanje ne dokazuje iznova"
+    AssertEq b, a, "393 nastavak daje isti rezultat kao pun dokaz"
+    AssertEq pC, 0, "393 ispravan dodat red se dokazuje sam, bez punog prolaza"
+    AssertEq c, cPun, "393 sud nad dodatim redom isti kao pun dokaz iste knjige"
+    AssertEq (kvarDod1 <> 0), True, "393 dodat red sa duplim AmbID-em pada i kroz nastavak"
+    AssertEq (InStr(1, opisDod1, "nose AmbID", vbTextCompare) > 0), True, _
+             "393 kvar dodatog reda pada po imenu"
+    AssertEq (kvarDod2 <> 0), True, "393 neuspeh nastavka se ne pamti"
+    AssertEq a2, a, "393 posle rollback-a dodatih redova sud isti kao pre"
+    AssertEq (kvarIzm <> 0), True, "393 izmena u dokazanom delu obara nastavak"
+    AssertEq (InStr(1, opisIzm, "nose AmbID", vbTextCompare) > 0), True, _
+             "393 kvar u dokazanom delu pada po imenu"
+    AssertEq posle, a, "393 posle rollback-a isti rezultat kao pre testa"
+End Sub
+
+' ============================================================
+' 394. OSVEZAVANJE POSLE UPISA: LISTE KONTEKSTA BEZ KASKADE (brzina, UI-7).
+' ============================================================
+' Merenje 20.11.2026: RefillMaticniCombos je posle svakog snimanja punio listu
+' otkupnih mesta ispocetka, a svaki programski Change (3 po snimanju) je pokretao
+' ceo handler OM-a -- OnStanicaChanged, saldo, otvorene blokove, KPI (~0,5 s) -- i
+' prljao praznu formu ("Nesacuvan unos", opazeno i posle Sync-a).
+' Mera:
+'  (a) izbor koji punjenje ne menja: handler OM-a ne radi nijednom, izbor ostaje,
+'      forma ostaje cista;
+'  (b) izbor koji punjenje stvarno menja (deaktivirano otkupno mesto): handler
+'      radi TACNO jednom, KPI ostaje bez otkupnog mesta, a forma ostaje cista.
+' Fixture: normal production state; deaktivacija je u transakciji koju rollback vraca.
+Private Sub T_Refresh_MaticneListeBezKaskade()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim rows As Collection, red As Long
+    Dim omID As String, nesac As String
+    Dim h0 As Long, hA As Long, hB As Long
+    Dim omA As String, omB As String, kpiB As String
+    Dim prljavoA As Boolean, prljavoB As Boolean
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    omID = GetComboID(cbOM)
+    nesac = Poruka("OTKUI_HDR_NESACUVANO")
+
+    ' (a) Cista forma posle upisa, izbor se ne menja.
+    modOtkupUI.ClearForm
+    h0 = modOtkupUI.OmPromenaBrojTest()
+    modOtkupUI.RefreshFromData
+    hA = modOtkupUI.OmPromenaBrojTest() - h0
+    omA = GetComboID(cbOM)
+    prljavoA = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+
+    ' (b) Izabrano mesto deaktivirano: punjenje ga izbacuje iz liste.
+    If Len(omID) > 0 Then
+        Set rows = FindRows(TBL_STANICE, "StanicaID", omID)
+        If Not rows Is Nothing Then
+            If rows.count > 0 Then red = rows(1)
+        End If
+    End If
+    If red > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        txZapoceta = True
+        tx.AddTableSnapshot TBL_STANICE
+        UpdateCell TBL_STANICE, red, "Aktivan", STATUS_NEAKTIVAN
+        h0 = modOtkupUI.OmPromenaBrojTest()
+        modOtkupUI.RefreshFromData
+        hB = modOtkupUI.OmPromenaBrojTest() - h0
+        omB = GetComboID(cbOM)
+        kpiB = CStr(f.Controls("zKpi").Controls("kpiV1").caption)
+        prljavoB = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+        tx.RollbackTx
+        txZapoceta = False
+    End If
+    ReleaseOtkupUIForm f
+
+    AssertEq (Len(omID) > 0), True, "394 preduslov: otkupno mesto je izabrano"
+    AssertEq omA, omID, "394 izbor otkupnog mesta prezivljava osvezavanje"
+    AssertEq hA, 0, "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja"
+    AssertEq (red > 0), True, "394 preduslov: izabrano mesto postoji u tblStanice"
+    AssertEq omB, "", "394 preduslov: deaktivirano mesto nestaje iz izbora"
+    AssertEq hB, 1, "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom"
+    AssertEq kpiB, ChrW(8212), "394 posle nestalog izbora KPI je bez otkupnog mesta"
+    AssertEq (prljavoA Or prljavoB), False, _
+             "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If txZapoceta Then tx.RollbackTx
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_MaticneListeBezKaskade", errDesc
+End Sub
+
+' ============================================================
+' 395. OSVEZAVANJE POSLE UPISA CITA SVAKU TABELU JEDNOM (brzina, UI-1).
+' ============================================================
+' Merenje 20.11.2026: osvezavanje posle snimanja (KPI, znacke menija, liste,
+' mreza) je istu tabelu citalo sa lista iznova -- tblKooperanti ~190 puta po
+' snimanju. Sada RefreshFromData radi u prozoru citanja. Mera: brojac citanja sa
+' lista po tabeli (test seam u modDataAccess) -- najvise jedno po tabeli, a prozor
+' se zatvara. Bez upisa usput (izbor se ne menja), pa nema ni invalidacije.
+Private Sub T_Refresh_CitaTabeluJednom()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim maxC As Long, tabela As String, dub As Long
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    modOtkupUI.ClearForm
+
+    modDataAccess.CitanjaSaListaTestPocni
+    modOtkupUI.RefreshFromData
+    maxC = modDataAccess.CitanjaSaListaTestMax(tabela)
+    modDataAccess.CitanjaSaListaTestKraj
+    dub = modDataAccess.TableCacheDepth()
+    ReleaseOtkupUIForm f
+
+    If maxC > 1 Then Debug.Print "395: najvise citanja sa lista: " & tabela & " x" & maxC
+    AssertEq (maxC >= 1), True, "395 preduslov: osvezavanje cita tabele sa lista (seam broji)"
+    AssertEq maxC, 1, "395 osvezavanje cita svaku tabelu sa lista najvise jednom"
+    AssertEq dub, 0, "395 prozor kesa je zatvoren posle osvezavanja"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modDataAccess.CitanjaSaListaTestKraj
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_CitaTabeluJednom", errDesc
+End Sub
+
+' ============================================================
+' 385. OTKUPNI LIST: STAVKE KANONSKIM REDOSLEDOM, JEDNIM PROLAZOM (brzina, OTK-1).
+' ============================================================
+' FillOtkupSablon je za svaki redni broj 1..UBound(tabele) prolazio CELU
+' tblOtkupStavke, pa je popuna rasla sa kvadratom broja stavki. Izbor redova je
+' izdvojen u modPrint.OtkupListRedoviStavki i ovde se meri nad sintetickim
+' nizom -- cista funkcija, bez sveske. Pravilo je isto kao u staroj petlji:
+' ID bez obzira na Trim i velika i mala slova, za svaki rb PRVI red redom tabele,
+' dupli rb samo jednom, rupa se preskace, a rb koji nije ceo broj iz
+' 1..UBound(tabele) se ne stampa. Ocekivani redosled je izracunat starim
+' algoritmom (Python simulacija, 20.000 slucajnih tabela, 0 razlika).
+' Popunu lista nad pravom sveskom i dalje mere 224 i 287.
+Private Sub T_OtkList_RedoviStavkiKanonskimRedom()
+    Dim ds As Variant, r As Variant, s As String, i As Long
+
+    ReDim ds(1 To 8, 1 To 2)
+    ds(1, 1) = "OTK-B":  ds(1, 2) = 1      ' tudj otkup
+    ds(2, 1) = "otk-a ": ds(2, 2) = 2      ' moj (Trim, velika i mala slova)
+    ds(3, 1) = "OTK-A":  ds(3, 2) = 1
+    ds(4, 1) = "OTK-A":  ds(4, 2) = 2      ' dupli rb 2 -- red 2 je pre njega
+    ds(5, 1) = "OTK-A":  ds(5, 2) = 1.5    ' nije ceo broj
+    ds(6, 1) = "OTK-A":  ds(6, 2) = ""     ' prazno = 0
+    ds(7, 1) = "OTK-A":  ds(7, 2) = 4      ' posle rupe na 3
+    ds(8, 1) = "OTK-A":  ds(8, 2) = 99     ' vece od broja redova tabele
+
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "OTK-A")
+    If IsArray(r) Then
+        For i = LBound(r) To UBound(r)
+            s = s & "|" & CStr(r(i))
+        Next i
+    End If
+    AssertEq s, "|3|2|7", _
+             "385 otkupni list: prvi red po rednom broju, dupli i necelobrojni se preskacu"
+    AssertEq IsArray(r), True, "385 otkupni list: redosled je 1-bazirani niz indeksa"
+    If IsArray(r) Then AssertEq LBound(r), 1, "385 otkupni list: niz pocinje od 1"
+
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "NEMA-GA")
+    AssertEq IsEmpty(r), True, "385 otkupni list: otkup bez stavki daje Empty"
+
+    ds(3, 2) = 0: ds(2, 2) = 0: ds(4, 2) = 0: ds(7, 2) = 0: ds(8, 2) = -3: ds(5, 2) = 0.5
+    r = modPrint.OtkupListRedoviStavki(ds, 1, 2, "OTK-A")
+    AssertEq IsEmpty(r), True, "385 otkupni list: bez ijednog rednog broja >= 1 nema stavki"
+End Sub
+
+' ============================================================
+' 384. IZVESTAJI: PROMENA KONTEKSTA OSVEZAVA PRIKAZ, NE PODATKE (brzina, IZV-1).
+' ============================================================
+' Operater: "sta god da se klikne u izvestaju traje neko vreme". Klik na tip
+' ili rezim i promena entiteta ili opsega su isli kroz pun RefreshFromData --
+' put "posle upisa": ResetCache podigne generaciju, pa ekran baci SVE snimke
+' (i povratak na vec vidjen kontekst cita tabele ispocetka), a uz to se
+' racunaju KPI, znacke menija i combo-i ljuske. 129 i 131 to ne vide: zovu
+' Scr_Rows direktno, mimo ljuske. Ovde klik ide kroz pravu ljusku (UiEvent ->
+' ScrAct -> Scr_Event), kao 352.
+'
+' A -> B -> A: SALDO pojedinacno (A), Zbirno (B), nazad Pojedinacno (A). Pre
+' ispravke: 2 punjenja i generacija +2; sada 1 punjenje i generacija +0.
+' Kljuc snimka posle svakog klika meri da je mreza STVARNO procitala nov
+' kontekst -- bez toga bi "nijedno punjenje" proslo i kad se prikaz uopste ne
+' osvezi. Opseg od 4.1 je jedinstven za ovaj test (v. 129, 131).
+Private Sub T_Izv_KontekstOsvezavaPrikazNePodatke()
+    Dim f As frmOtkupUI, od As Double
+    Dim ekran As String, kA As String, kZ As String, kP As String, kE As String
+    Dim g0 As Long, gZ As Long, gP As Long, gE As Long
+    Dim p0 As Long, pZ As Long, pP As Long, pE As Long
+    Dim listaZ As String
+    Dim errNum As Long, errDesc As String
+
+    od = CDbl(DateSerial(2026, 1, 4))
+    On Error GoTo CleanUp
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", False, FX_STANICA, od, IzvDoS()
+    Set f = NewOtkupUIForm()
+    modOtkupUI.IdiNaEkran "IZVESTAJI"
+    ekran = modOtkupUI.AktivanEkran()
+    kA = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    g0 = modUiData.DataGeneracija()
+    p0 = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    modOtkupUI.UiEvent "scrIzRezZ", "Click", Empty
+    kZ = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    listaZ = modScrIzvestaji.Scr_Lista()
+    gZ = modUiData.DataGeneracija()
+    pZ = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    modOtkupUI.UiEvent "scrIzRezP", "Click", Empty
+    kP = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    gP = modUiData.DataGeneracija()
+    pP = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+    ' Entitet: u testu ga nosi seam (combo se ne cita), promena stize kao
+    ' Change polja zone -- isti put kao kucanje operatera.
+    modScrIzvestaji.Scr_IzTestSet "", "OM", False, FX_IZV_STANICA2, od, IzvDoS()
+    modOtkupUI.UiEvent "scrIzEntT", "Change", Empty
+    kE = modScrIzvestaji.Scr_IzSnimakKljucTest()
+    gE = modUiData.DataGeneracija()
+    pE = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrIzvestaji.Scr_IzTestReset
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_Izv_KontekstOsvezavaPrikazNePodatke", errDesc
+
+    AssertEq ekran, "IZVESTAJI", "384 preduslov: ljuska je na Izvestajima"
+    AssertEq (InStr(1, kA, "SALDO|OM|P|" & FX_STANICA & "|", vbBinaryCompare) = 1), True, _
+             "384 preduslov: ulazak na ekran prikazuje kontekst A"
+    AssertEq listaZ, "SALDO", "384 preduslov: saldo postoji i u zbirnom rezimu"
+    AssertEq (InStr(1, kZ, "SALDO|OM|Z|", vbBinaryCompare) = 1), True, _
+             "384 klik na Zbirno osvezava prikaz: mreza cita nov kontekst"
+    AssertEq pZ - p0, 1, "384 nov kontekst se cita jednom"
+    AssertEq kP, kA, "384 povratak na Pojedinacno prikazuje kontekst A"
+    AssertEq pP - p0, 1, _
+             "384 povratak na vec vidjen kontekst ide iz kesa, bez novog citanja tabela"
+    AssertEq gP - g0, 0, _
+             "384 klik na tip/rezim ne ide kroz pun RefreshFromData (generacija ista)"
+    AssertEq (InStr(1, kE, "SALDO|OM|P|" & FX_IZV_STANICA2 & "|", vbBinaryCompare) = 1), True, _
+             "384 promena entiteta osvezava prikaz"
+    AssertEq pE - p0, 2, "384 nov entitet se cita jednom"
+    AssertEq gE - g0, 0, _
+             "384 promena entiteta ne ide kroz pun RefreshFromData (generacija ista)"
 End Sub
 
 Private Sub T_ZonaIzv_PoljaIRaspored()
