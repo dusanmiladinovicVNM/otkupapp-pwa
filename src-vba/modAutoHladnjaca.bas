@@ -572,6 +572,16 @@ End Function
 '   outRod   -- UCase(PrijemnicaID) -> ZbirnaRoditeljID, ista ivica u smeru
 '               prijemnica -> zbirna (S9-3; javni ulaz ZbirneAktivnihPrijemnica).
 ' Lanac i dalje cita mapu i outKvar, nepromenjene.
+'
+' DUPLI PrijemnicaID (S93-REV-02, test 401): dva AKTIVNA reda istog ID-a -- sa
+' roditeljem ili bez, istim ili razlicitim -- nisu "dupla prijemnica" (to su
+' dva ID-a pod jednom zbirnom) nego kvar identiteta. outRod bi uzeo prvog
+' roditelja, pa bi redosled redova tabele birao kojoj zbirnoj prijemnica
+' pripada. Centralne kapije jedinstvenosti pred citaocima nema
+' (modProductionHealthCheck samo broji), pa odbija citac, i to za CELU tabelu:
+' za razliku od duple prijemnice gore, ovde se ne zna ni koja zbirna je
+' pogodjena. Lanac hladnjace tada staje sa razlogom za svaku zbirnu dok se
+' identitet ne popravi -- svesno, jer bi nastavak birao roditelja nasumice.
 Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
                                            Optional ByRef outSve As Object, _
                                            Optional ByRef outBezID As Object, _
@@ -579,8 +589,10 @@ Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
     Const SRC As String = "AktivnePrijemnicePoZbirni"
     Dim mapa As Object, d As Variant, i As Long, rod As String, pid As String
     Dim cId As Long, cRod As Long, cSto As Long, lista As Collection
+    Dim vidjen As Object
 
     Set mapa = CreateObject("Scripting.Dictionary")
+    Set vidjen = CreateObject("Scripting.Dictionary")
     Set outKvar = CreateObject("Scripting.Dictionary")
     Set outSve = CreateObject("Scripting.Dictionary")
     Set outBezID = CreateObject("Scripting.Dictionary")
@@ -593,6 +605,17 @@ Private Function AktivnePrijemnicePoZbirni(ByRef outKvar As Object, _
     cRod = RequireColumnIndex(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, SRC)
     cSto = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
     For i = 1 To UBound(d, 1)
+        If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then
+            pid = Trim$(NzToText(d(i, cId)))
+            If Len(pid) > 0 Then
+                If vidjen.Exists(UCase$(pid)) Then
+                    Err.Raise vbObjectError + 8476, SRC, _
+                              "PrijemnicaID " & pid & " nose dva aktivna reda tblPrijemnica (redovi " & _
+                              CStr(vidjen(UCase$(pid))) & " i " & CStr(i) & "): identitet prijemnice nije jedinstven."
+                End If
+                vidjen.Add UCase$(pid), i
+            End If
+        End If
         rod = UCase$(Trim$(NzToText(d(i, cRod))))
         If Len(rod) > 0 Then
             If StrComp(Trim$(NzToText(d(i, cSto))), "Da", vbTextCompare) <> 0 Then

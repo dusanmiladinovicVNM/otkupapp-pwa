@@ -15000,6 +15000,24 @@ SABOTAZE = {
         "T_S93_TekucaPredajaBezZbirne",
         "399 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne",
     ),
+    # S93-REV-01 (review #501): indeks izvoza OtkupiAll guta kvar citaca E4 i
+    # vraca recnik -- zbirne bez indeksa izvoze se kao Primljeno "Ne".
+    "s93-izvoz-guta-kvar-e4": (
+        "modStammdatenSync.bas",
+        "    Err.Raise errNum, SOURCE, errDesc\n",
+        "    Set PrijemniceZaIzvozPoZbirni = dict   ' SABOTAZA: izvoz guta kvar citaca\n",
+        "T_S93_IzvozKvarE4JeGreska",
+        "400 izvoz OtkupiAll: kvar citaca E4 je greska izvoza, ne prazan indeks (S93-REV-01)",
+    ),
+    # S93-REV-02 (review #501): citac E4 pusta dupli PrijemnicaID, pa obrnuta
+    # mapa uzme prvog roditelja (redosled redova bira zbirnu).
+    "s93-e4-dupli-id-prvi": (
+        "modAutoHladnjaca.bas",
+        "                If vidjen.Exists(UCase$(pid)) Then\n",
+        "                If False Then   ' SABOTAZA: dupli PrijemnicaID prolazi\n",
+        "T_S93_E4DupliIDJeGreska",
+        "401 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj",
+    ),
     # S9-3: BFP S8R2A1-REV-01 posle promene premise -- obim zbirne cija druga
     # prijemnica broja nema trag je siguran po ID-u (strog uvid validan) ...
     # Sabotaza mora biti osetljiva na TRAG: obim bez ID-a ubija scenario 1 istog

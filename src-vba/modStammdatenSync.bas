@@ -1217,6 +1217,10 @@ End Function
 '
 ' Vraca: Dictionary (CompareMode tekst) ZbirnaID -> Array(PrijemnicaID,
 ' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 396.
+'
+' Kvar citanja (strog citac E4 bez kolone, dupli PrijemnicaID) se DIZE, ne
+' guta (S93-REV-01, test 400): zbirna koje u indeksu nema izvozi se kao
+' Primljeno "Ne", pa bi progutan kvar postao status koji izgleda procitano.
 Public Function PrijemniceZaIzvozPoZbirni() As Object
     Const SOURCE As String = "PrijemniceZaIzvozPoZbirni"
 
@@ -1228,6 +1232,7 @@ Public Function PrijemniceZaIzvozPoZbirni() As Object
     Dim colBrojPrijemnice As Long
     Dim colKupac As Long
     Dim colDatum As Long
+    Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
 
@@ -1293,8 +1298,13 @@ Public Function PrijemniceZaIzvozPoZbirni() As Object
     Exit Function
 
 EH:
+    ' S93-REV-01: ExportOtkupiAll gresku hvata i javlja neuspeh izvoza
+    ' (MgmtReports "partial export"); prazan ili delimican indeks bi izvezao
+    ' Primljeno "Ne" / "in_transport" za zbirnu cija se prijemnica ne zna.
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SOURCE
-    Set PrijemniceZaIzvozPoZbirni = dict
+    Err.Raise errNum, SOURCE, errDesc
 End Function
 Private Function GetKooperantDisplayNameForExport(ByVal kooperantID As String) As String
     On Error GoTo EH
