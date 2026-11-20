@@ -93,6 +93,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
 | `DUPLI_LOKAL` | isto ime dvaput u **istoj** proceduri (`Dim src` uz `Const SRC`, parametar pa `Dim`) |
 | `SEMA_REGISTAR` | `TBL_*` konstanta koje nema u registru `modSchema` — `EnsureAllTables` je ne bi napravio, a `VerifySchema` ne bi prijavio da fali |
+| `DECLARE_PRELOM` | `Declare` prelomljen sa ` _` unutar `#If … #End If` — takav modPerf je posle `ImportAllVBA` dobijao red `()` i završna provera je pucala |
 
 **`Poruka()` nikad ne vraća prazno.** Nepoznat ključ daje `"[KLJUČ]"`, pa je
 `Len(Poruka(k)) = 0` provera koja **ne može da padne**. Tvrdnja „ključ postoji u
@@ -169,6 +170,17 @@ prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je
 nevidljivo. A ono obara compile isto tako — i **ne prijavljuje se kao compile
 greška** nego kao `Cannot run the macro` na bilo kom makrou, jer modul koji se ne
 kompajlira obara ceo projekat. Simptom ne pokazuje na krivca.
+
+**`DECLARE_PRELOM` je uska namerno.** `modPerf` je nosio QPC `Declare` prelomljen
+sa ` _` i u `#If VBA7` i u `#Else` grani; posle svakog `ImportAllVBA` modul u
+svesci je završavao redom `()`, a završna provera (`SameCode`/`CanonCode`) je
+javljala „kod se razlikuje od izvora" (operater, 19–20.11.2026). Posle prepisa u
+jedan red (`3766ee5`) uvoz je prošao. To je **jak dokaz, ne dokaz uzroka** u
+VBE-u. Pravilo zato važi samo unutar `#If … #End If`: prelomljen `Declare` van
+`#If` je legalan VBA i nikad nije pokazan kao kvar, pa bi nalaz bio lažan. Šire
+tek uz nov dokaz. `modSelfUpdate` ide istim `AddFromString` putem, pa isti oblik
+u bilo kom modulu može da obori self-update kod klijenta — zato kapija, a ne
+napomena.
 
 `python tools\vba_check.py --self-test` vrti slučajeve koji **moraju** da zapište
 i legalan VBA koji **ne sme**. Vrti se i u CI-ju: zelen checker nad čistim repoom
