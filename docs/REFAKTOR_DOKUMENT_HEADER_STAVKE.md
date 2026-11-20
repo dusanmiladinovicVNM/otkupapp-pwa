@@ -12416,7 +12416,7 @@ mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
   cilja), a pisac nacrt i tuđu zbirnu odbija razlogom koji stiže na ekran (S94-ODL-03). Filtar izdatih u listi je deo
   R2 iz `#477` (`LZP-ODL-07`).
 - **`S94-ODL-03` — Oporavak nosi `ZbirnaID`.** Kolona 7 cilja = `COL_ZBR_ID`, ključ reda = PK; red bez PK-a se ne nudi
-  (integritet B9 ga prijavljuje). Grupisanje „broj + vlasnik" se briše (oba pozivaoca `RowsAktivni` šalju PK).
+  (zbirnu bez PK-a prijavljuje integritet B9; prijemnicu bez PK-a strogi čitač stavki obara još pre liste). Grupisanje „broj + vlasnik" se briše (oba pozivaoca `RowsAktivni` šalju PK).
   `mCiljZbirnaID`; kapija radnje nad ID-om; jezgro `PreveziPrijemnicuCore(brojPrij, prijemnicaID, outRazlog)` bez
   `MsgBox`-a. Razlog pisca ide u poruku (**`KI-055` se zatvara**). Natpis kolone: nov ključ `OTKUI_HDO_ZBR_ID`
   („ZBIRNA ID", uzor `OTKUI_HDO_PRJ_ID`); `OTKUI_HDO_GENERACIJA` izlazi iz kataloga. Seam `Scr_OpoTestSet`: 4.
@@ -12428,7 +12428,8 @@ mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
   `ZbirnaOpisKolone` se brišu. F4 i dalje šalje broj (labela), a resolver ga razrešava strogo (dvosmislen odbija) —
   prenos izabranog `ZbirnaID`-a do pisca F4 je van reza (`KI-098`).
 - **`S94-ODL-06` — mrtav API se briše u rezu** (spisak gore, uz kaskadu `RequireJedanVlasnik*`, `BrojVlasnikaPoBroju`,
-  prefill pomoćnika). `VlasniciPoBroju` ostaje (drugi pozivaoci). Kolona, `EnsureSledljivostSchema` i `GEN-` vrednosti
+  prefill pomoćnika). `VlasniciPoBroju` ostaje bez produkcionog pozivaoca — merilo preduslova
+  u testovima (kolizija broja u fixture-u); čišćenje ide uz S9-6. Kolona, `EnsureSledljivostSchema` i `GEN-` vrednosti
   fixture-a ostaju do S9-6.
 - **`S94-ODL-07` — imena koja lažu:** `scopedPoGeneraciji` → `scopedPoID` (ponašanje isto); `PoveziDeteNaZbirnu`
   parametar `gen` → `zbirnaID`; tekst loga MasterSync „bez ZbirnaID". Zastareli komentari se ispravljaju u dirnutim
@@ -12480,6 +12481,58 @@ mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
   ishod nije tuđa zbirna nego odbijen upis; to je „display → lookup → ID" iz pre-flight §5.
 - Lista ciljeva Oporavka nudi nacrte i tuđe zbirne (filtar je R2, `#477`).
 - `modStornoFlow.ScanZbirna` upisuje ključ `mutRazlog` koji niko ne čita (jedan `ZbirnaIdentResolve` po pozivu).
+
+#### Izvršeno (20.11.2026, `docs/STANJE_REFAKTORA.md` stavka 335)
+
+- **Commiti:** `fc250bf7` ugovor · `389fca0e` testovi 414–417 i 171 prvi, uz skelu bez promene ponašanja
+  (`PreveziPrijemnicuCore` sa starim pozivom pisca) · `1267e692` kod, popis, sabotaže, dokumenti ·
+  `4c125023` ispravke posle nezavisnog pregleda.
+- **Crveno nad zatečenim kodom, po imenu:**
+  - nad commit-om testova (`389fca0e`): 171, 414, 415, 416 i 417 padaju, 20 i 25 prolaze (očekivano — prosleđuju
+    ID-eve, a pravilo meri 414);
+  - konačne verzije testova (HEAD) nad produkcijom `389fca0e` (`run_vba --src`): **9 / 9 palo** — 414 (dve zbirne istog
+    broja i vlasnika su JEDAN red), 415 (`True`: prijemnica kupca 1 pod zbirnom kupca 2), 416 (razlog prazan), 417
+    (`41|41`: prefill drugog otkupa), 171 (jedna stavka za dva dokumenta), a 28, 29, 114 i 115 zato što stari pisac
+    ne prima ID niti vraća razlog (premisa promenjena, v. „Testovi koji tvrde staro pravilo").
+- **Zeleno ciljano:** `RunAllTests` 17 / 0 (novi, prerađeni i susedni testovi), BFP 44 / 0 (šest testova prefill-a,
+  prevezivanja i kapije `scopedPoID`), Palete i Golden zeleni (izlaz golden-a nepromenjen i uz brojanje po PK-u).
+- **FULL nad `4c125023`: 12 / 12 zeleno, marker upisan** (izvor `7038e42f4c5c`) — `RunAllTests` **417 / 0**,
+  BFP **3488 / 0**, Banka 241 / 0, Storno 111 / 0, Palete, Faktura, Agrohemija, Golden, JSON, Izveštaji,
+  StornoCentar, Licenca. BFP 3499 → 3488 je tačno 11 tvrdnji obrisanog `Test_PrefillBiraPoslednjuGeneraciju`.
+- **Popis:** `nema_generacije` 0 = prag 0 nad granom; nad `832a355a` isti alat daje **45 > prag 0 PAO** sa
+  imenom svake procedure (API generacije, pisac prevezivanja, Oporavak, picker, prefill, `scopedPoGeneraciji`,
+  MasterSync); zastareo unos `GENERACIJA_SETUP` → `ZASTAREO UNOS … PAO`. Ispis pada je proširen sa 12 na 40
+  mesta. Granica: generacija prosleđena kao indeks (`cGen`) vidi se samo na pozivaocu.
+- **Sabotaže:** 11 novih `s94-*`, 6 povučenih sa obrisanim kodom (`cilj-zbirna-*` ×3, `prefill-fallback-po-broju`,
+  `s6k8-prevezi-pri-bez-id`, `generacija-nema-pa-po-broju` → `s94-prevezi-izvor-bez-kapije`), 2 povučene u
+  commit-u testova (`oporavak-cilj-po-broju`, `picker-ne-spaja-redove-dokumenta`), presidrene
+  `prijemnica-izvor-i-stornirani`, `s6k8-prevezi-bez-provere-robe`, `zbr-opis-bez-vozaca`, `prefill-anchor-broj`,
+  `s6k8-oporavak-cilj-prij-generacija`. Katalog **1531**; `vba_check` čist.
+- **Dokaz:** **39 / 39 crveno po imenu** (`dokaz.py --grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)"): 11 `s94-*` i 28
+  sabotaža čiji su ciljani testovi dirnuti (20, 22, 24, 25, 114, 115, 167, 171, 370, BFP S6K8), uključujući 5
+  presidrenih. Snimak izvora `236fb70af368c7a8` isti pre i posle; 31 od 39 grupno, 3 ponovljene same (mešanje u
+  grupi) i crvene pojedinačno.
+- **Jeftine kapije (HEAD):** `vba_check` i `--self-test`, `sabotaza.py --self-test`, `run_vba --self-test`,
+  `who_writes --check` (WHO_WRITES regenerisan: `ApplyGeneracijaID` je bio dinamički upis `modDokumenta`) i
+  `--check-ownership`, `gen_schema_module --check` (`F22278A1`, šema nedirnuta), `popis_citalaca --check`,
+  `vba_gate --popis`.
+- **Probni spoj:** `main` = `832a355a` (nije mrdnuo), `git merge-tree` bez konflikta; rebase nije potreban.
+- **NIJE izvršeno:** ručni Compile i ručna provera (operater); pun pojedinačni dokaz celom suite-om ide pred release.
+
+#### Nezavisni pregled (20.11.2026) — 11 nalaza, posle opovrgavanja 5 stvarnih (svi P3), svi zatvoreni u `4c125023`
+
+| Nalaz | Zatvaranje |
+|---|---|
+| 414 prevezuje na zbirnu koja je **prvi** red svog broja, pa ne bi uhvatio regresiju „cilj po prvom redu" | 414 bira zbirnu A (kasniji red); „E4 nije prazan" je zasebna tvrdnja; nova sabotaža `s94-opo-cilj-prvi-red` |
+| `generacija-nema-pa-po-broju` povučena kao ekvivalentna, a nije (razlog više ne imenuje ID; dupli `PrijemnicaID` bi tiho prevezao prvi red) | vraćena kao `s94-prevezi-izvor-bez-kapije` nad kapijom izvora |
+| `prefill-anchor-broj` posle reza obara drugu tvrdnju (pada na broj više nema) | presidrena na „prefill po PK-u A nije prazan" |
+| `s6k8-oporavak-cilj-prij-generacija` obara drugu tvrdnju (kolona identiteta koje nema je sada greška 1963) | presidrena na „ciljna lista prijemnica vraca ugovor mreze" |
+| Potvrda i poruka „Prevezi prijemnicu" imenuju cilj samo brojem | uz broj ide i `ZbirnaID` (obrazac `KI-056` za izvor); meri ga ručna provera |
+
+Odbijeni posle provere (6): isti nalaz o potvrdi iz drugog ugla; dva o poruci `OTVORI ISPRAVKU` (scenario nedostižan:
+strogi čitač stavki obara ispravku pre prefill-a); red bez PK-a u listi prijemnica (komentar je bio netačan — B9 meri
+samo zbirnu; ispravljen); dupli PK u `RowsAktivni` (mrtva grana: strogi čitači padaju pre liste); 416 meri jezgro, ne
+toast (toast je jedan red koji spaja `Poruka` i razlog).
 
 ## 15) Backlog — namerno van opsega
 
