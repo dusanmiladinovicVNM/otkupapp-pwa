@@ -528,6 +528,32 @@ CSV, po snimanju):
   - provera knjige (nastavak) ≈0,55 s i šema-kapija knjige ≈0,21 s
     (13 provera po snimanju);
   - značke 0,86 s, KPI 0,36 s, mreža 0,18 s.
+
+**Raščlanjavanje hladnjačkog lanca** (20.11., 2 hladnjačka snimanja, sekcije
+`OTP.*`, `IZD.*`, `PRJ.*`, `LNCP.*`; po hladnjačkom snimanju):
+
+| Korak | Ukupno | Najveći delovi |
+|---|---|---|
+| **Lanac ukupno** | 2,38 s | |
+| Otpremnica | 1,22 s | izdavanje 0,70 s (ponovna provera članova 0,29 s, knjiženje ambalaže 0,40 s); upis izvora 0,15 s; očekivanje 0,13 s; commit 0,11 s |
+| Prijemnica | 0,83 s | upis dokumenta 0,48 s (od toga knjiga ≈0,19 s); šema 0,07 s; priprema (izvori, zbir po klasi, cene) 0,16 s; palete 0,06 s |
+| Zbirna | 0,23 s | neraščlanjeno |
+
+- **Nema jednog uskog grla.** Najveća zajednička stavka je čitanje knjige
+  ambalaže: ≈19 čitanja po hladnjačkom snimanju. Svako ponovo uzima tabelu sa
+  lista, traži 12 kolona i radi nastavak dokaza (0,62 s), a 15 puta i
+  šema-kapiju (0,24 s, `SchemaReadyOrFail` čita zaglavlja i formate kolona).
+- **Kandidati za sledeći krug** (nisu rađeni):
+  1. prozor čitanja oko kapija u `PrenesiAmbalazu` (idempotencija, manjak,
+     prazne gajbe, obaveza), pre prvog upisa. Kapije tada dele jedno čitanje i
+     jedan dokaz. Procena 0,4–0,6 s po hladnjačkom i 0,15–0,3 s po običnom
+     snimanju. Dira jezgro pisca knjige: treba mu sopstveni EH koji zatvara
+     prozor na svakom izlazu, pa ide kroz `pre-flight`;
+  2. šema-kapija knjige jednom po potezu umesto po čitaocu. Kapija čuva
+     pozicioni upis, pa i to ide kroz `pre-flight`;
+  3. ponovna provera članova u `OtpIzdaj` odmah posle iste provere u
+     `CreateOtpremnicaIzIzvora_TX` (0,29 s): odluka D2 je tvoja;
+  4. značka „Bankovni nalozi” (0,59 s po svakom snimanju).
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
