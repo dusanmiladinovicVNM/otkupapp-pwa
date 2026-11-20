@@ -12419,7 +12419,8 @@ mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
   (zbirnu bez PK-a prijavljuje integritet B9; prijemnicu bez PK-a strogi čitač stavki obara još pre liste). Grupisanje „broj + vlasnik" se briše (oba pozivaoca `RowsAktivni` šalju PK).
   `mCiljZbirnaID`; kapija radnje nad ID-om; jezgro `PreveziPrijemnicuCore(brojPrij, prijemnicaID, outRazlog)` bez
   `MsgBox`-a. Razlog pisca ide u poruku (**`KI-055` se zatvara**). Natpis kolone: nov ključ `OTKUI_HDO_ZBR_ID`
-  („ZBIRNA ID", uzor `OTKUI_HDO_PRJ_ID`); `OTKUI_HDO_GENERACIJA` izlazi iz kataloga. Seam `Scr_OpoTestSet`: 4.
+  („ZBIRNA ID", uzor `OTKUI_HDO_PRJ_ID`); `OTKUI_HDO_GENERACIJA` izlazi iz kataloga. *(Zamenjeno odlukom operatera
+  posle `#502`: kolone identiteta su nevidljive, `OTKUI_HD_IDENT` — v. kraj odeljka.)* Seam `Scr_OpoTestSet`: 4.
   parametar je `ciljZbirnaID` (isti položaj).
 - **`S94-ODL-04` — prefill po `OldDocID`, bez pada na broj.** Red dokumenta = red sa zadatim PK-om (`PrefillRedPoID`);
   prazan `OldDocID` daje prazan spec. `PickPrefillRows`, `FindAnchorRow`, `RowRank`, `RowKlasaII`, `IdRank` se brišu
@@ -12470,8 +12471,8 @@ mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
   `--check-ownership` (WHO_WRITES se regeneriše: `ApplyGeneracijaID` je bio dinamički upis), `gen_schema_module
   --check`, `popis_citalaca --check` (nova grupa), `vba_gate --popis`; FULL (12 suita, marker); `dokaz.py --grupe
   --izbor --radnika 4 s94-` uz presidrena sidra. Ručni Compile je kapija operatera.
-- **Ručna provera (operater):** Oporavak „Prevezi prijemnicu" između dve zbirne istog broja (kolona ZBIRNA ID, izbor
-  reda, poruka sa razlogom na odbijanju); F8 Ispravi prijemnicu → prefill po starom dokumentu; picker BROJ ZBIRNE
+- **Ručna provera (operater):** Oporavak „Prevezi prijemnicu" između dve zbirne istog broja (izbor reda, poruka sa
+  razlogom na odbijanju; kolona ID se od odluke operatera posle `#502` ne vidi); F8 Ispravi prijemnicu → prefill po starom dokumentu; picker BROJ ZBIRNE
   u F4 (jedna stavka po dokumentu, opis mesta/kg). Nov ključ poruke traži zatvaranje i otvaranje fajla.
 
 #### Van obima, upisano
@@ -12533,6 +12534,23 @@ Odbijeni posle provere (6): isti nalaz o potvrdi iz drugog ugla; dva o poruci `O
 strogi čitač stavki obara ispravku pre prefill-a); red bez PK-a u listi prijemnica (komentar je bio netačan — B9 meri
 samo zbirnu; ispravljen); dupli PK u `RowsAktivni` (mrtva grana: strogi čitači padaju pre liste); 416 meri jezgro, ne
 toast (toast je jedan red koji spaja `Poruka` i razlog).
+
+#### Odluka operatera posle PR `#502` (20.11.2026) — kolone identiteta u Oporavku se ne crtaju
+
+Operater je pitao kome treba kolona ZBIRNA ID (GUID u listi „Zbirne (cilj)"). Odgovor: operateru ne treba — treba
+**radnji**, koja iz izabranog reda šalje piscu baš taj dokument. Kolona je bila vidljiva samo zato što je rez preuzeo
+obrazac `OTKUI_HDO_PRJ_ID` (prioritet 3, S6 korak 8); konvencija projekta za identitet je nevidljiva kolona
+`OTKUI_HD_IDENT||txt|0|4` (`modOtkupUI.ColPrioritet`: 4 = nikad se ne crta; Dokumenti, Palete, Storno, Banka).
+
+- **Urađeno (`452163d0`):** sve četiri kolone identiteta u Oporavku (Zbirne (cilj), Prijemnice (cilj), Osiroćene
+  prijemnice, Osiroćene palete) prelaze na `OTKUI_HD_IDENT||txt|0|4`; podatak ostaje u redu, pa radnje i testovi čitaju
+  isto. Potvrda i poruka „Prevezi prijemnicu" imenuju cilj **samo brojem** — `ZbirnaID` koji je dodala ispravka
+  posle pregleda (tabela gore, poslednji red) je povučen kao šum. Ključevi `OTKUI_HDO_ZBR_ID` i `OTKUI_HDO_PRJ_ID`
+  izlaze iz kataloga. Izvor u potvrdi i dalje nosi `PrijemnicaID` (`KI-056`, nedirnuto).
+- **Izmereno:** ciljano 13 / 13 (svi testovi Oporavka); **FULL nad `452163d0`: 12 / 12, marker upisan** (izvor
+  `24d1e5a6fe57`) — `RunAllTests` 417 / 0, BFP 3488 / 0, Banka 241 / 0, Storno 111 / 0; **`dokaz.py` 25 / 25** (sve
+  sabotaže sa sidrom u `modScrOporavak` i sve `s94-*`, „DOKAZANO (grupno, izbor)", snimak izvora `61ed65b2e3a24a73`
+  isti pre i posle). Ručna provera tačke 3 i 4 se menja: kolone ID u Oporavku se ne vide.
 
 ## 15) Backlog — namerno van opsega
 

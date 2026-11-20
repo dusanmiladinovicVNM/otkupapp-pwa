@@ -11286,6 +11286,10 @@
        BFP 3488/0 (−11 = obrisan test), Banka 241/0, Storno 111/0, ostale suite zelene; `dokaz.py` 39/39 crveno po
        imenu (`--grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)"); katalog sabotaža 1531; sve jeftine kapije
        zelene; probni spoj na `main` = `832a355a` čist.
+     - **Odluka operatera posle PR `#502`:** `ZbirnaID` i `PrijemnicaID` operateru ne trebaju, trebaju radnji. Četiri
+       kolone identiteta u Oporavku su nevidljive (`OTKUI_HD_IDENT||txt|0|4`, konvencija projekta), a potvrda i poruka
+       „Prevezi prijemnicu" imenuju cilj samo brojem (`452163d0`). Ciljano 13/13; FULL 12/12 nad `452163d0`, marker
+       upisan (izvor `24d1e5a6fe57`; `RunAllTests` 417/0, BFP 3488/0); `dokaz.py` 25/25 (sabotaže Oporavka i `s94-*`).
      - **NIJE izvršeno:** ručni Compile, ručna provera (operater); pun pojedinačni dokaz celom suite-om ide pred
        release.
      - **Sledeći brojevi:** test 418 · stavka 336 · KI-099 · plan §14.69.
