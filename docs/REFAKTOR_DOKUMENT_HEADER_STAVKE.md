@@ -12218,9 +12218,24 @@ Uz to:
   `vba_gate --popis`, `popis_citalaca --check`.
 - **Sabotaže:** 9 zatečenih sidara preslagano na nov kod (`zbirna-kaskada-bez-kapije`,
   `pregled-broji-svu-decu-broja`, tri `s6k3-*`, dve `s8r2a1-*`, dve `s92-*`); 18 novih `s93-*`.
-- **NIJE izvršeno (Excel je bio zauzet drugom sesijom):** `make_fixture` u worktree-ju, crveno nad starim kodom
-  (`run_vba --src` sa izvorom `75af3deb`, testovi 366–369), zeleno, pune suite, `dokaz.py s93-` i preslagana
-  sidra, ručni Compile, ručna provera. Do tada je ponašanje **neverifikovano**.
+- **Fixture u worktree-ju (20.11.2026):** donor nosi `tblPrijemnica.ZbirnaGeneracijaID` (staro ime iz S4-3c, u
+  aplikaciji ga preimenuje `modSetup.PreimenujKolonuAko` na startu), pa je `make_fixture` stao na SEMA čim je SEED
+  počeo da piše `ZbirnaRoditeljID`. Dodato preimenovanje u `RENAME_COLS` (`b2ffb413`); potpis `435d2490e80c03a9`.
+- **Crveno nad starim kodom (`run_vba --src`, izvor `75af3deb` uz ispravljene testove):** 4/4 crvena po imenu, svaki
+  iz svog razloga — 366 `[-53|-43]` umesto `[10|7]` (`KI-032`), 367 pregled storna zbirne broji prijemnice broja,
+  368 stari F4 pita „dupla prijemnica" zbog prijemnice starog oblika sa labelom, 369 tekuća predaja ćuti.
+- **Dve ispravke testova pre zelenog (merenje, ne kod):**
+  - **368** (`b2ffb413`): unos F4 je imao 0 gajbi, pa je stroga validacija stajala na `OTKUNOS_ERR_GAJBE_I` pre
+    provere duple prijemnice (ona je poslednja). Prvi crveni prolaz je zato bio crven iz pogrešnog razloga; posle
+    ispravke stari kod crveni baš na pitanju.
+  - **367** (`5e217cfc`): obim kaskade je meren nad dve zbirne istog broja i **dva vlasnika**, a takav broj
+    `ZBR-MUT-01` odbija i uz ID (`historicalOwnerCount > 1` → `VISE_VLASNIKA`). Ta grana je van S9-3 (red 9 seče
+    samo uslov „sva deca tog broja nose ZbirnaID"). Obim se sada meri nad zbirnom C **jednog vlasnika** uz mamac
+    koji ugovor imenuje — prijemnicu starog oblika sa brojem C kao labelom: stari kod {C, mamac}, nov {C},
+    `s93-obim-kaskade-bez-id` prazan skup. Ostale tvrdnje 367 ostaju na dve zbirne istog broja.
+- **Zeleno nad granom:** 366–369 4/4.
+- **NIJE izvršeno:** pune suite, `dokaz.py s93-` i preslagana sidra, ručni Compile, ručna provera. Razlog: Excel je
+  20.11. zauzimala druga sesija (A/B merenje `ImportAllVBA`).
 
 ## 15) Backlog — namerno van opsega
 

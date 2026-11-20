@@ -11219,10 +11219,13 @@
        procedura-labela i S9-5 integriteta). Dokaz u oba smera izmeren (stari kod 13 → `PAO` po imenu; zastareo
        unos → `PAO`; grana → `ok`).
      - **Sabotaže:** 9 sidara preslagano, 18 novih `s93-*`; `vba_check` čist (1424).
-     - **Izvršeno:** jeftine kapije nad `f7832ed8` (v. plan §14.67).
-     - **NIJE izvršeno:** fixture u worktree-ju, crveno nad starim kodom (`--src` = izvor `75af3deb`), zeleno,
-       pune suite, `dokaz.py s93-` i preslagana sidra, ručni Compile, ručna provera (i ostatak iz S9-2). Razlog:
-       Excel je bio zauzet drugom sesijom (G1). Ponašanje je do tada neverifikovano.
+     - **Izvršeno:** jeftine kapije nad `f7832ed8`; fixture u worktree-ju (`make_fixture` dobio preimenovanje
+       `ZbirnaGeneracijaID` → `ZbirnaRoditeljID`, `b2ffb413`); crveno nad starim kodom 4/4 po imenu i zeleno 4/4
+       (v. plan §14.67). Pre zelenog su ispravljena dva testa koja su merila preduslov umesto pravila: 368 (gajbe 0
+       → validator stao pre provere duple) i 367 (obim kaskade nad brojem dva vlasnika → `VISE_VLASNIKA`, kapija
+       van S9-3; sada zbirna jednog vlasnika uz mamac starog oblika, `5e217cfc`).
+     - **NIJE izvršeno:** pune suite, `dokaz.py s93-` i preslagana sidra, ručni Compile, ručna provera (i ostatak
+       iz S9-2). Razlog: Excel je 20.11. zauzimala druga sesija (A/B merenje `ImportAllVBA`).
      - **Sledeći brojevi:** test 370 · stavka 335 · KI-097 · plan §14.68.
 
 ## Dug sa imenom (posle S5-5b)
