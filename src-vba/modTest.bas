@@ -785,6 +785,9 @@ Public Sub RunAllTests()
     RunOne 397
     RunOne 398
     RunOne 399
+    ' S93-REV-01/02 (review #501): izvoz ne guta kvar E4; dupli PrijemnicaID je greska.
+    RunOne 400
+    RunOne 401
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1441,6 +1444,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 397: TestName = "T_S93_StornoPoID"
         Case 398: TestName = "T_S93_F4IOporavakPoID"
         Case 399: TestName = "T_S93_TekucaPredajaBezZbirne"
+        Case 400: TestName = "T_S93_IzvozKvarE4JeGreska"
+        Case 401: TestName = "T_S93_E4DupliIDJeGreska"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1855,6 +1860,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 397: T_S93_StornoPoID
         Case 398: T_S93_F4IOporavakPoID
         Case 399: T_S93_TekucaPredajaBezZbirne
+        Case 400: T_S93_IzvozKvarE4JeGreska
+        Case 401: T_S93_E4DupliIDJeGreska
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -36925,4 +36932,131 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_TekucaPredajaBezZbirne", _
              "399: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 400 -- S93-REV-01: izvoz OtkupiAll ne pretvara kvar citaca E4 u "nije
+' primljeno". Indeks prijemnica za izvoz (PrijemniceZaIzvozPoZbirni) je gutao
+' gresku citaca (LogErr + delimican recnik), pa je ExportOtkupiAll izvozio
+' Primljeno "Ne" i TransportStatus "in_transport" kao da je procitano. Kvar
+' citaca se izaziva seam-om kesa kolone (modDataAccess.KesKoloneTestSet: indeks
+' kolone ZbirnaRoditeljID = 0 u prozoru kesa), pa strog citac E4 pada isto kao
+' nad sveskom bez te kolone. Kontrola bez kvara: indeks nosi zbirnu lanca.
+' SABOTAZA: s93-izvoz-guta-kvar-e4.
+Private Sub T_S93_IzvozKvarE4JeGreska()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brojX As String, bX As String, otpX As String, zbrX As String
+    Dim prjX As String, idx As Object, greska As String, prozor As Boolean
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    brojX = "ZB-S93IZ-" & t
+    SledLanacDoZbirne "S93IZ", brojX, FX_VOZAC, FX_KUPAC, 40, bX, otpX, zbrX
+    prjX = SledPrijemnica("PR-S93IZ-" & t, brojX, FX_VOZAC, FX_KUPAC, 35, 0)
+
+    Set idx = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
+    AssertEq CStr(idx.Exists(zbrX)), "True", _
+             "400 preduslov: bez kvara indeks izvoza nosi prijemnicu zbirne lanca"
+
+    modDataAccess.BeginTableCache
+    prozor = True
+    modDataAccess.KesKoloneTestSet TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, 0
+    Set idx = Nothing
+    On Error Resume Next
+    Set idx = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
+    greska = Err.description
+    On Error GoTo CleanUp
+    modDataAccess.EndTableCache
+    prozor = False
+
+    AssertEq CStr(Len(greska) > 0) & "|" & CStr(idx Is Nothing), "True|True", _
+             "400 izvoz OtkupiAll: kvar citaca E4 je greska izvoza, ne prazan indeks (S93-REV-01)"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    If prozor Then modDataAccess.EndTableCache
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_IzvozKvarE4JeGreska", _
+             "400: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 401 -- S93-REV-02: dupli PrijemnicaID u aktivnim redovima nije izbor prvog
+' roditelja. Obrnuta mapa E4 (ZbirneAktivnihPrijemnica) je za drugi red istog
+' PrijemnicaID-a precutala roditelja, pa je redosled redova tabele birao zbirnu
+' kojoj prijemnica "pripada" -- u izvestajima, manjku, izvozu i stornu.
+' Centralne kapije jedinstvenosti pred citaocima nema (modProductionHealthCheck
+' samo broji, modFaktura proverava tek pri fakturi), pa odbija sam citac: oba
+' smera E4 dizu gresku koja imenuje ID, i kad oba reda nose ISTOG roditelja.
+' SABOTAZA: s93-e4-dupli-id-prvi.
+Private Sub T_S93_E4DupliIDJeGreska()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, brB As String, bA As String, otpA As String
+    Dim zbrA As String, bB As String, otpB As String, zbrB As String
+    Dim prjA As String, prjB As String, brPrjB As String
+    Dim kvar As Object, m As Object, gRod As String, gSve As String
+    Dim gIzv As String, gIsti As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    brA = "ZB-S93DA-" & t
+    brB = "ZB-S93DB-" & t
+    brPrjB = "PR-S93DB-" & t
+    SledLanacDoZbirne "S93DA", brA, FX_VOZAC, FX_KUPAC, 40, bA, otpA, zbrA
+    prjA = SledPrijemnica("PR-S93DA-" & t, brA, FX_VOZAC, FX_KUPAC, 35, 0)
+    SledLanacDoZbirne "S93DB", brB, FX_VOZAC, FX_KUPAC, 30, bB, otpB, zbrB
+    prjB = SledPrijemnica(brPrjB, brB, FX_VOZAC, FX_KUPAC, 25, 0)
+    AssertEq S93Roditelj(prjA) & "|" & S93Roditelj(prjB), UCase$(zbrA) & "|" & UCase$(zbrB), _
+             "401 preduslov: svaka prijemnica nosi svoju zbirnu po E4"
+
+    ' Drugi red dobija ID prvog: isti PrijemnicaID, DRUGI roditelj.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_ID, prjA
+
+    On Error Resume Next
+    Set m = modAutoHladnjaca.ZbirneAktivnihPrijemnica(kvar)
+    gRod = Err.description
+    Err.Clear
+    Set m = modAutoHladnjaca.AktivnePrijemniceZbirnih(kvar)
+    gSve = Err.description
+    Err.Clear
+    Set m = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
+    gIzv = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+
+    AssertEq CStr(InStr(1, gRod, prjA, vbTextCompare) > 0), "True", _
+             "401 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj"
+    AssertEq CStr(InStr(1, gSve, prjA, vbTextCompare) > 0), "True", _
+             "401 E4 zbirna -> prijemnice: ista prijemnica pod dve zbirne je greska, ne dete obe"
+    AssertEq CStr(InStr(1, gIzv, prjA, vbTextCompare) > 0), "True", _
+             "401 izvoz OtkupiAll: dupli PrijemnicaID obara indeks izvoza, ne bira roditelja"
+
+    ' Isti roditelj: drugi red (nadjen po svom broju) vraca se na zbirnu A.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_DETE_ZBIRNA_ROD, zbrA
+    On Error Resume Next
+    Set m = modAutoHladnjaca.ZbirneAktivnihPrijemnica(kvar)
+    gIsti = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+
+    AssertEq CStr(InStr(1, gIsti, prjA, vbTextCompare) > 0), "True", _
+             "401 E4: dupli PrijemnicaID je greska i kad oba reda nose istog roditelja"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_E4DupliIDJeGreska", _
+             "401: rollback je vratio redove svih tabela lanca"
 End Sub
