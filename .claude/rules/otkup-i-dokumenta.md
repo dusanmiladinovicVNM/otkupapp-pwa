@@ -17,7 +17,7 @@ paths:
 ## 1) `ClearForm` ima ugovor, ne „čisti ekran"
 
 `modOtkupUI.ClearForm` se izvršava posle **svakog** snimanja otkupnog lista
-(`modScrDokumenti.Scr_Save`, po uspehu `SaveOtkupMulti_TX`). Šta se briše a šta
+(`modOtkupUI.CommitDokument`, kad `modScrDokumenti.Scr_Save` vrati uspeh). Šta se briše a šta
 ne — nije stvar ukusa, nego radnog toka operatera na terenu:
 
 | Polje | Posle snimanja | Zašto |
@@ -92,13 +92,37 @@ nego „da li se kontekst otpremnice zaista napušta".
 
 ## 4) Snimanje ide kroz transakciju, ne kroz formu
 
-`SaveOtkupMulti_TX` je jedina ulazna tačka za upis otkupa. `Scr_Save` →
-`modOtkupUnos` iznad nje radi validaciju i prikupljanje vrednosti; ispod nje
-idu best-effort koraci koji **ne smeju** da obore potvrdu snimanja (`OutputOtkupniList`,
-`AutoChainHladnjaca`, prevezivanje paleta) — svi su pod `On Error Resume Next`.
+`modOtkupUnos.OtkupUpisi` je jedina ulazna tačka za upis otkupnog lista.
+`Scr_Save` samo prevodi polja u rečnik i zove nju; ona radi validaciju i
+prikupljanje vrednosti, a upisuje tačno jedan pisac po slučaju:
 
-Ne dodavati upis u tabele mimo `SaveOtkupMulti_TX`, i ne premeštati best-effort
-korake iznad nje.
+- nov list: `modOtkup.CreateOtkup_TX`;
+- ispravka (`IspraviOtkupIliLanac`):
+  - sam list ili list u nacrtu otpremnice ide kroz `modOtkup.IspravkaOtkupa_TX`;
+  - list u izdatoj otpremnici ide kroz `modDokumenta.IspravkaListaULancu_TX`.
+
+Potvrda manjka ambalaže (`AMB_ERR_POTVRDA_DEFICITA`) ponavlja **istog** pisca iz
+`OtkupUpisi`.
+
+Posle uspešnog upisa idu koraci koji **ne smeju** da obore potvrdu snimanja, i
+svaki ima svoju zaštitu:
+
+- **Štampa** `OutputOtkupniList` ide iz `OtkupUpisi`, posle pisca, pod
+  `On Error Resume Next` / `Err.Clear`.
+- **Auto-lanac hladnjače** `modAutoHladnjaca.AutoLanacHladnjaca` ide iz
+  `Scr_Save`, tek kad `RutaPosleUpisa` vrati `RUTA_LANAC`. Ima sopstveni EH:
+  greška se loguje i vraća kao tekst, ne diže se.
+- **Vezivanje za aktivni nacrt** (`VeziZaAktivnu`, ruta `RUTA_NACRT`) takođe ide
+  iz `Scr_Save` i ima sopstveni EH.
+
+Lanac se namerno ne zove iz `OtkupUpisi`: ekran ga pokreće tek posle odluke o
+vezivanju za aktivni nacrt, da ne pretekne izbor operatera. Prevezivanja paleta
+na ovom putu više nema (S6 korak 7, KI-046); prevezivanje siročadi paleta
+je u Oporavku („Prevezi").
+
+Ne dodavati upis u tabele mimo ovih pisaca, i ne premeštati best-effort korake
+ispred upisa. (`SaveOtkupMulti_TX` iz starijih dokumenata je obrisan u S1a,
+`modOtkup.bas` oko 1949; `AutoChainHladnjaca` je danas `AutoLanacHladnjaca`.)
 
 ## 5) Novi UI je ljuska — legacy se penzioniše po koracima
 
