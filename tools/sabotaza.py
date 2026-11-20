@@ -14732,6 +14732,33 @@ SABOTAZE = {
         "T_KesKnjiga_DokazJednomUProzoru",
         "392 upis kvara u prozoru obara zapamcen dokaz",
     ),
+    # D1-UPIS (merenje 20.11.2026): zapamcen dokaz knjige se nikad ne nastavlja --
+    # svako citanje van prozora dokazuje celu knjigu (stanje pre reza).
+    "knjiga-nastavak-gluv": (
+        "modAmbalaza.bas",
+        "    If mDokazN = 0 Or mDokazVrste Is Nothing Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: dokaz knjige se uvek ponavlja ceo\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 dva citanja zaredom: pun dokaz samo prvi put",
+    ),
+    # D1-UPIS: dokazani prefiks se ne poredi -- izmena u njemu (ne dodavanje)
+    # prolazi sa starim dokazom, pa pokvarena knjiga ulazi u kapije upisa.
+    "knjiga-nastavak-ne-poredi-dokazano": (
+        "modAmbalaza.bas",
+        "    For j = 1 To UBound(mDokazIdx)\n",
+        "    For j = 1 To 0   ' SABOTAZA: dokazani deo se ne poredi\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 izmena u dokazanom delu obara nastavak",
+    ),
+    # D1-UPIS: dodati redovi se ne dokazuju -- nastavak samo prepise zapamcen
+    # recnik, pa duplikat AmbID-a u novom redu prolazi (AMB-INV-11).
+    "knjiga-nastavak-ne-dokazuje-nove": (
+        "modAmbalaza.bas",
+        "        Set vrste = KnjigaIntegritet(data, kol, sourceName, Nothing, mDokazN + 1, KopijaRecnika(mDokazVrste))\n",
+        "        Set vrste = KopijaRecnika(mDokazVrste)   ' SABOTAZA: novi redovi se ne dokazuju\n",
+        "T_KnjigaDokaz_NastavakIstiSud",
+        "393 dodat red sa duplim AmbID-em pada i kroz nastavak",
+    ),
 }
 
 

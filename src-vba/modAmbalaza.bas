@@ -62,6 +62,19 @@ Private mOdlTx As clsTransaction
 Private mOdlNalozi As Object
 Private mOdlOriginali As Collection
 
+' ZAPAMCEN DOKAZ KNJIGE (D1-UPIS, analiza brzine 2026-11; v. KnjigaZaCitanje):
+' prefiks knjige koji je prosao KnjigaIntegritet -- njegove celije SAMO u
+' kolonama koje dokaz cita (kolona, red; red je poslednja dimenzija), raspored
+' tih kolona i recnik vrsta (AmbID -> VrstaKretanja). Nije kes poverenja: svako
+' citanje prvo poredi prefiks celiju po celiju, pa ne zavisi od toga ko je i
+' kako pisao (upis mimo modDataAccess, rucna izmena u Excelu, rollback).
+Private mDokazN As Long
+Private mDokazKol As String
+Private mDokazIdx() As Long
+Private mDokazPodaci() As Variant
+Private mDokazVrste As Object
+Private mDokazPunih As Long         ' broj punih dokaza (test ga cita)
+
 ' ============================================================
 ' Helpers
 ' ============================================================
@@ -759,17 +772,30 @@ End Function
 ' Taj saldo ulazi u kapiju deficita, pa korumpiran identitet otvara izlaz BEZ
 ' pokrica. Za 10d je gore: StornoOd = AMB-X vise ne pokazuje na jedan original.
 ' Pravilo je isto kao za nalog (AmbNalogProblem): 0 pada, 1 prolazi, 2+ pada.
+'
+' NASTAVAK (D1-UPIS): odReda > 1 i pocetne = recnik vec dokazanog prefiksa 1..odReda-1
+' sude SAMO redove od odReda, ISTIM pravilima. To je isti sud kao pun prolaz kad je
+' prefiks nepromenjen: njegovi redovi su vec prosli, recnik nosi njihove AmbID-e (pa
+' duplikat u novom redu pada), a StornoOd starog reda ne moze da izgubi metu dodavanjem.
+' Nepromenjenost prefiksa jemci pozivalac (KnjigaDokazNastavi), ne ova funkcija.
 Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
                                   ByVal sourceName As String, _
-                                  Optional ByVal nalazi As Collection) As Object
+                                  Optional ByVal nalazi As Collection, _
+                                  Optional ByVal odReda As Long = 1, _
+                                  Optional ByVal pocetne As Object = Nothing) As Object
     Dim vrste As Object
-    Set vrste = CreateObject("Scripting.Dictionary")
+    If pocetne Is Nothing Then
+        Set vrste = CreateObject("Scripting.Dictionary")
+    Else
+        Set vrste = pocetne
+    End If
     Set KnjigaIntegritet = vrste
 
     If IsEmpty(data) Then Exit Function
+    If odReda < 1 Then odReda = 1
 
     Dim i As Long, p As String, ambID As String
-    For i = 1 To UBound(data, 1)
+    For i = odReda To UBound(data, 1)
         If RedPrazan(data, i, kol) Then
             ' artefakt prazne tabele -- nije red
         ElseIf Not RedDoticeKnjigu(data, i, kol) Then
@@ -803,7 +829,7 @@ Private Function KnjigaIntegritet(ByRef data As Variant, ByRef kol As Object, _
     ' StornoOd mora da pokazuje na postojeci red -- DRUGI prolaz, jer original sme
     ' da stoji posle svog kontra-stava (knjiga je append-only, ne sortirana).
     Dim st As String
-    For i = 1 To UBound(data, 1)
+    For i = odReda To UBound(data, 1)
         If RedDoticeKnjigu(data, i, kol) Then
             st = AmbText(data(i, kol(COL_AMB_STORNO_OD)))
             If Len(st) > 0 Then
@@ -839,16 +865,129 @@ End Function
 ' Svi citaoci predaju PUNU knjigu iz GetTableData; u prozoru je to ista kopija za
 ' sve, pa je dokaz o njoj isti. Audit (AmbKnjigaNalazi) ne ide ovuda i dokazuje
 ' uvek iznova.
+'
+' VAN PROZORA (D1-UPIS): jedno snimanje otkupa je 15 puta dokazivalo istu knjigu
+' (4,8 od 10,4 s, merenje 20.11.2026) -- kapije upisa, idempotencija i stampa,
+' svaka za sebe, a izmedju njih se knjizi tek po red-dva. Zato drugi nivo:
+' zapamcen dokazan prefiks (KnjigaDokazNastavi). Citanje poredi prefiks celiju po
+' celiju u svim kolonama koje dokaz cita, a ISTI sud (KnjigaIntegritet) prolaze
+' samo redovi dodati posle njega. Promenjen, skracen ili premesten prefiks, druge
+' kolone ili greska u celiji znace pun dokaz -- nikad slabije citanje.
 Private Function KnjigaZaCitanje(ByRef data As Variant, ByVal sourceName As String, _
                                  ByRef outVrste As Object) As Object
     Dim kol As Object
     Set kol = KnjigaIndeksi(sourceName)
     If Not KnjigaDokazIzKesa(data, outVrste) Then
-        Set outVrste = KnjigaIntegritet(data, kol, sourceName)
+        If Not KnjigaDokazNastavi(data, kol, sourceName, outVrste) Then
+            Set outVrste = KnjigaIntegritet(data, kol, sourceName)
+            mDokazPunih = mDokazPunih + 1
+            KnjigaDokazZapamti data, kol, outVrste
+        End If
         KnjigaDokazUKes data, outVrste
     End If
     Set KnjigaZaCitanje = kol
 End Function
+
+' True = knjiga je dokazana BEZ punog prolaza: zapamcen prefiks je celija po celija
+' isti (isti tip, tekst binarno), a redovi dodati posle njega su prosli isti sud.
+' Kvar u novim redovima dize gresku kao i pun dokaz, a zapamcen prefiks ostaje
+' kakav je bio -- neuspeh se ne pamti. outVrste je NOV recnik (kopija).
+Private Function KnjigaDokazNastavi(ByRef data As Variant, ByVal kol As Object, _
+                                    ByVal sourceName As String, _
+                                    ByRef outVrste As Object) As Boolean
+    Dim n As Long, i As Long, j As Long, c As Long
+    Dim v As Variant, m As Variant, vrste As Object
+
+    If mDokazN = 0 Or mDokazVrste Is Nothing Then Exit Function
+    If Not IsArray(data) Then Exit Function
+    n = UBound(data, 1)
+    If n < mDokazN Then Exit Function
+    If StrComp(KnjigaKolPotpis(kol), mDokazKol, vbBinaryCompare) <> 0 Then Exit Function
+
+    For j = 1 To UBound(mDokazIdx)
+        c = mDokazIdx(j)
+        For i = 1 To mDokazN
+            v = data(i, c)
+            m = mDokazPodaci(j, i)
+            If VarType(v) <> VarType(m) Then Exit Function
+            If IsError(v) Or IsNull(v) Then Exit Function
+            If VarType(v) = vbString Then
+                If StrComp(v, m, vbBinaryCompare) <> 0 Then Exit Function
+            ElseIf v <> m Then
+                Exit Function
+            End If
+        Next i
+    Next j
+
+    If n > mDokazN Then
+        Set vrste = KnjigaIntegritet(data, kol, sourceName, Nothing, mDokazN + 1, KopijaRecnika(mDokazVrste))
+        KnjigaDokazZapamti data, kol, vrste
+    End If
+    Set outVrste = KopijaRecnika(mDokazVrste)
+    KnjigaDokazNastavi = True
+End Function
+
+' Zapamti dokazanu knjigu: celije kolona koje dokaz cita, njihov raspored i KOPIJU
+' recnika vrsta (citalac dobija svoju kopiju, pa zapamcen ne menja niko).
+Private Sub KnjigaDokazZapamti(ByRef data As Variant, ByVal kol As Object, ByVal vrste As Object)
+    Dim n As Long, i As Long, j As Long, k As Variant
+
+    mDokazN = 0
+    Set mDokazVrste = Nothing
+    If Not IsArray(data) Then Exit Sub
+    If vrste Is Nothing Then Exit Sub
+    n = UBound(data, 1)
+    If n < 1 Or kol.count < 1 Then Exit Sub
+
+    ReDim mDokazIdx(1 To kol.count)
+    For Each k In kol.keys
+        j = j + 1
+        mDokazIdx(j) = CLng(kol(k))
+    Next k
+    ReDim mDokazPodaci(1 To kol.count, 1 To n)
+    For j = 1 To kol.count
+        For i = 1 To n
+            mDokazPodaci(j, i) = data(i, mDokazIdx(j))
+        Next i
+    Next j
+    mDokazKol = KnjigaKolPotpis(kol)
+    Set mDokazVrste = KopijaRecnika(vrste)
+    mDokazN = n
+End Sub
+
+' Raspored kolona koje dokaz cita, kao tekst -- drugi raspored znaci pun dokaz.
+Private Function KnjigaKolPotpis(ByVal kol As Object) As String
+    Dim k As Variant, s As String
+    For Each k In kol.keys
+        s = s & CStr(k) & "=" & CStr(kol(k)) & ";"
+    Next k
+    KnjigaKolPotpis = s
+End Function
+
+Private Function KopijaRecnika(ByVal src As Object) As Object
+    Dim d As Object, k As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = src.CompareMode
+    For Each k In src.keys
+        d(k) = src(k)
+    Next k
+    Set KopijaRecnika = d
+End Function
+
+' TEST SEAM: broj punih dokaza knjige od starta sesije. Samo posmatra; tvrdo
+' gejtovan, test meri RAZLIKU pre i posle (obrazac IzvedenoPogodakaTest).
+Public Function KnjigaDokazPunihTest() As Long
+    If Not IsTestMode() Then Exit Function
+    KnjigaDokazPunihTest = mDokazPunih
+End Function
+
+' TEST SEAM: zaboravi zapamcen dokaz, da test izmeri pun dokaz pa nastavak. Samo
+' brise kes (sledece citanje dokazuje ceo prolaz); tvrdo gejtovan.
+Public Sub KnjigaDokazTestZaboravi()
+    If Not IsTestMode() Then Exit Sub
+    mDokazN = 0
+    Set mDokazVrste = Nothing
+End Sub
 
 ' True = ista knjiga je u ovom prozoru vec dokazana; outVrste je tada NOV recnik
 ' AmbID -> VrstaKretanja, sagradjen iz zapamcenog niza (kopija po vrednosti).

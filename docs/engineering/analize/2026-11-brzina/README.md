@@ -222,6 +222,7 @@ commit):
 | PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (FULL + dokaz) |
 | PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (FULL + dokaz) |
 | D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **zeleno 20.11.** (FULL + dokaz `kes-knjiga` 2/2) |
+| D1-UPIS (20.11.) | Van prozora čitanja `KnjigaZaCitanje` pamti **dokazan prefiks** knjige: ćelije u 12 kolona koje dokaz čita, raspored kolona i rečnik vrsta. Sledeće čitanje poredi prefiks ćeliju po ćeliju (isti tip, tekst binarno), a **istu** funkciju `KnjigaIntegritet`, pokrenutu od prvog novog reda, prolaze samo dodati redovi. Promenjen, skraćen ili premešten prefiks, druge kolone ili greška u ćeliji znače pun dokaz. Ne zavisi od toga ko je pisao (upis mimo `modDataAccess`, ručna izmena, rollback). Pre koda je prošao `pre-flight`; dokaz je čista funkcija 12 kolona knjige (`AmbPrenosStrukturaProblem` ne čita tabele). | `modTest` 393 `T_KnjigaDokaz_NastavakIstiSud`; sabotaže `knjiga-nastavak-gluv`, `knjiga-nastavak-ne-poredi-dokazano`, `knjiga-nastavak-ne-dokazuje-nove` | **neverifikovano** (web sesija; ovde zelene samo statičke provere) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -257,6 +258,8 @@ commit):
   - za D1-IZV: ~~test 392, dokaz `kes-knjiga` 2/2 i pun prolaz~~ (zeleno
     20.11.: 12 suite-ova, `RunAllTests` 392/392, BFP 3.499/3.499, GREEN
     marker); ~~ponovno merenje zbirnog prikaza~~ (20.11.: 4,41 → 1,80 s).
+  - za D1-UPIS: test 393, `dokaz.py --izbor knjiga-nastavak`, pun prolaz (BFP
+    gađa kapije knjige) i merenje snimanja otkupa.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i

@@ -763,6 +763,8 @@ Public Sub RunAllTests()
     RunOne 391
     ' Merenje 20.11.2026: dokaz integriteta knjige ambalaze jednom po prozoru (D1).
     RunOne 392
+    ' Merenje 20.11.2026: snimanje otkupa dokazuje knjigu ambalaze 15 puta (D1-UPIS).
+    RunOne 393
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1398,6 +1400,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 390: TestName = "T_Nevezane_DupliIdPadaPoImenu"
         Case 391: TestName = "T_KesTabele_RollbackZastareva"
         Case 392: TestName = "T_KesKnjiga_DokazJednomUProzoru"
+        Case 393: TestName = "T_KnjigaDokaz_NastavakIstiSud"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1798,6 +1801,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 390: T_Nevezane_DupliIdPadaPoImenu
         Case 391: T_KesTabele_RollbackZastareva
         Case 392: T_KesKnjiga_DokazJednomUProzoru
+        Case 393: T_KnjigaDokaz_NastavakIstiSud
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24494,6 +24498,137 @@ Private Function KesKnjigaKvar(ByRef opis As String) As Long
     opis = Err.description
     Err.Clear
 End Function
+
+' ============================================================
+' 393. KNJIGA AMBALAZE: DOKAZ SE NASTAVLJA, NE PONAVLJA (brzina, D1-UPIS).
+' ============================================================
+' Merenje 20.11.2026: jedno snimanje otkupa je 15 puta dokazivalo integritet iste
+' knjige (4,8 od 10,4 s) -- van prozora citanja, gde 392 ne pomaze. Sada
+' KnjigaZaCitanje pamti dokazan prefiks knjige; sledece citanje ga poredi celiju
+' po celiju, a ISTI sud (KnjigaIntegritet) prolaze samo dodati redovi.
+'
+' Kriticne su invarijante koje kapije upisa citaju kroz dokaz (AMB-INV-07, -11,
+' -16): pokvarena knjiga ne sme da prodje ni kroz nastavak. Mera, van prozora:
+'  (a) posle punog dokaza sledeca citanja ga ne ponavljaju, isti rezultat;
+'  (b) ispravan dodat red se dokazuje sam, a sud je isti kao pun dokaz;
+'  (c) dodat red sa duplim AmbID-em pada po imenu, i ponovo (neuspeh se ne pamti);
+'  (d) izmena u dokazanom delu (ne dodavanje) obara nastavak, po imenu;
+'  (e) posle rollback-a rezultat i knjiga su kao pre testa, i audit.
+' Fixture: normal production state. Kvarovi su fault injection u transakcijama
+' koje rollback vraca u celosti (obrazac TEST390-REV-01). Dodat red je kopija
+' originala iz fixture-a sa novim AmbID-em -- isti ugovor reda, drugi identitet.
+Private Sub T_KnjigaDokaz_NastavakIstiSud()
+    Dim d As Variant, nKol As Long, cId As Long, cSt As Long
+    Dim r1 As Long, r2 As Long, i As Long, j As Long
+    Dim id1 As String, red() As Variant
+    Dim a As String, b As String, c As String, cPun As String
+    Dim a2 As String, posle As String
+    Dim p0 As Long, pA As Long, pB As Long, pC As Long
+    Dim kvarDod1 As Long, kvarDod2 As Long, kvarIzm As Long
+    Dim opisDod1 As String, opisDod2 As String, opisIzm As String
+    Dim knjigaPre As String, knjigaPosle As String
+    Dim tx As clsTransaction
+    Dim errNum As Long, errDesc As String
+
+    knjigaPre = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    d = GetTableData(TBL_AMBALAZA)
+    cId = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    cSt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD)
+    If IsArray(d) And cId > 0 And cSt > 0 Then
+        nKol = UBound(d, 2)
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If r1 = 0 And Len(Trim$(NzToText(d(i, cSt)))) = 0 Then
+                    r1 = i
+                ElseIf r2 = 0 Then
+                    r2 = i
+                End If
+            End If
+            If r1 > 0 And r2 > 0 Then Exit For
+        Next i
+    End If
+    If r1 > 0 Then
+        id1 = Trim$(NzToText(d(r1, cId)))
+        ReDim red(1 To nKol)
+        For j = 1 To nKol
+            red(j) = d(r1, j)
+        Next j
+    End If
+
+    On Error GoTo CleanUp
+
+    ' (a) Pun dokaz jednom, pa nastavak.
+    modAmbalaza.KnjigaDokazTestZaboravi
+    p0 = modAmbalaza.KnjigaDokazPunihTest()
+    a = KesKnjigaPotpis()
+    pA = modAmbalaza.KnjigaDokazPunihTest() - p0
+    p0 = modAmbalaza.KnjigaDokazPunihTest()
+    b = KesKnjigaPotpis()
+    pB = modAmbalaza.KnjigaDokazPunihTest() - p0
+
+    If r1 > 0 And r2 > 0 Then
+        ' (b) Ispravan dodat red, pa (c) dodat red sa duplim AmbID-em.
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        red(cId) = "ZZ-393-" & Format$(Now, "hhnnss")
+        AppendRow TBL_AMBALAZA, red
+        p0 = modAmbalaza.KnjigaDokazPunihTest()
+        c = KesKnjigaPotpis()
+        pC = modAmbalaza.KnjigaDokazPunihTest() - p0
+        modAmbalaza.KnjigaDokazTestZaboravi
+        cPun = KesKnjigaPotpis()
+
+        red(cId) = id1
+        AppendRow TBL_AMBALAZA, red
+        kvarDod1 = KesKnjigaKvar(opisDod1)
+        kvarDod2 = KesKnjigaKvar(opisDod2)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (d) Izmena u dokazanom delu: prvo dokaz nad vracenom knjigom.
+        a2 = KesKnjigaPotpis()
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        UpdateCell TBL_AMBALAZA, r2, COL_AMB_ID, id1
+        kvarIzm = KesKnjigaKvar(opisIzm)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (e)
+        posle = KesKnjigaPotpis()
+    End If
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    knjigaPosle = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KnjigaDokaz_NastavakIstiSud", errDesc
+
+    AssertEq (r1 > 0 And r2 > 0 And Len(id1) > 0), True, _
+             "393 preduslov: knjiga fixture-a ima original i jos jedan red sa AmbID-em"
+    AssertEq (Len(a) > 1), True, "393 preduslov: saldo po nalogu ima sadrzaj nad fixture-om"
+    AssertEq (Len(knjigaPre) > 0 And knjigaPosle = knjigaPre), True, _
+             "393 preduslov: knjiga je posle testa ista kao pre, i audit"
+    AssertEq pA, 1, "393 dva citanja zaredom: pun dokaz samo prvi put"
+    AssertEq pB, 0, "393 ponovljeno citanje ne dokazuje iznova"
+    AssertEq b, a, "393 nastavak daje isti rezultat kao pun dokaz"
+    AssertEq pC, 0, "393 ispravan dodat red se dokazuje sam, bez punog prolaza"
+    AssertEq c, cPun, "393 sud nad dodatim redom isti kao pun dokaz iste knjige"
+    AssertEq (kvarDod1 <> 0), True, "393 dodat red sa duplim AmbID-em pada i kroz nastavak"
+    AssertEq (InStr(1, opisDod1, "nose AmbID", vbTextCompare) > 0), True, _
+             "393 kvar dodatog reda pada po imenu"
+    AssertEq (kvarDod2 <> 0), True, "393 neuspeh nastavka se ne pamti"
+    AssertEq a2, a, "393 posle rollback-a dodatih redova sud isti kao pre"
+    AssertEq (kvarIzm <> 0), True, "393 izmena u dokazanom delu obara nastavak"
+    AssertEq (InStr(1, opisIzm, "nose AmbID", vbTextCompare) > 0), True, _
+             "393 kvar u dokazanom delu pada po imenu"
+    AssertEq posle, a, "393 posle rollback-a isti rezultat kao pre testa"
+End Sub
 
 ' ============================================================
 ' 385. OTKUPNI LIST: STAVKE KANONSKIM REDOSLEDOM, JEDNIM PROLAZOM (brzina, OTK-1).
