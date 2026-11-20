@@ -53,6 +53,11 @@ Option Explicit
 '   modScrIzvestaji.PuniSnimak   IZV.PuniSnimak|<lista>|<P/Z>
 '   modJournaling.AutoSaveTick   AKCIJA "ONTIME.AUTOSAVE"
 '   modStornoWarm.BuildWarm      AKCIJA "ONTIME.WARM"
+'   modIzvestaj.ReportSaldoOM..  IZV.SaldoOM i delovi .Otkup/.ZbirStavki/
+'                                .Sifarnik/.Novac/.Doplata/.Agro/.Amb;
+'                                zbirni: IZV.Zbirni.Stanice (rascl. 20.11.)
+'   modAmbalaza (knjiga)         AMB.SemaKapija, AMB.KnjigaIntegritet,
+'                                AMB.DokVlasnikMapa (odluka D1, analiza)
 '   modTest.ResetSeamova         PerfIskljuciTiho
 ' ============================================================
 

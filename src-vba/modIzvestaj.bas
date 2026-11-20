@@ -494,6 +494,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     ' Letzte Zeile = UKUPNO
     
     Dim otkupData As Variant
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Otkup"
     otkupData = GetOtkupByStation(stanicaID, datumOd, datumDo)
     
     ' --- Otkup pro Kooperant aggregieren ---
@@ -517,7 +518,9 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                 ' linijska polja zaglavlja ostavlja prazna (REFAKTOR S14.7, kvar 3).
                 ' Kolona Ambalaza je saldo iz tblAmbalaza (nize), ne zbir zaglavlja.
                 Dim stavkeZbir As Object
+                If gPerfOn Then PerfPocni "IZV.SaldoOM.ZbirStavki"
                 Set stavkeZbir = modOtkup.ZbirStavkiPoOtkupu()
+                If gPerfOn Then PerfKraj "IZV.SaldoOM.ZbirStavki"
                 
                 For i = 1 To UBound(otkupData, 1)
                     Dim key As String
@@ -542,17 +545,21 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         End If
     End If
     
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Otkup"
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Sifarnik"
     ' Mape kooperanata (ime/prezime, stanica) -- jednom, umesto LookupValue u petljama nize.
     Dim koopNameDict As Object
     Set koopNameDict = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
     Dim koopStanicaDict As Object
     Set koopStanicaDict = BuildLookupDict(TBL_KOOPERANTI, "KooperantID", "StanicaID")
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Sifarnik"
 
     ' --- Novac pro Kooperant aus tblNovac ---
     Dim novacDict As Object
     Set novacDict = CreateObject("Scripting.Dictionary")
     
     Dim novacData As Variant
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Novac"
     novacData = GetTableData(TBL_NOVAC)
     
     If IsArray(novacData) Then
@@ -598,12 +605,15 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         Next n
     End If
 
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Novac"
     ' --- Doplata (knjizno odobrenje) pro Kooperant -- DOPLATA.md par. 6 ---
     ' Stavka KO pripada stanici na kojoj je roba predata; period je po datumu
     ' knjizenja (DOP-ODL-04). Kooperant sa doplatom a bez otkupa u periodu
     ' ulazi u listu, kao kod novca: KO se po pravilu knjizi posle otkupa.
     Dim dopDict As Object
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Doplata"
     Set dopDict = modDoplata.DoplataIznosPoKooperantu(stanicaID, datumOd, datumDo)
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Doplata"
     Dim dopK As Variant
     For Each dopK In dopDict.keys
         If Not dict.Exists(CStr(dopK)) Then dict.Add CStr(dopK), Array(0#, 0#, 0#)
@@ -638,6 +648,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     
     ' --- Agrohemija pro Kooperant (Dict) ---
     Dim magData As Variant
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Agro"
     magData = GetTableData(TBL_MAGACIN)
     
     If IsArray(magData) Then
@@ -681,6 +692,7 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             Next m
     End If
     
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Agro"
     ' --- Saldo ambalaze po kooperantu, iz KNJIGE (AMB-10c).
     '
     ' Ovde je stajao SVOJ prolaz kroz tblAmbalaza: svoje pravilo znaka (Select
@@ -699,8 +711,10 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
     ' prikazao kao zaduzenje. Nema prelivanja: kretanje sa drugom stanicom je
     ' tamo. Fizicki pregled stanice ostaje ReportAmbalaza("OM").
     Dim koopAmbDict As Object
+    If gPerfOn Then PerfPocni "IZV.SaldoOM.Amb"
     Set koopAmbDict = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True, datumDo, _
                                                    AMB_NALOG_STANICA, Trim$(stanicaID))
+    If gPerfOn Then PerfKraj "IZV.SaldoOM.Amb"
 
     ' --- Ergebnis-Array: 8 Spalten ---
     ' Kooperant | Kolicina | Vrednost | Isplaceno | AgroZaduzenje | Saldo | Ambalaza | Doplata
@@ -2097,7 +2111,9 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
 
     ' Univerzum stanica IZ PODATAKA (krug 16) -- sifarnik samo imenuje.
     Dim st As Variant
+    If gPerfOn Then PerfPocni "IZV.Zbirni.Stanice"
     st = IzvStaniceIzPodataka()
+    If gPerfOn Then PerfKraj "IZV.Zbirni.Stanice"
     If Not IsArray(st) Then Exit Function
 
     Dim outA() As Variant, n As Long, i As Long, j As Long
@@ -2108,8 +2124,10 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
         Dim stID As String
         stID = Trim$(CStr(st(i, 1)))
         If Len(stID) > 0 Then
+            If gPerfOn Then PerfPocni "IZV.SaldoOM"
             r = ReportSaldoOM(stID, datumOd, datumDo)
             uk = IzvUkupnoRed(r, 1)
+            If gPerfOn Then PerfKraj "IZV.SaldoOM"
             If uk > 0 Then
                 imaSta = False
                 For j = 2 To 8
