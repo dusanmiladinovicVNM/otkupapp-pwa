@@ -765,6 +765,9 @@ Public Sub RunAllTests()
     RunOne 392
     ' Merenje 20.11.2026: snimanje otkupa dokazuje knjigu ambalaze 15 puta (D1-UPIS).
     RunOne 393
+    ' Merenje 20.11.2026: osvezavanje posle snimanja (UI-7 kaskada, UI-1 prozor).
+    RunOne 394
+    RunOne 395
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1007,6 +1010,8 @@ Private Sub ResetSeamova()
     modMaticniEkran.CenPitanjeTestReset
     ' Podmetnut pad upisa cene (381): zaostao seam bi oborio svaki sledeci unos.
     modCenovnik.CenUpisPadaTestSet False
+    ' Brojac citanja sa lista (395): zaostao bi brojao tudje citanje.
+    modDataAccess.CitanjaSaListaTestKraj
     Err.Clear
 End Sub
 
@@ -1401,6 +1406,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 391: TestName = "T_KesTabele_RollbackZastareva"
         Case 392: TestName = "T_KesKnjiga_DokazJednomUProzoru"
         Case 393: TestName = "T_KnjigaDokaz_NastavakIstiSud"
+        Case 394: TestName = "T_Refresh_MaticneListeBezKaskade"
+        Case 395: TestName = "T_Refresh_CitaTabeluJednom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1802,6 +1809,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 391: T_KesTabele_RollbackZastareva
         Case 392: T_KesKnjiga_DokazJednomUProzoru
         Case 393: T_KnjigaDokaz_NastavakIstiSud
+        Case 394: T_Refresh_MaticneListeBezKaskade
+        Case 395: T_Refresh_CitaTabeluJednom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24628,6 +24637,129 @@ CleanUp:
     AssertEq (InStr(1, opisIzm, "nose AmbID", vbTextCompare) > 0), True, _
              "393 kvar u dokazanom delu pada po imenu"
     AssertEq posle, a, "393 posle rollback-a isti rezultat kao pre testa"
+End Sub
+
+' ============================================================
+' 394. OSVEZAVANJE POSLE UPISA: LISTE KONTEKSTA BEZ KASKADE (brzina, UI-7).
+' ============================================================
+' Merenje 20.11.2026: RefillMaticniCombos je posle svakog snimanja punio listu
+' otkupnih mesta ispocetka, a svaki programski Change (3 po snimanju) je pokretao
+' ceo handler OM-a -- OnStanicaChanged, saldo, otvorene blokove, KPI (~0,5 s) -- i
+' prljao praznu formu ("Nesacuvan unos", opazeno i posle Sync-a).
+' Mera:
+'  (a) izbor koji punjenje ne menja: handler OM-a ne radi nijednom, izbor ostaje,
+'      forma ostaje cista;
+'  (b) izbor koji punjenje stvarno menja (deaktivirano otkupno mesto): handler
+'      radi TACNO jednom, KPI ostaje bez otkupnog mesta, a forma ostaje cista.
+' Fixture: normal production state; deaktivacija je u transakciji koju rollback vraca.
+Private Sub T_Refresh_MaticneListeBezKaskade()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim rows As Collection, red As Long
+    Dim omID As String, nesac As String
+    Dim h0 As Long, hA As Long, hB As Long
+    Dim omA As String, omB As String, kpiB As String
+    Dim prljavoA As Boolean, prljavoB As Boolean
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    omID = GetComboID(cbOM)
+    nesac = Poruka("OTKUI_HDR_NESACUVANO")
+
+    ' (a) Cista forma posle upisa, izbor se ne menja.
+    modOtkupUI.ClearForm
+    h0 = modOtkupUI.OmPromenaBrojTest()
+    modOtkupUI.RefreshFromData
+    hA = modOtkupUI.OmPromenaBrojTest() - h0
+    omA = GetComboID(cbOM)
+    prljavoA = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+
+    ' (b) Izabrano mesto deaktivirano: punjenje ga izbacuje iz liste.
+    If Len(omID) > 0 Then
+        Set rows = FindRows(TBL_STANICE, "StanicaID", omID)
+        If Not rows Is Nothing Then
+            If rows.count > 0 Then red = rows(1)
+        End If
+    End If
+    If red > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        txZapoceta = True
+        tx.AddTableSnapshot TBL_STANICE
+        UpdateCell TBL_STANICE, red, "Aktivan", STATUS_NEAKTIVAN
+        h0 = modOtkupUI.OmPromenaBrojTest()
+        modOtkupUI.RefreshFromData
+        hB = modOtkupUI.OmPromenaBrojTest() - h0
+        omB = GetComboID(cbOM)
+        kpiB = CStr(f.Controls("zKpi").Controls("kpiV1").caption)
+        prljavoB = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+        tx.RollbackTx
+        txZapoceta = False
+    End If
+    ReleaseOtkupUIForm f
+
+    AssertEq (Len(omID) > 0), True, "394 preduslov: otkupno mesto je izabrano"
+    AssertEq omA, omID, "394 izbor otkupnog mesta prezivljava osvezavanje"
+    AssertEq hA, 0, "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja"
+    AssertEq (red > 0), True, "394 preduslov: izabrano mesto postoji u tblStanice"
+    AssertEq omB, "", "394 preduslov: deaktivirano mesto nestaje iz izbora"
+    AssertEq hB, 1, "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom"
+    AssertEq kpiB, ChrW(8212), "394 posle nestalog izbora KPI je bez otkupnog mesta"
+    AssertEq (prljavoA Or prljavoB), False, _
+             "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If txZapoceta Then tx.RollbackTx
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_MaticneListeBezKaskade", errDesc
+End Sub
+
+' ============================================================
+' 395. OSVEZAVANJE POSLE UPISA CITA SVAKU TABELU JEDNOM (brzina, UI-1).
+' ============================================================
+' Merenje 20.11.2026: osvezavanje posle snimanja (KPI, znacke menija, liste,
+' mreza) je istu tabelu citalo sa lista iznova -- tblKooperanti ~190 puta po
+' snimanju. Sada RefreshFromData radi u prozoru citanja. Mera: brojac citanja sa
+' lista po tabeli (test seam u modDataAccess) -- najvise jedno po tabeli, a prozor
+' se zatvara. Bez upisa usput (izbor se ne menja), pa nema ni invalidacije.
+Private Sub T_Refresh_CitaTabeluJednom()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim maxC As Long, tabela As String, dub As Long
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    modOtkupUI.ClearForm
+
+    modDataAccess.CitanjaSaListaTestPocni
+    modOtkupUI.RefreshFromData
+    maxC = modDataAccess.CitanjaSaListaTestMax(tabela)
+    modDataAccess.CitanjaSaListaTestKraj
+    dub = modDataAccess.TableCacheDepth()
+    ReleaseOtkupUIForm f
+
+    If maxC > 1 Then Debug.Print "395: najvise citanja sa lista: " & tabela & " x" & maxC
+    AssertEq (maxC >= 1), True, "395 preduslov: osvezavanje cita tabele sa lista (seam broji)"
+    AssertEq maxC, 1, "395 osvezavanje cita svaku tabelu sa lista najvise jednom"
+    AssertEq dub, 0, "395 prozor kesa je zatvoren posle osvezavanja"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modDataAccess.CitanjaSaListaTestKraj
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_CitaTabeluJednom", errDesc
 End Sub
 
 ' ============================================================

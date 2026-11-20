@@ -14759,6 +14759,43 @@ SABOTAZE = {
         "T_KnjigaDokaz_NastavakIstiSud",
         "393 dodat red sa duplim AmbID-em pada i kroz nastavak",
     ),
+    # UI-7 (merenje 20.11.2026): liste konteksta bez garda -- programski Change
+    # posle svakog upisa pokrece ceo handler otkupnog mesta (stanje pre reza).
+    "ui7-liste-bez-garda": (
+        "modOtkupUI.bas",
+        '            Case "cbOM", "cbVozac", "cbVrsta", "cbSorta", "fgTipAmbT": Exit Sub\n',
+        '            Case "_SABOTAZA_": Exit Sub   \' SABOTAZA: liste konteksta bez garda\n',
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja",
+    ),
+    # UI-7: izbor koji punjenje stvarno promeni ne ide kroz handler -- lock i
+    # broj deaktiviranog otkupnog mesta ostaju, KPI pokazuje staro mesto.
+    "ui7-nestao-izbor-bez-handlera": (
+        "modOtkupUI.bas",
+        '    If StrComp(GetComboID(ctx.Controls("cbOM")), omPre, vbTextCompare) <> 0 Then UiChange "cbOM"\n',
+        "    ' SABOTAZA: promenjen izbor otkupnog mesta ne ide kroz handler\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom",
+    ),
+    # UI-7: osvezavanje ostavlja praznu formu "Nesacuvan unos" (terenski simptom).
+    "ui7-osvezavanje-prlja-formu": (
+        "modOtkupUI.bas",
+        "    If bioCist And mDirty Then MarkClean\n",
+        "    ' SABOTAZA: osvezavanje ostavlja formu prljavom\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane",
+    ),
+    # UI-1: RefreshFromData bez prozora citanja -- iste tabele se citaju sa lista
+    # po vise puta (tblKooperanti ~190 po snimanju, merenje 20.11.2026).
+    "ui1-osvezavanje-bez-prozora": (
+        "modOtkupUI.bas",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    BeginTableCache\n",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    ' SABOTAZA: osvezavanje bez prozora citanja\n",
+        "T_Refresh_CitaTabeluJednom",
+        "395 osvezavanje cita svaku tabelu sa lista najvise jednom",
+    ),
 }
 
 

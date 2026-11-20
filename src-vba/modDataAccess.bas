@@ -26,6 +26,9 @@ Private mColCache As Object         ' kes GetColumnIndex ("tbl|col" -> index), i
 ' upis kroz ovaj modul prazni CEO kes, jer izveden niz zavisi od vise tabela.
 Private mIzvCache As Object
 Private mIzvPogodaka As Long        ' koliko puta je citac dobio niz iz kesa (test ga cita)
+' TEST SEAM: tabela -> broj citanja SA LISTA (promasaj kesa). Postoji samo dok ga
+' test ukljuci (CitanjaSaListaTestPocni); van test rezima se ne puni.
+Private mCitanjaLista As Object
 
 ' Test seam: NewEntityID se ponasa kao da je CoCreateGuid pao.
 '
@@ -197,6 +200,35 @@ Public Function GetTableData(ByVal tblName As String) As Variant
     End If
     GetTableData = lo.DataBodyRange.value
     If Not mTableCache Is Nothing Then mTableCache(tblName) = GetTableData
+    If Not mCitanjaLista Is Nothing Then
+        If IsTestMode() Then mCitanjaLista(tblName) = mCitanjaLista(tblName) + 1
+    End If
+End Function
+
+' TEST SEAM: brojanje citanja sa lista po tabeli, od ukljucenja. Samo posmatra;
+' tvrdo gejtovan. Gasi ga i modTest.ResetSeamova (seam nosi stanje).
+Public Sub CitanjaSaListaTestPocni()
+    If Not IsTestMode() Then Exit Sub
+    Set mCitanjaLista = CreateObject("Scripting.Dictionary")
+End Sub
+
+Public Sub CitanjaSaListaTestKraj()
+    Set mCitanjaLista = Nothing
+End Sub
+
+' Najvise citanja sa lista JEDNE tabele od ukljucenja, i koje tabele (tabela izlazi
+' kroz outTabela). 0 kad seam nije ukljucen.
+Public Function CitanjaSaListaTestMax(Optional ByRef outTabela As String) As Long
+    Dim k As Variant
+    outTabela = ""
+    If Not IsTestMode() Then Exit Function
+    If mCitanjaLista Is Nothing Then Exit Function
+    For Each k In mCitanjaLista.keys
+        If CLng(mCitanjaLista(k)) > CitanjaSaListaTestMax Then
+            CitanjaSaListaTestMax = CLng(mCitanjaLista(k))
+            outTabela = CStr(k)
+        End If
+    Next k
 End Function
 
 Public Function GetTableHeaders(ByVal tblName As String) As Variant
