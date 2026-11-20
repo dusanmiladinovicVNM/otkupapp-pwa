@@ -357,7 +357,7 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                              Optional ByVal docID As String = "") As Boolean
     Dim ok As Boolean, novID As String, razlog As String, errDesc As String
     Dim izvBroj As String, izvRacun As String, izvInfo As String
-    Dim fakID As String, vezPrij As String, fakAvans As Double
+    Dim fakID As String, vezPrij As String, fakAvans As Double, vezGreska As String
     On Error GoTo EH
     poruka = ""
     broj = Trim$(broj)
@@ -412,7 +412,17 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             If ok Then
                 ' Prijemnice OVE zbirne po ivici E4 (S9-3), sve -- ne prva sa tim
                 ' brojem zbirne, koja je mogla biti prijemnica druge zbirne.
+                ' Citanje POSLE upisa ne sme da obori potvrdu (review #501, test 406):
+                ' storno je vec upisan, pa greska citaca E4 (npr. dupli PrijemnicaID)
+                ' ide u poruku kao razlog, ne u EH kao "neuspeh" -- operater bi
+                ' ponovio storno koji je prosao.
+                On Error Resume Next
                 vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))
+                If Err.Number <> 0 Then
+                    vezGreska = Err.description
+                    vezPrij = ""
+                End If
+                On Error GoTo EH
                 ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",
                 ' a VBA je case-insensitive -- pa nekvalifikovan poziv te funkcije
                 ' unutar ove procedure nije poziv funkcije nego indeksiranje tog
@@ -421,6 +431,9 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                 ' proceduru kompajlira tek kad se pozove.
                 If Len(vezPrij) > 0 Then _
                     poruka = modPoruke.Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
+                If Len(vezGreska) > 0 Then _
+                    poruka = modPoruke.Poruka("STORNO_MSG_OK") & " " & _
+                             modPoruke.Poruka("OTKUI_STAT_NEPOZNATO") & ": " & vezGreska
             End If
 
         Case STIP_PRIJEMNICA

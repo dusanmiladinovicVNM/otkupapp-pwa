@@ -15081,6 +15081,14 @@ SABOTAZE = {
         "T_S93_ManjakE4KvarImenujeRazlog",
         "405 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja",
     ),
+    "s93-storno-uspeh-javljen-kao-neuspeh": (
+        "modStornoDok.bas",
+        "                On Error Resume Next\n"
+        "                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))\n",
+        "                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))   ' SABOTAZA: greska posle upisa ide u EH\n",
+        "T_S93_StornoUspehPosleKvaraE4",
+        "406 storno zbirne: upisan storno je uspeh i kad citanje prijemnica posle upisa padne, poruka nosi razlog",
+    ),
     "s93-manjak-linija-bez-razloga": (
         "modOtkupUI.bas",
         "        If Len(CStr(m(4))) > 0 Then\n",
