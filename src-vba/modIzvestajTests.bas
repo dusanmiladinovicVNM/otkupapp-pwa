@@ -545,15 +545,16 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
     IzvSeedZbirnaStavka "IZVT-ZBR-K2", KLASA_II, 200#, 20
 
     ' Klasa I i II dele BROJ prijemnice (kao u produkciji), ali su zasebni redovi.
+    ' S9-3: roditelj je ivica E4 (ZbirnaRoditeljID) -- zbirna svoje klase.
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
-        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup)
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
+        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, "IZVT-ZBR-K1")
     IzvSeedPrijemnicaStavka "IZVT-PRJ-K1", KLASA_I, 900#, 0#
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
-        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup)
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
+        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, "IZVT-ZBR-K2")
     IzvSeedPrijemnicaStavka "IZVT-PRJ-K2", KLASA_II, 150#, 0#
 
     ' Zaglavlje zbirne je ovde po klasi (dva reda istog broja), a otpremnica sme
@@ -641,18 +642,19 @@ Private Sub SeedDveZbirneIstogBroja()
         Array("IZVT-ZBR-B", IZVT_BROJ, IZVT_DATUM, IZVT_VOZAC_B, IZVT_KUPAC_B, 2000#, 200)
     IzvSeedZbirnaStavka "IZVT-ZBR-B", KLASA_I, 2000#, 200
 
+    ' S9-3: roditelj je ivica E4 (ZbirnaRoditeljID), ne broj koji dele obe zbirne.
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
         Array("IZVT-PRJ-A", "IZVT-PRJ-A", IZVT_DATUM, IZVT_BROJ, _
-              IZVT_VOZAC_A, IZVT_KUPAC_A)
+              IZVT_VOZAC_A, IZVT_KUPAC_A, "IZVT-ZBR-A")
     IzvSeedPrijemnicaStavka "IZVT-PRJ-A", KLASA_I, 900#, 0#
 
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC), _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
         Array("IZVT-PRJ-B", "IZVT-PRJ-B", IZVT_DATUM, IZVT_BROJ, _
-              IZVT_VOZAC_B, IZVT_KUPAC_B)
+              IZVT_VOZAC_B, IZVT_KUPAC_B, "IZVT-ZBR-B")
     IzvSeedPrijemnicaStavka "IZVT-PRJ-B", KLASA_I, 1500#, 0#
 End Sub
 

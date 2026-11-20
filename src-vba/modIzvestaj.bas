@@ -3958,11 +3958,11 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
             ReportProsecnaCena = Empty
             Exit Function
         End If
-        Dim vrstaCache As Object
-        Set vrstaCache = BuildZbirnaVrstaCache()
-        
-        Dim colBrZbr As Long, colPrijID As Long
-        colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+        ' Vrsta prijemnice je vrsta zaglavlja NJENE zbirne po ivici E4 (S9-3).
+        Dim vrstaPrj As Object
+        Set vrstaPrj = modDokumenta.VrstaPrijemnicaPoZbirni()
+
+        Dim colPrijID As Long
         colPrijID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
 
         ' Kg i vrednost dokumenta su zbir STAVKI (S6 korak 3).
@@ -3971,7 +3971,9 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
 
         For i = 1 To UBound(prijData, 1)
             Dim vrsta As String
-            vrsta = GetVrstaFromCache(vrstaCache, CStr(prijData(i, colBrZbr)))
+            vrsta = ""
+            If vrstaPrj.Exists(Trim$(CStr(prijData(i, colPrijID)))) Then _
+                vrsta = CStr(vrstaPrj(Trim$(CStr(prijData(i, colPrijID)))))
             If vrsta = "" Then vrsta = "(Nepoznato)"
 
             If Not dict.Exists(vrsta) Then dict.Add vrsta, Array(0#, 0#)
@@ -4448,17 +4450,16 @@ Private Function ReportZbirniKupac(ByVal datumOd As Date, _
         Exit Function
     End If
     
-    ' Cache fuer Vrsta-Lookup
-    Dim vrstaCache As Object
-    Set vrstaCache = BuildZbirnaVrstaCache()
-    
+    ' Vrsta prijemnice je vrsta zaglavlja NJENE zbirne po ivici E4 (S9-3).
+    Dim vrstaPrj As Object
+    Set vrstaPrj = modDokumenta.VrstaPrijemnicaPoZbirni()
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
-    Dim colKupac As Long, colPid As Long, colBrZbr As Long
+
+    Dim colKupac As Long, colPid As Long
     colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
     colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
 
     ' Kg i vrednost dokumenta su zbir STAVKI (S6 korak 3).
     Dim zbir As Object, z As Variant
@@ -4467,7 +4468,9 @@ Private Function ReportZbirniKupac(ByVal datumOd As Date, _
     Dim i As Long
     For i = 1 To UBound(filtered, 1)
         Dim vrsta As String
-        vrsta = GetVrstaFromCache(vrstaCache, CStr(filtered(i, colBrZbr)))
+        vrsta = ""
+        If vrstaPrj.Exists(Trim$(CStr(filtered(i, colPid)))) Then _
+            vrsta = CStr(vrstaPrj(Trim$(CStr(filtered(i, colPid)))))
         If vrsta = "" Then vrsta = "(Nepoznato)"
 
         Dim key As String
@@ -4562,43 +4565,34 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
     
     ' Kg prijema je zbir STAVKI dokumenta (S6 korak 3); vracene gajbe su
     ' cinjenica DOKUMENTA i ostaju na zaglavlju.
-    Dim colPBrZbr As Long, colPAmbVr As Long, colPid As Long, zbirPrj As Object
+    Dim colPAmbVr As Long, colPid As Long, zbirPrj As Object
     If IsArray(prijData) And Not IsEmpty(prijData) Then
-        colPBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportZbirniVozac")
         colPAmbVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA, "modIzvestaj.ReportZbirniVozac")
         colPid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIzvestaj.ReportZbirniVozac")
         Set zbirPrj = modDokumenta.ZbirStavkiPoPrijemnici()
     End If
     
-    ' Prijemnice aggregieren po BrojZbirne:
-    '   vals(0) = AmbVracena
-    '   vals(1) = PrijKg
+    ' Prijemnice po PrijemnicaID (S9-3, KI-032): prijem zbirne su NJENE
+    ' prijemnice, ivica E4 (ZbirnaRoditeljID), ne broj zbirne. Do S9-3 se
+    ' sabiralo po broju, pa su dve zbirne istog broja (dva vozaca) dobijale
+    ' prijem jedna drugoj.
+    '   prijAgg(UCase(PrijemnicaID)) = Array(AmbVracena, PrijKg)
     Dim prijAgg As Object
     Set prijAgg = CreateObject("Scripting.Dictionary")
-    
+    Dim e4 As Object, e4Kvar As Object
+    Set e4 = modAutoHladnjaca.AktivnePrijemniceZbirnih(e4Kvar)
+
     Dim j As Long
-    
+
     If IsArray(prijData) And Not IsEmpty(prijData) Then
         For j = 1 To UBound(prijData, 1)
-            Dim pBrZbrAgg As String
-            pBrZbrAgg = CStr(prijData(j, colPBrZbr))
-            
-            If pBrZbrAgg <> "" Then
-                If Not prijAgg.Exists(pBrZbrAgg) Then
-                    prijAgg.Add pBrZbrAgg, Array(0#, 0#)
-                End If
-                
-                Dim prijAggVals As Variant
-                prijAggVals = prijAgg(pBrZbrAgg)
-                
-                If IsNumeric(prijData(j, colPAmbVr)) Then
-                    prijAggVals(0) = prijAggVals(0) + CLng(prijData(j, colPAmbVr))
-                End If
-                
-                prijAggVals(1) = prijAggVals(1) + CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _
-                                     zbirPrj, CStr(prijData(j, colPid)), SRC)(0))
-                
-                prijAgg(pBrZbrAgg) = prijAggVals
+            Dim pidAgg As String, ambVr As Double
+            pidAgg = UCase$(Trim$(CStr(prijData(j, colPid))))
+            If Len(pidAgg) > 0 Then
+                ambVr = 0
+                If IsNumeric(prijData(j, colPAmbVr)) Then ambVr = CLng(prijData(j, colPAmbVr))
+                prijAgg(pidAgg) = Array(ambVr, CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _
+                                      zbirPrj, CStr(prijData(j, colPid)), SRC)(0)))
             End If
         Next j
     End If
@@ -4606,9 +4600,8 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
     
-    Dim colVozac As Long, colBroj As Long, colZbrID As Long
+    Dim colVozac As Long, colZbrID As Long
     colVozac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportZbirniVozac")
-    colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIzvestaj.ReportZbirniVozac")
     colZbrID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIzvestaj.ReportZbirniVozac")
 
     ' Kilaza i gajbe zbirne su na STAVKAMA (S4-1). Zaglavlje ih od PR3 ne nosi,
@@ -4638,16 +4631,21 @@ Private Function ReportZbirniVozac(ByVal datumOd As Date, _
         vals(0) = vals(0) + CDbl(zbrStav(2))
         vals(2) = vals(2) + CDbl(zbrStav(0))
         
-        ' Prijemnica-Daten fuer diese Zbirna aus vorgeladenem Array
-        Dim brZbr As String
-        brZbr = CStr(zbrFiltered(i, colBroj))
-        
-        If prijAgg.Exists(brZbr) Then
-            Dim prijLookupVals As Variant
-            prijLookupVals = prijAgg(brZbr)
-            
-            vals(1) = vals(1) + CLng(prijLookupVals(0))   ' AmbVracena
-            vals(3) = vals(3) + CDbl(prijLookupVals(1))   ' PrijKg
+        ' Prijemnice OVE zbirne po ivici E4. Zbirna ciji se skup prijemnica ne
+        ' zna (aktivna prijemnica bez PrijemnicaID-a) obara izvestaj sa razlogom:
+        ' manjak bez dela prijema bio bi izmisljen.
+        If e4Kvar.Exists(UCase$(zbrID)) Then
+            IzvRethrow SRC, vbObjectError + 1965, CStr(e4Kvar(UCase$(zbrID))), SRC
+        End If
+        If e4.Exists(UCase$(zbrID)) Then
+            Dim pidZ As Variant, prijLookupVals As Variant
+            For Each pidZ In e4(UCase$(zbrID))
+                If prijAgg.Exists(UCase$(CStr(pidZ))) Then
+                    prijLookupVals = prijAgg(UCase$(CStr(pidZ)))
+                    vals(1) = vals(1) + CLng(prijLookupVals(0))   ' AmbVracena
+                    vals(3) = vals(3) + CDbl(prijLookupVals(1))   ' PrijKg
+                End If
+            Next pidZ
         End If
         
         dict(vozacID) = vals

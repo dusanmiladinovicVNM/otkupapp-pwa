@@ -362,7 +362,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             ciljZC = ZbirnaCiljIDMeko(broj, docID)
             If Len(ciljZC) > 0 Then ownsZC = ZbirnaOwnsExternalChain(ciljZC)
         End If
-        razZC = ZbirnaScopeRazlog(broj, docID, ownsZC, scopeID)
+        razZC = ZbirnaScopeRazlog(broj, docID, scopeID)
         If Len(razZC) > 0 Then
             r("message") = ZbirnaMutPoruka(razZC, "zbirne", broj, _
                 "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
@@ -881,10 +881,16 @@ Private Function ScanPrijemnica(ByVal broj As String, _
         d("hasPalete") = False: d("paleteCount") = 0&: d("blockCount") = 0&: d("otpCount") = 0&
         Exit Function
     End If
-    Dim bz As String: bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
+    ' Zbirna prijemnice je ivica E4 IZABRANOG dokumenta (S9-3): ZbirnaRoditeljID,
+    ' a broj je labela iz zaglavlja te zbirne. Do S9-3 su se otpremnice i blokovi
+    ' trazili po broju sa prijemnice, pa je broj koji nose dve zbirne dao nulu
+    ' (broj se ne razresava), a pregled je obecavao manje nego sto bi palo.
+    Dim zid As String: zid = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_DETE_ZBIRNA_ROD))
+    Dim bz As String
+    If Len(zid) > 0 Then bz = NzTx(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zid, COL_ZBR_BROJ))
     d("brojZbirne") = bz
     ' Otpremnice te zbirne (PONISTENJE prijemnice ih stornira; zbirna se rekalk/storno).
-    d("otpCount") = OtpCountZbirnePoBroju(bz, strict)
+    d("otpCount") = OtpCountZbirnePoID(zid)
     ' Isti izvedeni status kao kapija storna (aktivne linije fakture, S6 korak 5,
     ' FAK-LIN-03), da uvid i kapija ne kazu dve razlicite stvari o istom dokumentu.
     d("fakturisano") = modFaktura.PrijemnicaJeFakturisana(prijID)
@@ -894,9 +900,9 @@ Private Function ScanPrijemnica(ByVal broj As String, _
     palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijID, strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
-    ' bz je vec procitan iz TACNOG prijID -- roditelj se ne trazi ponovo po
-    ' poslovnom broju prijemnice, koji nije globalno jedinstven.
-    d("blockCount") = ActiveOtkupIDsByZbirna(bz).count
+    ' Roditelj je procitan iz TACNOG prijID -- ne trazi se ponovo po poslovnom
+    ' broju prijemnice (nije globalno jedinstven) ni po broju zbirne.
+    d("blockCount") = ActiveOtkupIDsByZbirnaID(zid, strict).count
     Exit Function
 EH:
     ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
@@ -910,61 +916,6 @@ End Function
 ' PANEL DATA - strukturirani podaci za "Storno / potvrda" overlay (frmDokumenta).
 ' Zamenjuju MsgBox-preview: chain rows (dotaknuti dokumenti) + block rows (multiselect).
 ' ============================================================
-
-' Aktivni otkup blokovi (samostalni) vezani za flow dokument. Otpremnica: preko
-' OtpremnicaID; Zbirna/Prijemnica: preko BrojZbirne. Za multiselect dodatni storno.
-' docID (ZbirnaID izabranog dokumenta) NIJE kozmetika: rezultat ove funkcije
-' ide u dodatni storno blokova, dakle u MUTACIJU. Bez njega su blokovi svih
-' dokumenata istog poslovnog broja u istoj korpi -- a citanje otpremnice po broju
-' namerno ukljucuje i STORNIRANE otpremnice, jer njihovi blokovi jos mogu da
-' pokazuju na njih.
-'
-' Kapija BlockStornoDriftReason ovo ne hvata: prva linija joj je
-' "If ModeStornoBlokParent(docType, mode) Then Exit Function", a to je True za
-' svaki PONISTENJE i za OTPREMNICA+DUPLI/ISPRAVKA -- to jest za tacno one modove
-' koji jedini i stizu do dodatnog storna blokova. Pretpostavka "roditelj umire,
-' pa je blok-storno bezbedan" vazi samo za blokove IZABRANOG dokumenta.
-' strict = citanje koje NE SME da propadne u tisini. Prazan rezultat tada znaci
-' iskljucivo "uspesno sam proverio i nema ih"; sve ostalo (schema drift,
-' necitljiva tabela, greska u prolazu) DIZE gresku. Trazi ga samo
-' modStornoImpact: model uvida se posle oznacava kao valid, a "ne znam" ne sme
-' da prodje kao "nema". Podrazumevano False -- zatecenim pozivaocima (legacy
-' frmDokumenta, paneli) ponasanje ostaje isto.
-Public Function ActiveBlocksForFlow(ByVal docType As String, ByVal broj As String, _
-                                    Optional ByVal dokumentTip As String = "", _
-                                    Optional ByVal docID As String = "", _
-                                    Optional ByVal strict As Boolean = False) As Collection
-    Dim result As New Collection
-    Set ActiveBlocksForFlow = result
-    On Error GoTo EH
-    broj = Trim$(broj)
-    Select Case docType
-        Case FLOW_DOC_ZBIRNA
-            ' SEMA: tblOtkup nosi denormalizovan BrojZbirne, ne ZbirnaID -- deca
-            ' se po generaciji zbirne ne mogu razdvojiti. Zato ovde nema sta da se
-            ' suzi; put je zasticen uzvodno (kapije nad dvosmislenim brojem
-            ' zbirne obore mode operaciju, a dodatni storno blokova ide samo posle
-            ' uspesne). Ako se te kapije ikad suze, ovo mesto se otvara.
-            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj, strict)
-        Case FLOW_DOC_PRIJEMNICA
-            ' BrojPrijemnice NIJE globalno jedinstven (sekvenca po kupcu), pa je
-            ' roditeljska zbirna morala da se cita iz TACNOG dokumenta, ne iz
-            ' prvog reda tog broja.
-            Dim prijID As String
-            prijID = PrijemnicaIDZaStorno(broj, docID, strict)
-            If Len(prijID) = 0 Then Exit Function
-            Dim bz As String
-            bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
-            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz, strict)
-    End Select
-    Exit Function
-EH:
-    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
-    Dim errNum As Long, errDesc As String
-    errNum = Err.Number: errDesc = Err.description
-    LogErr MOD_NAME & ".ActiveBlocksForFlow"
-    If strict Then Err.Raise errNum, MOD_NAME & ".ActiveBlocksForFlow", errDesc
-End Function
 
 ' Aktivni OtkupID-jevi za dati BrojZbirne (denormalizovani otkup.BrojZbirne).
 ' strict: v. GetStornoBlockRows. Ova grana hrani spisak blokova za ZBIRNU i za
@@ -984,12 +935,17 @@ End Function
 ' se ne sme oslanjati na tudju invarijantu.
 Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String, _
                                         Optional ByVal strict As Boolean = False) As Collection
+    Set ActiveOtkupIDsByZbirna = ActiveOtkupIDsByZbirnaID(ZbrIdPoBrojuMeko(brojZbirne, strict), strict)
+End Function
+
+' Isto, za zbirnu zadatu IDENTITETOM (S9-3: prijemnica zna svoju zbirnu po ID-u).
+Private Function ActiveOtkupIDsByZbirnaID(ByVal zid As String, _
+                                          Optional ByVal strict As Boolean = False) As Collection
     Dim result As New Collection
-    Set ActiveOtkupIDsByZbirna = result
+    Set ActiveOtkupIDsByZbirnaID = result
     On Error GoTo EH
 
-    Dim zid As String
-    zid = ZbrIdPoBrojuMeko(brojZbirne, strict)
+    zid = Trim$(zid)
     If Len(zid) = 0 Then Exit Function
 
     Dim vidjeni As Object
@@ -1014,15 +970,8 @@ Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String, _
 EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
-    LogErr MOD_NAME & ".ActiveOtkupIDsByZbirna"
-    If strict Then Err.Raise errNum, MOD_NAME & ".ActiveOtkupIDsByZbirna", errDesc
-End Function
-
-' Broj aktivnih otpremnica zbirne zadate BROJEM. Broj je labela, pa se prvo
-' prevodi u identitet; neprevodiv broj znaci "nema takve zbirne", dakle 0.
-Private Function OtpCountZbirnePoBroju(ByVal broj As String, _
-                                       Optional ByVal strict As Boolean = False) As Long
-    OtpCountZbirnePoBroju = OtpCountZbirnePoID(ZbrIdPoBrojuMeko(broj, strict))
+    LogErr MOD_NAME & ".ActiveOtkupIDsByZbirnaID"
+    If strict Then Err.Raise errNum, MOD_NAME & ".ActiveOtkupIDsByZbirnaID", errDesc
 End Function
 
 ' Broj aktivnih otpremnica zbirne zadate IDENTITETOM.
@@ -1193,6 +1142,12 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
     ' Otpremnica vise ne nosi BrojZbirne kao kolonu, pa se labela za prikaz
     ' racuna iz clanstva: OtpremnicaID -> broj njene aktivne zbirne.
     Dim zbrPoOtp As Object: Set zbrPoOtp = BuildBrojZbirnePoOtpremnici()
+    ' Otkupna mesta reda su mesta NJEGOVE zbirne po ID-u (S9-3): prijemnica kroz
+    ' ivicu E4, otpremnica kroz clanstvo, zbirna je svoj ID. Do S9-3 je kljuc bio
+    ' broj, pa je red jedne zbirne pokazivao i OM druge zbirne istog broja.
+    Dim e4Kvar As Object
+    Dim zidPoPrj As Object: Set zidPoPrj = modAutoHladnjaca.ZbirneAktivnihPrijemnica(e4Kvar)
+    Dim zidPoOtp As Object: Set zidPoOtp = modDokumenta.AktivnoZbrClanstvoPoKanonu()
 
     ' Kolicina je na STAVKAMA za sva tri tipa (otpremnica S3b, zbirna S4-1,
     ' prijemnica S6 korak 2), pa umesto kolone zaglavlja ide zbir po dokumentu.
@@ -1208,19 +1163,26 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
     If WantTip(tipFilter, FLOW_DOC_PRIJEMNICA) Then _
         AddStornoDocs2 result, TBL_PRIJEMNICA, FLOW_DOC_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
             COL_PRJ_BROJ_ZBIRNE, COL_PRJ_KUPAC, COL_PRJ_VOZAC, "", tf, kupci, vozaci, stByZbr, _
-            zbirPrj, COL_PRJ_ID
+            zbirPrj, COL_PRJ_ID, Nothing, zidPoPrj
 
     If WantTip(tipFilter, FLOW_DOC_OTPREMNICA) Then _
         AddStornoDocs2 result, TBL_OTPREMNICA, FLOW_DOC_OTPREMNICA, COL_OTP_BROJ, COL_OTP_DATUM, _
             "", "", COL_OTP_VOZAC, "", tf, kupci, vozaci, stByZbr, _
-            zbirOtp, COL_OTP_ID, zbrPoOtp
+            zbirOtp, COL_OTP_ID, zbrPoOtp, zidPoOtp
     If WantTip(tipFilter, FLOW_DOC_ZBIRNA) Then _
         AddStornoDocs2 result, TBL_ZBIRNA, FLOW_DOC_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
             COL_ZBR_BROJ, COL_ZBR_KUPAC, COL_ZBR_VOZAC, "", tf, kupci, vozaci, stByZbr, _
             zbirZbr, COL_ZBR_ID
     Exit Function
 EH:
+    ' Kvar citanja (npr. citac E4) je GRESKA liste, ne prazna lista (review
+    ' #501, test 410): prazna kolekcija bi na ekranu izgledala kao "nema
+    ' dokumenata za storno". Ekran (modScrStorno.RowsLanac -> Scr_Rows,
+    ' UI-PAD-01) gresku prikazuje sa razlogom.
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr SRC
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Function WantTip(ByVal tipFilter As String, ByVal tip As String) As Boolean
@@ -1230,12 +1192,14 @@ End Function
 
 ' zbirnaCol: za Zbirnu = njen broj; za Prijemnicu/Otpremnicu = njihov BrojZbirne.
 ' kupacCol/vozacCol: "" -> preskace (otpremnica nema kupca). Imena preko dict-ova.
+' zidPoId: UCase(ID reda) -> ZbirnaID njegove zbirne (S9-3); Nothing = red JE
+' zbirna (svoj ID). Po njemu se traze otkupna mesta, ne po labeli.
 Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVal tip As String, _
         ByVal brojCol As String, ByVal datumCol As String, ByVal zbirnaCol As String, _
         ByVal kupacCol As String, ByVal vozacCol As String, ByVal kolCol As String, _
         ByVal tf As String, ByVal kupci As Object, ByVal vozaci As Object, ByVal stByZbr As Object, _
         Optional ByVal zbirStavki As Object, Optional ByVal idCol As String = "", _
-        Optional ByVal zbrPoId As Object = Nothing)
+        Optional ByVal zbrPoId As Object = Nothing, Optional ByVal zidPoId As Object = Nothing)
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Sub
     Dim cBr As Long, cDa As Long, cZb As Long, cKu As Long, cVo As Long, cKo As Long, cSt As Long
@@ -1275,7 +1239,15 @@ Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVa
                     If cKu > 0 Then kup = DictGet2(kupci, NzTxC(data, i, cKu), NzTxC(data, i, cKu))
                     Dim voz As String: voz = ""
                     If cVo > 0 Then voz = DictGet2(vozaci, NzTxC(data, i, cVo), "")
-                    Dim mesta As String: mesta = DictGet2(stByZbr, zbr, "")
+                    Dim zidReda As String: zidReda = ""
+                    If cId > 0 Then
+                        If zidPoId Is Nothing Then
+                            zidReda = UCase$(Trim$(NzTxC(data, i, cId)))
+                        Else
+                            zidReda = UCase$(DictGet2(zidPoId, UCase$(Trim$(NzTxC(data, i, cId))), ""))
+                        End If
+                    End If
+                    Dim mesta As String: mesta = DictGet2(stByZbr, zidReda, "")
                     Dim datum As String: datum = FmtDatum(NzTxC(data, i, cDa))
                     ' Kolicina: sa zaglavlja kad je tamo, sa STAVKI kad nije
                     ' (otpremnica od S3b). Dokument bez stavki ostaje u listi sa
@@ -1304,8 +1276,8 @@ Private Sub AddStornoDocs2(ByRef result As Collection, ByVal tbl As String, ByVa
     Next i
 End Sub
 
-' Mapa: brojZbirne -> ";"-spojena distinct otkupna mesta (stanice) te zbirne, iz
-' aktivnih otpremnica. Jednoprolazno; stanice imena preko dict-a.
+' Mapa: UCase(ZbirnaID) -> ";"-spojena distinct otkupna mesta (stanice) te
+' zbirne, iz aktivnih otpremnica. Jednoprolazno; stanice imena preko dict-a.
 Private Function BuildStationsByZbirna() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set BuildStationsByZbirna = d
@@ -1317,14 +1289,12 @@ Private Function BuildStationsByZbirna() As Object
     ' niko ne pise, pa je mapa bila prazna i kolona "otkupna mesta" u listi za
     ' storno je stajala prazna za svaku zbirnu.
     '
-    ' Kljuc ostaje BROJ, jer ga takvog trazi prikaz; menja se samo odakle veza
-    ' dolazi -- iz tblZbirnaIzvori umesto sa deteta.
+    ' S9-3: kljuc je ZbirnaID, ne broj -- dve zbirne istog broja imaju svoja
+    ' mesta, a red liste trazi mesta svoje zbirne po ID-u (AddStornoDocs2).
     Dim stanice As Object: Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
     Dim clanstvo As Object: Set clanstvo = modDokumenta.AktivnoZbrClanstvoPoKanonu()
     If clanstvo Is Nothing Then Exit Function
     If clanstvo.count = 0 Then Exit Function
-
-    Dim brojPoZbr As Object: Set brojPoZbr = BuildLookupDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ)
 
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
@@ -1341,7 +1311,7 @@ Private Function BuildStationsByZbirna() As Object
             Dim otpId As String: otpId = UCase$(Trim$(CStr(data(i, cId))))
             If clanstvo.Exists(otpId) Then
                 Dim zbr As String
-                zbr = DictGet2(brojPoZbr, CStr(clanstvo(otpId)), "")
+                zbr = UCase$(Trim$(CStr(clanstvo(otpId))))
                 If Len(zbr) > 0 Then
                     Dim stId As String: stId = Trim$(CStr(data(i, cSt)))
                     Dim stNm As String: stNm = DictGet2(stanice, stId, stId)
@@ -1554,13 +1524,11 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' zaustaviti. Promenilo se samo STA je scope: do ovog reza generacija
     ' zaglavlja, sada njegov IDENTITET.
     '
-    ' Nista drugo nije trebalo dirati: i SvaAktivnaDecaNoseZbirnaID i
-    ' SuziDecuNaZbirnu rade nad TRAGOM NA DETETU, a taj trag od S4-3c nosi
-    ' ZbirnaID. Prvo sam ceo scoping obrisao kao "mrtav kod" -- nije bio mrtav
-    ' nego pogresno hranjen.
+    ' Od S9-3 se ni prijemnice ne biraju po broju (ivica E4), pa je uslov "sva
+    ' deca nose trag" otpao sa SvaAktivnaDecaNoseZbirnaID i SuziDecuNaZbirnu.
     Dim scopeID As String
     Dim razMut As String
-    razMut = ZbirnaScopeRazlog(broj, zbrID, False, scopeID)
+    razMut = ZbirnaScopeRazlog(broj, zbrID, scopeID)
     If Len(razMut) > 0 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
                   ZbirnaMutPoruka(razMut, "zbirne", broj, _
@@ -1798,20 +1766,15 @@ End Function
 '
 ' outScopeID: "" = operacija ide po broju; inace identitet po kom se deca
 ' suzavaju. Vraca RAZLOG odbijanja, "" = sme.
+'
+' PRIJEMNICE SU ISPALE IZ RACUNA U S9-3, istim putem kao otpremnice u S5-3b: od
+' S9-3 se biraju po ivici E4 (ZbirnaRoditeljID izabrane zbirne), pa tudja
+' prijemnica ne moze ni da udje u skup. Uslov "sva aktivna deca tog broja nose
+' ZbirnaID" je postao tautologija; prijemnica bez veze (stari oblik) nije dete
+' nijedne zbirne -- nju pokazuje Oporavak, ne kaskada.
 Private Function ZbirnaScopeRazlog(ByVal broj As String, ByVal zbirnaID As String, _
-                                   ByVal diraPrijemnice As Boolean, _
                                    ByRef outScopeID As String) As String
-    outScopeID = ""
-
-    If Len(Trim$(zbirnaID)) > 0 Then
-        Dim ok As Boolean
-        ok = True
-        If diraPrijemnice Then
-            ok = modDokumenta.SvaAktivnaDecaNoseZbirnaID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj)
-        End If
-        If ok Then outScopeID = Trim$(zbirnaID)
-    End If
-
+    outScopeID = Trim$(zbirnaID)
     ZbirnaScopeRazlog = ZbirnaMutRazlog(broj, Len(outScopeID) > 0)
 End Function
 
@@ -1925,27 +1888,24 @@ Private Sub PodeliPrijemnice(ByVal ids As Collection, ByVal subjektPrijID As Str
     Next k
 End Sub
 
-Private Function ActivePrijIDsByZbirna(ByVal brojZbirne As String, ByVal gen As String, _
-                                       ByVal SRC As String) As Collection
+' AKTIVNE prijemnice zbirne zadate IDENTITETOM -- ivica E4 kroz javni citac
+' (S9-3, SLED-IDENT-01). Do S9-3: kandidati po BROJU zbirne, suzeni po ID-u samo
+' kad ga nose svi. Prazan ID je prazan skup. Zbirna ciji se skup prijemnica ne
+' zna (aktivna prijemnica bez PrijemnicaID-a) je GRESKA: skup koji kaskada
+' stornira, a pregled obecava, ne sme da se pogadja.
+Private Function ActivePrijIDsByZbirnaID(ByVal zbirnaID As String, _
+                                         ByVal SRC As String) As Collection
     Dim result As New Collection
-    Set ActivePrijIDsByZbirna = result
-    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-    Dim cZbr As Long, cId As Long, cSt As Long
-    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
-    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
-    cSt = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
-    Dim kand As Collection: Set kand = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cZbr))) = brojZbirne And UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
-            kand.Add i
-        End If
-    Next i
-    Set kand = SuziDecuNaZbirnu(TBL_PRIJEMNICA, data, kand, gen)
-    For i = 1 To kand.count
-        result.Add Trim$(CStr(data(CLng(kand(i)), cId)))
-    Next i
+    Set ActivePrijIDsByZbirnaID = result
+    Dim zid As String: zid = UCase$(Trim$(zbirnaID))
+    If Len(zid) = 0 Then Exit Function
+    Dim e4 As Object, e4Kvar As Object, pid As Variant
+    Set e4 = modAutoHladnjaca.AktivnePrijemniceZbirnih(e4Kvar)
+    If e4Kvar.Exists(zid) Then Err.Raise ERR_STORNO_FW_BASE + 72, SRC, CStr(e4Kvar(zid))
+    If Not e4.Exists(zid) Then Exit Function
+    For Each pid In e4(zid)
+        result.Add CStr(pid)
+    Next pid
 End Function
 
 ' Broj AKTIVNIH paletnih stavki datih prijemnica, po PrijemnicaID-u (S8 rez 2a-1,
@@ -1961,12 +1921,12 @@ End Function
 
 ' KI-039 (S8 rez 2a-1): razlog odbijanja PONISTENJA zbirne cija prijemnica iz
 ' obima kaskade ima robu na PRERADJENOJ paleti, ili "". Isti obim kao kaskada
-' (ActivePrijIDsByZbirna nad istim scope-om) i ista provera kao okvir prijemnice
+' (ActivePrijIDsByZbirnaID nad istim scope-om) i ista provera kao okvir prijemnice
 ' (modPaletniList.PreradjenaPaletaRazlog, #438). Samo cita.
 Private Function PreradjenaRazlogZbirne(ByVal broj As String, ByVal scopeID As String, _
                                         ByVal SRC As String) As String
     Dim ids As Collection, k As Long, raz As String
-    Set ids = ActivePrijIDsByZbirna(broj, scopeID, SRC)
+    Set ids = ActivePrijIDsByZbirnaID(scopeID, SRC)
     For k = 1 To ids.count
         raz = modPaletniList.PreradjenaPaletaRazlog(CStr(ids(k)))
         If Len(raz) > 0 Then
@@ -1988,9 +1948,9 @@ Public Function PrijemniceUObimuZbirne(ByVal broj As String, ByVal zbirnaID As S
     Dim scopeID As String, ids As Collection, k As Long, razlogObima As String
     Dim res As Object: Set res = CreateObject("Scripting.Dictionary")
     res.CompareMode = vbTextCompare
-    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, True, scopeID)
+    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)
     If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, "Obim zbirne " & Trim$(broj) & " se ne moze suziti: " & razlogObima
-    Set ids = ActivePrijIDsByZbirna(Trim$(broj), scopeID, SRC)
+    Set ids = ActivePrijIDsByZbirnaID(scopeID, SRC)
     For k = 1 To ids.count
         res(CStr(ids(k))) = 1
     Next k
@@ -2074,7 +2034,7 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     ' stvarno ide do njih (ownsChain).
     Dim scopeID As String
     Dim razPon As String
-    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, ownsChain, scopeID)
+    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, scopeID)
     If Len(razPon) > 0 Then
         res("message") = ZbirnaMutPoruka(razPon, "zbirne", brojZbirne, _
                                          "Deca se u semi vezuju BROJEM, pa se lanac ne moze ponistiti samo za jedan")
@@ -2109,7 +2069,7 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     Set otpIDs = ActiveOtpIDsByZbirna(SRC, zbrID)
     Dim prijIDs As Collection
     If ownsChain Then
-        Set prijIDs = ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC)
+        Set prijIDs = ActivePrijIDsByZbirnaID(zbrID, SRC)
     Else
         Set prijIDs = New Collection
     End If
@@ -2137,16 +2097,17 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, _
     ' odbijanje stoji PRED svakom mutacijom, pa ni zbirna ne bude dirnuta.
     '
     ' Skup se broji BEZ OBZIRA na ownsChain: u False grani je prijIDs namerno
-    ' prazan (kaskada ih ne dira), pa bi kapija nad njim bila placebo. Prazan
-    ' scopeID je ovde bezbedan -- SuziDecuNaZbirnu tada vraca kandidate
-    ' NEPROMENJENO (pravilo 1), dakle skup je SIRI, a kapija fail-closed.
+    ' prazan (kaskada ih ne dira), pa bi kapija nad njim bila placebo. Od S9-3 je
+    ' to skup prijemnica zbirne po ivici E4 (zbrID je razresen iznad); prazan ID
+    ' znaci da zbirne nema, pa ni dece. Prijemnica samo sa labelom broja (stari
+    ' oblik) nije dete -- nju pokazuje Oporavak.
     Dim subjektPrijIDs As Collection, ostalePrij As Collection
     If Not ownsChain Then
         ' SUBJEKAT OPERACIJE NIJE PREPREKA. Ponistenje prijemnice ukida bas nju, pa
         ' bi kapija nad njom odbila operaciju zbog dokumenta koji pozivalac upravo
         ' gasi. Druga aktivna prijemnica istog lanca i dalje blokira -- nju niko ne
         ' ukida, i to je cela razlika.
-        PodeliPrijemnice ActivePrijIDsByZbirna(brojZbirne, scopeID, SRC), _
+        PodeliPrijemnice ActivePrijIDsByZbirnaID(zbrID, SRC), _
                          subjektPrij, subjektPrijIDs, ostalePrij, SRC
         If ostalePrij.count > 0 Then
             res("message") = "Zbirna '" & brojZbirne & "' ima " & _
@@ -2347,17 +2308,19 @@ Private Function ScanZbirna(ByVal broj As String, _
     ' ZbirnaScopeRazlog je isti racun koji radi i PonistiZbirnaChain_TX; ovde nas
     ' zanima samo scopeID koji vraca, jer razlog odbijanja pregled ne donosi.
     Dim scopeID As String, razlogScope As String
-    razlogScope = ZbirnaScopeRazlog(broj, CStr(d("zbrID")), True, scopeID)
+    razlogScope = ZbirnaScopeRazlog(broj, CStr(d("zbrID")), scopeID)
 
-    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)
+    ' Prijemnice zbirne su ivica E4 izabranog dokumenta (S9-3), isti skup koji
+    ' PONISTENJE stornira (ActivePrijIDsByZbirnaID).
+    Dim pc As Long: pc = ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & ".ScanZbirna").count
     d("prijCount") = pc
     d("hasPrijemnica") = (pc > 0)
     ' PALETE ZBIRNE SU PALETE NJENIH PRIJEMNICA (S8 rez 2a-1, R2): isti skup koji
-    ' PONISTENJE stornira (ActivePrijIDsByZbirna nad istim scope-om), a paletne
+    ' PONISTENJE stornira (ActivePrijIDsByZbirnaID nad istim scope-om), a paletne
     ' stavke po PrijemnicaID-u. Kolona BrojZbirne paletne stavke je labela -- i
     ' kad lazi, ne sme da promeni sta pregled obecava.
     Dim palc As Long
-    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, scopeID, MOD_NAME & ".ScanZbirna"), strict)
+    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & ".ScanZbirna"), strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
     ' Scope ide i pozivaocu: pregled PONISTENJA po njemu pita za preradu (KI-039),
@@ -2369,7 +2332,14 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ScanZbirna"
-    If strict Then Err.Raise errNum, MOD_NAME & ".ScanZbirna", errDesc
+    ' Greska se DIZE i u ne-strogom pozivu (review #501, test 409). Recnik bez
+    ' kljuceva se citao kao "nema prijemnice" (CBool(Empty) = False): pitanje o
+    ' dijalogu je biralo prost storno, pregled je pisao "Prijemnica: Ne", a
+    ' ispravka DUPLI je isla dalje. Svaki ne-strogi pozivalac ima svoj handler
+    ' koji gresku pretvara u ishod sa razlogom (pun dijalog, "Pregled nije
+    ' dostupan", "spisak posledica nedostupan", "Greska: ..."). Strog rezim i
+    ' dalje bira razresenje broja i strogo citanje paleta.
+    Err.Raise errNum, MOD_NAME & ".ScanZbirna", errDesc
 End Function
 
 ' Broj AKTIVNIH redova gde filterCol = value.
@@ -2377,21 +2347,12 @@ End Function
 ' Scan* bio strict spolja a slep iznutra: nestane tblPrijemnica.BrojZbirne ->
 ' CountActive vrati 0 -> ekran kaze hasPrijemnica = False, i uvid je i dalje
 ' valid.
-' PREGLED I AKTER BROJE ISTI SKUP (review #389, treci krug P2).
-'
-' Parametar gen je scope izabranog dokumenta (ZbirnaID na detetu). Bez njega je
-' pregled brojao SVU decu tog BROJA, dok je mutacija -- kad je scope dokaziv --
-' birala samo decu IZABRANE zbirne. Pod kolizijom broja je ekran pred nepovratnom
-' radnjom pokazivao "prijemnice: 2", a padala je jedna.
-'
-' Suzavanje ide kroz SuziDecuNaZbirnu, isto telo koje koriste ActivePrijIDsByZbirna
-' i DistinctActiveValues -- pa se skupovi ne mogu raziici. Prazan gen = ponasanje
-' pre ovog reza (bez suzavanja), sto je i dalje tacno za pozivaoce koji scope
-' nemaju.
+' S9-3: suzavanje po generaciji (parametar gen, SuziDecuNaZbirnu) je obrisano --
+' prijemnice zbirne se broje po ivici E4 (ActivePrijIDsByZbirnaID), pa ovde vise
+' nema dece koja se biraju po broju zbirne.
 Private Function CountActive(ByVal tblName As String, ByVal filterCol As String, _
                              ByVal value As String, _
-                             Optional ByVal strict As Boolean = False, _
-                             Optional ByVal gen As String = "") As Long
+                             Optional ByVal strict As Boolean = False) As Long
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(tblName)
     If IsEmpty(data) Then
@@ -2413,16 +2374,12 @@ Private Function CountActive(ByVal tblName As String, ByVal filterCol As String,
         End If
         Exit Function
     End If
-    Dim kand As Collection: Set kand = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cF))) = value Then
-            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then kand.Add i
+            If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then CountActive = CountActive + 1
         End If
     Next i
-
-    Set kand = SuziDecuNaZbirnu(tblName, data, kand, gen)
-    CountActive = kand.count
     Exit Function
 EH:
     Dim errNum As Long, errDesc As String
@@ -2433,8 +2390,7 @@ End Function
 
 ' Distinktne AKTIVNE vrednosti valueCol gde filterCol = filterVal.
 Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As String, _
-                                      ByVal filterCol As String, ByVal filterVal As String, _
-                                      Optional ByVal gen As String = "") As Collection
+                                      ByVal filterCol As String, ByVal filterVal As String) As Collection
     Dim result As New Collection
     Set DistinctActiveValues = result
     On Error GoTo EH
@@ -2446,9 +2402,6 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
     cSt = GetColumnIndex(tblName, COL_STORNIRANO)
     If cV = 0 Or cF = 0 Then Exit Function
 
-    ' ZBR-CHILD-01 faza 3: kandidati pa suzavanje, da bi dedup radio nad decom
-    ' JEDNOG dokumenta. Dedup pre suzavanja bi spojio vrednosti dva dokumenta pod
-    ' istim brojem i suzavanje vise ne bi imalo sta da razdvoji.
     Dim kand As Collection: Set kand = New Collection
     Dim c As Long
     For c = 1 To UBound(data, 1)
@@ -2460,7 +2413,6 @@ Private Function DistinctActiveValues(ByVal tblName As String, ByVal valueCol As
             If cSt = 0 Or UCase$(Trim$(CStr(data(c, cSt)))) <> "DA" Then kand.Add c
         End If
     Next c
-    Set kand = SuziDecuNaZbirnu(tblName, data, kand, gen)
 
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim i As Long, v As String

@@ -2354,6 +2354,39 @@ SEED["tblPrijemnicaStavke"] = [
     for red in SEED["tblPrijemnica"]
 ]
 
+# PRIJEMNICA NOSI RODITELJA PO ID-u (S9-3, plan 14.67, SLED-IDENT-01).
+#
+# Od S9-3 se prijemnica zbirne bira po ivici E4 (ZbirnaRoditeljID), nikad po
+# labeli BrojZbirne. Kanonski pisac (SavePrijemnicaDokument) pise oba polja u
+# istom koraku, a zatecen fixture je nosio samo labelu -- pa bi svaka fixture
+# prijemnica posle S9-3 bila siroce (Oporavak), van kaskade storna i van
+# izvestaja. Fixture zato nosi oblik koji pisac pravi.
+#
+# Roditelj je JEDINA zbirna tog broja. Broj koji nose dve zbirne (ZB-TEST-KASK)
+# se ne razresava po broju nego izricito (PRJ_RODITELJ): PRJ-KASK-1 pripada
+# zbirnoj svog vozaca i kupca. PRJ-STL-T namerno OSTAJE starog oblika (labela
+# bez roditelja): to je "tudja" prijemnica dvosmislenog broja koju meri
+# prevezivanje po broju (S9-4, N7) i detektor starog oblika (N15, N17).
+PRJ_RODITELJ = {"PRJ-KASK-1": "ZBI-KASK-1"}
+PRJ_STAROG_OBLIKA = {"PRJ-STL-T"}
+
+
+def _roditelj_prijemnice(red):
+    pid = red["PrijemnicaID"]
+    if pid in PRJ_STAROG_OBLIKA:
+        return ""
+    if pid in PRJ_RODITELJ:
+        return PRJ_RODITELJ[pid]
+    kand = [z["ZbirnaID"] for z in SEED["tblZbirna"] if z.get("BrojZbirne") == red.get("BrojZbirne")]
+    if len(kand) != 1:
+        raise ValueError("prijemnica %s: broj zbirne %r nosi %d zbirnih -- roditelj mora "
+                          "biti izricit (PRJ_RODITELJ)" % (pid, red.get("BrojZbirne"), len(kand)))
+    return kand[0]
+
+
+for _red in SEED["tblPrijemnica"]:
+    _red["ZbirnaRoditeljID"] = _roditelj_prijemnice(_red)
+
 # PALETNA STAVKA NOSI KLJUC LINIJE (S8 rez 2b-1, PAL-INV-01, PAL-ODL-13).
 #
 # Pisac paletne stavke od 2b-1 odbija prazan, nepostojeci, tudj kljuc i kljuc
@@ -2497,6 +2530,10 @@ RENAME_COLS = {
     # A9: veza ispravke ide po ID-u; za sada samo tblOtkup.
     "tblOtkup": [("IspravkaOd", "IspravkaOdID"),
                  ("ZamenjenSa", "ZamenjenSaID")],
+    # S9-3 (S93-ODL-01): SEED pise ZbirnaRoditeljID na svaku prijemnicu, a donor
+    # nosi kolonu pod STARIM imenom (S4-3c). U aplikaciji je preimenuje
+    # modSetup.PreimenujKolonuAko na startu, na istoj poziciji (kraj kanona).
+    "tblPrijemnica": [("ZbirnaGeneracijaID", "ZbirnaRoditeljID")],
 }
 
 ENSURE_COLS = {

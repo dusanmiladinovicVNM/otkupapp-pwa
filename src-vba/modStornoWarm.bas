@@ -101,7 +101,10 @@ Public Function GetWarmStornoDocs() As Collection
 EH:
     LogErr MOD_NAME & ".GetWarmStornoDocs"
     ' Ultimativni fallback: gradi direktno (bez keza) da forma nikad ne ostane prazna.
-    On Error Resume Next
+    ' Greska nastala u AKTIVNOM handleru ide pozivaocu -- tu je do review-a #501
+    ' stajao On Error Resume Next koji to nije menjao (mrtva naredba; dokaz.py je
+    ' pokazao da je mutant sa njom ekvivalentan). Ekran (RowsLanac -> Scr_Rows)
+    ' gresku prikazuje sa razlogom.
     Set GetWarmStornoDocs = GetActiveDocumentsForStorno("Svi", "")
 End Function
 
@@ -129,6 +132,9 @@ EH:
     On Error Resume Next
     EndTableCache
     If gPerfOn Then PerfAkcijaZavrsi "ONTIME.WARM"
+    ' Neuspeo build ne ostavlja STARI skup (review #501, test 410):
+    ' GetWarmStornoDocs bi ga posle vratio kao da je procitan.
+    Set g_stornoDocs = Nothing
     m_warming = False
 End Sub
 

@@ -1805,15 +1805,17 @@ SABOTAZE = {
         "T_OtkupStornoPoID_NeDiraTudjeOM",
         "storniran je izabran dokument (B)",
     ),
-    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
+    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem. Od S9-3 se
+    # deca biraju po ID-u, pa kaskada bez kapije PROLAZI (nizvodno je vise nista
+    # ne zaustavlja) -- obara se prva tvrdnja testa, ne tvrdnja o razlogu.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, ownsChain, scopeID)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, scopeID)\n"
         "    If Len(razPon) > 0 Then\n",
-        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, ownsChain, scopeID)\n"
+        "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, scopeID)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
-        "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
+        "ponistenje lanca staje dok broj nose dva aktivna dokumenta",
     ),
 
     # S5-3b: kapija iz review-a #362 je razlog zasto hladnjacka kaskada u
@@ -6864,7 +6866,7 @@ SABOTAZE = {
     # nepovratnom radnjom je obecavao vise nego sto bi palo.
     "pregled-broji-svu-decu-broja": (
         "modStornoFlow.bas",
-        "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict, scopeID)\n",
+        "    Dim pc As Long: pc = ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & \".ScanZbirna\").count\n",
         "    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)   ' SABOTAZA: pregled broji svu decu broja\n",
         "Test_ZBR_PregledBrojiISTISkupKojiMutacijaDira",
         "ZBR PRG: pregled NE sabira decu oba dokumenta istog broja",
@@ -10111,8 +10113,8 @@ SABOTAZE = {
     # Zbirni po vozacu: prijem po broju zbirne iz zbira stavki.
     "s6k3-zbirni-vozac-nula": (
         "modIzvestaj.bas",
-        "                prijAggVals(1) = prijAggVals(1) + CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _\n                                     zbirPrj, CStr(prijData(j, colPid)), SRC)(0))\n",
-        "                prijAggVals(1) = prijAggVals(1) + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "                prijAgg(pidAgg) = Array(ambVr, CDbl(modDokumenta.ZbirStavkiZaPrijemnicu( _\n                                      zbirPrj, CStr(prijData(j, colPid)), SRC)(0)))\n",
+        "                prijAgg(pidAgg) = Array(ambVr, 0#)   ' SABOTAZA: kg sa praznog zaglavlja\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: zbirni po vozacu -- manjak pada za zbir stavki",
     ),
@@ -10127,7 +10129,7 @@ SABOTAZE = {
     # Preview manjka F4: prijemnicka strana iz stavki.
     "s6k3-preview-prijem-nula": (
         "modDokumenta.bas",
-        "                prijKg = prijKg + CDbl(ZbirStavkiZaPrijemnicu(zbirPrj, _\n                             CStr(prijData(i, colPid)), SRC)(0))\n",
+        "                prijKg = prijKg + CDbl(ZbirStavkiZaPrijemnicu(zbirPrj, CStr(pid), SRC)(0))\n",
         "                prijKg = prijKg + 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: preview manjka F4 -- prijem zbirne raste za zbir stavki",
@@ -10143,8 +10145,8 @@ SABOTAZE = {
     # Preview manjka: zbirnina strana iz STAVKI (kanonska zbirna zaglavlje ne puni).
     "s6k3-preview-zbirna-nula": (
         "modDokumenta.bas",
-        "                zbirnaKg = zbirnaKg + CDbl(ZbirStavkiZaZbirnu(zbirZbr, _\n                               CStr(zbrData(i, colZid)), SRC)(0))\n",
-        "                zbirnaKg = zbirnaKg + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "        zbirnaKg = CDbl(ZbirStavkiZaZbirnu(ZbirStavkiPoZbirni(), zbrID, SRC)(0))\n",
+        "        zbirnaKg = 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
         "Test_ManjakPreviewJeZbirnaMinusPrijem",
         "Manjak: zbirna je ZBIR svojih stavki",
     ),
@@ -10409,8 +10411,8 @@ SABOTAZE = {
     # Od 2b-2: po broju zbirne preko zaglavlja prijemnica, bez obima (scopeID).
     "s8r2a1-pregled-po-broju": (
         "modStornoFlow.bas",
-        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, scopeID, MOD_NAME & \".ScanZbirna\"), strict)\n",
-        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirna(broj, \"\", MOD_NAME & \".ScanZbirna\"), strict)   ' SABOTAZA: po broju, bez obima\n",
+        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & \".ScanZbirna\"), strict)\n",
+        "    palc = PaletneStavkePrijemnica(ActivePrijIDsByZbirnaID(\"\", MOD_NAME & \".ScanZbirna\"), strict)   ' SABOTAZA: pregled bez obima zbirne\n",
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: pregled zbirne A broji paletne stavke svojih prijemnica",
     ),
@@ -10418,8 +10420,12 @@ SABOTAZE = {
     # Od 2b-2: obim uvida (PrijemniceUObimuZbirne) po broju, bez scopeID-a.
     "s8r2a1-uvid-po-broju": (
         "modStornoFlow.bas",
-        "    Set ids = ActivePrijIDsByZbirna(Trim$(broj), scopeID, SRC)\n",
-        "    Set ids = ActivePrijIDsByZbirna(Trim$(broj), \"\", SRC)   ' SABOTAZA: uvid po broju, bez obima\n",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)\n"
+        "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n"
+        "    Set ids = ActivePrijIDsByZbirnaID(scopeID, SRC)\n",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)\n"
+        "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n"
+        "    Set ids = ActivePrijIDsByZbirnaID(\"\", SRC)   ' SABOTAZA: uvid bez obima zbirne\n",
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: uvid zbirne A nosi samo robu svojih prijemnica",
     ),
@@ -10449,14 +10455,15 @@ SABOTAZE = {
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete",
     ),
-    # S8R2A1-REV-01: nesiguran obim zbirne se odbija; prazan scope bi uvid jedne
-    # zbirne pustio na sva deca tog broja (i palete druge zbirne).
+    # S8R2A1-REV-01: nesiguran obim zbirne se odbija. Od S9-3 (plan 14.67) se
+    # obim bira po ID-u, pa scenario BFP-a raise vise ne dostize; ostaje razlog
+    # ZBR-MUT-01 (broj dva vlasnika), koji meri kontra-tvrdnja 404.
     "s8r2a1-obim-nesuzen": (
         "modStornoFlow.bas",
         "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n",
         "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
-        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
-        "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+        "T_S93_StornoPoID",
+        "404 obim kaskade nad brojem dva vlasnika se odbija (ZBR-MUT-01 ostaje, van S9-3)",
     ),
     # S8 rez 2a-2 (R11, PAL-ODL-08): A3 meri stavku koja je IKAD bila na paleti --
     # i kad je sva njena roba skinuta (N7 iz istorije).
@@ -13884,7 +13891,7 @@ SABOTAZE = {
     ),
     "s92-detalj-otkupa-cita-kolone": (
         "modScrIzvestaji.bas",
-        "    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb)\n",
+        "    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb, zbrID)\n",
         "    vozId = NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC)): "
         "brZb = NzS(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_BROJ_ZBIRNE))"
         "   ' SABOTAZA: detalj otkupa cita kolone bez pisca\n",
@@ -13957,8 +13964,8 @@ SABOTAZE = {
     ),
     "s92-vrsta-kes-prazan": (
         "modDokumenta.bas",
-        "        If Len(brz) > 0 And Len(vrsta) > 0 Then\n",
-        "        If False Then   ' SABOTAZA: vrsta se ne cita iz zaglavlja zbirne (simptom N2)\n",
+        "        If Len(zid) > 0 Then vrPoZbr(zid) = Trim$(NzToText(zbrData(i, colVrsta)))\n",
+        "        If False Then vrPoZbr(zid) = \"\"   ' SABOTAZA: vrsta se ne cita iz zaglavlja zbirne (simptom N2)\n",
         "T_S92_IzvestajiPoClanstvu",
         "365 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne, ne (Nepoznato)",
     ),
@@ -14861,6 +14868,245 @@ SABOTAZE = {
         "    ' SABOTAZA: osvezavanje bez prozora citanja\n",
         "T_Refresh_CitaTabeluJednom",
         "395 osvezavanje cita svaku tabelu sa lista najvise jednom",
+    ),
+    # S9-3 (plan 14.67): broj zbirne nije veza -- prijemnica zbirne je E4.
+    "s93-zbirni-vozac-bez-e4": (
+        "modIzvestaj.bas",
+        "        If e4.Exists(UCase$(zbrID)) Then\n",
+        "        If False Then   ' SABOTAZA: prijem zbirne se ne trazi po ivici E4\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 KI-032: manjak po vozacu racuna prijem svoje zbirne, ne svih zbirnih istog broja",
+    ),
+    "s93-prosecna-cena-vrsta": (
+        "modIzvestaj.bas",
+        "                vrsta = CStr(vrstaPrj(Trim$(CStr(prijData(i, colPrijID)))))\n",
+        "                vrsta = \"\"   ' SABOTAZA: vrsta prijemnice nije vrsta njene zbirne\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne po ID-u, ne kes po broju",
+    ),
+    "s93-zbirni-kupac-vrsta": (
+        "modIzvestaj.bas",
+        "            vrsta = CStr(vrstaPrj(Trim$(CStr(filtered(i, colPid)))))\n",
+        "            vrsta = \"\"   ' SABOTAZA: vrsta prijemnice nije vrsta njene zbirne\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 zbirni izvestaj kupca: vrsta prijemnice je vrsta njene zbirne po ID-u",
+    ),
+    "s93-manjak-f4-prva-po-broju": (
+        "modDokumenta.bas",
+        "    If id.resolutionStatus = ZBR_RES_UNIQUE Then zbrID = id.selectedZbirnaID\n",
+        "    zbrID = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_ID))   ' SABOTAZA: prva zbirna sa tim brojem\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 manjak F4: broj koji nose dve aktivne zbirne nema liniju, ne zbir oba dokumenta",
+    ),
+    "s93-manjak-f4-bez-e4": (
+        "modDokumenta.bas",
+        "        If e4.Exists(UCase$(zbrID)) Then\n",
+        "        If False Then   ' SABOTAZA: prijem preview-a nije prijem zbirne po E4\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 manjak F4: jednoznacna zbirna -- njene stavke, njena prijemnica i kg unosa",
+    ),
+    "s93-roba-om-vlasnik-prijemnice": (
+        "modHelpers.bas",
+        "        pVk = CStr(vkPoZbr(pRod))\n",
+        "        pVk = ZbirnaVlasnikKljuc(pZbr, Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)))), "
+        "Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)))))   ' SABOTAZA: vlasnik po atributima prijemnice\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 ROBA (OM): prijem otpremnice je prijem prijemnice njene zbirne po ID-u, ne po vozacu i kupcu prijemnice",
+    ),
+    "s93-detalj-po-broju": (
+        "modScrIzvestaji.bas",
+        "        If clan.Exists(NzS(d(i, cId))) Then\n",
+        "        If NzS(d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE))) = "
+        "NzS(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)) Then   ' SABOTAZA: prijemnice po broju zbirne\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 detalj otpremnice: prijemnica je prijemnica njene zbirne po ID-u, ne kandidat istog broja",
+    ),
+    "s93-izvoz-po-broju": (
+        "modStammdatenSync.bas",
+        "            If rod.Exists(UCase$(prjID)) Then zid = CStr(rod(UCase$(prjID)))\n",
+        "            zid = CStr(nz(data(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)), \"\"))   ' SABOTAZA: kljuc indeksa je broj zbirne\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 izvoz OtkupiAll: indeks prijemnica je po ZbirnaID, ne po broju zbirne",
+    ),
+    "s93-izvoz-prva-u-tabeli": (
+        "modStammdatenSync.bas",
+        "            ElseIf dat < CDbl(najDatum(zid)) Then\n",
+        "            ElseIf False Then   ' SABOTAZA: prva u tabeli, ne najranija po datumu\n",
+        "T_G2_BrojNijeIdentitet",
+        "403 izvoz OtkupiAll (SLED-ODL-07): zbirna sa dve prijemnice izvozi najraniju po datumu",
+    ),
+    "s93-scan-zbirne-broji-bez-veze": (
+        "modStornoFlow.bas",
+        "    Dim pc As Long: pc = ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & \".ScanZbirna\").count\n",
+        "    Dim pc As Long: pc = ActivePrijIDsByZbirnaID(scopeID, MOD_NAME & \".ScanZbirna\").count + "
+        "CountActive(TBL_PRIJEMNICA, COL_DETE_ZBIRNA_ROD, \"\", strict)   ' SABOTAZA: broji i prijemnice bez veze\n",
+        "T_S93_StornoPoID",
+        "404 pregled storna zbirne: prijemnice su prijemnice te zbirne po ID-u, ne sve sa tim brojem",
+    ),
+    "s93-scan-prijemnice-po-broju": (
+        "modStornoFlow.bas",
+        "    d(\"otpCount\") = OtpCountZbirnePoID(zid)\n",
+        "    d(\"otpCount\") = OtpCountZbirnePoID(ZbrIdPoBrojuMeko(bz, False))   ' SABOTAZA: zbirna prijemnice po broju\n",
+        "T_S93_StornoPoID",
+        "404 pregled storna prijemnice: otpremnice i blokovi su njene zbirne po ID-u, ne po broju",
+    ),
+    "s93-obim-kaskade-bez-id": (
+        "modStornoFlow.bas",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)\n",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), \"\", scopeID)   ' SABOTAZA: obim kaskade bez ID-a zbirne\n",
+        "T_S93_StornoPoID",
+        "404 obim kaskade zbirne: tacno njena prijemnica po ID-u, ne odbijanje zbog labele starog oblika",
+    ),
+    "s93-mesta-po-broju": (
+        "modStornoFlow.bas",
+        "                zbr = UCase$(Trim$(CStr(clanstvo(otpId))))\n",
+        "                zbr = UCase$(DictGet2(BuildLookupDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ), "
+        "CStr(clanstvo(otpId)), \"\"))   ' SABOTAZA: mesta po broju zbirne\n",
+        "T_S93_StornoPoID",
+        "404 lista za storno: otkupna mesta reda su mesta njegove zbirne po ID-u, ne svih zbirnih istog broja",
+    ),
+    "s93-poruka-storna-po-broju": (
+        "modStornoDok.bas",
+        "                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))\n",
+        "                vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))   ' SABOTAZA: prva prijemnica sa tim brojem\n",
+        "T_S93_StornoPoID",
+        "404 poruka posle storna zbirne imenuje NJENU prijemnicu, ne prvu sa tim brojem",
+    ),
+    "s93-f4-dupla-po-broju": (
+        "modDokUnos.bas",
+        "        postojeca = modDokumenta.BrojeviPrijemnicaZbirne(rodID)\n",
+        "        postojeca = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, S(p, \"brojZbirne\"), COL_PRJ_BROJ)   ' SABOTAZA: dupla po broju\n",
+        "T_S93_F4IOporavakPoID",
+        "405 F4 (N18): zbirna bez prijemnice ne pita 'dupla prijemnica' zbog labele tudje prijemnice",
+    ),
+    "s93-oporavak-stornirana-zbirna": (
+        "modDokumenta.bas",
+        "            ElseIf CStr(stZbr(rodR)) = \"DA\" Then\n",
+        "            ElseIf False Then   ' SABOTAZA: stornirana zbirna nije siroce\n",
+        "T_S93_F4IOporavakPoID",
+        "405 Oporavak: prijemnica stornirane zbirne je siroce i kad broj nosi druga aktivna zbirna",
+    ),
+    "s93-oporavak-bez-veze": (
+        "modDokumenta.bas",
+        "            If Len(rodR) = 0 Then\n",
+        "            If False Then   ' SABOTAZA: prijemnica bez veze nije siroce\n",
+        "T_S93_F4IOporavakPoID",
+        "405 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja",
+    ),
+    "s93-tekuca-predaja-cuti": (
+        "modStammdatenSync.bas",
+        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: clanstvo na zbirnu koje nema se precutkuje\n",
+        "T_S93_TekucaPredajaBezZbirne",
+        "406 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne",
+    ),
+    # S93-REV-01 (review #501): indeks izvoza OtkupiAll guta kvar citaca E4 i
+    # vraca recnik -- zbirne bez indeksa izvoze se kao Primljeno "Ne".
+    "s93-izvoz-guta-kvar-e4": (
+        "modStammdatenSync.bas",
+        "    Err.Raise errNum, SOURCE, errDesc\n",
+        "    Set PrijemniceZaIzvozPoZbirni = dict   ' SABOTAZA: izvoz guta kvar citaca\n",
+        "T_S93_IzvozKvarE4JeGreska",
+        "407 izvoz OtkupiAll: kvar citaca E4 je greska izvoza, ne prazan indeks (S93-REV-01)",
+    ),
+    # S93-REV-02 (review #501): citac E4 pusta dupli PrijemnicaID, pa obrnuta
+    # mapa uzme prvog roditelja (redosled redova bira zbirnu).
+    "s93-e4-dupli-id-prvi": (
+        "modAutoHladnjaca.bas",
+        "                If vidjen.Exists(UCase$(pid)) Then\n",
+        "                If False Then   ' SABOTAZA: dupli PrijemnicaID prolazi\n",
+        "T_S93_E4DupliIDJeGreska",
+        "408 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj",
+    ),
+    # Review #501: citaoci E4 ne pretvaraju kvar u normalan ishod (409-412).
+    "s93-scan-zbirne-guta-kvar": (
+        "modStornoFlow.bas",
+        "    Err.Raise errNum, MOD_NAME & \".ScanZbirna\", errDesc\n",
+        "    If strict Then Err.Raise errNum, MOD_NAME & \".ScanZbirna\", errDesc   ' SABOTAZA: ne-strogi poziv guta kvar\n",
+        "T_S93_StornoZbirneE4KvarTraziDijalog",
+        "409 storno zbirne: necitljiva E4 trazi pun dijalog, ne prost storno",
+    ),
+    "s93-storno-lista-guta-kvar": (
+        "modStornoFlow.bas",
+        "    LogErr SRC\n"
+        "    Err.Raise errNum, SRC, errDesc\n"
+        "End Function\n"
+        "\n"
+        "Private Function WantTip(",
+        "    LogErr SRC\n"
+        "    ' SABOTAZA: lista za storno guta kvar\n"
+        "End Function\n"
+        "\n"
+        "Private Function WantTip(",
+        "T_S93_StornoListaE4KvarJeGreska",
+        "410 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista",
+    ),
+    "s93-storno-warm-stari-kes": (
+        "modStornoWarm.bas",
+        "    Set g_stornoDocs = Nothing\n"
+        "    m_warming = False\n",
+        "    m_warming = False   ' SABOTAZA: neuspeo build ostavlja stari skup\n",
+        "T_S93_StornoListaE4KvarJeGreska",
+        "410 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan",
+    ),
+    "s93-detalj-prijemnice-guta-kvar": (
+        "modScrIzvestaji.bas",
+        "    If Err.Number <> 0 Or e4 Is Nothing Then\n",
+        "    If e4 Is Nothing Then Exit Sub   ' SABOTAZA: greska citaca E4 se precutkuje\n"
+        "    If False Then\n",
+        "T_S93_DetaljE4KvarImenujeRazlog",
+        "411 detalj otkupa: necitljiva E4 je red 'veza nepoznata' sa razlogom, ne zbirna bez prijemnice",
+    ),
+    "s93-manjak-kvar-bez-razloga": (
+        "modDokumenta.bas",
+        "            razlog = CStr(e4Kvar(UCase$(zbrID)))\n",
+        "            ' SABOTAZA: kvar E4 zbirne bez razloga\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "412 manjak F4: kvar E4 zbirne je razlog u rezultatu preview-a, bez broja",
+    ),
+    "s93-manjak-greska-bez-razloga": (
+        "modDokumenta.bas",
+        "    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#, errDesc)\n",
+        "    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#, \"\")   ' SABOTAZA: greska bez razloga\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "412 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja",
+    ),
+    "s93-storno-uspeh-javljen-kao-neuspeh": (
+        "modStornoDok.bas",
+        "                On Error Resume Next\n"
+        "                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))\n",
+        "                vezPrij = modDokumenta.BrojeviPrijemnicaZbirne(Trim$(docID))   ' SABOTAZA: greska posle upisa ide u EH\n",
+        "T_S93_StornoUspehPosleKvaraE4",
+        "413 storno zbirne: upisan storno je uspeh i kad citanje prijemnica posle upisa padne, poruka nosi razlog",
+    ),
+    "s93-manjak-linija-bez-razloga": (
+        "modOtkupUI.bas",
+        "        If Len(CStr(m(4))) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: linija manjka ignorise razlog\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "412 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje",
+    ),
+    # S9-3: BFP S8R2A1-REV-01 posle promene premise -- obim zbirne cija druga
+    # prijemnica broja nema trag je siguran po ID-u (strog uvid validan) ...
+    # Sabotaza mora biti osetljiva na TRAG: obim bez ID-a ubija scenario 1 istog
+    # testa (dve zbirne istog broja, FATAL 424) pre tvrdnje. Ovde citac E4 tretira
+    # prijemnicu bez traga kao nepoznatog clana zbirne svoje labele (fail-closed
+    # citanje, suprotno odluci S9-3) -- zbirna D1 postaje kvar, strog uvid pada.
+    "s93-bez-traga-nepoznat-clan": (
+        "modAutoHladnjaca.bas",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod))))\n",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod)))): If Len(rod) = 0 Then rod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID)))): If Len(rod) > 0 Then d(i, cId) = \"\"   ' SABOTAZA: prijemnica bez traga je nepoznat clan zbirne svoje labele\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: strog uvid zbirne D1 je validan -- prijemnica bez traga nije dete (S9-3)",
+    ),
+    # ... i prijemnica bez traga ne pada na zbirnu po broju (regresija koju S9-3
+    # zabranjuje: citac E4 "dopuni" prazan ZbirnaRoditeljID iz labele broja).
+    "s93-prijemnica-bez-traga-po-broju": (
+        "modAutoHladnjaca.bas",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod))))\n",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod)))): If Len(rod) = 0 Then rod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: prijemnica bez traga pada na zbirnu po broju\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne D1 nosi robu svoje prijemnice, ne robu prijemnice bez traga",
     ),
 }
 

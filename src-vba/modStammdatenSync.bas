@@ -997,7 +997,12 @@ End Function
 '   OtpremnicaZaOtkup       -> aktivna otpremnica bloka ("" kad je nema)
 '   njen VozacID            -> kome je predato
 '   njen PredajaID          -> koji utovar
-'   njena aktivna zbirna    -> broj po kom se nalazi prijemnica
+'   njena aktivna zbirna    -> ZbirnaID (po njemu se nalazi prijemnica, E4) i broj
+'
+' S9-3 (uz S92-REV-01): clanstvo koje pokazuje na zbirnu koje NEMA je greska koja
+' je imenuje, ne prazan broj zbirne -- detalj otkupa je tada "veza nepoznata",
+' OTK red se ne salje (S92-ODL-01), a izvoz OtkupiAll pada sa razlogom umesto da
+' red izveze bez zbirne. Postojanje se meri po ID-u (nacrt sme da nema broj).
 '
 ' STORNO SAM OD SEBE OSLOBADJA BLOK: OtpremnicaZaOtkup vraca samo AKTIVNU, pa
 ' storniran dokument ovde daje prazno -- bez ijednog dodatnog pravila. To je i
@@ -1007,11 +1012,13 @@ Public Sub TekucaPredajaOtkupa(ByVal otkupID As String, _
                                ByRef outOtpremnicaID As String, _
                                ByRef outVozacID As String, _
                                ByRef outPredajaID As String, _
-                               ByRef outBrojZbirne As String)
+                               ByRef outBrojZbirne As String, _
+                               Optional ByRef outZbirnaID As String = "")
     outOtpremnicaID = ""
     outVozacID = ""
     outPredajaID = ""
     outBrojZbirne = ""
+    outZbirnaID = ""
 
     If Len(Trim$(otkupID)) = 0 Then Exit Sub
 
@@ -1026,6 +1033,12 @@ Public Sub TekucaPredajaOtkupa(ByVal otkupID As String, _
     Dim zbrID As String
     zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(outOtpremnicaID)
     If Len(zbrID) > 0 Then
+        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then
+            Err.Raise vbObjectError + 8144, "modStammdatenSync.TekucaPredajaOtkupa", _
+                      "Clanstvo otpremnice " & outOtpremnicaID & _
+                      " pokazuje na zbirnu koje nema: " & zbrID
+        End If
+        outZbirnaID = zbrID
         outBrojZbirne = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
                                                    zbrID, COL_ZBR_BROJ)))
     End If
@@ -1077,11 +1090,11 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
     colParcela = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, SRC)
     colCrid = RequireColumnIndex(TBL_OTKUP, COL_OTK_CLIENT_RECORD_ID, SRC)
 
-    Set prjIndex = BuildPrijemnicaIndexByBrojZbirne()
+    Set prjIndex = PrijemniceZaIzvozPoZbirni()
 
     For i = 1 To UBound(data, 1)
         Dim otkupID As String, koopID As String, crid As String
-        Dim brojZbirne As String, otpremnicaID As String
+        Dim brojZbirne As String, otpremnicaID As String, zbirnaID As String
         Dim vozacID As String, predajaID As String
         Dim prijemnicaID As String, brojPrijemnice As String, kupacID As String
         Dim datumPrijema As String, primljeno As String, transportStatus As String
@@ -1100,7 +1113,7 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
         ' otpremnica nosi vozaca i identitet utovara, a njena zbirna broj po kom
         ' se nalazi prijemnica. STORNIRANA otpremnica time sama od sebe oslobadja
         ' blok -- OtpremnicaZaOtkup vraca samo AKTIVNU.
-        Call TekucaPredajaOtkupa(otkupID, otpremnicaID, vozacID, predajaID, brojZbirne)
+        Call TekucaPredajaOtkupa(otkupID, otpremnicaID, vozacID, predajaID, brojZbirne, zbirnaID)
 
         ' IDENTITET REDA JE NJEGOV ClientRecordID (review #390, P1-A).
         '
@@ -1118,10 +1131,11 @@ Private Function ExportOtkupiAll(ByVal sheetID As String) As Boolean
         datumPrijema = ""
         primljeno = "Ne"
 
-        If Len(Trim$(brojZbirne)) > 0 Then
+        ' Prijemnica bloka je prijemnica NJEGOVE zbirne po ID-u (S9-3, N5).
+        If Len(Trim$(zbirnaID)) > 0 Then
             If Not prjIndex Is Nothing Then
-                If prjIndex.Exists(brojZbirne) Then
-                    prjInfo = prjIndex(brojZbirne)
+                If prjIndex.Exists(zbirnaID) Then
+                    prjInfo = prjIndex(zbirnaID)
                     prijemnicaID = CStr(prjInfo(0))
                     brojPrijemnice = CStr(prjInfo(1))
                     kupacID = CStr(prjInfo(2))
@@ -1190,8 +1204,25 @@ EH:
     ExportOtkupiAll = False
 End Function
 
-Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
-    Const SOURCE As String = "BuildPrijemnicaIndexByBrojZbirne"
+' INDEKS PRIJEMNICA ZA IZVOZ OtkupiAll, po ZbirnaID (S9-3, N5, SLED-ODL-07).
+'
+' Kljuc je ZbirnaID, a prijemnice zbirne su ivica E4 (ZbirnaRoditeljID) kroz
+' javni citac lanca i grafa. Do S9-3 je indeks bio po BROJU zbirne, "prva je
+' dovoljna" -- dve zbirne istog broja izvozile su istu prijemnicu.
+'
+' Zbirna sa vise aktivnih prijemnica (F4 "dupla prijemnica" pusta) izvozi
+' NAJRANIJU po datumu; isti datum -> prva po redu tabele (SLED-ODL-07). Broj
+' prijemnica se ne izvozi: ugovor kolona OtkupiAll nema mesto za njega (plan
+' 14.67). Ugovor kolona se ne menja.
+'
+' Vraca: Dictionary (CompareMode tekst) ZbirnaID -> Array(PrijemnicaID,
+' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 403.
+'
+' Kvar citanja (strog citac E4 bez kolone, dupli PrijemnicaID) se DIZE, ne
+' guta (S93-REV-01, test 407): zbirna koje u indeksu nema izvozi se kao
+' Primljeno "Ne", pa bi progutan kvar postao status koji izgleda procitano.
+Public Function PrijemniceZaIzvozPoZbirni() As Object
+    Const SOURCE As String = "PrijemniceZaIzvozPoZbirni"
 
     Dim dict As Object
     Dim data As Variant
@@ -1199,14 +1230,15 @@ Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
 
     Dim colPrjID As Long
     Dim colBrojPrijemnice As Long
-    Dim colBrojZbirne As Long
     Dim colKupac As Long
     Dim colDatum As Long
+    Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
 
     Set dict = CreateObject("Scripting.Dictionary")
-    Set BuildPrijemnicaIndexByBrojZbirne = dict
+    dict.CompareMode = vbTextCompare
+    Set PrijemniceZaIzvozPoZbirni = dict
 
     data = GetTableData(TBL_PRIJEMNICA)
 
@@ -1218,34 +1250,47 @@ Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
 
     colPrjID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SOURCE)
     colBrojPrijemnice = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SOURCE)
-    colBrojZbirne = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SOURCE)
     colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SOURCE)
     colDatum = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SOURCE)
 
+    Dim rod As Object, kvar As Object, najDatum As Object
+    Set rod = modAutoHladnjaca.ZbirneAktivnihPrijemnica(kvar)
+    Set najDatum = CreateObject("Scripting.Dictionary")
+    najDatum.CompareMode = vbTextCompare
+
     For i = 1 To UBound(data, 1)
-        Dim bz As String
+        Dim zid As String
         Dim prjID As String
         Dim brojPrj As String
         Dim kupacID As String
         Dim datumPrj As String
+        Dim dat As Double
 
-        bz = Trim$(CStr(nz(data(i, colBrojZbirne), "")))
+        prjID = Trim$(CStr(nz(data(i, colPrjID), "")))
+        zid = ""
+        If Len(prjID) > 0 Then
+            If rod.Exists(UCase$(prjID)) Then zid = CStr(rod(UCase$(prjID)))
+        End If
 
-        If Len(bz) > 0 Then
-            prjID = CStr(nz(data(i, colPrjID), ""))
+        If Len(zid) > 0 Then
             brojPrj = CStr(nz(data(i, colBrojPrijemnice), ""))
             kupacID = CStr(nz(data(i, colKupac), ""))
 
             If IsDate(data(i, colDatum)) Then
+                dat = CDbl(CDate(data(i, colDatum)))
                 datumPrj = Format$(CDate(data(i, colDatum)), "yyyy-mm-dd")
             Else
+                dat = 1E+300
                 datumPrj = CStr(nz(data(i, colDatum), ""))
             End If
 
-            ' Ako postoji vise prijemnica za isti BrojZbirne, prva je dovoljna
-            ' za status "received". Kasnije mozemo agregirati ako bude trebalo.
-            If Not dict.Exists(bz) Then
-                dict.Add bz, Array(prjID, brojPrj, kupacID, datumPrj)
+            ' Najranija po datumu; strogo manje, pa isti datum zadrzava prvu.
+            If Not dict.Exists(zid) Then
+                dict.Add zid, Array(prjID, brojPrj, kupacID, datumPrj)
+                najDatum.Add zid, dat
+            ElseIf dat < CDbl(najDatum(zid)) Then
+                dict(zid) = Array(prjID, brojPrj, kupacID, datumPrj)
+                najDatum(zid) = dat
             End If
         End If
     Next i
@@ -1253,8 +1298,13 @@ Private Function BuildPrijemnicaIndexByBrojZbirne() As Object
     Exit Function
 
 EH:
+    ' S93-REV-01: ExportOtkupiAll gresku hvata i javlja neuspeh izvoza
+    ' (MgmtReports "partial export"); prazan ili delimican indeks bi izvezao
+    ' Primljeno "Ne" / "in_transport" za zbirnu cija se prijemnica ne zna.
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SOURCE
-    Set BuildPrijemnicaIndexByBrojZbirne = dict
+    Err.Raise errNum, SOURCE, errDesc
 End Function
 Private Function GetKooperantDisplayNameForExport(ByVal kooperantID As String) As String
     On Error GoTo EH

@@ -276,8 +276,9 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
               Array("SVT-KA-OID", "SVT-KA-O", "SVT-KA-Z")
     TcSeedClanstvo "SVT-KA-ZID", "SVT-KA-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KA-PID", "SVT-KA-P", "SVT-KA-Z")
+    ' S9-3: prijemnica zbirne je ivica E4 -- seed nosi ZbirnaRoditeljID, kao pisac.
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_DETE_ZBIRNA_ROD), _
+              Array("SVT-KA-PID", "SVT-KA-P", "SVT-KA-Z", "SVT-KA-ZID")
     TcSeedStavkaPrijemnice "SVT-KA-PID", 1, "I", 100
 
     ' Identitet je PrijemnicaID izabranog reda (S6 korak 4) -- bez njega okvir
@@ -293,8 +294,8 @@ Public Sub Test_PonistenjePrijemniceKaskada_Auto()
     TcSeedRow TBL_OTPREMNICA, Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE), _
               Array("SVT-KB-OID", "SVT-KB-O", "SVT-KB-Z")
     TcSeedClanstvo "SVT-KB-ZID", "SVT-KB-OID"
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-KB-PID", "SVT-KB-P", "SVT-KB-Z")
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_DETE_ZBIRNA_ROD), _
+              Array("SVT-KB-PID", "SVT-KB-P", "SVT-KB-Z", "SVT-KB-ZID")
     TcSeedStavkaPrijemnice "SVT-KB-PID", 1, "I", 100
 
     Dim rB As Object: Set rB = RunPrijemnicaCorrection("SVT-KB-P", SV_MODE_DUPLI, True, False, "SVT-KB-PID")
@@ -320,9 +321,10 @@ Public Sub Test_GetNedovrseno_Auto()
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_STORNO_VEZE
 
-    ' aktivna prijemnica cija zbirna ne postoji -> osirocena
-    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE), _
-              Array("SVT-ND-PID", "SVT-ND-P1", "SVT-ND-ZDEAD")
+    ' aktivna prijemnica cija zbirna ne postoji -> osirocena (S9-3: roditelj po
+    ' ID-u pokazuje na zbirnu koje nema)
+    TcSeedRow TBL_PRIJEMNICA, Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, COL_DETE_ZBIRNA_ROD), _
+              Array("SVT-ND-PID", "SVT-ND-P1", "SVT-ND-ZDEAD", "SVT-ND-ZDEAD-ID")
 
     ' pre context-a: SVT-ND-P1 vidljiv kao osiroce, bez CorrectionID
     TcChk NedRefCount("SVT-ND-P1") = 1, "osirocena prijemnica -> 1 red u Nedovrseno"

@@ -2254,7 +2254,7 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Dim nasao As Boolean, vrsta As String, vozId As String, brZb As String
     Dim linije As Collection, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
-    Dim st As Variant, kvarVeze As String
+    Dim st As Variant, kvarVeze As String, zbrID As String
     On Error GoTo EH
 
     d = GetTableData(TBL_OTKUP)
@@ -2302,7 +2302,7 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     ' pokazuje. Prazan deo se preskace (nema = nema, ne izmislja se).
     ' S9-2: vozac i zbirna nisu kolone otkupa (Otkup.VozacID / BrojZbirne nemaju
     ' pisca) nego clanstvo -- isti seam kao izvoz OtkupiAll.
-    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb)
+    kvarVeze = TekucaPredajaZaDetalj(otkupID, vozId, brZb, zbrID)
     If Len(kvarVeze) > 0 Then linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & kvarVeze
     Dim ctx As String
     If Len(vozId) > 0 Then
@@ -2313,7 +2313,7 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
         ctx = ctx & Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
     End If
     If Len(ctx) > 0 Then linije.Add ctx
-    If Len(brZb) > 0 Then DodajPrijemniceZbirne linije, brZb, vozId
+    If Len(zbrID) > 0 Then DodajPrijemniceZbirne linije, zbrID
 
     Dim res() As String, n As Long
     ReDim res(0 To linije.count - 1)
@@ -2330,10 +2330,8 @@ End Function
 ' Detalj otpremnice nosi SAMO ono sto kolone reda ROBA (OM) ne pokazuju
 ' (smoke krug 4): vozac (trazen izricito), broj otkupnih listova, ZBIRNA i
 ' PRIJEMNICE te zbirne (broj + kg). Otpremljene kg i kg blokova su vec
-' kolone reda -- ne ponavljaju se. Prijemnica se vezuje kao u
-' ReportOtkupRobaOM prvom koraku: isti BrojZbirne, pa suzenje po vozacu ako
-' broj dele dve zbirne; detalj je pregled pa sme fail-open (pokazuje sve
-' kandidate), racun manjka i dalje radi samo fail-closed put.
+' kolone reda -- ne ponavljaju se. Prijemnice su prijemnice aktivne zbirne
+' otpremnice po ivici E4 (S9-3), ne kandidati istog broja.
 '
 ' S9-2 (SLED-INV-03): blokovi i zbirna su CLANSTVO -- E2 (IzvoriOtpremnice) i
 ' aktivno E3 (AktivnaZbirnaZaOtpremnicu). Otkup.OtpremnicaID i
@@ -2343,7 +2341,7 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cBr As Long, cVoz As Long
     Dim brOtp As String, vozac As String, vozId As String, brZb As String
-    Dim blokova As Long, kvarVeze As String
+    Dim blokova As Long, kvarVeze As String, zbrID As String
     Dim linije As Collection
     On Error GoTo EH
 
@@ -2362,7 +2360,7 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     Next i
     If Len(brOtp) = 0 Then Exit Function
 
-    kvarVeze = ClanstvoOtpremniceZaDetalj(otpID, blokova, brZb)
+    kvarVeze = ClanstvoOtpremniceZaDetalj(otpID, blokova, brZb, zbrID)
 
     Set linije = New Collection
     linije.Add Poruka("OTKUI_IZ_DET_VOZAC") & " " & vozac
@@ -2371,10 +2369,8 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     Else
         linije.Add Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova)
     End If
-    If Len(brZb) > 0 Then
-        linije.Add Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
-        DodajPrijemniceZbirne linije, brZb, vozId
-    End If
+    If Len(brZb) > 0 Then linije.Add Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
+    If Len(zbrID) > 0 Then DodajPrijemniceZbirne linije, zbrID
 
     Dim res() As String, n As Long
     ReDim res(0 To linije.count - 1)
@@ -2390,22 +2386,25 @@ End Function
 ' Strogi citac clanstva je globalan (KI-081): kad odbije tabelu, detalj ne
 ' pogadja i ne nestaje -- vraca se razlog citaca (imenuje dokument), a vozac
 ' i zbirna ostaju prazni. Stavke otkupa od clanstva ne zavise i ostaju.
+' S9-3: vraca i ZbirnaID -- prijemnice zbirne se traze po njemu (E4), a seam
+' clanstvo na zbirnu koje nema prijavljuje kao gresku (taj razlog ide u detalj).
 Private Function TekucaPredajaZaDetalj(ByVal otkupID As String, ByRef outVozId As String, _
-                                       ByRef outBrZb As String) As String
+                                       ByRef outBrZb As String, ByRef outZbrID As String) As String
     Dim otpID As String, predajaID As String
     On Error GoTo EH
-    modStammdatenSync.TekucaPredajaOtkupa Trim$(otkupID), otpID, outVozId, predajaID, outBrZb
+    modStammdatenSync.TekucaPredajaOtkupa Trim$(otkupID), otpID, outVozId, predajaID, outBrZb, outZbrID
     Exit Function
 EH:
     outVozId = ""
     outBrZb = ""
+    outZbrID = ""
     TekucaPredajaZaDetalj = Err.description
 End Function
 
 ' S9-2 (S92-ODL-01): broj blokova (E2) i broj aktivne zbirne (E3) otpremnice.
 ' Isti dogovor kao TekucaPredajaZaDetalj: kvar citaca je razlog, ne nula.
 Private Function ClanstvoOtpremniceZaDetalj(ByVal otpID As String, ByRef outBlokova As Long, _
-                                            ByRef outBrZb As String) As String
+                                            ByRef outBrZb As String, ByRef outZbrID As String) As String
     Dim zbrID As String
     On Error GoTo EH
     outBlokova = modDokumenta.IzvoriOtpremnice(Trim$(otpID)).count
@@ -2421,57 +2420,69 @@ Private Function ClanstvoOtpremniceZaDetalj(ByVal otpID As String, ByRef outBlok
             Exit Function
         End If
         outBrZb = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_BROJ)))
+        outZbrID = zbrID
     End If
     Exit Function
 EH:
     outBlokova = 0
     outBrZb = ""
+    outZbrID = ""
     ClanstvoOtpremniceZaDetalj = Err.description
 End Function
 
-' Prijemnice date zbirne u detalj: prvo po (BrojZbirne, VozacID); ako se
-' nijedna ne poklopi po vozacu, svi kandidati po broju zbirne (fail-open).
+' Prijemnice date zbirne u detalj: AKTIVNE prijemnice te zbirne po ivici E4
+' (S9-3, ZbirnaRoditeljID). Do S9-3 se trazilo po broju zbirne, pa po vozacu, a
+' kad se po vozacu nista ne poklopi -- svi kandidati tog broja (fail-open), dakle
+' i prijemnica druge zbirne istog broja. Zbirna ciji se skup prijemnica ne zna
+' (kvar E4) dobija red "veza nepoznata" sa razlogom, ne tisinu.
 ' Linija nosi i KUPCA prijemnice (smoke krug 5: "firma koja je izdala
 ' prijemnicu") -- to je karika sledljivosti koju nijedan red liste ne kaze.
-Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
-                                  ByVal brZb As String, ByVal vozId As String)
-    Dim d As Variant, i As Long, krug As Long, nasao As Boolean
-    Dim cZb As Long, cVoz As Long, cBr As Long, cId As Long, cStorno As Long
-    Dim cKup As Long, s As String, zbir As Object, kg As Variant
+Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, ByVal zbrID As String)
+    Dim d As Variant, i As Long, e4 As Object, e4Kvar As Object, clan As Object, pid As Variant
+    Dim cBr As Long, cId As Long, cKup As Long, s As String, zbir As Object, kg As Variant
     On Error Resume Next
+    Set e4 = modAutoHladnjaca.AktivnePrijemniceZbirnih(e4Kvar)
+    If Err.Number <> 0 Or e4 Is Nothing Then
+        ' Citac E4 pao (npr. dupli PrijemnicaID): red "veza nepoznata" sa
+        ' razlogom, isto kao kvar E4 te zbirne -- tisina bi izgledala kao zbirna
+        ' bez prijemnice (review #501, test 411).
+        ' Opis se cita PRE Poruka(): ona usput brise Err, pa bi razlog bio prazan.
+        s = Err.description
+        linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & s
+        Exit Sub
+    End If
+    If e4Kvar.Exists(UCase$(zbrID)) Then
+        linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & CStr(e4Kvar(UCase$(zbrID)))
+        Exit Sub
+    End If
+    If Not e4.Exists(UCase$(zbrID)) Then Exit Sub
+    Set clan = CreateObject("Scripting.Dictionary")
+    clan.CompareMode = vbTextCompare
+    For Each pid In e4(UCase$(zbrID))
+        clan(CStr(pid)) = True
+    Next pid
     d = GetTableData(TBL_PRIJEMNICA)
     If Not IsArray(d) Then Exit Sub
-    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
     cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
     ' Kg dokumenta je zbir STAVKI (S6 korak 3), citan meko: detalj je prikaz,
     ' pa nepoznata kolicina (kvar stavki) izostaje iz linije, ne pise se kao 0.
     Set zbir = modDokumenta.ZbirStavkiPoPrijemniciMeko()
-    For krug = 1 To 2
-        For i = 1 To UBound(d, 1)
-            If NzS(d(i, cZb)) = brZb Then
-                If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
-                    If krug = 2 Or NzS(d(i, cVoz)) = vozId Then
-                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & NzS(d(i, cBr))
-                        kg = modDokumenta.KgPrijemniceMeko(zbir, NzS(d(i, cId)))
-                        If Len(CStr(kg)) > 0 Then
-                            s = s & "  " & ChrW(183) & "  " & FmtKolicina(CDbl(kg)) & " kg"
-                        End If
-                        If Len(NzS(d(i, cKup))) > 0 Then
-                            s = s & "  " & ChrW(183) & "  " & _
-                                EntitetNaziv("Kupac", NzS(d(i, cKup)), False)
-                        End If
-                        linije.Add s
-                        nasao = True
-                    End If
-                End If
+    For i = 1 To UBound(d, 1)
+        If clan.Exists(NzS(d(i, cId))) Then
+            s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & NzS(d(i, cBr))
+            kg = modDokumenta.KgPrijemniceMeko(zbir, NzS(d(i, cId)))
+            If Len(CStr(kg)) > 0 Then
+                s = s & "  " & ChrW(183) & "  " & FmtKolicina(CDbl(kg)) & " kg"
             End If
-        Next i
-        If nasao Then Exit For
-    Next krug
+            If Len(NzS(d(i, cKup))) > 0 Then
+                s = s & "  " & ChrW(183) & "  " & _
+                    EntitetNaziv("Kupac", NzS(d(i, cKup)), False)
+            End If
+            linije.Add s
+        End If
+    Next i
     Err.Clear
 End Sub
 

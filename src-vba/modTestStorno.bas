@@ -794,12 +794,15 @@ End Sub
 ' Seed pise ZAGLAVLJE I STAVKU (S6 korak 3, presedan S3b-1): citaoci linija
 ' prijemnice citaju tblPrijemnicaStavke kroz strog kanonski citalac.
 ' Zaglavlje od S6 koraka 8 linijskih polja nema.
+' Roditelj je zbirna iste klase koju seje SeedZbirna (ID = broj & "-ID-" & klasa):
+' od S9-3 prijemnica zbirne je ivica E4 (ZbirnaRoditeljID), pa seed nosi oblik
+' koji kanonski pisac pise -- labela sama vise nije veza.
 Private Sub SeedPrijemnica(ByVal broj As String, ByVal brojZbirne As String, _
                            ByVal klasa As String, ByVal kg As Double, ByVal amb As Long)
     SvAppend TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_DATUM, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_TIP_AMB), _
-        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, "SVT-A")
+              COL_PRJ_TIP_AMB, COL_DETE_ZBIRNA_ROD), _
+        Array(broj & "-ID-" & klasa, Date, broj, brojZbirne, "SVT-A", brojZbirne & "-ID-" & klasa)
     SvAppend TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
