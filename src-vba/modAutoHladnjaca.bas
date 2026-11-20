@@ -453,12 +453,16 @@ Private Function LanacPrijemnica(ByVal otkupID As String, ByVal zbrID As String,
 
     outGreska = ""
 
+    If gPerfOn Then PerfPocni "LNCP.Izvori"
     Set izvZbr = modDokumenta.IzvoriZbirne(zbrID)
+    If gPerfOn Then PerfKraj "LNCP.Izvori"
     If izvZbr.count <> 1 Then
         Err.Raise vbObjectError + 8469, SRC, _
                   "Zbirna lanca " & zbrID & " ne nosi tacno jednu otpremnicu (" & izvZbr.count & ")."
     End If
+    If gPerfOn Then PerfPocni "LNCP.Izvori"
     Set izvOtp = modDokumenta.IzvoriOtpremnice(CStr(izvZbr(1)))
+    If gPerfOn Then PerfKraj "LNCP.Izvori"
     If izvOtp.count <> 1 Then
         Err.Raise vbObjectError + 8470, SRC, _
                   "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi tacno jedan blok (" & izvOtp.count & ")."
@@ -468,8 +472,12 @@ Private Function LanacPrijemnica(ByVal otkupID As String, ByVal zbrID As String,
                   "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi blok " & otkupID & "."
     End If
 
+    If gPerfOn Then PerfPocni "LNCP.ZbirnaPoKlasi"
     Set poKlasi = modDokumenta.ZbirnaPoKlasi(zbrID)
+    If gPerfOn Then PerfKraj "LNCP.ZbirnaPoKlasi"
+    If gPerfOn Then PerfPocni "LNCP.Cene"
     Set cene = CeneOtkupaPoKlasi(otkupID)
+    If gPerfOn Then PerfKraj "LNCP.Cene"
     For Each kl In poKlasi.Keys
         If Not cene.Exists(CStr(kl)) Then
             Err.Raise vbObjectError + 8471, SRC, _

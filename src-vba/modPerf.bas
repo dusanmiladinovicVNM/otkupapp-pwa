@@ -57,6 +57,8 @@ Option Explicit
 '   modScrDokumenti.Scr_Save     OTK.AutoLanacHladnjaca
 '   modAutoHladnjaca.AutoLanac.. LNC.PostojeciLanac/.Brojevi/.Otpremnica/.Zbirna/
 '                                .Prijemnica (rasclanjavanje 20.11.)
+'   modDokumenta (lanac)         OTP.* (CreateOtpremnicaIzIzvora_TX), IZD.* (OtpIzdaj),
+'                                PRJ.* (SavePrijemnicaMulti_TX), LNCP.* (LanacPrijemnica)
 '   modMasterSync.AutoZbirnaZa.. DOK.NevezaneOtpremnice
 '   modScrIzvestaji.PuniSnimak   IZV.PuniSnimak|<lista>|<P/Z>
 '   modJournaling.AutoSaveTick   AKCIJA "ONTIME.AUTOSAVE"
