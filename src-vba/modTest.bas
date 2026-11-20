@@ -36694,7 +36694,9 @@ End Sub
 '
 ' Dve aktivne zbirne istog broja (S93DveZbirne) i prijemnica STAROG oblika sa
 ' istom labelom: kad je ona u igri, stari scope ("sva deca tog broja nose
-' ZbirnaID") pada, pa se deca broje i biraju po broju. Lista za storno pokazuje
+' ZbirnaID") pada, pa se deca broje i biraju po broju. Obim kaskade se meri nad
+' zbirnom C JEDNOG vlasnika uz isti mamac: broj koji je drzalo vise vlasnika
+' ZBR-MUT-01 odbija i uz ID (VISE_VLASNIKA ostaje, van S9-3). Lista za storno pokazuje
 ' otkupna mesta reda (dva OM-a), a poruka posle storna zbirne imenuje NJENU
 ' prijemnicu, ne prvu sa tim brojem.
 ' SABOTAZE: s93-scan-zbirne-po-broju, s93-scan-prijemnice-po-broju,
@@ -36705,7 +36707,8 @@ Private Sub T_S93_StornoPoID()
     Dim bA As String, otpA As String, zbrA As String, prjA As String
     Dim bB As String, otpB As String, zbrB As String, prjB As String
     Dim prjL As String, st1 As String, voz1 As String, poruka As String, k As Variant, kljuc As String
-    Dim vozDict As Object
+    Dim vozDict As Object, brojC As String, bC As String, otpC As String, zbrC As String
+    Dim prjC As String, prjL2 As String
 
     redoviPre = SledBrojRedova()
     On Error GoTo CleanUp
@@ -36717,6 +36720,12 @@ Private Sub T_S93_StornoPoID()
     t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
     S93DveZbirne "S", t, brojZ, bA, otpA, zbrA, prjA, bB, otpB, zbrB, prjB
     prjL = S93PrijemnicaStarogOblika("SL", t, brojZ)
+    ' Zbirna C: jedan vlasnik, mamac starog oblika sa njenim brojem. Labela se
+    ' prepisuje POSLE upisa prijemnice C (F4 bi nad starim kodom pitao "dupla").
+    brojC = "ZB-S93SC-" & t
+    SledLanacDoZbirne "S93SC", brojC, FX_VOZAC, FX_KUPAC, 40, bC, otpC, zbrC
+    prjC = SledPrijemnica("PR-S93SC-" & t, brojC, FX_VOZAC, FX_KUPAC, 35, 0)
+    prjL2 = S93PrijemnicaStarogOblika("SL2", t, brojC)
 
     pos = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brojZ, "", zbrA)
     AssertEq CStr(InStr(1, pos, " - prijemnice: 1 (", vbBinaryCompare) > 0), "True", _
@@ -36728,7 +36737,7 @@ Private Sub T_S93_StornoPoID()
              "367 pregled storna prijemnice: otpremnice i blokovi su njene zbirne po ID-u, ne po broju"
 
     On Error Resume Next
-    Set obim = modStornoFlow.PrijemniceUObimuZbirne(brojZ, zbrA)
+    Set obim = modStornoFlow.PrijemniceUObimuZbirne(brojC, zbrC)
     obimErr = Err.description
     On Error GoTo CleanUp
     If Not obim Is Nothing Then
@@ -36736,7 +36745,7 @@ Private Sub T_S93_StornoPoID()
             kljuc = kljuc & UCase$(CStr(k)) & ";"
         Next k
     End If
-    AssertEq obimErr & "|" & kljuc, "|" & UCase$(prjA) & ";", _
+    AssertEq obimErr & "|" & kljuc, "|" & UCase$(prjC) & ";", _
              "367 obim kaskade zbirne: tacno njena prijemnica po ID-u, ne odbijanje zbog labele starog oblika"
 
     st1 = Trim$(NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, "Naziv")))
