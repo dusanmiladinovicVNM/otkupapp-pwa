@@ -4496,10 +4496,13 @@ Private Sub RefreshKpi(frm As Object)
 
     ' kg dana je zbir STAVKI: zaglavlje novog otkupa ne nosi kolicinu, pa je
     ' plocica za nov dokument pokazivala 0 (REFAKTOR S14.7).
+    If gPerfOn Then PerfPocni "KPI.Danas"
     st = "danas": z.Controls("kpiV0").caption = FmtBroj(modOtkup.KgOtkupaZaDan(Int(Now)), 0)
     ' 0 kg je TACAN podatak, ne odsustvo podatka - zato ostaje nula, a ne crta
     KpiSub z, 0, CountForDate(TBL_OTKUP, COL_OTK_DATUM, Int(Now)) & " " & Poruka("OTKUI_KPI_SUB_DOK")
 
+    If gPerfOn Then PerfKraj "KPI.Danas"
+    If gPerfOn Then PerfPocni "KPI.SaldoOM"
     st = "OM saldo": om = SelectedStanicaID(frm)
     If Len(om) > 0 Then
         sal = SaldoOMUkupno(om)
@@ -4511,14 +4514,17 @@ Private Sub RefreshKpi(frm As Object)
         KpiPrazno z, 1
     End If
 
+    If gPerfOn Then PerfKraj "KPI.SaldoOM"
     ' otvoreno kg jos nema izvor u semi - dok ga nema, plocica je tiha
     KpiPrazno z, 2
 
+    If gPerfOn Then PerfPocni "KPI.Dokumenti"
     st = "dokumenata"
     cOtp = CountForDate(TBL_OTPREMNICA, COL_OTP_DATUM, Int(Now))
     cPrj = CountForDate(TBL_PRIJEMNICA, COL_PRJ_DATUM, Int(Now))
     z.Controls("kpiV3").caption = cOtp & " otpr " & ChrW(183) & " " & cPrj & " prij"
 
+    If gPerfOn Then PerfKraj "KPI.Dokumenti"
     z.Controls("kpiV4").caption = Poruka("OTKUI_KPI_SPREMNO")
     z.Controls("kpiV4").ForeColor = C_GREEN
     KpiSub z, 4, Poruka("OTKUI_KPI_SUB_OK")
@@ -4531,6 +4537,7 @@ End Sub
 ' DISPATCHER
 '=====================================================================
 Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant)
+    Dim perfAkc As String
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     ' Kontrole faze (splash, prijava, mini kartica) nose tag "fz..." i idu u
@@ -4540,6 +4547,8 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
         modUiFaze.FazaEvent tag, ev, arg
         Exit Sub
     End If
+    ' Merni tajmer (modPerf): svaka radnja operatera je jedna akcija.
+    If gPerfOn Then perfAkc = "UI." & ev & "." & PerfTagKlasa(tag): PerfAkcijaPocni perfAkc: PerfNapomena "ekran=" & mScreen
     Select Case ev
         Case "Click":    UiClick tag
         Case "DblClick": UiDblClick tag
@@ -4553,6 +4562,7 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
         Case "Commit":   ' rezervisano: normalizacija vrednosti posle unosa
         Case "Scroll":   ' rezervisano: zone sa sopstvenim klizacem
     End Select
+    If Len(perfAkc) > 0 Then PerfAkcijaZavrsi perfAkc
 End Sub
 
 ' Desni klik. Danas radi jedno: bira red na koji je pokazano, da radnja nad
@@ -6536,7 +6546,9 @@ Public Sub OsveziNavBrojace()
     Set mNavBroj = CreateObject("Scripting.Dictionary")
     For Each r In modUiScreens.ScrRows()
         kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If gPerfOn Then PerfPocni "NAV|" & kljuc
         mNavBroj(kljuc) = modUiScreens.ScrBrojac(kljuc)
+        If gPerfOn Then PerfKraj "NAV|" & kljuc
     Next r
     For Each nm In mNavKey.keys
         z.Controls(CStr(nm) & "B").caption = _
@@ -6563,10 +6575,12 @@ End Function
 Public Sub RefreshFromData()
     Dim bioCist As Boolean
     On Error Resume Next
+    If gPerfOn Then PerfAkcijaPocni "REFRESH"
     ' OSVEZAVANJE PODATAKA NIJE IZMENA OPERATERA: forma koja je bila cista ostaje
     ' cista. Punjenje lista (konteksta, otvorenih blokova) okida Change, a do UI-7 je
     ' prazna forma posle snimanja i posle Sync-a stajala kao "Nesacuvan unos".
     bioCist = Not mDirty
+    If gPerfOn Then PerfPocni "REF.ResetCache"
     modUiData.ResetCache
     ' PROZOR CITANJA za ceo prolaz (UI-1, katalog analize brzine 2026-11): KPI,
     ' znacke menija, liste i mreza citaju iste tabele -- izmereno 20.11.2026 npr.
@@ -6579,23 +6593,39 @@ Public Sub RefreshFromData()
     Application.Run modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), _
                                           SCR_MODUL) & ".Scr_ResetCache"
     Err.Clear
+    If gPerfOn Then PerfKraj "REF.ResetCache"
     Set mPartMap = Nothing
     Set mColSpec = CreateObject("Scripting.Dictionary")
     mColSpec.CompareMode = 1
+    If gPerfOn Then PerfPocni "REF.Kpi"
     RefreshKpi mFrm
+    If gPerfOn Then PerfKraj "REF.Kpi"
+    If gPerfOn Then PerfPocni "REF.NavBrojaci"
     OsveziNavBrojace
+    If gPerfOn Then PerfKraj "REF.NavBrojaci"
+    If gPerfOn Then PerfPocni "REF.ZbirneCombo"
     FillZbirneCombo mFrm      ' nove zbirne u picker
+    If gPerfOn Then PerfKraj "REF.ZbirneCombo"
+    If gPerfOn Then PerfPocni "REF.MaticniCombos"
     RefillMaticniCombos mFrm  ' nova stanica / vozac u kontekst
+    If gPerfOn Then PerfKraj "REF.MaticniCombos"
     ' Otvoreni blokovi za isplatu su lista PODATAKA: upis isplate ili otkupa je
     ' menja. Do UI-7 ju je posle upisa osvezavala usputna kaskada Change na OM-u
     ' (ClearForm osvezava saldo i fakture, ne blokove); sada jednom, ovde.
+    If gPerfOn Then PerfPocni "REF.OtvoreniBlokovi"
     FillOpenBlokovi mFrm
+    If gPerfOn Then PerfKraj "REF.OtvoreniBlokovi"
     mPartnerFor = ""          ' partner lista se ponovo puni
+    If gPerfOn Then PerfPocni "REF.Prikaz"
     OsveziPrikaz
+    If gPerfOn Then PerfKraj "REF.Prikaz"
     ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
+    If gPerfOn Then PerfPocni "REF.OtpTraka"
     RefreshOtpTraka mFrm
+    If gPerfOn Then PerfKraj "REF.OtpTraka"
     If bioCist And mDirty Then MarkClean
     EndTableCache
+    If gPerfOn Then PerfAkcijaZavrsi "REFRESH"
 End Sub
 
 ' OSVEZI PRIKAZ, NE PODATKE: za promenu konteksta koja ne menja tabele
@@ -7158,9 +7188,13 @@ Private Sub ReloadGrid()
     ' Od S4b SVI ekrani idu istim putem: mreza pita aktivan ekran za redove.
     ' Ranije je ekran dokumenata imao svoj put (FillGrid je pisao pravo u
     ' stanje ljuske), pa je mreza umela da sluzi samo njega.
+    If gPerfOn Then PerfPocni "GRID.Ucitaj"
     LoadGridFromScreen
+    If gPerfOn Then PerfKraj "GRID.Ucitaj"
     mPage = 1
+    If gPerfOn Then PerfPocni "GRID.Crtaj"
     RenderGrid
+    If gPerfOn Then PerfKraj "GRID.Crtaj"
     ' Uspelo citanje gasi PRETHODNU gresku mreze. Crveni toast nema tajmer -
     ' namerno, greska ne sme da nestane sama - pa je bez ovoga ostajao na
     ' ekranu i posle poteza koji je sve doveo u red.
@@ -8930,7 +8964,9 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
         Exit Sub
     End If
 
+    If gPerfOn Then PerfNapomena "rezim=" & ActiveMode: PerfPocni "UI.Commit.ScrSave"
     greska = modUiScreens.ScrSave(mScreen, p)
+    If gPerfOn Then PerfKraj "UI.Commit.ScrSave"
     If Len(modUiScreens.ScrLastErr) > 0 Then
         Debug.Print "modOtkupUI.CommitDokument: " & modUiScreens.ScrLastErr
         ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & modUiScreens.ScrLastErr, True
@@ -8962,7 +8998,9 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
 
     ' Uspeh: poruke koje je ekran vratio idu u toast, forma se prazni, podaci
     ' se citaju ponovo (KPI, liste).
+    If gPerfOn Then PerfPocni "UI.Commit.ClearForm"
     ClearForm
+    If gPerfOn Then PerfKraj "UI.Commit.ClearForm"
     RefreshFromData
     Dim dopuna As String
     If p.Exists("poruke") Then dopuna = Trim$(CStr(p("poruke")))
@@ -9001,7 +9039,9 @@ Private Sub Dijalog(ByVal txt As String)
         mDijalogTest = txt
         Exit Sub
     End If
+    If gPerfOn Then PerfPocni "UI.CekaOperatera"
     MsgBox txt, vbExclamation, APP_NAME
+    If gPerfOn Then PerfKraj "UI.CekaOperatera"
 End Sub
 
 ' TEST SEAM (KI-011): ceo potez "Sacuvaj" kroz CommitDokument -- isti put kojim

@@ -479,6 +479,7 @@ End Sub
 ' Glavni ulaz (zove se posle CreateOtkup_TX). Best-effort: greska se loguje.
 Public Sub OutputOtkupniList(ByVal otkupIDs As String)
     On Error GoTo EH
+    If gPerfOn Then PerfPocni "PRINT.OtkupniList"
     Dim mode As String
     mode = DocResolveMode(GetConfigValue(CFG_OTKUP_PRINT_MODE), "PDF")
 
@@ -490,9 +491,11 @@ Public Sub OutputOtkupniList(ByVal otkupIDs As String)
             ExportOtkupniListPDF otkupIDs, True   ' default (prazno) -> tihi PDF
         ' OFF -> bez izlaza
     End Select
+    If gPerfOn Then PerfKraj "PRINT.OtkupniList"
     Exit Sub
 EH:
     LogErr "modPrint.OutputOtkupniList"
+    If gPerfOn Then PerfKraj "PRINT.OtkupniList"
 End Sub
 
 ' PDF otkupnog lista -> <workbook>\Otkupni listovi\OtkupniList_<brDok>.pdf

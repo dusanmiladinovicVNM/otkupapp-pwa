@@ -3654,12 +3654,14 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
         TBL_OTPREMNICA_IZVORI & "|" & TBL_OTKUP & "|" & TBL_OTKUP_STAVKE & _
         "|" & TBL_KULTURE & "|" & TBL_AMBALAZA
 
+    If gPerfOn Then PerfPocni "OTP.TxSnapshot"
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
     tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
     ' Jedan potez se zavrsava izdavanjem, pa i on knjizi gajbe (v. OtpIzdaj).
     tx.AddTableSnapshot TBL_AMBALAZA
+    If gPerfOn Then PerfKraj "OTP.TxSnapshot"
 
     If izvori Is Nothing Then
         Err.Raise vbObjectError + 1281, "CreateOtpremnicaIzIzvora_TX", _
@@ -3672,20 +3674,30 @@ Public Function CreateOtpremnicaIzIzvora_TX(ByVal h As Object, _
 
     ' Draft bez ocekivanja, pa se ocekivanje izvede iz izvora tek kad su svi
     ' provereni i upisani -- inace bi prvi lose izvor ostavio pogresne stavke.
+    If gPerfOn Then PerfPocni "OTP.Draft"
     CreateOtpremnicaIzIzvora_TX = OtpNapraviDraft(h, Nothing)
+    If gPerfOn Then PerfKraj "OTP.Draft"
 
     Dim i As Long
+    If gPerfOn Then PerfPocni "OTP.Izvori"
     For i = 1 To izvori.count
         OtpRequireIzvorValjan CreateOtpremnicaIzIzvora_TX, _
                               Trim$(NzToText(izvori(i))), "OtpDodajIzvor", True
         OtpUpisiClanstvo CreateOtpremnicaIzIzvora_TX, _
                          Trim$(NzToText(izvori(i))), "OtpDodajIzvor"
     Next i
+    If gPerfOn Then PerfKraj "OTP.Izvori"
 
+    If gPerfOn Then PerfPocni "OTP.Ocekivanje"
     OtpUpisiOcekivanjeIzIzvora CreateOtpremnicaIzIzvora_TX
+    If gPerfOn Then PerfKraj "OTP.Ocekivanje"
+    If gPerfOn Then PerfPocni "OTP.Izdaj"
     OtpIzdaj CreateOtpremnicaIzIzvora_TX, tx
+    If gPerfOn Then PerfKraj "OTP.Izdaj"
 
+    If gPerfOn Then PerfPocni "OTP.Commit"
     tx.CommitTx
+    If gPerfOn Then PerfKraj "OTP.Commit"
     Set tx = Nothing
     Exit Function
 
@@ -6561,6 +6573,7 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
     Const SRC As String = "OtpIzdaj"
 
     Dim rOtp As Long
+    If gPerfOn Then PerfPocni "IZD.Provera"
     rOtp = OtpRedHeadera(otpremnicaID, SRC)
     RequireOtpDraft otpremnicaID, rOtp, SRC
 
@@ -6593,6 +6606,7 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
 
     OtpRequireJednakost otpremnicaID, ocek, pov, "Kolicina", SRC
     OtpRequireJednakost otpremnicaID, ocekAmb, povAmb, "KolAmbalaze", SRC
+    If gPerfOn Then PerfKraj "IZD.Provera"
 
     ' --- zamrzavanje: stavke prestaju da budu ocekivanje ---------------------
     '
@@ -6630,7 +6644,9 @@ Private Sub OtpIzdaj(ByVal otpremnicaID As String, ByVal tx As clsTransaction)
     ' oba -- menja se samo sta se cime dokazuje.
     RequireUpdateCell TBL_OTPREMNICA, rOtp, COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO, SRC
     tx.BindSourceDocument DOK_TIP_OTPREMNICA, otpremnicaID
+    If gPerfOn Then PerfPocni "IZD.Ambalaza"
     OtpKnjiziAmbalazu tx, otpremnicaID, rOtp, ocekAmb, SRC
+    If gPerfOn Then PerfKraj "IZD.Ambalaza"
 End Sub
 
 ' --- zaglavlje nove verzije ---------------------------------------------------
@@ -8720,18 +8736,22 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     '
     ' Ide PRE BeginTx: kapija sme da digne gresku, a nema smisla otvarati
     ' transakciju koja se odmah rollback-uje.
+    If gPerfOn Then PerfPocni "PRJ.Sema"
     modSchema.SchemaReadyOrFail "SavePrijemnicaMulti_TX", _
         TBL_PRIJEMNICA & "|" & TBL_PRIJEMNICA_STAVKE & "|" & TBL_AMBALAZA & _
         "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA
+    If gPerfOn Then PerfKraj "PRJ.Sema"
 
     ' Fakture i njihove linije se ne snimaju: od S6 koraka 5 pisac prijemnice ih
     ' ne dira (prevezivanje osirotelih linija, RelinkFakturaStavke, je obrisano).
+    If gPerfOn Then PerfPocni "PRJ.TxSnapshot"
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_PRIJEMNICA_STAVKE
     tx.AddTableSnapshot TBL_AMBALAZA
     tx.AddTableSnapshot TBL_PALETA
     tx.AddTableSnapshot TBL_PALETA_STAVKA
+    If gPerfOn Then PerfKraj "PRJ.TxSnapshot"
 
     ' Klasa I je opciona (kolicinaI = 0 -> snima se samo Klasa II). Bar jedna klasa.
     Dim hasKlasaI As Boolean: hasKlasaI = (kolicinaI > 0)
@@ -8756,10 +8776,12 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     If hasKlasaII Then stavke.Add Array(KLASA_II, kolicinaII, cenaII, kolAmbII, brutoKgII)
 
     Dim docID As String, stavkaIDs As Collection
+    If gPerfOn Then PerfPocni "PRJ.Dokument"
     docID = SavePrijemnicaDokument(tx, datum, kupacID, vozacID, brojPrij, brojZbirne, _
                                    vrstaVoca, sortaVoca, tipAmb, _
                                    kolAmbVracena, stavke, potvrdaDeficita, stavkaIDs, _
                                    zbirnaRoditeljID)
+    If gPerfOn Then PerfKraj "PRJ.Dokument"
     If docID = "" Then
         Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
                   "SavePrijemnicaDokument nije vratio PrijemnicaID."
@@ -8772,6 +8794,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
     Dim closedPal As Collection
     Set closedPal = New Collection
     Dim i As Long, s As Variant
+    If gPerfOn Then PerfPocni "PRJ.Palete"
     For i = 1 To stavke.count
         s = stavke(i)
         If CLng(s(3)) > 0 Then
@@ -8782,11 +8805,16 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                 prijemnicaStavkaID:=CStr(stavkaIDs(i))
         End If
     Next i
+    If gPerfOn Then PerfKraj "PRJ.Palete"
 
+    If gPerfOn Then PerfPocni "PRJ.Commit"
     tx.CommitTx
+    If gPerfOn Then PerfKraj "PRJ.Commit"
 
     ' Print/PDF zatvorenih paleta = post-commit side effect (bez rollback rizika).
+    If gPerfOn Then PerfPocni "PRJ.PaletniList"
     PaletniListOutputClosed closedPal
+    If gPerfOn Then PerfKraj "PRJ.PaletniList"
 
     Set tx = Nothing
     Exit Function

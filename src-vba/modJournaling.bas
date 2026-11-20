@@ -831,7 +831,9 @@ Public Sub AutoSaveTick()
     ' Application.OnTime callback. MORA biti Public u standardnom modulu.
     m_SaveScheduled = False
     If ThisWorkbook.Saved Then Exit Sub        ' nista nesnimljeno -> ne snimaj
+    If gPerfOn Then PerfAkcijaPocni "ONTIME.AUTOSAVE"
     AutoSaveAfterCommit "autosave-timer"       ' force=False -> postojeci debounce/log
+    If gPerfOn Then PerfAkcijaZavrsi "ONTIME.AUTOSAVE"
 End Sub
 
 Public Sub FlushNow(ByVal sourceName As String)

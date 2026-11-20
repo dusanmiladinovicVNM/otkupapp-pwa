@@ -184,6 +184,7 @@ Public Function GetTableData(ByVal tblName As String) As Variant
     ' Gibt den gesamten Datenbereich einer Tabelle als 2D-Array zurueck
     If Not mTableCache Is Nothing Then
         If mTableCache.Exists(tblName) Then
+            If gPerfOn Then PerfBroji "DA.GTD.KES|" & tblName
             GetTableData = mTableCache(tblName)
             Exit Function
         End If
@@ -198,7 +199,10 @@ Public Function GetTableData(ByVal tblName As String) As Variant
         GetTableData = Empty
         Exit Function
     End If
+    If gPerfDetalj Then PerfPocni "DA.GTD.ms|" & tblName
     GetTableData = lo.DataBodyRange.value
+    If gPerfDetalj Then PerfKraj "DA.GTD.ms|" & tblName
+    If gPerfOn Then PerfVelicina "DA.GTD|" & tblName, tblName, lo.DataBodyRange.rows.count, lo.DataBodyRange.Columns.count
     If Not mTableCache Is Nothing Then mTableCache(tblName) = GetTableData
     If Not mCitanjaLista Is Nothing Then
         If IsTestMode() Then mCitanjaLista(tblName) = mCitanjaLista(tblName) + 1

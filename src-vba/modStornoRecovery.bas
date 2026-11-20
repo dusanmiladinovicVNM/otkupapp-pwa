@@ -57,7 +57,10 @@ Public Function GetNedovrseno() As Collection
     seen.CompareMode = vbTextCompare
 
     ' 1) Persistentni contexti (tblStornoVeze) - strukturirano, sa CorrectionID.
-    Dim ctx As Collection: Set ctx = GetPendingCorrections()
+    Dim ctx As Collection
+    If gPerfOn Then PerfPocni "OPO.Konteksti"
+    Set ctx = GetPendingCorrections()
+    If gPerfOn Then PerfKraj "OPO.Konteksti"
     If Not ctx Is Nothing Then
         Dim i As Long
         For i = 1 To ctx.count
@@ -78,14 +81,18 @@ Public Function GetNedovrseno() As Collection
     '    Izvor koji ne moze da se procita daje red GRESKA_CITANJA (S8R1B-REV-01):
     '    "nema osirotelih" i "nisam uspeo da ih procitam" nisu isto.
     Dim izvor As Variant, greska As String
+    If gPerfOn Then PerfPocni "OPO.OsirocenePrij"
     izvor = CitajOsirocene("PRIJ", greska)
+    If gPerfOn Then PerfKraj "OPO.OsirocenePrij"
     If Len(greska) > 0 Then
         AddGreskaCitanja result, "Prijemnica", greska
     Else
         AddOsiroceneRows result, izvor, "OSIROCENA_PRIJEMNICA", 1, 8, _
             "Prijemnica", "PRIJ", "Osiroceni dokumenti (prevezi prijemnicu)", seen
     End If
+    If gPerfOn Then PerfPocni "OPO.OsirocenePal"
     izvor = CitajOsirocene("PAL", greska)
+    If gPerfOn Then PerfKraj "OPO.OsirocenePal"
     If Len(greska) > 0 Then
         AddGreskaCitanja result, "Prijemnica (palete)", greska
     Else
@@ -94,9 +101,13 @@ Public Function GetNedovrseno() As Collection
             "Prijemnica (palete)", "PAL", "Osiroceni dokumenti (prevezi ili skini palete)", seen
     End If
     ' 3) Izgubljeni blokovi (B-041) -- KANON, ne stara veza.
+    If gPerfOn Then PerfPocni "OPO.IzgubljeniBlokovi"
     AddIzgubljeniBlokovi result
+    If gPerfOn Then PerfKraj "OPO.IzgubljeniBlokovi"
     ' 4) Nedovrseni hladnjacki lanci (S6 korak 7, odluka 8).
+    If gPerfOn Then PerfPocni "OPO.NedovrseniLanci"
     AddNedovrseniLanci result
+    If gPerfOn Then PerfKraj "OPO.NedovrseniLanci"
     Exit Function
 EH:
     LogErr MOD_NAME & ".GetNedovrseno"

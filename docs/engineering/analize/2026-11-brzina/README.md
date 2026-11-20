@@ -609,6 +609,11 @@ Pre izmene treba izabrati jedan mehanizam (pun tekst je na kraju
 
 ## 5. Tajmer (detalji: `03-tajmer.md`)
 
+**Urađen 19.11.2026** na grani `claude/merenje-modperf` (testovi 392–398, od
+20.11. 396–402), uz
+granu `claude/merenje-modperf-pre` za merenje „pre". Uputstvo: `04-merenje.md`.
+Ispod je prvobitni dizajn.
+
 - **Nov modul `modPerf`, jedan `.bas`.** Ekvivalent ne postoji: postoje pet
   lokalnih `Timer` razlika rezolucije oko 15,6 ms, bez ugnježđavanja, bez
   brojača i svaka sa svojim izlazom. Od njih se preuzima:

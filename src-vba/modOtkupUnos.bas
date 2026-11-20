@@ -533,7 +533,9 @@ Public Function PotvrdiManjakAmbalaze(ByVal nalogTip As String, _
         mPitanjeManjkaTest = txt
         Exit Function
     End If
+    If gPerfOn Then PerfPocni "UI.CekaOperatera"
     PotvrdiManjakAmbalaze = (MsgBox(txt, vbExclamation + vbYesNo, APP_NAME) = vbYes)
+    If gPerfOn Then PerfKraj "UI.CekaOperatera"
 End Function
 
 ' TEST SEAM: tekst poslednjeg pitanja o manjku ("" = nije postavljeno). Tvrdo

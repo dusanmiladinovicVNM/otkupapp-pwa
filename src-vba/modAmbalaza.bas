@@ -556,6 +556,7 @@ End Function
 '                   neprazan, uz vlasnika niza (AMB-10-DOK).
 
 Private Sub RequireKnjigaSchema(ByVal sourceName As String)
+    If gPerfOn Then PerfPocni "AMB.SemaKapija"
     modSchema.SchemaReadyOrFail sourceName, TBL_AMBALAZA
 
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ID, sourceName)
@@ -570,6 +571,7 @@ Private Sub RequireKnjigaSchema(ByVal sourceName As String)
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, sourceName)
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VRSTA_KRETANJA, sourceName)
     Call RequireColumnIndex(TBL_AMBALAZA, COL_AMB_STORNO_OD, sourceName)
+    If gPerfOn Then PerfKraj "AMB.SemaKapija"
 End Sub
 
 Private Sub RequireAmbDokSchema(ByVal sourceName As String)
@@ -875,15 +877,24 @@ End Function
 ' kolone ili greska u celiji znace pun dokaz -- nikad slabije citanje.
 Private Function KnjigaZaCitanje(ByRef data As Variant, ByVal sourceName As String, _
                                  ByRef outVrste As Object) As Object
-    Dim kol As Object
+    Dim kol As Object, nastavljen As Boolean
     Set kol = KnjigaIndeksi(sourceName)
     If Not KnjigaDokazIzKesa(data, outVrste) Then
-        If Not KnjigaDokazNastavi(data, kol, sourceName, outVrste) Then
+        If gPerfOn Then PerfPocni "AMB.KnjigaDokaz.Nastavak"
+        nastavljen = KnjigaDokazNastavi(data, kol, sourceName, outVrste)
+        If gPerfOn Then PerfKraj "AMB.KnjigaDokaz.Nastavak"
+        If Not nastavljen Then
+            If gPerfOn Then PerfPocni "AMB.KnjigaIntegritet"
             Set outVrste = KnjigaIntegritet(data, kol, sourceName)
+            If gPerfOn Then PerfKraj "AMB.KnjigaIntegritet"
             mDokazPunih = mDokazPunih + 1
             KnjigaDokazZapamti data, kol, outVrste
+        ElseIf gPerfOn Then
+            PerfBroji "AMB.KnjigaDokaz.NASTAVAK"
         End If
         KnjigaDokazUKes data, outVrste
+    ElseIf gPerfOn Then
+        PerfBroji "AMB.KnjigaDokaz.KES"
     End If
     Set KnjigaZaCitanje = kol
 End Function
@@ -1193,7 +1204,9 @@ Public Function AmbSaldoPoNalogu(ByVal tip As String, _
     If saProtivnim Then
         cDokTip = kolIdx(COL_AMB_DOK_TIP)
         cDokID = kolIdx(COL_AMB_DOK_ID)
+        If gPerfOn Then PerfPocni "AMB.DokVlasnikMapa"
         Set vlasnik = AmbDokVlasnikMapa()
+        If gPerfOn Then PerfKraj "AMB.DokVlasnikMapa"
     End If
 
     ' VBA Or ne prekida izracunavanje: predikat protivnaloga se zove SAMO kad je

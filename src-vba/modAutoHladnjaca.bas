@@ -307,15 +307,21 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     If Not HladnjacaStrogo(stanicaID) Then Exit Function
 
     ' --- GDE JE LANAC STAO: po kanonskom roditelju, po ID-u ----------------
+    If gPerfOn Then PerfPocni "LNC.PostojeciLanac"
     otpID = modDokumenta.OtpremnicaZaOtkup(otkupID)
+    If gPerfOn Then PerfKraj "LNC.PostojeciLanac"
     ' N1 (rucna provera #442): blok u RUCNOJ otpremnici nije u lancu ni kad je
     ' stanica posle oznacena kao hladnjaca. Nema posla -- lanac ne dopisuje zbirnu
     ' i prijemnicu otpremnici koju nije izdao.
     If Len(otpID) > 0 Then
         If Not OtpremnicaJeHladnjacka(otpID) Then Exit Function
     End If
+    If gPerfOn Then PerfPocni "LNC.PostojeciLanac"
     If Len(otpID) > 0 Then zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(otpID)
+    If gPerfOn Then PerfKraj "LNC.PostojeciLanac"
+    If gPerfOn Then PerfPocni "LNC.PostojeciLanac"
     If Len(zbrID) > 0 Then prjID = PrijemnicaZaZbirnu(zbrID)
+    If gPerfOn Then PerfKraj "LNC.PostojeciLanac"
     If Len(prjID) > 0 Then Exit Function
 
     ' --- PREDUSLOVI, PRE PRVOG UPISA ---------------------------------------
@@ -345,7 +351,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     ' Broj otpremnice ide iz niza STANICE, kao i svaka druga otpremnica; mirror
     ' prefiks je pravilo broja ZBIRNE (modBrojevi.ApplyMirrorPrefix).
     If Len(otpID) = 0 Then
+        If gPerfOn Then PerfPocni "LNC.Brojevi"
         brOtp = modBrojevi.GenerateBrojOtpremnice(stanicaID, datum)
+        If gPerfOn Then PerfKraj "LNC.Brojevi"
         If Len(brOtp) = 0 Then
             izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ") & " " & stanicaID
             Exit Function
@@ -360,7 +368,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
             Exit Function
         End If
     End If
+    If gPerfOn Then PerfPocni "LNC.Brojevi"
     brPrj = modBrojevi.GenerateBrojPrijemnice(kupacID, datum)
+    If gPerfOn Then PerfKraj "LNC.Brojevi"
     If Len(brPrj) = 0 Then
         izvestaj = Poruka("OTKUI_ERR_LANAC") & " " & Poruka("OTKUI_ERR_LANAC_BROJ_PRJ") & " " & kupacID
         Exit Function
@@ -379,7 +389,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
         Set izvori = New Collection
         izvori.Add otkupID
 
+        If gPerfOn Then PerfPocni "LNC.Otpremnica"
         otpID = modDokumenta.CreateOtpremnicaIzIzvora_TX(h, izvori, greska)
+        If gPerfOn Then PerfKraj "LNC.Otpremnica"
         If Len(otpID) = 0 Then
             izvestaj = LanacStao(korak, greska, "", "")
             Exit Function
@@ -389,7 +401,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
     ' --- ZBIRNA: isto jezgro kao malina (odluka 3) -------------------------
     If Len(zbrID) = 0 Then
         korak = "ZBR"
+        If gPerfOn Then PerfPocni "LNC.Zbirna"
         zbrID = modMasterSync.AutoZbirnaZaOtpremnicu(otpID, greska)
+        If gPerfOn Then PerfKraj "LNC.Zbirna"
         If Len(zbrID) = 0 Then
             ' "" bez razloga znaci da jezgro nije videlo posao -- za otpremnicu
             ' koju je lanac upravo napravio to je kvar, ne "nista".
@@ -401,7 +415,9 @@ Public Function AutoLanacHladnjaca(ByVal otkupID As String, _
 
     ' --- PRIJEMNICA: stavke iz zbirne, cena iz otkupa, roditelj po ID-u -----
     korak = "PRJ"
+    If gPerfOn Then PerfPocni "LNC.Prijemnica"
     prjID = LanacPrijemnica(otkupID, zbrID, kupacID, brPrj, greska)
+    If gPerfOn Then PerfKraj "LNC.Prijemnica"
     If Len(prjID) = 0 Then
         izvestaj = LanacStao(korak, greska, otpID, zbrID)
         Exit Function
@@ -437,12 +453,16 @@ Private Function LanacPrijemnica(ByVal otkupID As String, ByVal zbrID As String,
 
     outGreska = ""
 
+    If gPerfOn Then PerfPocni "LNCP.Izvori"
     Set izvZbr = modDokumenta.IzvoriZbirne(zbrID)
+    If gPerfOn Then PerfKraj "LNCP.Izvori"
     If izvZbr.count <> 1 Then
         Err.Raise vbObjectError + 8469, SRC, _
                   "Zbirna lanca " & zbrID & " ne nosi tacno jednu otpremnicu (" & izvZbr.count & ")."
     End If
+    If gPerfOn Then PerfPocni "LNCP.Izvori"
     Set izvOtp = modDokumenta.IzvoriOtpremnice(CStr(izvZbr(1)))
+    If gPerfOn Then PerfKraj "LNCP.Izvori"
     If izvOtp.count <> 1 Then
         Err.Raise vbObjectError + 8470, SRC, _
                   "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi tacno jedan blok (" & izvOtp.count & ")."
@@ -452,8 +472,12 @@ Private Function LanacPrijemnica(ByVal otkupID As String, ByVal zbrID As String,
                   "Otpremnica lanca " & CStr(izvZbr(1)) & " ne nosi blok " & otkupID & "."
     End If
 
+    If gPerfOn Then PerfPocni "LNCP.ZbirnaPoKlasi"
     Set poKlasi = modDokumenta.ZbirnaPoKlasi(zbrID)
+    If gPerfOn Then PerfKraj "LNCP.ZbirnaPoKlasi"
+    If gPerfOn Then PerfPocni "LNCP.Cene"
     Set cene = CeneOtkupaPoKlasi(otkupID)
+    If gPerfOn Then PerfKraj "LNCP.Cene"
     For Each kl In poKlasi.Keys
         If Not cene.Exists(CStr(kl)) Then
             Err.Raise vbObjectError + 8471, SRC, _
