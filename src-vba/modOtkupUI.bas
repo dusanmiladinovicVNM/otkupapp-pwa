@@ -10037,6 +10037,14 @@ Public Function ManjakLinija(ByVal zbrKg As Double, ByVal prijKg As Double, _
                    Poruka("OTKUI_MNJ_PRIJEM") & " " & FmtBroj(prijKg, 2)
 End Function
 
+' Natpis linije manjka iz rezultata CalculateManjakPreview -- jedini put kojim
+' ide SetManjakLine, pa ga test meri kroz isti poziv (review #501, test 405).
+Public Function ManjakLinijaIzPreview(ByVal m As Variant) As String
+    If Not IsArray(m) Then Exit Function
+    If UBound(m) < 3 Then Exit Function
+    ManjakLinijaIzPreview = ManjakLinija(CDbl(m(0)), CDbl(m(1)), CDbl(m(2)), CDbl(m(3)))
+End Function
+
 ' ZIVI MANJAK PRIJEMNICE (samo F4).
 '
 ' Poredi NETO sa NETO. Zbirna se u tabeli cuva u neto, pa se od unetog bruta
@@ -10078,11 +10086,9 @@ Private Sub SetManjakLine()
             ' razresivac kao kapija upisa, pa linija i upis gledaju isti dokument.
             m = modDokumenta.CalculateManjakPreview(broj, kgI, kgII, _
                     GetComboID(mFrm.Controls("zCtx").Controls("cbVozac")), PartnerID(mFrm))
+            L.caption = ManjakLinijaIzPreview(m)
             If IsArray(m) Then
-                If UBound(m) >= 3 Then
-                    L.caption = ManjakLinija(CDbl(m(0)), CDbl(m(1)), CDbl(m(2)), CDbl(m(3)))
-                    L.ForeColor = ManjakBoja(CDbl(m(3)))
-                End If
+                If UBound(m) >= 3 Then L.ForeColor = ManjakBoja(CDbl(m(3)))
             End If
         End If
     End If

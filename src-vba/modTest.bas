@@ -788,6 +788,11 @@ Public Sub RunAllTests()
     ' S93-REV-01/02 (review #501): izvoz ne guta kvar E4; dupli PrijemnicaID je greska.
     RunOne 400
     RunOne 401
+    ' Review #501: citaoci E4 ne pretvaraju kvar u normalan ishod.
+    RunOne 402
+    RunOne 403
+    RunOne 404
+    RunOne 405
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1446,6 +1451,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 399: TestName = "T_S93_TekucaPredajaBezZbirne"
         Case 400: TestName = "T_S93_IzvozKvarE4JeGreska"
         Case 401: TestName = "T_S93_E4DupliIDJeGreska"
+        Case 402: TestName = "T_S93_StornoZbirneE4KvarTraziDijalog"
+        Case 403: TestName = "T_S93_StornoListaE4KvarJeGreska"
+        Case 404: TestName = "T_S93_DetaljE4KvarImenujeRazlog"
+        Case 405: TestName = "T_S93_ManjakE4KvarImenujeRazlog"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1862,6 +1871,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 399: T_S93_TekucaPredajaBezZbirne
         Case 400: T_S93_IzvozKvarE4JeGreska
         Case 401: T_S93_E4DupliIDJeGreska
+        Case 402: T_S93_StornoZbirneE4KvarTraziDijalog
+        Case 403: T_S93_StornoListaE4KvarJeGreska
+        Case 404: T_S93_DetaljE4KvarImenujeRazlog
+        Case 405: T_S93_ManjakE4KvarImenujeRazlog
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -37059,4 +37072,225 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_E4DupliIDJeGreska", _
              "401: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' Dva lanca sa po jednom prijemnicom (oba istog vlasnika, razliciti brojevi).
+' Test posle kontrole bez kvara daje drugom redu ID prvog (PostaviPoljePoPK po
+' broju prijemnice B), pa citac E4 pada za celu tabelu (S93-REV-02). Vraca ID
+' prijemnice A -- njega nose oba reda i njega imenuje greska.
+Private Function S93DvaLancaZaKvarE4(ByVal oznaka As String, ByVal t As String, _
+                                     ByRef outBrA As String, ByRef bA As String, _
+                                     ByRef zbrA As String, ByRef outBrB As String, _
+                                     ByRef outBrPrjB As String) As String
+    Dim otpA As String, bB As String, otpB As String, zbrB As String
+    Dim prjA As String, prjB As String
+    outBrA = "ZB-S93" & oznaka & "A-" & t
+    outBrB = "ZB-S93" & oznaka & "B-" & t
+    outBrPrjB = "PR-S93" & oznaka & "B-" & t
+    SledLanacDoZbirne "S93" & oznaka & "A", outBrA, FX_VOZAC, FX_KUPAC, 40, bA, otpA, zbrA
+    prjA = SledPrijemnica("PR-S93" & oznaka & "A-" & t, outBrA, FX_VOZAC, FX_KUPAC, 35, 0)
+    SledLanacDoZbirne "S93" & oznaka & "B", outBrB, FX_VOZAC, FX_KUPAC, 30, bB, otpB, zbrB
+    prjB = SledPrijemnica(outBrPrjB, outBrB, FX_VOZAC, FX_KUPAC, 25, 0)
+    AssertEq CStr(Len(prjA) > 0 And Len(prjB) > 0), "True", _
+             "S93 kvar E4 preduslov: obe prijemnice su upisane (" & oznaka & ")"
+    S93DvaLancaZaKvarE4 = prjA
+End Function
+
+' 402 -- review #501 (#12): storno zbirne ne cita nepoznatu E4 kao "nema
+' prijemnice". ScanZbirna je u ne-strogom pozivu gutao gresku i vracao recnik
+' bez kljuceva, pa je CorrectionNeedsDialog dobio CBool(Empty) = False -- prost
+' storno bez dijaloga -- iako njegov handler za gresku namerno nudi pun dijalog;
+' pregled storna je pisao "Prijemnica: Ne", a ispravka DUPLI je isla dalje.
+' E4 se kvari duplim PrijemnicaID-om (S93-REV-02). Zbirna C nema prijemnicu ni
+' paleta, pa je kontrola bez kvara "bez dijaloga".
+' SABOTAZA: s93-scan-zbirne-guta-kvar.
+Private Sub T_S93_StornoZbirneE4KvarTraziDijalog()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, bA As String, zbrA As String, brB As String
+    Dim brPrjB As String, prjA As String, brC As String, bC As String, otpC As String
+    Dim zbrC As String, pregled As String, r As Object, uspeh As String, stornoC As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjA = S93DvaLancaZaKvarE4("SD", t, brA, bA, zbrA, brB, brPrjB)
+    brC = "ZB-S93SDC-" & t
+    SledLanacDoZbirne "S93SDC", brC, FX_VOZAC, FX_KUPAC, 20, bC, otpC, zbrC
+    AssertEq CStr(modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, brC, "", zbrC)), "False", _
+             "402 preduslov: zbirna bez prijemnice i paleta ne trazi dijalog"
+
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
+
+    AssertEq CStr(modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, brC, "", zbrC)), "True", _
+             "402 storno zbirne: necitljiva E4 trazi pun dijalog, ne prost storno"
+    pregled = modStornoFlow.BuildStornoPreview(FLOW_DOC_ZBIRNA, brC, "", zbrC)
+    AssertEq CStr(InStr(1, pregled, prjA, vbTextCompare) > 0), "True", _
+             "402 pregled storna zbirne: necitljiva E4 se imenuje, ne pise 'Prijemnica: Ne'"
+
+    Set r = modStornoFlow.RunZbirnaCorrection(brC, SV_MODE_DUPLI, False, zbrC)
+    uspeh = CStr(CBool(r("success")))
+    stornoC = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO)))
+    AssertEq uspeh & "|" & CStr(StrComp(stornoC, "Da", vbTextCompare) <> 0), "False|True", _
+             "402 ispravka zbirne (DUPLI): necitljiva E4 odbija ispravku, zbirna ostaje aktivna"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoZbirneE4KvarTraziDijalog", _
+             "402: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 403 -- review #501 (#11): lista za storno ne pretvara kvar E4 u praznu ili
+' staru listu. GetActiveDocumentsForStorno je u EH samo logovao i vracao praznu
+' kolekciju; GetWarmStornoDocs je posle neuspelog builda vracao STARI kes, a
+' poslednja mreza pod Resume Next -- Nothing. Ekran je tada pokazivao listu
+' kao da je procitana. Greska sada stize do Scr_Rows (UI-PAD-01) sa razlogom.
+' SABOTAZE: s93-storno-lista-guta-kvar, s93-storno-warm-guta-kvar,
+' s93-storno-warm-stari-kes.
+Private Sub T_S93_StornoListaE4KvarJeGreska()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, bA As String, zbrA As String, brB As String
+    Dim brPrjB As String, prjA As String, c As Collection, w As Collection
+    Dim gLista As String, gWarm As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjA = S93DvaLancaZaKvarE4("SL", t, brA, bA, zbrA, brB, brPrjB)
+    Set c = modStornoFlow.GetActiveDocumentsForStorno("Svi", "")
+    Set w = modStornoWarm.GetWarmStornoDocs()
+    AssertEq CStr(c.count > 0 And w.count > 0), "True", _
+             "403 preduslov: lista za storno bez kvara nije prazna (direktno i warm)"
+
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
+
+    On Error Resume Next
+    Set c = Nothing
+    Set c = modStornoFlow.GetActiveDocumentsForStorno("Svi", "")
+    gLista = Err.description
+    Err.Clear
+    modStornoWarm.InvalidateStornoWarm
+    modStornoWarm.StopStornoWarm
+    Set w = Nothing
+    Set w = modStornoWarm.GetWarmStornoDocs()
+    gWarm = Err.description
+    Err.Clear
+    On Error GoTo CleanUp
+
+    AssertEq CStr(InStr(1, gLista, prjA, vbTextCompare) > 0), "True", _
+             "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista"
+    AssertEq CStr(InStr(1, gWarm, prjA, vbTextCompare) > 0), "True", _
+             "403 lista za storno (warm): neuspeo build je greska, ne stari kes ni prazna lista"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modStornoWarm.InvalidateStornoWarm
+    modStornoWarm.StopStornoWarm
+    On Error GoTo 0
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoListaE4KvarJeGreska", _
+             "403: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 404 -- review #501 (#8): detalj izvestaja ne precutkuje prijemnice kad se E4
+' ne moze procitati. DodajPrijemniceZbirne je citac E4 zvao pod Resume Next i
+' na gresku izlazio bez reda -- detalj je izgledao kao zbirna bez prijemnice.
+' Sada red "veza nepoznata" sa razlogom, isto kao za kvar E4 te zbirne.
+' SABOTAZA: s93-detalj-prijemnice-guta-kvar.
+Private Sub T_S93_DetaljE4KvarImenujeRazlog()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, bA As String, zbrA As String, brB As String
+    Dim brPrjB As String, prjA As String, det As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjA = S93DvaLancaZaKvarE4("DT", t, brA, bA, zbrA, brB, brPrjB)
+    det = S93Linije(modScrIzvestaji.IzDetaljOtkupLista(bA))
+    AssertEq CStr(InStr(1, det, "PR-S93DTA-" & t, vbTextCompare) > 0), "True", _
+             "404 preduslov: detalj otkupa bez kvara nosi prijemnicu svoje zbirne"
+
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
+    det = S93Linije(modScrIzvestaji.IzDetaljOtkupLista(bA))
+
+    AssertEq CStr(InStr(1, det, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
+                  InStr(1, det, prjA, vbTextCompare) > 0), "True", _
+             "404 detalj otkupa: necitljiva E4 je red 'veza nepoznata' sa razlogom, ne zbirna bez prijemnice"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_DetaljE4KvarImenujeRazlog", _
+             "404: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 405 -- review #501 (#3): linija manjka F4 ne nestaje bez reci kad se skup
+' prijemnica zbirne ne zna. CalculateManjakPreview je i za kvar E4 te zbirne i
+' za gresku citaca vracao nule, pa linija nije crtana -- isto kao "zbirna nije
+' izabrana". Broja i dalje nema (izmisljen manjak je gori od prazne linije),
+' ali linija kaze zasto: peti clan rezultata je razlog, a ManjakLinijaIzPreview
+' (jedini put kojim ide SetManjakLine) ga ispisuje.
+' SABOTAZE: s93-manjak-kvar-bez-razloga, s93-manjak-greska-bez-razloga,
+' s93-manjak-linija-bez-razloga.
+Private Sub T_S93_ManjakE4KvarImenujeRazlog()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, bA As String, zbrA As String, brB As String
+    Dim brPrjB As String, prjA As String, m As Variant, lin As String, nep As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    nep = Poruka("OTKUI_STAT_NEPOZNATO")
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjA = S93DvaLancaZaKvarE4("MK", t, brA, bA, zbrA, brB, brPrjB)
+    m = modDokumenta.CalculateManjakPreview(brA, 0#, 0#, FX_VOZAC, FX_KUPAC)
+    lin = modOtkupUI.ManjakLinijaIzPreview(m)
+    AssertEq CStr(InStr(1, lin, Poruka("OTKUI_MNJ_MANJAK"), vbTextCompare) = 1 And _
+                  InStr(1, lin, nep, vbTextCompare) = 0), "True", _
+             "405 preduslov: bez kvara linija manjka nosi broj"
+
+    ' Kvar E4 zbirne B: njena aktivna prijemnica nema PrijemnicaID.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, ""
+    lin = modOtkupUI.ManjakLinijaIzPreview(modDokumenta.CalculateManjakPreview(brB, 0#, 0#, FX_VOZAC, FX_KUPAC))
+    AssertEq CStr(InStr(1, lin, nep, vbTextCompare) > 0 And _
+                  InStr(1, lin, "PrijemnicaID", vbTextCompare) > 0), "True", _
+             "405 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje"
+
+    ' Dupli PrijemnicaID: citac E4 pada za celu tabelu.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
+    m = modDokumenta.CalculateManjakPreview(brA, 0#, 0#, FX_VOZAC, FX_KUPAC)
+    lin = modOtkupUI.ManjakLinijaIzPreview(m)
+    AssertEq CStr(InStr(1, lin, nep, vbTextCompare) > 0 And _
+                  InStr(1, lin, prjA, vbTextCompare) > 0) & "|" & CStr(CDbl(m(0))), "True|0", _
+             "405 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_ManjakE4KvarImenujeRazlog", _
+             "405: rollback je vratio redove svih tabela lanca"
 End Sub
