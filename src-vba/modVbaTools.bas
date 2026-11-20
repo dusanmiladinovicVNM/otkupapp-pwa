@@ -1420,9 +1420,16 @@ End Sub
 
 ' Zameni kod komponente uz rollback. rollbackOk je True kad rollback nije ni bio
 ' potreban ILI je uspeo; False znaci da je komponenta ostala BEZ ispravnog koda.
+'
+' "Uspeo" znaci da je vraceni kod SADRZAJNO isti kao stari (SameCode), ne samo da
+' upis nije podigao gresku: upis ume da prodje bez greske, a da telo nije ceo
+' (zato postoji drift prolaz u VerifyFinalProject). Bez ove provere bi nepotpun
+' rollback prosao kao "Rollback je uspeo: modul ima STARI kod" (review #498,
+' VBA498-REV-02).
 Private Function ReplaceCodeWithRollback(ByVal vbc As Object, ByVal newBody As String, _
                                          ByRef errOut As String, ByRef rollbackOk As Boolean) As Boolean
     Dim old As String, okOut As Boolean, errNum As Long, errDesc As String
+    Dim vraceno As String
     rollbackOk = True
     errOut = ""
 
@@ -1449,11 +1456,27 @@ Private Function ReplaceCodeWithRollback(ByVal vbc As Object, ByVal newBody As S
     On Error Resume Next
     Err.Clear
     ZameniTelo vbc.CodeModule, old
-    If Err.Number <> 0 Then
-        rollbackOk = False
-        errOut = errOut & " + ROLLBACK PAO [" & Err.Number & "] " & Err.description
-    End If
+    errNum = Err.Number
+    errDesc = Err.description
     On Error GoTo 0
+    If errNum <> 0 Then
+        rollbackOk = False
+        errOut = errOut & " + ROLLBACK PAO [" & errNum & "] " & errDesc
+        Exit Function
+    End If
+
+    ' Nepotpun ili neprocitan rollback = modul bez ispravnog koda; isprazni ga iz
+    ' istog razloga kao ZameniTelo na gresci (polovican modul obori poruku).
+    vraceno = ComponentCode(vbc, okOut)
+    If Not okOut Then
+        rollbackOk = False
+        IsprazniModul vbc.CodeModule
+        errOut = errOut & " + ROLLBACK NEPROVEREN (vraceni kod nije citljiv; modul ispraznjen)"
+    ElseIf Not SameCode(vraceno, old) Then
+        rollbackOk = False
+        IsprazniModul vbc.CodeModule
+        errOut = errOut & " + ROLLBACK NEPOTPUN (vraceni kod se razlikuje od starog; modul ispraznjen)"
+    End If
 End Function
 
 ' Sadrzaj modula postaje TACNO body: obrisi sve linije, pa upisi telo u delovima
@@ -1475,13 +1498,23 @@ End Function
 ' OZNAKU REDA "2" i skine uvlacenje. Red koji ne nastavlja, a ipak se zavrsava
 ' sa "_", samo produzi deo za jedan red.
 '
-' Namerno BEZ On Error: greska jednog InsertLines-a prekida upis i stize do
-' pozivaoca (ReplaceCodeWithRollback / softnew su pod Resume Next i citaju
-' Err.Number odmah posle poziva), isto kao ranije greska AddFromString-a.
-' Da je upis bio potpun, dokazuje drift prolaz u VerifyFinalProject.
+' POLOVICAN MODUL I POZIV PROCEDURE (review #498, REV-03). Izmereno 20.11.2026:
+' dok ciljni modul nosi polovinu tela (pocinje usred procedure), PRVI poziv bilo
+' koje korisnicke procedure - i u modulu koji je vec preveden - natera VBE da
+' prevede izmenjeni modul: "Compile error: Invalid outside procedure", a makro
+' stane BEZ poruke "ImportAllVBA NIJE uspeo". COM pozivi (InsertLines,
+' DeleteLines, CountOfLines) i Err.Raise to ne izazivaju. Zato:
+'   - izmedju dva InsertLines-a nema poziva procedura (samo ReDim / Join);
+'   - pad InsertLines-a i nepotpun upis (manje redova nego sto telo ima)
+'     ISPRAZNE modul ovde, bez ijednog poziva procedure, pa tek onda podignu
+'     gresku pozivaocu (ReplaceCodeWithRollback / softnew su pod Resume Next i
+'     citaju Err.Number odmah posle poziva). Prazan modul se prevodi, pa poruka
+'     o neuspehu stize.
+' Da je upis i sadrzajno potpun, dokazuje drift prolaz u VerifyFinalProject.
 Private Sub ZameniTelo(ByVal cm As Object, ByVal body As String)
     Dim t As String, arr() As String, n As Long, od As Long, doo As Long
     Dim deo() As String, j As Long, k As Long, pocetak() As Long, nDel As Long
+    Dim errNum As Long, errDesc As String, errSrc As String, nMin As Long
 
     If cm.CountOfLines > 0 Then cm.DeleteLines 1, cm.CountOfLines
     If Len(body) = 0 Then Exit Sub
@@ -1506,7 +1539,16 @@ Private Sub ZameniTelo(ByVal cm As Object, ByVal body As String)
     Loop
     pocetak(nDel) = n
 
+    ' najmanji broj redova koji potpun upis mora da ostavi (zavrsne prazne
+    ' redove VBE ume da doda ili da ne broji, pa se oni ne racunaju)
+    nMin = n
+    Do While nMin > 0
+        If Len(Trim$(arr(nMin - 1))) > 0 Then Exit Do
+        nMin = nMin - 1
+    Loop
+
     ' upis: od poslednjeg dela ka prvom, svaki na red 1
+    On Error GoTo PAO
     For k = nDel - 1 To 0 Step -1
         ReDim deo(0 To pocetak(k + 1) - pocetak(k) - 1)
         For j = pocetak(k) To pocetak(k + 1) - 1
@@ -1514,6 +1556,33 @@ Private Sub ZameniTelo(ByVal cm As Object, ByVal body As String)
         Next j
         cm.InsertLines 1, Join(deo, vbCrLf)
     Next k
+    If cm.CountOfLines >= nMin Then Exit Sub
+
+    errNum = vbObjectError + 1498
+    errSrc = "modVbaTools.ZameniTelo"
+    errDesc = "upis nepotpun: modul ima " & cm.CountOfLines & " redova, telo najmanje " & nMin
+    GoTo PRAZNI
+
+PAO:
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.Source
+    Resume PRAZNI
+
+PRAZNI:
+    ' bez ijednog poziva procedure - vidi zaglavlje
+    On Error Resume Next
+    If cm.CountOfLines > 0 Then cm.DeleteLines 1, cm.CountOfLines
+    On Error GoTo 0
+    Err.Raise errNum, errSrc, errDesc
+End Sub
+
+' Obrisi sve redove modula; greska brisanja se guta (poziva se samo na putu
+' greske, gde vec postoji razlog koji se prijavljuje).
+Private Sub IsprazniModul(ByVal cm As Object)
+    On Error Resume Next
+    If cm.CountOfLines > 0 Then cm.DeleteLines 1, cm.CountOfLines
+    Err.Clear
 End Sub
 
 ' Uvezi jedan fajl i verifikuj VRACENU komponentu (ime + tip). report dobija opis
