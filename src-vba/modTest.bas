@@ -761,6 +761,8 @@ Public Sub RunAllTests()
     ' Pregled 19.11.2026: PERF-REV-02 (dupli ID) i PERF-REV-03 (rollback u prozoru).
     RunOne 390
     RunOne 391
+    ' Merenje 20.11.2026: dokaz integriteta knjige ambalaze jednom po prozoru (D1).
+    RunOne 392
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1395,6 +1397,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 389: TestName = "T_Rang_StabilnoOpadajuce"
         Case 390: TestName = "T_Nevezane_DupliIdPadaPoImenu"
         Case 391: TestName = "T_KesTabele_RollbackZastareva"
+        Case 392: TestName = "T_KesKnjiga_DokazJednomUProzoru"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1794,6 +1797,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 389: T_Rang_StabilnoOpadajuce
         Case 390: T_Nevezane_DupliIdPadaPoImenu
         Case 391: T_KesTabele_RollbackZastareva
+        Case 392: T_KesKnjiga_DokazJednomUProzoru
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24355,6 +24359,140 @@ Private Function KesIzvPotpis(ByVal v As Variant) As String
         s = s & vbLf
     Next i
     KesIzvPotpis = s
+End Function
+
+' ============================================================
+' 392. KNJIGA AMBALAZE: DOKAZ INTEGRITETA JEDNOM PO PROZORU CITANJA (brzina, D1).
+' ============================================================
+' Merenje 20.11.2026: zbirni saldo po OM je za svaku stanicu iznova dokazivao
+' integritet ISTE knjige (oko 325 ms po dokazu, 2,9 od 4,4 s klika). Dokaz se
+' sada pamti u kesu izvedenih nizova prozora citanja (modAmbalaza.KnjigaZaCitanje).
+'
+' Kriticna invarijanta je AMB-INV-11 i ugovor reda knjige: pokvarena knjiga ne
+' sme da prodje citanje. Mera sa tri strane:
+'  (a) u prozoru drugo citanje ne dokazuje iznova, a rezultat je isti kao bez
+'      prozora; van prozora se nista ne pamti;
+'  (b) upis kvara u knjigu (duplikat AmbID-a) u ISTOM prozoru obara zapamcen
+'      dokaz -- sledece citanje pada po imenu, i ponovo sledece (neuspeh se ne
+'      pamti);
+'  (c) posle rollback-a knjiga je opet dokazana, sa istim rezultatom.
+' Fixture: normal production state. Kvar je fault injection u transakciji koju
+' rollback vraca u celosti, i audit (obrazac TEST390-REV-01). Upis u otvorenom
+' prozoru krsi ugovor "prozor je samo citanje" namerno: meri se mreza ispod
+' ugovora, kao u 391.
+Private Sub T_KesKnjiga_DokazJednomUProzoru()
+    Dim d As Variant, cId As Long, r1 As Long, r2 As Long, i As Long
+    Dim id1 As String, bez As String, bez2 As String
+    Dim sa1 As String, sa2 As String, posle As String
+    Dim h0 As Long, hVan As Long, hDrugo As Long
+    Dim kvar1 As Long, kvar2 As Long, opis1 As String, opis2 As String
+    Dim knjigaPre As String, knjigaPosle As String
+    Dim tx As clsTransaction, otvoren As Boolean
+    Dim errNum As Long, errDesc As String
+
+    knjigaPre = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    d = GetTableData(TBL_AMBALAZA)
+    cId = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ID)
+    If IsArray(d) And cId > 0 Then
+        For i = 1 To UBound(d, 1)
+            If Len(Trim$(NzToText(d(i, cId)))) > 0 Then
+                If r1 = 0 Then
+                    r1 = i
+                ElseIf r2 = 0 Then
+                    r2 = i
+                    Exit For
+                End If
+            End If
+        Next i
+    End If
+    If r1 > 0 Then id1 = Trim$(NzToText(d(r1, cId)))
+
+    ' (a0) Van prozora: put kakav je bio, kesa nema.
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    bez = KesKnjigaPotpis()
+    bez2 = KesKnjigaPotpis()
+    hVan = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    On Error GoTo CleanUp
+    BeginTableCache
+    otvoren = True
+
+    ' (a) Prvo citanje dokazuje i pamti, drugo ide iz kesa.
+    sa1 = KesKnjigaPotpis()
+    h0 = modDataAccess.IzvedenoPogodakaTest()
+    sa2 = KesKnjigaPotpis()
+    hDrugo = modDataAccess.IzvedenoPogodakaTest() - h0
+
+    ' (b) Kvar upisan u istom prozoru: dva reda sa istim AmbID-em.
+    If r2 > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_AMBALAZA
+        UpdateCell TBL_AMBALAZA, r2, COL_AMB_ID, id1
+        kvar1 = KesKnjigaKvar(opis1)
+        kvar2 = KesKnjigaKvar(opis2)
+        tx.RollbackTx
+        Set tx = Nothing
+
+        ' (c) Posle rollback-a: opet dokazana, isti rezultat.
+        posle = KesKnjigaPotpis()
+    End If
+
+    EndTableCache
+    otvoren = False
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    If otvoren Then EndTableCache
+    knjigaPosle = KesIzvPotpis(GetTableData(TBL_AMBALAZA))
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_KesKnjiga_DokazJednomUProzoru", errDesc
+
+    AssertEq (r2 > 0 And Len(id1) > 0), True, _
+             "392 preduslov: knjiga fixture-a ima bar dva reda sa AmbID-em"
+    AssertEq (Len(bez) > 1), True, "392 preduslov: saldo po nalogu ima sadrzaj nad fixture-om"
+    AssertEq (Len(knjigaPre) > 0 And knjigaPosle = knjigaPre), True, _
+             "392 preduslov: knjiga je posle testa ista kao pre, i audit"
+    AssertEq bez2, bez, "392 preduslov: dva citanja van prozora daju isto"
+    AssertEq hVan, 0, "392 van prozora dokaz knjige se ne pamti"
+    AssertEq sa1, bez, "392 prvo citanje u prozoru isto kao bez prozora"
+    AssertEq (hDrugo > 0), True, "392 drugo citanje knjige u prozoru ide iz kesa"
+    AssertEq sa2, bez, "392 rezultat iz kesa dokaza isti kao bez kesa"
+    AssertEq (kvar1 <> 0), True, "392 upis kvara u prozoru obara zapamcen dokaz"
+    AssertEq (InStr(1, opis1, "nose AmbID", vbTextCompare) > 0), True, _
+             "392 kvar u prozoru pada po imenu (duplikat AmbID-a)"
+    AssertEq (kvar2 <> 0), True, "392 neuspeh dokaza se ne pamti"
+    AssertEq posle, bez, "392 posle rollback-a knjiga je opet dokazana, isti rezultat"
+    AssertEq modDataAccess.TableCacheDepth(), 0, "392 prozor kesa je zatvoren"
+End Sub
+
+' Potpis dva citaoca knjige koji koriste i dokaz i recnik vrsta (poslovni saldo
+' sudi kontra-stav po vrsti originala): kooperanti i stanice.
+Private Function KesKnjigaPotpis() As String
+    KesKnjigaPotpis = KesRecnikPotpis(modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True)) & _
+                      "#" & KesRecnikPotpis(modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_STANICA, True))
+End Function
+
+Private Function KesRecnikPotpis(ByVal o As Object) As String
+    Dim k As Variant, s As String
+    If o Is Nothing Then Exit Function
+    For Each k In o.keys
+        s = s & CStr(k) & "=" & CStr(o(k)) & ";"
+    Next k
+    KesRecnikPotpis = s
+End Function
+
+' Broj greske citanja knjige (0 = proslo) i njen opis.
+Private Function KesKnjigaKvar(ByRef opis As String) As Long
+    Dim o As Object
+    On Error Resume Next
+    Set o = modAmbalaza.AmbSaldoPoNalogu(AMB_NALOG_KOOPERANT, True)
+    KesKnjigaKvar = Err.Number
+    opis = Err.description
+    Err.Clear
 End Function
 
 ' ============================================================

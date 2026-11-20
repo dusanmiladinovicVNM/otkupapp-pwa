@@ -14712,6 +14712,26 @@ SABOTAZE = {
         "T_KesTabele_RollbackZastareva",
         "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
     ),
+    # D1 (merenje 20.11.2026): dokaz integriteta knjige ambalaze se u prozoru
+    # citanja ne cita iz kesa -- svaki citalac dokazuje iznova (stanje pre reza).
+    "kes-knjiga-dokaz-gluv": (
+        "modAmbalaza.bas",
+        "    If Not modDataAccess.IzvedenoTryGet(KNJIGA_DOKAZ_KLJUC & CStr(UBound(data, 1)), memo) Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: dokaz knjige se ne cita iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 drugo citanje knjige u prozoru ide iz kesa",
+    ),
+    # D1: upis ne prazni kes izvedenih nizova -- zapamcen dokaz integriteta
+    # nadzivi upis kvara u knjigu, pa pokvarena knjiga prolazi citanje
+    # (AMB-INV-11). Isto sidro kao izv3-upis-ne-prazni, druga tvrdnja: 392 meri
+    # bas knjigu.
+    "kes-knjiga-upis-ne-obara-dokaz": (
+        "modDataAccess.bas",
+        "    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll\n",
+        "    ' SABOTAZA: upis ne obara dokaz knjige iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 upis kvara u prozoru obara zapamcen dokaz",
+    ),
 }
 
 
