@@ -37408,7 +37408,11 @@ End Function
 ' a prevezivanje ide na IZABRANU. Do S9-4: kolona 7 je bila GeneracijaID (prazna
 ' za kanonsku zbirnu), dve zbirne istog broja i vlasnika su bile JEDAN red, a
 ' pisac je po broju upisivao prazan E4 uz True.
-' SABOTAZE: s94-opo-cilj-generacija, s94-opo-izbor-bez-id, s94-prevezi-e4-prazan.
+' Bira se zbirna A -- KASNIJI red tog broja u tblZbirna (B nastaje prva). Tako
+' tvrdnja o E4 razlikuje izbor po ID-u od izbora "prvi red istog broja"
+' (review S9-4).
+' SABOTAZE: s94-opo-cilj-generacija, s94-opo-izbor-bez-id, s94-prevezi-e4-prazan,
+' s94-opo-cilj-prvi-red, s94-prevezi-labela-prazna.
 Private Sub T_S94_OporavakPreveziPoID()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, br As String, razlog As String, ok As Boolean
@@ -37440,7 +37444,7 @@ Private Sub T_S94_OporavakPreveziPoID()
     AssertEq CStr(redA > 0) & "|" & CStr(redB > 0), "True|True", _
              "414 red cilja nosi ZbirnaID svoje zbirne (kolona 7)"
 
-    ok = S94Prevezi(redB, prjP, razlog)
+    ok = S94Prevezi(redA, prjP, razlog)
     labela = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjP, COL_PRJ_BROJ_ZBIRNE)))
     os = modDokumenta.GetOsirocenePrijemnice()
     If IsArray(os) Then
@@ -37451,8 +37455,10 @@ Private Sub T_S94_OporavakPreveziPoID()
 
     AssertEq CStr(ok) & "|" & razlog, "True|", _
              "414 izbor reda cilja i prevezivanje prolaze bez odbijanja"
-    AssertEq S93Roditelj(prjP), UCase$(zbrB), _
-             "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID"
+    AssertEq CStr(Len(S93Roditelj(prjP)) > 0), "True", _
+             "414 posle prevezivanja prijemnica ima roditelja (E4 nije prazan)"
+    AssertEq S93Roditelj(prjP), UCase$(zbrA), _
+             "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID, ne prvi red istog broja"
     AssertEq labela, br, "414 labela prijemnice je broj izabrane zbirne"
     AssertEq uSirocadi, False, "414 prevezena prijemnica vise nije siroce"
 

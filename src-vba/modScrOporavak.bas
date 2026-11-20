@@ -339,15 +339,18 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
+    ' Cilj se imenuje i ID-em (review S9-4): dve zbirne istog broja se po broju ne
+    ' razlikuju, a radnja ide tacno po izabranom ZbirnaID-u (isti razlog kao
+    ' KI-056 za izvor).
     If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
-              Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
+              Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & " (" & mCiljZbirnaID & ")?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
     Dim razlog As String
     If PreveziPrijemnicuCore(brojPrij, prijemnicaID, razlog) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
-                             " " & ChrW(8594) & " " & mCiljZbirna, False
+                             " " & ChrW(8594) & " " & mCiljZbirna & " (" & mCiljZbirnaID & ")", False
         PreveziPrijemnicu = True
     Else
         ' Razlog je pisceva poruka (KI-055): roba, vlasnik, nacrt, storno, ID koga
@@ -893,9 +896,10 @@ End Function
 ' mogao da izabere onu koja mu treba. Kljuc je sada sam PK, a vlasnik se
 ' PRIKAZUJE: kolizija mora da bude vidljiva, ne samo tacno obradjena.
 '
-' Red bez PK-a se NE nudi: radnja ga ne bi mogla poslati piscu, a prazan PK je
-' integritetski nalaz (B9), ne cilj. Kolona identiteta koja ne postoji je kvar
-' poziva, pa dize gresku umesto da tiho isprazni listu.
+' Red bez PK-a se NE nudi: radnja ga ne bi mogla poslati piscu. Za zbirnu ga
+' prijavljuje integritet (B9); prijemnicu bez PK-a strogi citac stavki obara jos
+' pre liste (ZbirStavkiPoPrijemnici se racuna kao argument). Kolona identiteta
+' koja ne postoji je kvar poziva, pa dize gresku umesto da tiho isprazni listu.
 ' colVlasnik je NIZ kolona, ne jedna: vlasnistvo zbirne je vozac + kupac, isti
 ' kompozit koji koriste StornoZbirna i kapija roditelja u
 ' ReassignPrijemnicaToZbirna_TX (ZbirnaRoditeljPrijemnice).
@@ -963,8 +967,8 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Exit Function
     End If
 
-    ' Red sa PK-om koji je vec vidjen (dupli PK, integritetski nalaz B9) samo
-    ' dodaje svoje kilograme, ne pravi drugi cilj istog ID-a.
+    ' Dupli PK ovde ne stize: strogi citaci stavki (argument kgPoDok) ga obaraju
+    ' pre liste. Recnik ostaje osigurac -- isti ID ne pravi drugi cilj.
     '
     ' Filter se primenjuje PRE nego sto se dokument upamti: da se prvo pamti,
     ' dokument koji ne pogadja pretragu prvim redom ne bi mogao da je pogodi
@@ -998,7 +1002,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Dim kgReda As Double
         kgReda = KgDokumenta(src, r, kgPoDok, iDokID)
         If seen.Exists(kljuc) Then
-            ' isti PK dvaput (B9) - samo dopuni kolicinu
+            ' isti ID dvaput (v. gore) - ne pravi drugi cilj
             outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + kgReda
             sumKg = sumKg + kgReda
             GoTo Sledeci

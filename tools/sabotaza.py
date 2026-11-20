@@ -1371,11 +1371,13 @@ SABOTAZE = {
         "    If Len(Trim$(oldDocID)) > 0 And cId > 0 Then\n"
         "        For r = 1 To UBound(data, 1)\n"
         "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n",
-        "    If False Then   ' SABOTAZA: PK se ignorise, ide se po broju\n"
+        "    If False Then   ' SABOTAZA: PK se ignorise\n"
         "        For r = 1 To UBound(data, 1)\n"
         "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n",
         "T_Prefill_PoIdentitetuNePoBroju",
-        "PK A daje SVOJU kolicinu",
+        # S9-4 (review): pada na broj vise nema (PrefillRedPoID), pa mutant daje
+        # PRAZAN prefill -- prva pada tvrdnja o nepraznom prefill-u po PK-u.
+        "prefill po PK-u A nije prazan",
     ),
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
     # Zavrsni krug S8 (04.11.2026): zamena je citala labelu sBr sa paletne stavke, koje od
@@ -1406,8 +1408,8 @@ SABOTAZE = {
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "roba je stigla na dokument kupca 1 (40 gajbica)",
     ),
-    # generacija-nema-pa-po-broju je povucena u S9-4 (plan 14.68): izvor je ID ili nista; mutant koji
-    # skida RequireTacnoJedan je ekvivalentan (FindRows prazan -> greska -> False).
+    # generacija-nema-pa-po-broju je u S9-4 (plan 14.68) zamenjena sa
+    # s94-prevezi-izvor-bez-kapije: izvor pisca prevezivanja je ID ili nista.
 
     # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
     # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
@@ -11845,7 +11847,10 @@ SABOTAZE = {
         "                                        modDokumenta.ZbirStavkiPoPrijemnici(), COL_PRJ_ID, _\n"
         "                                        COL_GENERACIJA_ID)   ' SABOTAZA: identitet cilja je generacija\n",
         "T_Oporavak_CiljneListe",
-        "ciljna lista prijemnica nosi PrijemnicaID dokumenta (S6 korak 8)",
+        # S9-4 (review): tblPrijemnica kolonu generacije nema, a RowsAktivni od
+        # S9-4 kolonu identiteta koje nema prijavljuje greskom (1963) umesto
+        # prazne kolone 7 -- lista pada, pa prva pada tvrdnja o ugovoru mreze.
+        "ciljna lista prijemnica vraca ugovor mreze",
     ),
     # ---- S6 korak 8, dopuna: PRJ-ZBR-02 (KI-047) -- prijemnica prima robu zbirne ----
     # Jedna kapija (PrijemnicaRobaRazlog), tri pozivaoca: pisac, prevezivanje, F4.
@@ -15054,7 +15059,7 @@ SABOTAZE = {
         "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, roditeljID, SRC\n",
         "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, \"\", SRC   ' SABOTAZA: E4 prazan\n",
         "T_S94_OporavakPreveziPoID",
-        "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID",
+        "414 posle prevezivanja prijemnica ima roditelja (E4 nije prazan)",
     ),
     # Labela ne opisuje izabranu zbirnu: E4 je tacan, a broj na prijemnici nije.
     # (Mutant nad citanjem brojCilja bi oborio kapiju broja u
@@ -15114,6 +15119,25 @@ SABOTAZE = {
         "        CB.List(CB.ListCount - 1, 1) = zid(1)   ' SABOTAZA: stavka nosi tudji ZbirnaID\n",
         "T_Zbirne_PickerJednaStavkaPoDokumentu",
         "svaka stavka pickera nosi SVOJ ZbirnaID, jedan, bez spajanja",
+    ),
+    # Izvor bez kapije "tacno jedan": nepostojeci ID pukne tek na redovi(1)
+    # (greska 5), pa razlog ne imenuje ID; dupli PrijemnicaID bi tiho prevezao
+    # prvi red. Review S9-4: mutant NIJE ekvivalentan.
+    "s94-prevezi-izvor-bez-kapije": (
+        "modDokumenta.bas",
+        "    RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, \"PrijemnicaID (izvor prevezivanja)\", SRC\n",
+        "    ' SABOTAZA: izvor bez kapije tacno-jedan\n",
+        "T_ZadatIdentitetKogaNema_Staje",
+        "zadat identitet prijemnice koga nema zaustavlja upis",
+    ),
+    # Izbor reda u Oporavku razresi cilj PO BROJU (prvi red istog broja) umesto
+    # da uzme ZbirnaID izabranog reda -- istorijski kvar "po prvom redu".
+    "s94-opo-cilj-prvi-red": (
+        "modScrOporavak.bas",
+        "                    mCiljZbirnaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)\n",
+        "                    mCiljZbirnaID = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_ID)))   ' SABOTAZA: prvi red istog broja\n",
+        "T_S94_OporavakPreveziPoID",
+        "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID, ne prvi red istog broja",
     ),
 }
 
