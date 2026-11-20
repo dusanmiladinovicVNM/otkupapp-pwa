@@ -251,8 +251,7 @@ commit):
   - poređenje štampe otkupnog lista pre i posle za isti dokument (obe klase,
     cena, bruto/neto, ambalaža);
   - hladnjački lanac i lista NEVEZANE nad pravim podacima;
-  - merenje vremena pre i posle (tajmer, §5) — sva vremena iz analize su
-    procene.
+  - ~~merenje vremena pre i posle~~ — **urađeno 20.11.**, rezultat je u §3a.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
@@ -317,6 +316,110 @@ Za svaku izmenu ponašanja važi:
   `python tools/dokaz.py --izbor --radnika 4 <prefiks>`.
 
 Iz web sesije se ništa od toga ne može prijaviti kao zeleno.
+
+## 3a. Merenje pre i posle (20.11.2026)
+
+**Uslovi:**
+- Dve sveže kopije prave sveske, iz iste osnove; u obe su cloud sync i
+  monitoring ugašeni.
+- Kod:
+  - „pre" = `claude/merenje-modperf-pre` @7d55949 (`main @1a2293d` + merač);
+  - „posle" = `claude/merenje-modperf` @5313843 (ova grana + isti merač).
+
+  Obe stoje na istom `main`-u, pa je razlika samo u rezovima iz §3.
+- `modPerf`:
+  - nivo 1, prag 0 ms, QPC 10 MHz;
+  - cena merača oko 9 µs po sekciji i 3 µs po brojaču.
+- Veličine tabela u merenju:
+  - `tblOtkup` i `tblOtkupStavke` po 1.813;
+  - `tblOtpremnica` 976, `tblZbirna` 977, `tblPrijemnica` 949;
+  - `tblAmbalaza` 5.239, `tblKooperanti` 104.
+- Scenario, isti redosled i isti unosi u obe kopije:
+  - Izveštaji: saldo zbirno i pojedinačno, izbor OM-a, kartice tipa, liste i
+    čipovi;
+  - zatim 5 snimanja otkupa na običnoj i 5 na hladnjačkoj stanici;
+  - na kraju mirovanje (AutoSave).
+- META kontrola (`TableCacheDepth`, `Nezatvorenih`, `Neuparenih`, `Preliv`) je 0
+  u obe sesije.
+- Vremena su **aktivna**, bez čekanja na dijalog. Ponavljanja je malo:
+  - Izveštaji: 1 hladno + 1–2 topla po radnji;
+  - snimanje: 1 + 9.
+- Izvor brojeva su sažeci sesija (`Perf_sazetak_2026-11-20_072031` i
+  `_080348`). Kasnija kontrolna snimanja nisu uračunata.
+
+**Rezultat:**
+
+| Radnja | Pre | Posle | Rez |
+|---|---|---|---|
+| **Snimanje otkupa**, prosek 9 toplih | 12,5 s | 10,5 s | −2,0 s (−16%) |
+| PDF otkupnog lista, po snimanju | 2,27 s | 1,27 s | OTK-1, −44% |
+| Nevezane otpremnice, po hladnjačkom snimanju | 2,02 s | 0,03 s | HLD-1, −98% |
+| Hladnjački lanac ukupno, po hladnjačkom snimanju | 6,5 s | 4,5 s | HLD-1 |
+| Čitanja `tblOtpremnica` u 10 snimanja | 4.940 (115 mil. ćelija) | 325 (7,6 mil.) | HLD-1, −93% |
+| **Izveštaji: Zbirno saldo**, ponovni klik | 5,8 s | 0,06–0,18 s | IZV-1 |
+| Zbirno saldo, prvi klik | 5,7 s | 4,2 s | snimak se računa jednom |
+| Pojedinačno | 1,9 s | 0,06–0,6 s | IZV-1 |
+| Tip OM / Kupci | 5,8 / 1,4 s | 0,06 / 0,13 s | IZV-1 (v. ispod) |
+| Izbor iz liste | 0,19 s, prvi 1,9 s | 0,09 s | IZV-1 |
+
+- **Snimanje.** Očekivano je ≈1,0 s na PDF-u svakog snimanja i ≈2,0 s na
+  nevezanim otpremnicama svakog hladnjačkog snimanja, u proseku ≈2,0 s.
+  Izmereno je 2,02 s.
+- **Kontrola da je scenario isti.** Brojači čitanja tabela koje nijedan rez ne
+  dira su u snimanju identični pre i posle (`tblOtkup` 509, `tblAmbalaza` 155,
+  `tblPrijemnica` 370, `tblKooperanti` 1.963, `tblSEFConfig` 691). Razlika je
+  dakle samo u rezovima.
+- **Izveštaji.** Klik na kontekst više ne ide kroz pun `RefreshFromData`. Pre je
+  svaki klik čitao `tblKooperanti` oko 178 puta, `tblPrijemnica` 34 i `tblOtkup`
+  14–22 puta sa lista, i nosio oko 1,25 s van samog snimka. Posle su to 0–2
+  čitanja.
+- **Prema proceni iz §1a:**
+  - HLD-1 je za 1.000 otpremnica procenjen na 2,4–12 s, u donjem rasponu
+    0,2–1 s. Izmereno pri 976: 2,02 s pre, 0,03 s posle.
+  - OTK-1: pri 1.813 stavki ceo otkupni list (popuna i PDF) je pao sa 2,27 na
+    1,27 s. Procena 3–9 s je bila za 3.000 stavki. Uklonjeni deo raste sa
+    kvadratom broja stavki, pa dobit raste kroz sezonu.
+
+**Nije izmereno ili nije uporedivo:**
+- **IZV-7 (RANG):** izmereno samo posle (113 ms); pre nema broja.
+- **IZV-9 (čipovi):** 34–40 ms i pre i posle. Pri ovoj veličini dobit nije
+  merljiva.
+- **IZV-3 / IZV-5:** prvi zbirni snimak je pao sa 4,4 na 4,1 s (SALDO) i sa 4,4
+  na 4,2 s (ROBA). Dobit je mala. Ostatak je računanje, ne čitanje lista: posle
+  su skoro sva čitanja u snimku pogoci keša. Za raščlanjavanje treba merenje na
+  nivou `DETALJ`.
+- **Tip OM 5,8 → 0,06 s:** posle je snimak već bio izračunat ranije u sesiji, a
+  IZV-1 ga više ne briše. Broj meri povratak na viđen kontekst, ne prvo
+  računanje.
+- **Kartica Kooperanti nije uporediva:** posle je računat drugi snimak
+  (KARTICA P, 0,54 s).
+
+**Šta i dalje nosi vreme:**
+
+| Gde | Trajanje (posle) | Napomena |
+|---|---|---|
+| Ostatak hladnjačkog lanca | 4,5 s po hladnjačkom snimanju | self `OTK.AutoLanacHladnjaca`, bez nevezanih otpremnica |
+| Upis (`ScrSave` van izmerenih sekcija) | ≈3,7 s po snimanju | neraščlanjeno |
+| Osvežavanje posle snimanja | 2,8 s po snimanju | pun `RefreshFromData`, opravdan jer su se podaci promenili |
+| PDF otkupnog lista | 1,27 s po snimanju | |
+| Programska promena OM-a (UI-7) | 0,8 s po snimanju | 3 `Change` po snimanju, ≈263 ms svaki |
+| Prvi zbirni snimak (SALDO ili ROBA Z) | 4,1–4,2 s | računanje, v. gore |
+| AutoSave | 7,3–7,5 s | forma stoji dok traje |
+
+- Čitanja koja nijedan rez ne dira, po snimanju:
+  - `tblOtkup` 51 put (2,7 mil. ćelija);
+  - `tblAmbalaza` 15,5 puta (1,3 mil.);
+  - `tblKooperanti` 196, `tblSEFConfig` 69.
+- Udeo knjige ambalaže (D1) nije izdvojen, za to treba nivo `DETALJ`.
+
+**Prozor Excela u sesiji „posle".** Posle svakog snimanja je list Excela
+izlazio ispred forme, a ikonica na traci vraćala je formu.
+- Redosled iz CSV-a: „Otvori Excel" je bila 2. radnja sesije, pre svih deset
+  snimanja, pa je Excel tokom svih snimanja bio vidljiv.
+- Bez „Otvori Excel" pojave nema (operater, 20.11.).
+- Diff ove grane prema „pre" je pročitan ceo. Ne dira vidljivost aplikacije,
+  aktiviranje prozora ili lista, `ScreenUpdating`, prikaz forme ni PDF.
+- Zato ovo nije regresija ove grane. Pojava je zapisana u §6.
 
 ## 4. Odluke koje su tvoje
 
@@ -424,21 +527,32 @@ Navedeno da se ne izgubi. Ništa od ovoga nije provereno testom.
   i „`AutoChainHladnjaca` pod `On Error Resume Next`". Lanac se zove
   `AutoLanacHladnjaca` i ima sopstveni EH. Ispravka ide **isključivo kroz
   zaseban process PR**.
+- **Posle „Otvori Excel" Excel ostaje vidljiv i prekriva formu** pri svakom
+  snimanju (merenje 20.11., §3a).
+  - Excel se ponovo sakriva samo povratkom preko kartice „Nazad u aplikaciju"
+    (`modUiFaze.NazadUAplikaciju`).
+  - Verovatno ga ispred forme dovodi PDF otkupnog lista, koji pri snimanju
+    preuzme fokus. Mehanizam nije potvrđen.
+  - Da li se isto dešava na `main`-u nije provereno. Kod ove grane ne dira
+    prozore.
 
 ## 7. Šta nije provereno
 
-- **Ništa nije pokrenuto u Excelu.** Svako vreme je procena; tačni su samo
-  brojevi poziva izvedeni iz koda, i to tamo gde su prebrojani.
+- **Izmereno je samo ono što je u §3a** (20.11., jedna kopija prave sveske,
+  nivo 1, malo ponavljanja). Sva ostala vremena u ovom dokumentu su i dalje
+  procene.
 - **Nepoznato je:**
   - veličina tabela;
   - da li sveska ima volatilne formule (utiče na OTK-16 i GRP-7: upis u šablon
     sa `Calculation` na automatskom);
   - da li `FormatNeslaganje` na pravoj svesci svaki put okida
     `PrimeniFormateKanona`;
-  - koliko traje `ThisWorkbook.Save`;
+  - koliko traje sam `ThisWorkbook.Save`. AutoSave akcija traje 7,3–7,5 s
+    (§3a), ali koliko od toga je `Save` nije razdvojeno;
   - da li je sveska na lokalnom disku, mreži ili OneDrive-u.
-- **UI-7:** da li MSForms `ComboBox` diže `Change` na `.Clear` i pri
-  programskom punjenju. Bez Excela se ne može utvrditi.
+- **UI-7:** da `Change` na OM-u pri snimanju zaista okida potvrđeno je merenjem:
+  3 puta po snimanju, ≈263 ms svaki (§3a). Koji tačno korak ga diže (`.Clear`,
+  programsko punjenje ili izbor) nije razdvojeno.
 - **Delovi koje nijedna analiza nije pročitala do kraja** (spisak po oblasti je
   u katalogu, odeljci „Šta analiza ove oblasti NIJE pokrila"). Glavni:
   - `CreateZbirna_TX` / `ZbirnaUpis`;
