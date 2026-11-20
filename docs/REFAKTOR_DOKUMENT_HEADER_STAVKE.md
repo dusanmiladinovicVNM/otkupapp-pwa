@@ -12328,6 +12328,11 @@ koji izgleda pročitano**; operater je odlučio da se zatvore u ovom PR-u. Testo
 - **Hash-evi** posle prvog rebase-a → posle drugog: `45c0b5ec`→`18b9ff1e`, `65c95d8d`→`b2fa95de`, `d27050c0`→`5f459f22`, `be9ffa49`→`d22afd69`, `734b9150`→`c13c9387`, `f3abdbbe`→`06ac5f0a`, `9981e19d`→`80cc2873`, `79c6dd21`→`e82fd50b`, `f28a6acc`→`89473ab9`, `439f9aae`→`71655e5c`, `f18d6bda`→`192bca12`, `ae6ceeca`→`5777d45c`, `91930d28`→`9fe0b4e2`, `afdc739c`→`e179ce52`, `a6dfe23d`→`9a723679`, `584331fb`→`56aee53b`, `073b086f`→`bd2bd231`, `08490000`→`666ac8b8`, `e5c02f29`→`b4e2cf6e`, `02220475`→`369617bd`, `d401caf8`→`f4bafb5f`.
 - **FULL nad `37386dad`: 12/12 zeleno, marker upisan** (izvor `c0f09128db54`) — `RunAllTests` 413/0, BFP 3499/0, Banka 241/0, Storno 111/0, Palete, Faktura, Agrohemija, Golden, JSON, Izveštaji, StornoCentar, License.
 - **`dokaz.py` nad istim izvorom: 40/40 crveno po imenu** (sve S9-3 sabotaže, `--grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)", snimak izvora `d1b6e3155df67625` isti pre i posle; 33 od 40 grupno). Pun pojedinačni dokaz bez `--grupe`/`--izbor` ide pred release.
+- **Ručni Compile i ručna provera: prošli** (operater, 20.11.2026) nad `75ee7e3f` — izvor `c0f09128db54`, isti kao
+  FULL; `vba_gate --require-green --require-compile` prolazi. Ručna provera u 12 tačaka (F1/F2 status i čip, detalj
+  otkupa i otpremnice, ROBA (OM), F4 bez i sa „dupla prijemnica", linija manjka, lista za storno, storno zbirne bez
+  i sa prijemnicom, štampa ispravke otpremnice): operater je javio da sve deluje u redu. Redove „Veza nepoznata" nad
+  pokvarenim podacima operater ne može da napravi — mere ih 410–412.
 
 ## 15) Backlog — namerno van opsega
 
