@@ -221,7 +221,7 @@ commit):
 | IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **zeleno 19.11.** (FULL + dokaz) |
 | PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (FULL + dokaz) |
 | PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (FULL + dokaz) |
-| D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **zeleno 20.11.** (izbor: 392, 386, 391; dokaz `kes-knjiga` 2/2); FULL čeka |
+| D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **zeleno 20.11.** (FULL + dokaz `kes-knjiga` 2/2) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -254,9 +254,9 @@ commit):
     cena, bruto/neto, ambalaža);
   - hladnjački lanac i lista NEVEZANE nad pravim podacima;
   - ~~merenje vremena pre i posle~~ — **urađeno 20.11.**, rezultat je u §3a.
-  - za D1-IZV: ~~test 392 i `dokaz.py --izbor kes-knjiga`~~ (zeleno 20.11.,
-    2/2); ostaju pun prolaz (dira čitanje knjige ambalaže, pa i BFP) i ponovno
-    merenje zbirnog prikaza.
+  - za D1-IZV: ~~test 392, dokaz `kes-knjiga` 2/2 i pun prolaz~~ (zeleno
+    20.11.: 12 suite-ova, `RunAllTests` 392/392, BFP 3.499/3.499, GREEN
+    marker); ostaje ponovno merenje zbirnog prikaza.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
