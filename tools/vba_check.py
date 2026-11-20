@@ -42,6 +42,10 @@ Provere:
  13. DUPLI_LOKAL -- isto ime deklarisano dvaput u ISTOJ proceduri (parametar +
                      `Dim`, ili `Dim src` uz `Const SRC`). VBA je case-insensitive,
                      pa je to "Duplicate declaration" i modul se NE kompajlira.
+ 14. PRELOM_POTPISA -- deklaracija (Sub/Function/Property/Declare/Event)
+                     prelomljena sa ` _` tik pre `(` liste parametara. VBE
+                     `AddFromString` tada na KRAJ modula doda red `()`: modul se
+                     ne kompajlira, a ImportAllVBA javi drift. Git i fajl su cisti.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -1866,6 +1870,57 @@ def check_truncated(path: str, raw: bytes, lines: list[str]) -> list[Finding]:
                         "ga nosi, pa je ovo odsecen fajl, ne modul.")]
     return []
 
+
+# --- PRELOM_POTPISA: prelom reda tik pre "(" liste parametara ------------------
+#
+# Zatecen incident (modPerf, 20.11.2026): Declare napisan kao
+#
+#     Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" _
+#         (ByRef lpPerformanceCount As Currency) As Long
+#
+# kroz VBE `CodeModule.AddFromString` dobije na KRAJU modula, posle poslednjeg
+# End Sub, prazan red i `()`. Modul se ne kompajlira, a zavrsna provera
+# ImportAllVBA javi "kod se razlikuje od izvora". Fajl u gitu je cist, pa se
+# krivac trazi na pogresnom mestu -- i artefakt nastaje iznova na svakom uvozu.
+#
+# Granica je IZMERENA u cistoj Excel instanci (AddFromString, pa CodeModule.Lines):
+#   pukne:   Sub / Function / Property Get / Static Sub / Declare Function /
+#            Declare Sub / Declare ... Alias / Event u klasi -- sve kad red
+#            pre "(" liste parametara zavrsi sa " _";  #If VBA7 nije bitan.
+#   prolazi: prelom UNUTAR liste ("(ByRef _"), posle liste ("(x) _" / "As Long"),
+#            pre ")", poziv "Call MsgBox _" / "(...)", izraz "Left$ _" / "(...)",
+#            modul-level niz "mA _" / "(1 To 5) As Long".
+# Zato provera gleda SAMO deklaraciju i SAMO prvu "(" u njoj: ako se lista
+# otvara na redu koji pocinje sa "(", a prethodni red je nastavak -- nalaz.
+POTPIS_PRELOM = re.compile(
+    r"^\s*(?:(?:Public|Private|Friend|Global)\s+)?(?:Static\s+)?"
+    r"(?:Declare\s+(?:PtrSafe\s+)?(?:Sub|Function)|Sub|Function"
+    r"|Property\s+(?:Get|Let|Set)|Event)\s+\w+", re.IGNORECASE)
+
+
+def check_prelom_potpisa(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    for i, line in enumerate(lines):
+        if not POTPIS_PRELOM.match(line):
+            continue
+        j = i
+        while j < len(lines):
+            kod = _clean(lines[j]).rstrip()
+            if "(" in kod:
+                break                    # lista se otvara usred reda -- bezbedno
+            if not _NASTAVAK.search(kod) or j + 1 >= len(lines):
+                break                    # izjava se zavrsila bez prelomljene liste
+            if lines[j + 1].lstrip().startswith("("):
+                out.append(Finding(path, j + 1, "PRELOM_POTPISA",
+                                   "prelom ' _' tik pre '(' liste parametara. VBE "
+                                   "AddFromString tada na kraj modula doda red '()' -- "
+                                   "modul se ne kompajlira, a ImportAllVBA javi 'kod se "
+                                   "razlikuje od izvora'. Spoji red sa '(' ili prelomi "
+                                   "UNUTAR liste (posle '(ByRef', ili posle zareza)."))
+                break
+            j += 1
+    return out
+
 # --- KOPIJA_NIZA: `ByVal` na parametru koji se koristi kao 2D niz ---------------
 #
 # `ByVal` na `Variant`-u koji SADRZI niz tera VBA da kopira CEO niz pri svakom
@@ -2478,6 +2533,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
     out += check_truncated(path, raw, lines)
+    out += check_prelom_potpisa(path, lines)
     out += check_array_copy(path, lines)
     out += check_test_registry(path, lines)
     out += check_storno_progutan(path, lines)
@@ -3592,6 +3648,99 @@ Option Explicit
 '''),
 ]
 
+# --- PRELOM_POTPISA: dokaz u oba smera -----------------------------------------
+#
+# Obe polovine su prepisane iz merenja u cistoj Excel instanci (20.11.2026), ne
+# izvedene iz pravila: "mora" je oblik posle koga AddFromString doda "()", "ne sme"
+# je oblik posle koga se kod vrati netaknut. Druga polovina drzi granicu -- poziv
+# i niz prelomljeni pre "(" su legalni i VBE ih ne kvari.
+PRELOM_POTPISA_CASES = [
+    # --- mora da zapisti ---
+    ("Declare u #If pre '(' (modPerf, zatecen incident)", 1, '''Option Explicit
+#If VBA7 Then
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" _
+        (ByRef lpPerformanceCount As Currency) As Long
+#End If
+'''),
+    ("Sub pre '('", 1, """Option Explicit
+Public Sub C _
+    (ByVal z As Long)
+End Sub
+"""),
+    ("Static Sub pre '('", 1, """Option Explicit
+Private Static Sub S _
+    (ByVal a As Long)
+End Sub
+"""),
+    ("Function sa As pre '('", 1, """Option Explicit
+Private Function F _
+    (ByVal x As Long) As Long
+    F = x
+End Function
+"""),
+    ("Property Get pre '('", 1, """Option Explicit
+Public Property Get P _
+    (ByVal i As Long) As Long
+End Property
+"""),
+    ("Declare Sub pre '('", 1, '''Option Explicit
+Private Declare PtrSafe Sub Sleep Lib "kernel32" _
+    (ByVal ms As Long)
+'''),
+    ("Declare sa Alias pre '('", 1, '''Option Explicit
+Private Declare PtrSafe Function GW Lib "user32" Alias "GetWindowLongA" _
+    (ByVal h As LongPtr, ByVal n As Long) As Long
+'''),
+    ("Event u klasi pre '('", 1, """Option Explicit
+Public Event Promena _
+    (ByVal a As Long)
+"""),
+    ("dva nastavka, '(' tek u trecem redu", 1, '''Option Explicit
+Private Declare PtrSafe Function GW Lib "user32" _
+    Alias "GetWindowLongA" _
+    (ByVal h As LongPtr, ByVal n As Long) As Long
+'''),
+    # --- NE sme da zapisti ---
+    ("Declare u jednom redu (modPerf posle popravke)", 0, '''Option Explicit
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As Currency) As Long
+'''),
+    ("prelom UNUTAR liste", 0, '''Option Explicit
+Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef _
+    lpPerformanceCount As Currency) As Long
+'''),
+    ("prelom POSLE liste", 0, """Option Explicit
+Private Function G(ByVal x As Long) _
+    As Long
+    G = x
+End Function
+"""),
+    ("prelom pre zatvorene zagrade", 0, """Option Explicit
+Private Sub H(ByVal x As Long _
+    )
+End Sub
+"""),
+    ("poziv naredbom pre '('", 0, '''Option Explicit
+Public Sub W()
+    Call MsgBox _
+        ("x")
+End Sub
+'''),
+    ("poziv u izrazu pre '('", 0, '''Option Explicit
+Public Sub W()
+    Dim s As String
+    s = Left$ _
+        ("abc", 1)
+End Sub
+'''),
+    ("modul-level niz pre '('", 0, """Option Explicit
+Private mA _
+    (1 To 5) As Long
+"""),
+    ("'(' samo u Alias stringu, lista u istom redu", 0, '''Option Explicit
+Private Declare PtrSafe Function GW Lib "user32" Alias "Get(" (ByVal h As LongPtr) As Long
+'''),
+]
+
 # --- KOPIJA_NIZA: dokaz u oba smera ------------------------------------------
 #
 # Druga polovina (0 nalaza) nosi celu tezinu. Provera je NAMERNO uska, a granice
@@ -3845,6 +3994,15 @@ def self_test() -> int:
             palo.append(f"  ODSECEN/{naziv}: ocekivano {ocekivano} nalaza, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in PRELOM_POTPISA_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "PRELOM_POTPISA")
+        if dobijeno != ocekivano:
+            palo.append(f"  PRELOM_POTPISA/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in MRTAV_LOG_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -4078,6 +4236,7 @@ def self_test() -> int:
 
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
+              + len(PRELOM_POTPISA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
               + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
               + len(PROC_SIZE_CASES) + len(KVAL_CASES)

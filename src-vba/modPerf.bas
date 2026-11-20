@@ -62,11 +62,11 @@ Option Explicit
 '   modTest.ResetSeamova         PerfIskljuciTiho
 ' ============================================================
 
-' Declare u JEDNOM redu, kao u modDataAccess/modWindow. Posle ImportAllVBA-a je
-' modPerf u svesci dobijao red "()" na kraju, pa je zavrsna provera javljala
-' drift (operater, 19-20.11.2026). Prelomljen Declare (" _") u #If/#Else je bio
-' jedina razlika prema modulima koji se uvoze cisto. Posle prepisa u jedan red
-' ImportAllVBA prolazi (20.11.2026) -- prelom u #If/#Else ne vracati.
+' Declare u JEDNOM redu. Prelom " _" tik pre "(" liste parametara tera VBE
+' AddFromString da na kraj modula doda red "()": modul se ne kompajlira, a
+' ImportAllVBA javi drift (izmereno 20.11.2026 u cistoj instanci Excela;
+' #If nije bitan). Posle prepisa u jedan red ImportAllVBA prolazi (20.11.2026).
+' Prelom ne vracati -- cuva ga vba_check PRELOM_POTPISA.
 #If VBA7 Then
     Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As Currency) As Long
     Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As Currency) As Long
