@@ -93,6 +93,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `CLAN_FORME` | `frmX.Clan` gde forma nema taj javni član ni kontrolu |
 | `DUPLI_LOKAL` | isto ime dvaput u **istoj** proceduri (`Dim src` uz `Const SRC`, parametar pa `Dim`) |
 | `SEMA_REGISTAR` | `TBL_*` konstanta koje nema u registru `modSchema` — `EnsureAllTables` je ne bi napravio, a `VerifySchema` ne bi prijavio da fali |
+| `PRELOM_POTPISA` | deklaracija (`Sub`/`Function`/`Property`/`Declare`/`Event`) prelomljena sa ` _` tik pre `(` liste parametara — VBE `AddFromString` tada na kraj modula doda red `()`, modul se ne kompajlira, a `ImportAllVBA` javi „kod se razlikuje od izvora" |
 
 **`Poruka()` nikad ne vraća prazno.** Nepoznat ključ daje `"[KLJUČ]"`, pa je
 `Len(Poruka(k)) = 0` provera koja **ne može da padne**. Tvrdnja „ključ postoji u
@@ -169,6 +170,32 @@ prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je
 nevidljivo. A ono obara compile isto tako — i **ne prijavljuje se kao compile
 greška** nego kao `Cannot run the macro` na bilo kom makrou, jer modul koji se ne
 kompajlira obara ceo projekat. Simptom ne pokazuje na krivca.
+
+**`PRELOM_POTPISA` čuva oblik koji se u gitu ne vidi.** Deklaracija prelomljena
+sa ` _` tik pre `(` liste parametara izgleda čisto i u fajlu i u diffu. Kvar
+nastaje tek u VBE-u: `AddFromString` na **kraj** modula doda prazan red i `()`.
+Modul se tada ne kompajlira, a završna provera `ImportAllVBA`
+(`SameCode`/`CanonCode`) javi „kod se razlikuje od izvora". Simptom pokazuje na
+kraj modula, a uzrok je u deklaraciji. Zatečen slučaj: QPC `Declare` u `modPerf`,
+prelomljen u obe grane `#If VBA7` (operater, 19–20.11.2026). Posle prepisa u
+jedan red (`3766ee5`) uvoz prolazi.
+
+Granica je **izmerena, ne izvedena** (20.11.2026, čista Excel instanca:
+`AddFromString`, pa `CodeModule.Lines`, pa poređenje sa izvorom kroz isti kanon):
+
+- kvari: `Sub`, `Function`, `Property Get`, `Static Sub`, `Declare Function`/`Sub`
+  (i sa `Alias`) i `Event` u klasi, sa `#If` ili bez njega — `#If` nije bitan;
+- ne kvari: prelom **unutar** liste (`(ByRef _`), posle liste ili pre `)`, kao
+  ni prelom pre `(` u pozivu (`Call MsgBox _`), izrazu (`Left$ _`) ili `Dim`-u
+  niza.
+
+Zato pravilo gleda samo deklaraciju i samo njenu prvu `(`. Svih 17 slučajeva
+self-testa (9 mora, 8 ne sme) pušteno je i kroz pravi VBE, i svi se slažu sa
+očekivanjem. Dokaz u oba smera: `modPerf` pre popravke daje 4 nalaza, a bez
+poziva iz `check_file()` self-test pada na 9 slučajeva, svaki po imenu.
+`modSelfUpdate` menja kod istim `AddFromString` putem, pa isti oblik u bilo kom
+modulu može da obori self-update kod klijenta. Kroz sam `modSelfUpdate` to nije
+izmereno — zato kapija, a ne napomena.
 
 `python tools\vba_check.py --self-test` vrti slučajeve koji **moraju** da zapište
 i legalan VBA koji **ne sme**. Vrti se i u CI-ju: zelen checker nad čistim repoom
