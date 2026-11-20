@@ -9740,17 +9740,24 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
     ' E4 (ZbirnaRoditeljID). Do S9-3 je spoj bio po broju -- dve zbirne istog
     ' broja davale su zbir oba dokumenta, a prijemnica sa tom labelom (i bez
     ' veze) ulazila je u prijem. Broj koji se ne razresava (nema ga, ili ga nose
-    ' dve aktivne zbirne -- A2) nema liniju, kao ni zbirna ciji se skup prijemnica
-    ' ne zna: izmisljen manjak je gori od prazne linije.
+    ' dve aktivne zbirne -- A2) nema liniju. Zbirna ciji se skup prijemnica ne zna
+    ' (kvar E4 te zbirne ili greska citanja) nema BROJ -- izmisljen manjak je gori
+    ' od prazne linije -- ali nosi RAZLOG kao peti clan rezultata, pa linija kaze
+    ' zasto je nema (review #501, test 405; ispisuje ga ManjakLinijaIzPreview).
+    ' Bez razloga bi izgledala isto kao "zbirna nije izabrana".
     Dim zbirnaKg As Double, prijKg As Double
     Dim id As ZbirnaIdent, zbrID As String
     id = ZbirnaIdentResolve(brojZbirne, vozacID, kupacID)
     If id.resolutionStatus = ZBR_RES_UNIQUE Then zbrID = id.selectedZbirnaID
 
     Dim e4 As Object, e4Kvar As Object, pid As Variant, zbirPrj As Object
+    Dim razlog As String
     If Len(zbrID) > 0 Then
         Set e4 = modAutoHladnjaca.AktivnePrijemniceZbirnih(e4Kvar)
-        If e4Kvar.Exists(UCase$(zbrID)) Then zbrID = ""
+        If e4Kvar.Exists(UCase$(zbrID)) Then
+            razlog = CStr(e4Kvar(UCase$(zbrID)))
+            zbrID = ""
+        End If
     End If
 
     If Len(zbrID) > 0 Then
@@ -9772,12 +9779,14 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
 
     If zbirnaKg > 0 Then manjakPct = manjakKg / zbirnaKg * 100
 
-    CalculateManjakPreview = Array(zbirnaKg, prijKg, manjakKg, manjakPct)
+    CalculateManjakPreview = Array(zbirnaKg, prijKg, manjakKg, manjakPct, razlog)
     Exit Function
 
 EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    Dim errDesc As String: errDesc = Err.description
     LogErr SRC
-    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#)
+    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#, errDesc)
 End Function
 
 ' ============================================================

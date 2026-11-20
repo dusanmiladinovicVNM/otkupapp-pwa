@@ -15018,6 +15018,76 @@ SABOTAZE = {
         "T_S93_E4DupliIDJeGreska",
         "401 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj",
     ),
+    # Review #501: citaoci E4 ne pretvaraju kvar u normalan ishod (402-405).
+    "s93-scan-zbirne-guta-kvar": (
+        "modStornoFlow.bas",
+        "    Err.Raise errNum, MOD_NAME & \".ScanZbirna\", errDesc\n",
+        "    If strict Then Err.Raise errNum, MOD_NAME & \".ScanZbirna\", errDesc   ' SABOTAZA: ne-strogi poziv guta kvar\n",
+        "T_S93_StornoZbirneE4KvarTraziDijalog",
+        "402 storno zbirne: necitljiva E4 trazi pun dijalog, ne prost storno",
+    ),
+    "s93-storno-lista-guta-kvar": (
+        "modStornoFlow.bas",
+        "    LogErr SRC\n"
+        "    Err.Raise errNum, SRC, errDesc\n"
+        "End Function\n"
+        "\n"
+        "Private Function WantTip(",
+        "    LogErr SRC\n"
+        "    ' SABOTAZA: lista za storno guta kvar\n"
+        "End Function\n"
+        "\n"
+        "Private Function WantTip(",
+        "T_S93_StornoListaE4KvarJeGreska",
+        "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista",
+    ),
+    "s93-storno-warm-guta-kvar": (
+        "modStornoWarm.bas",
+        "    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.\n"
+        "    Set GetWarmStornoDocs = GetActiveDocumentsForStorno(\"Svi\", \"\")\n",
+        "    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.\n"
+        "    On Error Resume Next   ' SABOTAZA: poslednja mreza guta gresku\n"
+        "    Set GetWarmStornoDocs = GetActiveDocumentsForStorno(\"Svi\", \"\")\n",
+        "T_S93_StornoListaE4KvarJeGreska",
+        "403 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista",
+    ),
+    "s93-storno-warm-stari-kes": (
+        "modStornoWarm.bas",
+        "    Set g_stornoDocs = Nothing\n"
+        "    m_warming = False\n",
+        "    m_warming = False   ' SABOTAZA: neuspeo build ostavlja stari skup\n",
+        "T_S93_StornoListaE4KvarJeGreska",
+        "403 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan",
+    ),
+    "s93-detalj-prijemnice-guta-kvar": (
+        "modScrIzvestaji.bas",
+        "    If Err.Number <> 0 Or e4 Is Nothing Then\n",
+        "    If e4 Is Nothing Then Exit Sub   ' SABOTAZA: greska citaca E4 se precutkuje\n"
+        "    If False Then\n",
+        "T_S93_DetaljE4KvarImenujeRazlog",
+        "404 detalj otkupa: necitljiva E4 je red 'veza nepoznata' sa razlogom, ne zbirna bez prijemnice",
+    ),
+    "s93-manjak-kvar-bez-razloga": (
+        "modDokumenta.bas",
+        "            razlog = CStr(e4Kvar(UCase$(zbrID)))\n",
+        "            ' SABOTAZA: kvar E4 zbirne bez razloga\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "405 manjak F4: kvar E4 zbirne je razlog u rezultatu preview-a, bez broja",
+    ),
+    "s93-manjak-greska-bez-razloga": (
+        "modDokumenta.bas",
+        "    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#, errDesc)\n",
+        "    CalculateManjakPreview = Array(0#, pendingKgKlI + pendingKgKlII, 0#, 0#, \"\")   ' SABOTAZA: greska bez razloga\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "405 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja",
+    ),
+    "s93-manjak-linija-bez-razloga": (
+        "modOtkupUI.bas",
+        "        If Len(CStr(m(4))) > 0 Then\n",
+        "        If False Then   ' SABOTAZA: linija manjka ignorise razlog\n",
+        "T_S93_ManjakE4KvarImenujeRazlog",
+        "405 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje",
+    ),
     # S9-3: BFP S8R2A1-REV-01 posle promene premise -- obim zbirne cija druga
     # prijemnica broja nema trag je siguran po ID-u (strog uvid validan) ...
     # Sabotaza mora biti osetljiva na TRAG: obim bez ID-a ubija scenario 1 istog

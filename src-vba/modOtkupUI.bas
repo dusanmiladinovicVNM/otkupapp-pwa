@@ -10039,9 +10039,18 @@ End Function
 
 ' Natpis linije manjka iz rezultata CalculateManjakPreview -- jedini put kojim
 ' ide SetManjakLine, pa ga test meri kroz isti poziv (review #501, test 405).
+' Peti clan je RAZLOG kad se skup prijemnica zbirne ne zna (kvar E4 ili greska
+' citanja): linija tada kaze zasto, bez broja.
 Public Function ManjakLinijaIzPreview(ByVal m As Variant) As String
     If Not IsArray(m) Then Exit Function
     If UBound(m) < 3 Then Exit Function
+    If UBound(m) >= 4 Then
+        If Len(CStr(m(4))) > 0 Then
+            ManjakLinijaIzPreview = Poruka("OTKUI_MNJ_MANJAK") & " " & _
+                                    Poruka("OTKUI_STAT_NEPOZNATO") & ": " & CStr(m(4))
+            Exit Function
+        End If
+    End If
     ManjakLinijaIzPreview = ManjakLinija(CDbl(m(0)), CDbl(m(1)), CDbl(m(2)), CDbl(m(3)))
 End Function
 

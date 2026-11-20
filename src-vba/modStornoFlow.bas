@@ -1175,7 +1175,14 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
             zbirZbr, COL_ZBR_ID
     Exit Function
 EH:
+    ' Kvar citanja (npr. citac E4) je GRESKA liste, ne prazna lista (review
+    ' #501, test 403): prazna kolekcija bi na ekranu izgledala kao "nema
+    ' dokumenata za storno". Ekran (modScrStorno.RowsLanac -> Scr_Rows,
+    ' UI-PAD-01) gresku prikazuje sa razlogom.
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr SRC
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Function WantTip(ByVal tipFilter As String, ByVal tip As String) As Boolean
@@ -2325,7 +2332,14 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ScanZbirna"
-    If strict Then Err.Raise errNum, MOD_NAME & ".ScanZbirna", errDesc
+    ' Greska se DIZE i u ne-strogom pozivu (review #501, test 402). Recnik bez
+    ' kljuceva se citao kao "nema prijemnice" (CBool(Empty) = False): pitanje o
+    ' dijalogu je biralo prost storno, pregled je pisao "Prijemnica: Ne", a
+    ' ispravka DUPLI je isla dalje. Svaki ne-strogi pozivalac ima svoj handler
+    ' koji gresku pretvara u ishod sa razlogom (pun dijalog, "Pregled nije
+    ' dostupan", "spisak posledica nedostupan", "Greska: ..."). Strog rezim i
+    ' dalje bira razresenje broja i strogo citanje paleta.
+    Err.Raise errNum, MOD_NAME & ".ScanZbirna", errDesc
 End Function
 
 ' Broj AKTIVNIH redova gde filterCol = value.

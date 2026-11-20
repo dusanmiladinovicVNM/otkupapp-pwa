@@ -101,7 +101,9 @@ Public Function GetWarmStornoDocs() As Collection
 EH:
     LogErr MOD_NAME & ".GetWarmStornoDocs"
     ' Ultimativni fallback: gradi direktno (bez keza) da forma nikad ne ostane prazna.
-    On Error Resume Next
+    ' Njegova greska se DIZE pozivaocu (review #501, test 403): pod Resume Next je
+    ' vracen Nothing, pa je ekran pokazao praznu listu kao da nema dokumenata.
+    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.
     Set GetWarmStornoDocs = GetActiveDocumentsForStorno("Svi", "")
 End Function
 
@@ -129,6 +131,9 @@ EH:
     On Error Resume Next
     EndTableCache
     If gPerfOn Then PerfAkcijaZavrsi "ONTIME.WARM"
+    ' Neuspeo build ne ostavlja STARI skup (review #501, test 403):
+    ' GetWarmStornoDocs bi ga posle vratio kao da je procitan.
+    Set g_stornoDocs = Nothing
     m_warming = False
 End Sub
 

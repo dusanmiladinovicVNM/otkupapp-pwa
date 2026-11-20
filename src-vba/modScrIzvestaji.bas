@@ -2442,7 +2442,15 @@ Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, ByVal zbrID As Str
     Dim cBr As Long, cId As Long, cKup As Long, s As String, zbir As Object, kg As Variant
     On Error Resume Next
     Set e4 = modAutoHladnjaca.AktivnePrijemniceZbirnih(e4Kvar)
-    If e4 Is Nothing Then Exit Sub
+    If Err.Number <> 0 Or e4 Is Nothing Then
+        ' Citac E4 pao (npr. dupli PrijemnicaID): red "veza nepoznata" sa
+        ' razlogom, isto kao kvar E4 te zbirne -- tisina bi izgledala kao zbirna
+        ' bez prijemnice (review #501, test 404).
+        ' Opis se cita PRE Poruka(): ona usput brise Err, pa bi razlog bio prazan.
+        s = Err.description
+        linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & s
+        Exit Sub
+    End If
     If e4Kvar.Exists(UCase$(zbrID)) Then
         linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & CStr(e4Kvar(UCase$(zbrID)))
         Exit Sub

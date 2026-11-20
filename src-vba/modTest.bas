@@ -37190,8 +37190,10 @@ Private Sub T_S93_StornoListaE4KvarJeGreska()
 
     AssertEq CStr(InStr(1, gLista, prjA, vbTextCompare) > 0), "True", _
              "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista"
+    AssertEq CStr(w Is Nothing), "True", _
+             "403 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan"
     AssertEq CStr(InStr(1, gWarm, prjA, vbTextCompare) > 0), "True", _
-             "403 lista za storno (warm): neuspeo build je greska, ne stari kes ni prazna lista"
+             "403 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista"
 
     Err.Clear
 CleanUp:
@@ -37255,6 +37257,7 @@ Private Sub T_S93_ManjakE4KvarImenujeRazlog()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, brA As String, bA As String, zbrA As String, brB As String
     Dim brPrjB As String, prjA As String, m As Variant, lin As String, nep As String
+    Dim razlog As String
 
     redoviPre = SledBrojRedova()
     On Error GoTo CleanUp
@@ -37274,7 +37277,12 @@ Private Sub T_S93_ManjakE4KvarImenujeRazlog()
 
     ' Kvar E4 zbirne B: njena aktivna prijemnica nema PrijemnicaID.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, ""
-    lin = modOtkupUI.ManjakLinijaIzPreview(modDokumenta.CalculateManjakPreview(brB, 0#, 0#, FX_VOZAC, FX_KUPAC))
+    m = modDokumenta.CalculateManjakPreview(brB, 0#, 0#, FX_VOZAC, FX_KUPAC)
+    razlog = ""
+    If UBound(m) >= 4 Then razlog = CStr(m(4))
+    AssertEq CStr(InStr(1, razlog, "PrijemnicaID", vbTextCompare) > 0) & "|" & CStr(CDbl(m(0))), "True|0", _
+             "405 manjak F4: kvar E4 zbirne je razlog u rezultatu preview-a, bez broja"
+    lin = modOtkupUI.ManjakLinijaIzPreview(m)
     AssertEq CStr(InStr(1, lin, nep, vbTextCompare) > 0 And _
                   InStr(1, lin, "PrijemnicaID", vbTextCompare) > 0), "True", _
              "405 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje"
