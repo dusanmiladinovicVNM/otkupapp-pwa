@@ -37662,6 +37662,9 @@ Private Sub T_S94_ZonaOporavkaSveza()
     S6K8Snimak tx
     S93UgasiIspravkePrijemnice
 
+    ' Zona od ranijih testova ne sme da odluci ishod: prvo citanje posle
+    ' Scr_ResetCache je "ulazak", isto kao posle upisa (RefreshFromData).
+    modScrOporavak.Scr_ResetCache
     modUiData.ResetCache
     modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
     d = modScrOporavak.Scr_Rows("sve", "")

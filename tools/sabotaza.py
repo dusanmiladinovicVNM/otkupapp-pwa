@@ -15139,6 +15139,25 @@ SABOTAZE = {
         "T_S94_OporavakPreveziPoID",
         "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID, ne prvi red istog broja",
     ),
+    # KI-085: zona se ne racuna iz izvora -- brojke ostaju 0 dok se ne otvori
+    # bas njihova lista (stanje do S9-4).
+    "s94-zona-ne-racuna": (
+        "modScrOporavak.bas",
+        "    modUiScreens.ScrPadAkoTest \"modScrOporavak.Scr_Rows\"\n"
+        "    OsveziBrojkeZone\n",
+        "    modUiScreens.ScrPadAkoTest \"modScrOporavak.Scr_Rows\"\n"
+        "    ' SABOTAZA: zona se ne racuna iz izvora\n",
+        "T_S94_ZonaOporavkaSveza",
+        "418 zona pri ulasku pokazuje sve tri brojke iz izvora, ne samo brojku otvorene liste",
+    ),
+    # KI-085: zona se racuna jednom i zamrzne -- posle upisa pokazuje staro stanje.
+    "s94-zona-zamrznuta": (
+        "modScrOporavak.bas",
+        "    If mZonaIma And mZonaGen = modUiData.DataGeneracija() Then Exit Sub\n",
+        "    If mZonaIma Then Exit Sub   ' SABOTAZA: zona se ne osvezava posle promene podataka\n",
+        "T_S94_ZonaOporavkaSveza",
+        "418 posle promene podataka zona se osvezava i kad je otvorena druga lista",
+    ),
 }
 
 

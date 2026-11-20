@@ -77,10 +77,14 @@ Private mCiljPrijemnica As String
 Private mCiljZbirnaID As String
 Private mCiljPrijemnicaID As String
 Private mStep As String           ' korak za poruku o gresci
-' Brojke u zoni; racuna ih Scr_Rows u istom prolazu kroz podatke.
+' Brojke u zoni (KI-085, S9-4): sve tri racuna OsveziBrojkeZone iz izvora svojih
+' lista, jednom po generaciji podataka (mZonaGen) -- ne tek kad se otvori bas ta
+' lista. -1 znaci "izvor nije procitan" i zona tada pokazuje "?".
 Private mBrNedovrseno As Long
 Private mBrOsirocene As Long
 Private mBrUndo As Long
+Private mZonaGen As Long
+Private mZonaIma As Boolean
 ' INTEGRITET: snimak nalaza + generacija podataka pod kojom je punjen.
 ' Jedina lista ovog ekrana koja se NE cita sveza pri svakom osvezavanju -
 ' RunAllChecks je 19 prolaza kroz tabele, a Scr_Rows se zove i na svaki znak
@@ -213,6 +217,46 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     Scr_Layout = OPO_ZONA_H
 End Function
 
+' BROJKE ZONE (KI-085, S9-4). Sve tri se racunaju ZAJEDNO, iz istih izvora kao
+' njihove liste (meni Scr_Brojac broji isti GetNedovrseno), cim se podaci
+' promene -- ne kao uzgredni ishod citanja SVOJE liste. Do S9-4 je zona pokazivala
+' OSIROCENO 0 i ZA VRACANJE 0 dok operater ne otvori te liste, a NEDOVRSENO je
+' zaostajao posle radnje na drugoj listi (operater, 04.11. i 20.11.2026).
+'
+' Generacija podataka cuva od racunanja na svaki znak pretrage (Scr_Rows se zove
+' i tada) -- isti obrazac kao snimak Integriteta. Ljuska je menja na svaki upis
+' (RefreshFromData -> modUiData.ResetCache), a radnja ovog ekrana jos i preko
+' Scr_ResetCache.
+'
+' Pad izvora NIJE nula: brojke postaju -1 (zona pokazuje "?") i razlog ide u log.
+' Lista se zbog brojke ne obara -- brojka je pregled, lista je posao.
+Private Sub OsveziBrojkeZone()
+    Dim c As Collection, errDesc As String
+    If mZonaIma And mZonaGen = modUiData.DataGeneracija() Then Exit Sub
+    On Error GoTo EH
+    Set c = GetNedovrseno()
+    mBrNedovrseno = 0
+    If Not c Is Nothing Then mBrNedovrseno = c.count
+    mBrOsirocene = ZbirOsirocenih()
+    Set c = GetUndoableStornoOperations()
+    mBrUndo = 0
+    If Not c Is Nothing Then mBrUndo = c.count
+    mZonaGen = modUiData.DataGeneracija()
+    mZonaIma = True
+    Exit Sub
+EH:
+    errDesc = Err.description
+    mBrNedovrseno = -1
+    mBrOsirocene = -1
+    mBrUndo = -1
+    mZonaIma = False
+    LogWarn MOD_TRAG, "Brojke zone Oporavka nisu procitane: " & errDesc
+End Sub
+
+Private Function BrojkaZone(ByVal n As Long) As String
+    If n < 0 Then BrojkaZone = "?" Else BrojkaZone = CStr(n)
+End Function
+
 Private Sub OsveziZonu()
     Dim z As Object
     On Error Resume Next
@@ -223,11 +267,11 @@ Private Sub OsveziZonu()
     z.Controls("opoPrj").caption = Poruka("OTKUI_OPO_CILJ_PRIJ") & " " & _
                                    IIf(Len(mCiljPrijemnica) = 0, ChrW(8212), mCiljPrijemnica)
     z.Controls("opoKL0").caption = UCase$(Poruka("OTKUI_OPO_KPI_NED"))
-    z.Controls("opoKV0").caption = CStr(mBrNedovrseno)
+    z.Controls("opoKV0").caption = BrojkaZone(mBrNedovrseno)
     z.Controls("opoKL1").caption = UCase$(Poruka("OTKUI_OPO_KPI_OSIR"))
-    z.Controls("opoKV1").caption = CStr(mBrOsirocene)
+    z.Controls("opoKV1").caption = BrojkaZone(mBrOsirocene)
     z.Controls("opoKL2").caption = UCase$(Poruka("OTKUI_OPO_KPI_UNDO"))
-    z.Controls("opoKV2").caption = CStr(mBrUndo)
+    z.Controls("opoKV2").caption = BrojkaZone(mBrUndo)
 End Sub
 
 '-------------------------------------------------------------- RADNJE
@@ -552,6 +596,7 @@ Public Sub Scr_ResetCache()
     ' popravke i dalje prijavljivao stari nalaz.
     mIntSnimak = Empty
     mIntGen = 0
+    mZonaIma = False
 End Sub
 
 '-------------------------------------------------------------- REDOVI
@@ -559,6 +604,8 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
     On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Rows"
+    OsveziBrojkeZone
+    OsveziZonu
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_Rows = RowsOsiroceninPrijemnica(q): Exit Function
         Case "ZBIRNE":     Scr_Rows = RowsAktivneZbirne(q): Exit Function
@@ -596,15 +643,16 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "nedovrseno"
     Set src = GetNedovrseno()
-    mBrNedovrseno = 0
-    If Not src Is Nothing Then mBrNedovrseno = src.count
-    If src Is Nothing Or mBrNedovrseno = 0 Then
-        OsveziZonu
+    If src Is Nothing Then
+        RowsNedovrseno = Array(NedGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If src.count = 0 Then
         RowsNedovrseno = Array(NedGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
-    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_OTK)
+    ReDim outA(1 To src.count, 1 To NED_COL_OTK)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("ref")) & "|" & CStr(d("kind")) & "|" & CStr(d("status")) & "|" & CStr(d("opis"))
@@ -622,7 +670,6 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
 Sledeci:
     Next i
 
-    OsveziZonu
     mStep = "OK"
     RowsNedovrseno = Array(NedGridCols(), outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -742,7 +789,7 @@ Private Function OsirPrijGridCols() As Variant
 End Function
 
 Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
-    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 8, q, True)
+    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 8, q)
 End Function
 
 '--- OSIROTELE PALETE -------------------------------------------------
@@ -760,19 +807,17 @@ Private Function OsirPalGridCols() As Variant
 End Function
 
 Private Function RowsOsirocenePalete(ByVal q As String) As Variant
-    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 7, q, True)
+    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 7, q)
 End Function
 
-' Zajednicko telo za dve liste koje dolaze kao 2D niz iz modDokumenta.
-' brojiUZonu: ove dve liste zajedno cine brojku "osirotelo" u zoni.
+' Zajednicko telo za liste koje dolaze kao 2D niz. Brojku "osiroceno" u zoni od
+' S9-4 racuna OsveziBrojkeZone (KI-085), ne ova rutina.
 Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol As Long, _
-                        ByVal q As String, ByVal brojiUZonu As Boolean) As Variant
+                        ByVal q As String) As Variant
     Dim r As Long, c As Long, n As Long, outA() As Variant, hay As String
     On Error GoTo EH
     mStep = "2D lista"
     If Not IsArray(src) Then
-        If brojiUZonu Then mBrOsirocene = ZbirOsirocenih()
-        OsveziZonu
         Rows2D = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
@@ -793,8 +838,6 @@ Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol 
 Sledeci:
     Next r
 
-    If brojiUZonu Then mBrOsirocene = ZbirOsirocenih()
-    OsveziZonu
     mStep = "OK"
     Rows2D = Array(cols, outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -805,9 +848,11 @@ End Function
 ' Brojka u zoni je zbir OBE vrste siroticica, bez obzira koja je lista
 ' otvorena - inace bi prelazak izmedju lista menjao brojku koja treba da
 ' kaze koliko posla ukupno ceka.
+'
+' Greska citaca ide pozivaocu: do S9-4 je Resume Next ovde od pada pravio
+' nepotpun zbir koji izgleda procitano.
 Private Function ZbirOsirocenih() As Long
     Dim a As Variant, b As Variant
-    On Error Resume Next
     a = GetOsirocenePrijemnice()
     b = GetPrijemniceSaOsirocenimPaletama()
     If IsArray(a) Then ZbirOsirocenih = ZbirOsirocenih + UBound(a, 1)
@@ -1049,15 +1094,16 @@ Private Function RowsUndo(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "undo"
     Set src = GetUndoableStornoOperations()
-    mBrUndo = 0
-    If Not src Is Nothing Then mBrUndo = src.count
-    If src Is Nothing Or mBrUndo = 0 Then
-        OsveziZonu
+    If src Is Nothing Then
+        RowsUndo = Array(UndoGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If src.count = 0 Then
         RowsUndo = Array(UndoGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
-    ReDim outA(1 To mBrUndo, 1 To 6)
+    ReDim outA(1 To src.count, 1 To 6)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("opID")) & "|" & CStr(d("docType")) & "|" & CStr(d("broj")) & _
@@ -1075,7 +1121,6 @@ Private Function RowsUndo(ByVal q As String) As Variant
 Sledeci:
     Next i
 
-    OsveziZonu
     mStep = "OK"
     RowsUndo = Array(UndoGridCols(), outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -1131,7 +1176,7 @@ Private Function IntegritetNalaza() As Long
 End Function
 
 Private Function RowsIntegritet(ByVal q As String) As Variant
-    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q, False)
+    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q)
 End Function
 
 '------------------------------------------------------------ TEST SEAM
