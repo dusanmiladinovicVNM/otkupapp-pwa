@@ -266,9 +266,9 @@ commit):
     provere knjige).
   - za UI-7 i UI-1: ~~testovi 394 i 395, dokaz `ui7 ui1` 4/4 i pun prolaz~~
     (zeleno 20.11.: 12 suite-ova, `RunAllTests` 395/395, BFP 3.499/3.499,
-    GREEN marker); ostaju merenje snimanja i ručno: posle snimanja zaglavlje
-    ne sme da kaže „Nesačuvan unos”, a posle isplate bloka lista blokova ga ne
-    nudi.
+    GREEN marker); ~~merenje snimanja~~ (20.11.: osvežavanje 2,25 → 1,46 s);
+    ostaje ručno: posle snimanja zaglavlje ne sme da kaže „Nesačuvan unos”, a
+    posle isplate bloka lista blokova ga ne nudi.
     - Usput, nije formalno merenje: BFP je na istoj mašini trajao 483 s umesto
       629 s posle D1-IZV (−23%), a `RunAllTests` 241 s umesto 259 s. BFP
       stalno knjiži ambalažu, pa je to prvi znak da nastavak dokaza radi u
@@ -502,9 +502,32 @@ hladnjačka i 2 obična, isti odnos kao u §3a):
 
 - **Hladnjački lanac**, po hladnjačkom snimanju: otpremnica 1,22 s,
   prijemnica 0,82 s, zbirna 0,21 s, ostalo malo.
-- Rez za ovo su UI-7 i UI-1 iz §3. Brojač „Bankovni nalozi” ostaje skup i u
-  prozoru, jer je trošak računanje. Ako merenje posle UI-1 to potvrdi, sledeći
-  korak je da značka ne gradi ceo spisak samo da bi ga prebrojala.
+- Rez za ovo su UI-7 i UI-1 iz §3.
+
+**Izmereno posle UI-7 i UI-1** (20.11., 3 snimanja, 2 hladnjačka i 1 obično;
+CSV, po snimanju):
+
+| | Pre | Posle |
+|---|---|---|
+| **Osvežavanje ukupno** | 2,25 s | **1,46 s** (−35%) |
+| Liste konteksta (kaskada OM-a) | 0,55 s | 0,01 s |
+| KPI saldo / „danas”, broj računanja | 4 / 4 | 1 / 1 |
+| Značka „Bankovni nalozi” | 0,73 s | 0,59 s |
+| Značka Oporavak | 0,32 s | 0,27 s |
+| Mreža, učitavanje | 0,18 s | 0,13 s |
+| Čitanja `tblKooperanti` sa lista | ≈193 | ≈16 (537 iz keša u 3 snimanja) |
+
+- Snimanje po vrsti: hladnjačko 7,0–7,1 s → 6,2–6,5 s, obično 4,8–5,0 s → 4,1 s.
+  Pre svih rezova (`main`) prosek je bio 12,5 s.
+- META je čista u obe sesije.
+- „Bankovni nalozi” ostaje najveća značka. Prozor je skinuo samo čitanje
+  lista; ostatak je računanje spiska blokova da bi se prebrojali.
+- **Šta sada nosi snimanje** (po snimanju):
+  - hladnjački lanac: otpremnica 1,2 s, prijemnica 0,8 s, zbirna 0,2 s;
+  - upis ≈1,05 s, PDF ≈0,95 s;
+  - provera knjige (nastavak) ≈0,55 s i šema-kapija knjige ≈0,21 s
+    (13 provera po snimanju);
+  - značke 0,86 s, KPI 0,36 s, mreža 0,18 s.
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
