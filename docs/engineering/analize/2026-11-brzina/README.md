@@ -256,7 +256,7 @@ commit):
   - ~~merenje vremena pre i posle~~ — **urađeno 20.11.**, rezultat je u §3a.
   - za D1-IZV: ~~test 392, dokaz `kes-knjiga` 2/2 i pun prolaz~~ (zeleno
     20.11.: 12 suite-ova, `RunAllTests` 392/392, BFP 3.499/3.499, GREEN
-    marker); ostaje ponovno merenje zbirnog prikaza.
+    marker); ~~ponovno merenje zbirnog prikaza~~ (20.11.: 4,41 → 1,80 s).
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
@@ -427,8 +427,27 @@ grani, jedan klik):
 | Snimanje otkupa (hladnjača) | 10,4 s | **15× = 4,82 s** (46%) | šema-kapija 12× 0,19 s |
 
 - Zbirni saldo zove pojedinačni saldo po stanici, a svaki ponovo dokazuje istu,
-  nepromenjenu knjigu (5.246 redova). Lek je D1-IZV iz §3, očekivano oko
-  −2,5 s po zbirnom kliku. **Nije izmereno posle reza.**
+  nepromenjenu knjigu (5.246 redova). Lek je D1-IZV iz §3.
+- **Izmereno posle D1-IZV (20.11., treće merenje, prvi klik posle otvaranja):**
+
+  | Klik | Pre reza | Posle reza |
+  |---|---|---|
+  | Zbirno saldo (OM) | 4,41 s | **1,80 s** (−59%) |
+  | Zbirna roba (OM) | 4,32 s | **1,86 s** (−57%) |
+  | Dokaz knjige u zbirnom kliku | 9× = 2,93 s | 1× = 0,31 s; 8 iz keša (`AMB.KnjigaDokaz.KES`) |
+
+  Jedini preostali dokaz je u `IzvStaniceIzPodataka` (univerzum stanica),
+  pre petlje po stanicama.
+- **Šta i dalje nosi zbirni klik (1,8 s):**
+  - saldo-prolaz knjige po stanici, 8× ≈ 95 ms = 0,76 s;
+  - otkup po stanici 0,34 s (zbir stavki 0,12 s);
+  - jedan dokaz knjige 0,31 s;
+  - šema-kapija knjige 9× = 0,14 s.
+
+  Sledeći rez bi bio jedan prolaz kroz knjigu za sve stanice. To je nov
+  čitalac knjige, pa ide kroz `pre-flight`.
+- **Usput izmereno:** Roba pojedinačno (jedan OM) traje 1,57 s, bez
+  raščlanjavanja (`ReportOtkupRoba` nema sekcije).
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
