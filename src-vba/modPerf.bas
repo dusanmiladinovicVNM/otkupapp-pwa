@@ -59,6 +59,7 @@ Option Explicit
 '   modAmbalaza (knjiga)         AMB.SemaKapija, AMB.KnjigaIntegritet,
 '                                AMB.DokVlasnikMapa (odluka D1, analiza)
 '                                BROJ AMB.KnjigaDokaz.KES: dokaz iz kesa (D1-IZV)
+'                                AMB.KnjigaDokaz.Nastavak + BROJ .NASTAVAK (D1-UPIS)
 '   modTest.ResetSeamova         PerfIskljuciTiho
 ' ============================================================
 

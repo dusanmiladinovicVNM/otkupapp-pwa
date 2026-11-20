@@ -9,7 +9,7 @@ ovo je način da se zamene merenjem.
 | Grana | Šta je | Za šta |
 |---|---|---|
 | `claude/merenje-modperf-pre` | `main` + `modPerf` + kukice. Bez testova merača. | merenje **pre** |
-| `claude/merenje-modperf` | PR #497 (optimizacije) + `modPerf` + kukice + testovi 393–399 | merenje **posle**; kasnije zaseban PR |
+| `claude/merenje-modperf` | PR #497 (optimizacije) + `modPerf` + kukice + testovi 394–400 | merenje **posle**; kasnije zaseban PR |
 
 Kukice stoje samo na linijama koje optimizacije ne diraju, pa obe grane mere
 **istim** kodom. Razlika u izmerenom vremenu je razlika u kodu aplikacije, a ne
@@ -37,7 +37,7 @@ Spisak pozivnih mesta je u zaglavlju `src-vba/modPerf.bas`.
 
   Brojači su deterministički, pa tvrdnju „tabela se čita 8 puta po snimanju"
   potvrđuju ili obaraju tačnim brojem, nezavisno od šuma.
-- **Sat:** `QueryPerformanceCounter` (test 398); kad nije dostupan, rezerva je
+- **Sat:** `QueryPerformanceCounter` (test 399); kad nije dostupan, rezerva je
   `Timer`.
 - **Merač ništa ne piše u tabele sveske.**
   - Izlaz je `<folder sveske>/Log/Perf_YYYY-MM-DD.csv`, separator `;`,

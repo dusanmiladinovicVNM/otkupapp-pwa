@@ -221,7 +221,8 @@ commit):
 | IZV-7 | Rang kooperanata: stabilno spajanje po broju (`modArrayUtils.IndeksiPoBrojuOpadajuce`) umesto mehurastog sortiranja, isti poredak (Python simulacija, 20.000 nizova). | `modTest` 389 `T_Rang_StabilnoOpadajuce` | **zeleno 19.11.** (FULL + dokaz) |
 | PERF-REV-02 (pregled 19.11.) | `NevezaneOtpremnice` primenjuje pravilo jedinstvenosti iz `StavkeOtpremniceRedovi` (greška 1941): dupli `OtpremnicaID` pada po imenu, umesto da se bira red po slučajnom redosledu. | `modTest` 390 `T_Nevezane_DupliIdPadaPoImenu` | **zeleno 19.11.** (FULL + dokaz) |
 | PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (FULL + dokaz) |
-| D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **neverifikovano** (web sesija; ovde zelene samo statičke provere) |
+| D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **zeleno 20.11.** (FULL + dokaz `kes-knjiga` 2/2) |
+| D1-UPIS (20.11.) | Van prozora čitanja `KnjigaZaCitanje` pamti **dokazan prefiks** knjige: ćelije u 12 kolona koje dokaz čita, raspored kolona i rečnik vrsta. Sledeće čitanje poredi prefiks ćeliju po ćeliju (isti tip, tekst binarno), a **istu** funkciju `KnjigaIntegritet`, pokrenutu od prvog novog reda, prolaze samo dodati redovi. Promenjen, skraćen ili premešten prefiks, druge kolone ili greška u ćeliji znače pun dokaz. Ne zavisi od toga ko je pisao (upis mimo `modDataAccess`, ručna izmena, rollback). Pre koda je prošao `pre-flight`; dokaz je čista funkcija 12 kolona knjige (`AmbPrenosStrukturaProblem` ne čita tabele). | `modTest` 393 `T_KnjigaDokaz_NastavakIstiSud`; sabotaže `knjiga-nastavak-gluv`, `knjiga-nastavak-ne-poredi-dokazano`, `knjiga-nastavak-ne-dokazuje-nove` | **neverifikovano** (web sesija; ovde zelene samo statičke provere) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -245,7 +246,7 @@ commit):
   Pušteno 19.11.: 386, 387, 390 zeleni (tabele posle testa iste, i audit, pa je
   potvrđena i vernost rollback-a); dokaz `izv3-`, `izv2-naziv`, `hld1-` 4/4.
 - **Tajmer 19.11.** (grana `claude/merenje-modperf`): testovi 392–398 (od 20.11.
-  393–399, jer je 392 D1-IZV) zeleni,
+  394–400: 392 je D1-IZV, 393 D1-UPIS) zeleni,
   dokaz `perf-` 7/7. Test 396 potvrđuje da merač ne dira `Err` pozivaoca.
 - **Ostaje pred merge** (ručno, nad kopijom prave sveske):
   - pun prolaz `python tools/run_vba.py` posle izmene testova 386, 387, 390;
@@ -254,8 +255,11 @@ commit):
     cena, bruto/neto, ambalaža);
   - hladnjački lanac i lista NEVEZANE nad pravim podacima;
   - ~~merenje vremena pre i posle~~ — **urađeno 20.11.**, rezultat je u §3a.
-  - za D1-IZV: test 392, `dokaz.py --izbor kes-knjiga`, pa pun prolaz (dira
-    čitanje knjige ambalaže, pa i BFP) i ponovno merenje zbirnog prikaza.
+  - za D1-IZV: ~~test 392, dokaz `kes-knjiga` 2/2 i pun prolaz~~ (zeleno
+    20.11.: 12 suite-ova, `RunAllTests` 392/392, BFP 3.499/3.499, GREEN
+    marker); ~~ponovno merenje zbirnog prikaza~~ (20.11.: 4,41 → 1,80 s).
+  - za D1-UPIS: test 393, `dokaz.py --izbor knjiga-nastavak`, pun prolaz (BFP
+    gađa kapije knjige) i merenje snimanja otkupa.
 
 **Sledeće za Izveštaje** (ne zavise od D1):
 - ostatak IZV-3: po stanici se i dalje grade rečnici kooperanata i
@@ -426,8 +430,27 @@ grani, jedan klik):
 | Snimanje otkupa (hladnjača) | 10,4 s | **15× = 4,82 s** (46%) | šema-kapija 12× 0,19 s |
 
 - Zbirni saldo zove pojedinačni saldo po stanici, a svaki ponovo dokazuje istu,
-  nepromenjenu knjigu (5.246 redova). Lek je D1-IZV iz §3, očekivano oko
-  −2,5 s po zbirnom kliku. **Nije izmereno posle reza.**
+  nepromenjenu knjigu (5.246 redova). Lek je D1-IZV iz §3.
+- **Izmereno posle D1-IZV (20.11., treće merenje, prvi klik posle otvaranja):**
+
+  | Klik | Pre reza | Posle reza |
+  |---|---|---|
+  | Zbirno saldo (OM) | 4,41 s | **1,80 s** (−59%) |
+  | Zbirna roba (OM) | 4,32 s | **1,86 s** (−57%) |
+  | Dokaz knjige u zbirnom kliku | 9× = 2,93 s | 1× = 0,31 s; 8 iz keša (`AMB.KnjigaDokaz.KES`) |
+
+  Jedini preostali dokaz je u `IzvStaniceIzPodataka` (univerzum stanica),
+  pre petlje po stanicama.
+- **Šta i dalje nosi zbirni klik (1,8 s):**
+  - saldo-prolaz knjige po stanici, 8× ≈ 95 ms = 0,76 s;
+  - otkup po stanici 0,34 s (zbir stavki 0,12 s);
+  - jedan dokaz knjige 0,31 s;
+  - šema-kapija knjige 9× = 0,14 s.
+
+  Sledeći rez bi bio jedan prolaz kroz knjigu za sve stanice. To je nov
+  čitalac knjige, pa ide kroz `pre-flight`.
+- **Usput izmereno:** Roba pojedinačno (jedan OM) traje 1,57 s, bez
+  raščlanjavanja (`ReportOtkupRoba` nema sekcije).
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
@@ -484,7 +507,7 @@ Pre izmene treba izabrati jedan mehanizam (pun tekst je na kraju
 ## 5. Tajmer (detalji: `03-tajmer.md`)
 
 **Urađen 19.11.2026** na grani `claude/merenje-modperf` (testovi 392–398, od
-20.11. 393–399), uz
+20.11. 394–400), uz
 granu `claude/merenje-modperf-pre` za merenje „pre". Uputstvo: `04-merenje.md`.
 Ispod je prvobitni dizajn.
 
