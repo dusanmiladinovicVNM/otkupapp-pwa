@@ -249,7 +249,7 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         Select Case Scr_Lista()
             ' Uz broj se pamti i IDENTITET izabranog reda: broj je labela, a
             ' radnja mora da posalje bas ovaj dokument. Kolona je poslednja i
-            ' prioriteta 3 -- na uskom ekranu se sakrije, u podacima ostaje.
+            ' nevidljiva (OTKUI_HD_IDENT, prioritet 4): ne crta se, u podacima ostaje.
             Case "ZBIRNE"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
                 If Len(broj) > 0 Then
@@ -279,7 +279,7 @@ End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
 ' Identitet dokumenta iz reda mreze (ZbirnaID, PrijemnicaID). Kolona je
-' prioriteta 3, pa se na uskom ekranu ne CRTA - ali podatak ostaje u mView, a
+' nevidljiva (OTKUI_HD_IDENT, prioritet 4) i ne CRTA se - ali podatak ostaje u mView, a
 ' GridCell cita njega, ne sirinu.
 Private Function IdentitetIzReda(ByVal red As Long, ByVal kolona As Long) As String
     On Error Resume Next
@@ -339,18 +339,18 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
-    ' Cilj se imenuje i ID-em (review S9-4): dve zbirne istog broja se po broju ne
-    ' razlikuju, a radnja ide tacno po izabranom ZbirnaID-u (isti razlog kao
-    ' KI-056 za izvor).
+    ' Cilj se imenuje brojem: ZbirnaID operateru ne govori nista, a radnja ga
+    ' svejedno nosi iz izabranog reda (S9-4; dve zbirne istog broja generator i
+    ' rucni unos ne prave).
     If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
-              Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & " (" & mCiljZbirnaID & ")?", _
+              Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
     Dim razlog As String
     If PreveziPrijemnicuCore(brojPrij, prijemnicaID, razlog) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
-                             " " & ChrW(8594) & " " & mCiljZbirna & " (" & mCiljZbirnaID & ")", False
+                             " " & ChrW(8594) & " " & mCiljZbirna, False
         PreveziPrijemnicu = True
     Else
         ' Razlog je pisceva poruka (KI-055): roba, vlasnik, nacrt, storno, ID koga
@@ -738,7 +738,7 @@ Private Function OsirPrijGridCols() As Variant
         "OTKUI_HD_KG||txt|72|1", _
         "OTKUI_HD_BROJ_ZBIRNE||txt|110|1", _
         "OTKUI_HD_STATUS||txt|132|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
@@ -756,7 +756,7 @@ Private Function OsirPalGridCols() As Variant
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HDP_GAJBICA||num|72|1", _
         "OTKUI_HD_STAVKI||num|72|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsOsirocenePalete(ByVal q As String) As Variant
@@ -848,7 +848,7 @@ Private Function CiljZbirnaGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_ZBR_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
@@ -871,7 +871,7 @@ Private Function CiljPrijGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 ' Kilaza dolazi sa STAVKI (S6 korak 3): zaglavlje prijemnice od koraka 2 ne nosi
