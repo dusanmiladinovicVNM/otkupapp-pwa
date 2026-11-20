@@ -2530,6 +2530,10 @@ RENAME_COLS = {
     # A9: veza ispravke ide po ID-u; za sada samo tblOtkup.
     "tblOtkup": [("IspravkaOd", "IspravkaOdID"),
                  ("ZamenjenSa", "ZamenjenSaID")],
+    # S9-3 (S93-ODL-01): SEED pise ZbirnaRoditeljID na svaku prijemnicu, a donor
+    # nosi kolonu pod STARIM imenom (S4-3c). U aplikaciji je preimenuje
+    # modSetup.PreimenujKolonuAko na startu, na istoj poziciji (kraj kanona).
+    "tblPrijemnica": [("ZbirnaGeneracijaID", "ZbirnaRoditeljID")],
 }
 
 ENSURE_COLS = {

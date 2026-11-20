@@ -36796,10 +36796,12 @@ Private Sub T_S93_F4IOporavakPoID()
     SledLanacDoZbirne "S93FP", "ZB-S93FP-" & t, FX_VOZAC, FX_KUPAC, 40, bP, otpP, zbrP
     prjP = SledPrijemnica("PR-S93FP-" & t, "ZB-S93FP-" & t, FX_VOZAC, FX_KUPAC, 35, 0)
 
+    ' Gajbe > 0: uz strogu validaciju bi validator stao na OTKUNOS_ERR_GAJBE_I
+    ' PRE provere duple prijemnice (ona je poslednja) -- test bi merio preduslov.
     Set p = modDokUnos.NoviPrijemnicaUnos()
     PopuniPrijemnicu p, "PR-S93FF2-" & t, "ZB-S93FF-" & t
     p("kolicinaI") = 38
-    p("kolAmb") = 0
+    p("kolAmb") = 4
     modDokUnos.PitanjeDuplePrijemniceTestReset
     razF = modDokUnos.PrijemnicaValidiraj(p, fokus)
     pitF = modDokUnos.PitanjeDuplePrijemniceTest()
@@ -36807,7 +36809,7 @@ Private Sub T_S93_F4IOporavakPoID()
     Set p = modDokUnos.NoviPrijemnicaUnos()
     PopuniPrijemnicu p, "PR-S93FP2-" & t, "ZB-S93FP-" & t
     p("kolicinaI") = 38
-    p("kolAmb") = 0
+    p("kolAmb") = 4
     modDokUnos.PitanjeDuplePrijemniceTestReset
     razP = modDokUnos.PrijemnicaValidiraj(p, fokus)
     pitP = modDokUnos.PitanjeDuplePrijemniceTest()
