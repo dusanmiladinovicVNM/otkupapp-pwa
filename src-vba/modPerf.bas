@@ -62,16 +62,16 @@ Option Explicit
 '   modTest.ResetSeamova         PerfIskljuciTiho
 ' ============================================================
 
+' Declare u JEDNOM redu, kao u modDataAccess/modWindow. Posle ImportAllVBA-a je
+' modPerf u svesci dobijao red "()" na kraju, pa je zavrsna provera javljala
+' drift (operater, 19-20.11.2026). Prelomljen Declare (" _") u #If/#Else je bio
+' jedina razlika prema modulima koji se uvoze cisto -- uzrok nije dokazan.
 #If VBA7 Then
-    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" _
-        (ByRef lpPerformanceCount As Currency) As Long
-    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" _
-        (ByRef lpFrequency As Currency) As Long
+    Private Declare PtrSafe Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As Currency) As Long
+    Private Declare PtrSafe Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As Currency) As Long
 #Else
-    Private Declare Function QueryPerformanceCounter Lib "kernel32" _
-        (ByRef lpPerformanceCount As Currency) As Long
-    Private Declare Function QueryPerformanceFrequency Lib "kernel32" _
-        (ByRef lpFrequency As Currency) As Long
+    Private Declare Function QueryPerformanceCounter Lib "kernel32" (ByRef lpPerformanceCount As Currency) As Long
+    Private Declare Function QueryPerformanceFrequency Lib "kernel32" (ByRef lpFrequency As Currency) As Long
 #End If
 
 Public gPerfOn As Boolean           ' nivo 1
