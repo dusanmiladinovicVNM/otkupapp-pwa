@@ -132,7 +132,7 @@ EH:
     On Error Resume Next
     EndTableCache
     If gPerfOn Then PerfAkcijaZavrsi "ONTIME.WARM"
-    ' Neuspeo build ne ostavlja STARI skup (review #501, test 403):
+    ' Neuspeo build ne ostavlja STARI skup (review #501, test 410):
     ' GetWarmStornoDocs bi ga posle vratio kao da je procitan.
     Set g_stornoDocs = Nothing
     m_warming = False

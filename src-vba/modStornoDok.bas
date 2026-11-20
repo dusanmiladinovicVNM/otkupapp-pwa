@@ -412,7 +412,7 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             If ok Then
                 ' Prijemnice OVE zbirne po ivici E4 (S9-3), sve -- ne prva sa tim
                 ' brojem zbirne, koja je mogla biti prijemnica druge zbirne.
-                ' Citanje POSLE upisa ne sme da obori potvrdu (review #501, test 406):
+                ' Citanje POSLE upisa ne sme da obori potvrdu (review #501, test 413):
                 ' storno je vec upisan, pa greska citaca E4 (npr. dupli PrijemnicaID)
                 ' ide u poruku kao razlog, ne u EH kao "neuspeh" -- operater bi
                 ' ponovio storno koji je prosao.

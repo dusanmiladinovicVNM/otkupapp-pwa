@@ -1176,7 +1176,7 @@ Public Function GetActiveDocumentsForStorno(ByVal tipFilter As String, _
     Exit Function
 EH:
     ' Kvar citanja (npr. citac E4) je GRESKA liste, ne prazna lista (review
-    ' #501, test 403): prazna kolekcija bi na ekranu izgledala kao "nema
+    ' #501, test 410): prazna kolekcija bi na ekranu izgledala kao "nema
     ' dokumenata za storno". Ekran (modScrStorno.RowsLanac -> Scr_Rows,
     ' UI-PAD-01) gresku prikazuje sa razlogom.
     Dim errNum As Long, errDesc As String
@@ -2332,7 +2332,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ScanZbirna"
-    ' Greska se DIZE i u ne-strogom pozivu (review #501, test 402). Recnik bez
+    ' Greska se DIZE i u ne-strogom pozivu (review #501, test 409). Recnik bez
     ' kljuceva se citao kao "nema prijemnice" (CBool(Empty) = False): pitanje o
     ' dijalogu je biralo prost storno, pregled je pisao "Prijemnica: Ne", a
     ' ispravka DUPLI je isla dalje. Svaki ne-strogi pozivalac ima svoj handler

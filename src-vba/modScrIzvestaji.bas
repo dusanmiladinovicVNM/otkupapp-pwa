@@ -2445,7 +2445,7 @@ Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, ByVal zbrID As Str
     If Err.Number <> 0 Or e4 Is Nothing Then
         ' Citac E4 pao (npr. dupli PrijemnicaID): red "veza nepoznata" sa
         ' razlogom, isto kao kvar E4 te zbirne -- tisina bi izgledala kao zbirna
-        ' bez prijemnice (review #501, test 404).
+        ' bez prijemnice (review #501, test 411).
         ' Opis se cita PRE Poruka(): ona usput brise Err, pa bi razlog bio prazan.
         s = Err.description
         linije.Add Poruka("OTKUI_STAT_NEPOZNATO") & ": " & s

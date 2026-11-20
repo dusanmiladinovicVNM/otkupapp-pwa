@@ -573,7 +573,7 @@ End Function
 '               prijemnica -> zbirna (S9-3; javni ulaz ZbirneAktivnihPrijemnica).
 ' Lanac i dalje cita mapu i outKvar, nepromenjene.
 '
-' DUPLI PrijemnicaID (S93-REV-02, test 401): dva AKTIVNA reda istog ID-a -- sa
+' DUPLI PrijemnicaID (S93-REV-02, test 408): dva AKTIVNA reda istog ID-a -- sa
 ' roditeljem ili bez, istim ili razlicitim -- nisu "dupla prijemnica" (to su
 ' dva ID-a pod jednom zbirnom) nego kvar identiteta. outRod bi uzeo prvog
 ' roditelja, pa bi redosled redova tabele birao kojoj zbirnoj prijemnica

@@ -781,19 +781,19 @@ Public Sub RunAllTests()
 
     ' S9-3: broj zbirne nije veza -- prijemnica zbirne je E4 (ZbirnaRoditeljID).
     ' Isti obrazac: svaki seje i vraca svoj lanac.
-    RunOne 396
-    RunOne 397
-    RunOne 398
-    RunOne 399
-    ' S93-REV-01/02 (review #501): izvoz ne guta kvar E4; dupli PrijemnicaID je greska.
-    RunOne 400
-    RunOne 401
-    ' Review #501: citaoci E4 ne pretvaraju kvar u normalan ishod.
-    RunOne 402
     RunOne 403
     RunOne 404
     RunOne 405
     RunOne 406
+    ' S93-REV-01/02 (review #501): izvoz ne guta kvar E4; dupli PrijemnicaID je greska.
+    RunOne 407
+    RunOne 408
+    ' Review #501: citaoci E4 ne pretvaraju kvar u normalan ishod.
+    RunOne 409
+    RunOne 410
+    RunOne 411
+    RunOne 412
+    RunOne 413
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1022,7 +1022,7 @@ Private Sub ResetSeamova()
     ' Zabelezeno pitanje o manjku (245-248): zaostao tekst bi sledecem testu
     ' izgledao kao pitanje koje je SAM postavio.
     modOtkupUnos.PitanjeManjkaTestReset
-    ' Zabelezeno pitanje "dupla prijemnica" (398): isti razlog.
+    ' Zabelezeno pitanje "dupla prijemnica" (405): isti razlog.
     modDokUnos.PitanjeDuplePrijemniceTestReset
     ' Zabelezen izvoz u PDF (249): zaostao zapis bi sledecem testu izgledao kao
     ' izvoz koji je SAM napravio.
@@ -1446,17 +1446,17 @@ Private Function TestName(ByVal idx As Long) As String
         Case 393: TestName = "T_KnjigaDokaz_NastavakIstiSud"
         Case 394: TestName = "T_Refresh_MaticneListeBezKaskade"
         Case 395: TestName = "T_Refresh_CitaTabeluJednom"
-        Case 396: TestName = "T_G2_BrojNijeIdentitet"
-        Case 397: TestName = "T_S93_StornoPoID"
-        Case 398: TestName = "T_S93_F4IOporavakPoID"
-        Case 399: TestName = "T_S93_TekucaPredajaBezZbirne"
-        Case 400: TestName = "T_S93_IzvozKvarE4JeGreska"
-        Case 401: TestName = "T_S93_E4DupliIDJeGreska"
-        Case 402: TestName = "T_S93_StornoZbirneE4KvarTraziDijalog"
-        Case 403: TestName = "T_S93_StornoListaE4KvarJeGreska"
-        Case 404: TestName = "T_S93_DetaljE4KvarImenujeRazlog"
-        Case 405: TestName = "T_S93_ManjakE4KvarImenujeRazlog"
-        Case 406: TestName = "T_S93_StornoUspehPosleKvaraE4"
+        Case 403: TestName = "T_G2_BrojNijeIdentitet"
+        Case 404: TestName = "T_S93_StornoPoID"
+        Case 405: TestName = "T_S93_F4IOporavakPoID"
+        Case 406: TestName = "T_S93_TekucaPredajaBezZbirne"
+        Case 407: TestName = "T_S93_IzvozKvarE4JeGreska"
+        Case 408: TestName = "T_S93_E4DupliIDJeGreska"
+        Case 409: TestName = "T_S93_StornoZbirneE4KvarTraziDijalog"
+        Case 410: TestName = "T_S93_StornoListaE4KvarJeGreska"
+        Case 411: TestName = "T_S93_DetaljE4KvarImenujeRazlog"
+        Case 412: TestName = "T_S93_ManjakE4KvarImenujeRazlog"
+        Case 413: TestName = "T_S93_StornoUspehPosleKvaraE4"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1867,17 +1867,17 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 393: T_KnjigaDokaz_NastavakIstiSud
         Case 394: T_Refresh_MaticneListeBezKaskade
         Case 395: T_Refresh_CitaTabeluJednom
-        Case 396: T_G2_BrojNijeIdentitet
-        Case 397: T_S93_StornoPoID
-        Case 398: T_S93_F4IOporavakPoID
-        Case 399: T_S93_TekucaPredajaBezZbirne
-        Case 400: T_S93_IzvozKvarE4JeGreska
-        Case 401: T_S93_E4DupliIDJeGreska
-        Case 402: T_S93_StornoZbirneE4KvarTraziDijalog
-        Case 403: T_S93_StornoListaE4KvarJeGreska
-        Case 404: T_S93_DetaljE4KvarImenujeRazlog
-        Case 405: T_S93_ManjakE4KvarImenujeRazlog
-        Case 406: T_S93_StornoUspehPosleKvaraE4
+        Case 403: T_G2_BrojNijeIdentitet
+        Case 404: T_S93_StornoPoID
+        Case 405: T_S93_F4IOporavakPoID
+        Case 406: T_S93_TekucaPredajaBezZbirne
+        Case 407: T_S93_IzvozKvarE4JeGreska
+        Case 408: T_S93_E4DupliIDJeGreska
+        Case 409: T_S93_StornoZbirneE4KvarTraziDijalog
+        Case 410: T_S93_StornoListaE4KvarJeGreska
+        Case 411: T_S93_DetaljE4KvarImenujeRazlog
+        Case 412: T_S93_ManjakE4KvarImenujeRazlog
+        Case 413: T_S93_StornoUspehPosleKvaraE4
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -36556,7 +36556,7 @@ Private Sub S93UgasiIspravkePrijemnice()
     Do
         cid = modStornoContext.FindLatestPending(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
         If Len(cid) = 0 Then Exit Do
-        If Not modStornoContext.CancelCorrectionContext(cid, "test 398") Then Exit Do
+        If Not modStornoContext.CancelCorrectionContext(cid, "test 405") Then Exit Do
         n = n + 1
         If n > 50 Then Exit Do
     Loop
@@ -36620,7 +36620,7 @@ Private Function S93MestaUListiStorna(ByVal tip As String, ByVal broj As String,
     S93MestaUListiStorna = "(nema reda)"
 End Function
 
-' 396 -- G2 "BrojNijeIdentitet" (SLED-IDENT-01): izvestaji, linija manjka,
+' 403 -- G2 "BrojNijeIdentitet" (SLED-IDENT-01): izvestaji, linija manjka,
 ' detalj i izvoz za PWA biraju prijemnicu zbirne po ZbirnaRoditeljID.
 '
 ' Dve aktivne zbirne dele broj (S93DveZbirne). MAMAC 1: zaglavlje zbirne B nosi
@@ -36663,25 +36663,25 @@ Private Sub T_G2_BrojNijeIdentitet()
 
     AssertEq CStr(Round(S93ManjakVozaca(FX_VOZAC) - mnj1, 2)) & "|" & _
              CStr(Round(S93ManjakVozaca(FX_VOZAC2) - mnj2, 2)), "10|7", _
-             "396 KI-032: manjak po vozacu racuna prijem svoje zbirne, ne svih zbirnih istog broja"
+             "403 KI-032: manjak po vozacu racuna prijem svoje zbirne, ne svih zbirnih istog broja"
 
     AssertEq CStr(Round(S92KgProsekKupca(FX_KUPAC2, vrB), 2)) & "|" & _
              CStr(Round(S92KgProsekKupca(FX_KUPAC, FX_VRSTA) - kupVr, 2)) & "|" & _
              CStr(Round(S92KgProsekKupca(FX_KUPAC, "(Nepoznato)") - kupNep, 2)), "63|50|0", _
-             "396 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne po ID-u, ne kes po broju"
+             "403 prosecna cena kupca: vrsta prijemnice je vrsta njene zbirne po ID-u, ne kes po broju"
     AssertEq CStr(Round(S93KgZbirniKupca(FX_KUPAC2, vrB), 2)), "63", _
-             "396 zbirni izvestaj kupca: vrsta prijemnice je vrsta njene zbirne po ID-u"
+             "403 zbirni izvestaj kupca: vrsta prijemnice je vrsta njene zbirne po ID-u"
 
     ' Linija manjka F4: dve aktivne zbirne istog broja se ne razresavaju (A2),
     ' pa linije nema -- zbir oba dokumenta bi bio izmisljen manjak.
     m = modDokumenta.CalculateManjakPreview(brojZ, 0#, 0#, FX_VOZAC, FX_KUPAC)
     AssertEq CStr(m(0)) & "|" & CStr(m(1)), "0|0", _
-             "396 manjak F4: broj koji nose dve aktivne zbirne nema liniju, ne zbir oba dokumenta"
+             "403 manjak F4: broj koji nose dve aktivne zbirne nema liniju, ne zbir oba dokumenta"
     SledLanacDoZbirne "S93GC", "ZB-S93GC-" & t, FX_VOZAC2, FX_KUPAC2, 20, bC, otpC, zbrC
     prjC = SledPrijemnica("PR-S93GC-" & t, "ZB-S93GC-" & t, FX_VOZAC2, FX_KUPAC2, 15, 0)
     m = modDokumenta.CalculateManjakPreview("ZB-S93GC-" & t, 5#, 0#, FX_VOZAC2, FX_KUPAC2)
     AssertEq CStr(m(0)) & "|" & CStr(m(1)), "20|20", _
-             "396 manjak F4: jednoznacna zbirna -- njene stavke, njena prijemnica i kg unosa"
+             "403 manjak F4: jednoznacna zbirna -- njene stavke, njena prijemnica i kg unosa"
 
     ' MAMAC 2: atributi prijemnice A pokazuju na vlasnika zbirne B.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjA, COL_PRJ_VOZAC, FX_VOZAC2
@@ -36689,27 +36689,27 @@ Private Sub T_G2_BrojNijeIdentitet()
 
     datOtp = CDate(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_DATUM))
     r = modIzvestaj.ReportOtkupRoba("OM", FX_STANICA, datOtp, datOtp)
-    AssertEq IsArray(r), True, "396 preduslov: ROBA (OM) postoji"
+    AssertEq IsArray(r), True, "403 preduslov: ROBA (OM) postoji"
     For i = 1 To UBound(r, 1)
         If CStr(r(i, 12)) = "OTP|" & otpA Then redOtp = i
     Next i
-    AssertEq (redOtp > 0), True, "396 preduslov: ROBA (OM) ima red otpremnice A"
+    AssertEq (redOtp > 0), True, "403 preduslov: ROBA (OM) ima red otpremnice A"
     AssertEq S92Kg(r(redOtp, 9)), 50#, _
-             "396 ROBA (OM): prijem otpremnice je prijem prijemnice njene zbirne po ID-u, ne po vozacu i kupcu prijemnice"
+             "403 ROBA (OM): prijem otpremnice je prijem prijemnice njene zbirne po ID-u, ne po vozacu i kupcu prijemnice"
 
     det = S93Linije(modScrIzvestaji.IzDetaljOtpremnice(otpA))
     AssertEq CStr(InStr(1, det, S93BrojPrijemnice(prjA), vbTextCompare) > 0) & "|" & _
              CStr(InStr(1, det, S93BrojPrijemnice(prjB), vbTextCompare) > 0), "True|False", _
-             "396 detalj otpremnice: prijemnica je prijemnica njene zbirne po ID-u, ne kandidat istog broja"
+             "403 detalj otpremnice: prijemnica je prijemnica njene zbirne po ID-u, ne kandidat istog broja"
 
     Set idx = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
     AssertEq CStr(idx.Exists(zbrA)) & "|" & CStr(idx.Exists(zbrB)), "True|True", _
-             "396 izvoz OtkupiAll: indeks prijemnica je po ZbirnaID, ne po broju zbirne"
+             "403 izvoz OtkupiAll: indeks prijemnica je po ZbirnaID, ne po broju zbirne"
     infoA = idx(zbrA)
     infoB = idx(zbrB)
     AssertEq CStr(infoA(1)) & "|" & CStr(infoB(1)), _
              S93BrojPrijemnice(prjA) & "|" & S93BrojPrijemnice(prjB), _
-             "396 izvoz OtkupiAll: svaka zbirna istog broja izvozi SVOJU prijemnicu"
+             "403 izvoz OtkupiAll: svaka zbirna istog broja izvozi SVOJU prijemnicu"
 
     ' Prijemnica C postaje druga prijemnica zbirne B, sa ranijim datumom.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjC, COL_DETE_ZBIRNA_ROD, zbrB
@@ -36718,17 +36718,17 @@ Private Sub T_G2_BrojNijeIdentitet()
     Set idx = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
     infoB = idx(zbrB)
     AssertEq CStr(infoB(1)), S93BrojPrijemnice(prjC), _
-             "396 izvoz OtkupiAll (SLED-ODL-07): zbirna sa dve prijemnice izvozi najraniju po datumu"
+             "403 izvoz OtkupiAll (SLED-ODL-07): zbirna sa dve prijemnice izvozi najraniju po datumu"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_G2_BrojNijeIdentitet", _
-             "396: rollback je vratio redove svih tabela lanca"
+             "403: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 397 -- S9-3: storno zbirne i prijemnice bira decu po ZbirnaRoditeljID.
+' 404 -- S9-3: storno zbirne i prijemnice bira decu po ZbirnaRoditeljID.
 '
 ' Dve aktivne zbirne istog broja (S93DveZbirne) i prijemnica STAROG oblika sa
 ' istom labelom: kad je ona u igri, stari scope ("sva deca tog broja nose
@@ -36768,12 +36768,12 @@ Private Sub T_S93_StornoPoID()
 
     pos = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_ZBIRNA, brojZ, "", zbrA)
     AssertEq CStr(InStr(1, pos, " - prijemnice: 1 (", vbBinaryCompare) > 0), "True", _
-             "397 pregled storna zbirne: prijemnice su prijemnice te zbirne po ID-u, ne sve sa tim brojem"
+             "404 pregled storna zbirne: prijemnice su prijemnice te zbirne po ID-u, ne sve sa tim brojem"
 
     pos = modStornoFlow.BuildPonistenjePosledice(FLOW_DOC_PRIJEMNICA, S93BrojPrijemnice(prjA), "", prjA)
     AssertEq CStr(InStr(1, pos, "(storniraju se): 1" & vbCrLf, vbBinaryCompare) > 0) & "|" & _
              CStr(InStr(1, pos, "za storno): 1", vbBinaryCompare) > 0), "True|True", _
-             "397 pregled storna prijemnice: otpremnice i blokovi su njene zbirne po ID-u, ne po broju"
+             "404 pregled storna prijemnice: otpremnice i blokovi su njene zbirne po ID-u, ne po broju"
 
     On Error Resume Next
     Set obim = modStornoFlow.PrijemniceUObimuZbirne(brojC, zbrC)
@@ -36785,7 +36785,7 @@ Private Sub T_S93_StornoPoID()
         Next k
     End If
     AssertEq obimErr & "|" & kljuc, "|" & UCase$(prjC) & ";", _
-             "397 obim kaskade zbirne: tacno njena prijemnica po ID-u, ne odbijanje zbog labele starog oblika"
+             "404 obim kaskade zbirne: tacno njena prijemnica po ID-u, ne odbijanje zbog labele starog oblika"
     ' Kontra: broj koji su drzala dva vlasnika obim ne suzava ni uz ID --
     ' ZBR-MUT-01 (historicalOwnerCount > 1) ostaje, van S9-3.
     Set obim = Nothing
@@ -36794,7 +36794,7 @@ Private Sub T_S93_StornoPoID()
     obimErr = Err.description
     On Error GoTo CleanUp
     AssertEq CStr(InStr(1, obimErr, ZBR_MUT_VISE_VLASNIKA, vbBinaryCompare) > 0), "True", _
-             "397 obim kaskade nad brojem dva vlasnika se odbija (ZBR-MUT-01 ostaje, van S9-3)"
+             "404 obim kaskade nad brojem dva vlasnika se odbija (ZBR-MUT-01 ostaje, van S9-3)"
 
     st1 = Trim$(NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, "Naziv")))
     Set vozDict = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
@@ -36802,24 +36802,24 @@ Private Sub T_S93_StornoPoID()
     AssertEq S93MestaUListiStorna(FLOW_DOC_ZBIRNA, brojZ, voz1) & "|" & _
              S93MestaUListiStorna(FLOW_DOC_PRIJEMNICA, S93BrojPrijemnice(prjA), ""), _
              st1 & "|" & st1, _
-             "397 lista za storno: otkupna mesta reda su mesta njegove zbirne po ID-u, ne svih zbirnih istog broja"
+             "404 lista za storno: otkupna mesta reda su mesta njegove zbirne po ID-u, ne svih zbirnih istog broja"
 
     ' Poslednje: storno je upis (vraca ga rollback na kraju).
     AssertEq modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brojZ, "", poruka, zbrA), True, _
-             "397 preduslov: storno zbirne A je prosao"
+             "404 preduslov: storno zbirne A je prosao"
     AssertEq CStr(InStr(1, poruka, S93BrojPrijemnice(prjA), vbTextCompare) > 0) & "|" & _
              CStr(InStr(1, poruka, S93BrojPrijemnice(prjB), vbTextCompare) > 0), "True|False", _
-             "397 poruka posle storna zbirne imenuje NJENU prijemnicu, ne prvu sa tim brojem"
+             "404 poruka posle storna zbirne imenuje NJENU prijemnicu, ne prvu sa tim brojem"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoPoID", _
-             "397: rollback je vratio redove svih tabela lanca"
+             "404: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 398 -- S9-3: F4 "dupla prijemnica" (N18) i Oporavak (osirotele prijemnice)
+' 405 -- S9-3: F4 "dupla prijemnica" (N18) i Oporavak (osirotele prijemnice)
 ' pitaju zbirnu po ZbirnaRoditeljID.
 '
 ' F4: zbirna F bez prijemnice, a prijemnica STAROG oblika nosi njen broj kao
@@ -36851,7 +36851,7 @@ Private Sub T_S93_F4IOporavakPoID()
     ' pitanje u validatoru PRE provere duple prijemnice, i to MsgBox-om van seama:
     ' test bi merio odgovor dijaloga. Gasi se U transakciji testa (rollback je vraca).
     S93UgasiIspravkePrijemnice
-    AssertEq S6K6IspravkeNaCekanju(), 0, "398 preduslov: nema ispravke prijemnice na cekanju"
+    AssertEq S6K6IspravkeNaCekanju(), 0, "405 preduslov: nema ispravke prijemnice na cekanju"
 
     t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
     SledLanacDoZbirne "S93FF", "ZB-S93FF-" & t, FX_VOZAC, FX_KUPAC, 40, bF, otpF, zbrF
@@ -36879,13 +36879,13 @@ Private Sub T_S93_F4IOporavakPoID()
     modDokUnos.PitanjeDuplePrijemniceTestReset
 
     AssertEq razF & "|" & pitF, "|", _
-             "398 F4 (N18): zbirna bez prijemnice ne pita 'dupla prijemnica' zbog labele tudje prijemnice"
+             "405 F4 (N18): zbirna bez prijemnice ne pita 'dupla prijemnica' zbog labele tudje prijemnice"
     AssertEq CStr(Len(razP) > 0) & "|" & CStr(InStr(1, pitP, S93BrojPrijemnice(prjP), vbTextCompare) > 0), _
              "True|True", _
-             "398 F4 (N18): zbirna koja vec ima prijemnicu pita i imenuje je"
+             "405 F4 (N18): zbirna koja vec ima prijemnicu pita i imenuje je"
 
     S93DveZbirne "O", t, brojZ, bA, otpA, zbrA, prjA, bB, otpB, zbrB, prjB
-    AssertEq modStorno.StornoZbirna_TX(zbrA), True, "398 preduslov: zbirna A je stornirana"
+    AssertEq modStorno.StornoZbirna_TX(zbrA), True, "405 preduslov: zbirna A je stornirana"
     os = modDokumenta.GetOsirocenePrijemnice()
     If IsArray(os) Then
         For i = 1 To UBound(os, 1)
@@ -36895,9 +36895,9 @@ Private Sub T_S93_F4IOporavakPoID()
         Next i
     End If
     AssertEq stA & "|" & stB, "zbirna stornirana|", _
-             "398 Oporavak: prijemnica stornirane zbirne je siroce i kad broj nosi druga aktivna zbirna"
+             "405 Oporavak: prijemnica stornirane zbirne je siroce i kad broj nosi druga aktivna zbirna"
     AssertEq stL, "nema veze sa zbirnom", _
-             "398 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja"
+             "405 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja"
 
     Err.Clear
 CleanUp:
@@ -36905,10 +36905,10 @@ CleanUp:
     errDesc = Err.description
     modDokUnos.PitanjeDuplePrijemniceTestReset
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_F4IOporavakPoID", _
-             "398: rollback je vratio redove svih tabela lanca"
+             "405: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 399 -- S9-3 (plan 14.66, uz S92-REV-01): tekuca predaja otkupa ne cuti o
+' 406 -- S9-3 (plan 14.66, uz S92-REV-01): tekuca predaja otkupa ne cuti o
 ' zbirnoj koje nema. Clanstvo otpremnice pokazuje na nepostojecu zbirnu: seam
 ' TekucaPredajaOtkupa (detalj otkupa, OTK red, izvoz OtkupiAll) dize gresku koja
 ' imenuje zbirnu, a detalj otkupa je pokazuje kao "veza nepoznata".
@@ -36937,20 +36937,20 @@ Private Sub T_S93_TekucaPredajaBezZbirne()
     det = S93Linije(modScrIzvestaji.IzDetaljOtkupLista(bX))
 
     AssertEq CStr(InStr(1, greska, nema, vbTextCompare) > 0) & "|" & bz, "True|", _
-             "399 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne"
+             "406 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne"
     AssertEq CStr(InStr(1, det, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
                   InStr(1, det, nema, vbTextCompare) > 0), "True", _
-             "399 detalj otkupa: zbirna koje nema je veza nepoznata sa imenom, ne tisina"
+             "406 detalj otkupa: zbirna koje nema je veza nepoznata sa imenom, ne tisina"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_TekucaPredajaBezZbirne", _
-             "399: rollback je vratio redove svih tabela lanca"
+             "406: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 400 -- S93-REV-01: izvoz OtkupiAll ne pretvara kvar citaca E4 u "nije
+' 407 -- S93-REV-01: izvoz OtkupiAll ne pretvara kvar citaca E4 u "nije
 ' primljeno". Indeks prijemnica za izvoz (PrijemniceZaIzvozPoZbirni) je gutao
 ' gresku citaca (LogErr + delimican recnik), pa je ExportOtkupiAll izvozio
 ' Primljeno "Ne" i TransportStatus "in_transport" kao da je procitano. Kvar
@@ -36977,7 +36977,7 @@ Private Sub T_S93_IzvozKvarE4JeGreska()
 
     Set idx = modStammdatenSync.PrijemniceZaIzvozPoZbirni()
     AssertEq CStr(idx.Exists(zbrX)), "True", _
-             "400 preduslov: bez kvara indeks izvoza nosi prijemnicu zbirne lanca"
+             "407 preduslov: bez kvara indeks izvoza nosi prijemnicu zbirne lanca"
 
     modDataAccess.BeginTableCache
     prozor = True
@@ -36991,7 +36991,7 @@ Private Sub T_S93_IzvozKvarE4JeGreska()
     prozor = False
 
     AssertEq CStr(Len(greska) > 0) & "|" & CStr(idx Is Nothing), "True|True", _
-             "400 izvoz OtkupiAll: kvar citaca E4 je greska izvoza, ne prazan indeks (S93-REV-01)"
+             "407 izvoz OtkupiAll: kvar citaca E4 je greska izvoza, ne prazan indeks (S93-REV-01)"
 
     Err.Clear
 CleanUp:
@@ -36999,10 +36999,10 @@ CleanUp:
     errDesc = Err.description
     If prozor Then modDataAccess.EndTableCache
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_IzvozKvarE4JeGreska", _
-             "400: rollback je vratio redove svih tabela lanca"
+             "407: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 401 -- S93-REV-02: dupli PrijemnicaID u aktivnim redovima nije izbor prvog
+' 408 -- S93-REV-02: dupli PrijemnicaID u aktivnim redovima nije izbor prvog
 ' roditelja. Obrnuta mapa E4 (ZbirneAktivnihPrijemnica) je za drugi red istog
 ' PrijemnicaID-a precutala roditelja, pa je redosled redova tabele birao zbirnu
 ' kojoj prijemnica "pripada" -- u izvestajima, manjku, izvozu i stornu.
@@ -37034,7 +37034,7 @@ Private Sub T_S93_E4DupliIDJeGreska()
     SledLanacDoZbirne "S93DB", brB, FX_VOZAC, FX_KUPAC, 30, bB, otpB, zbrB
     prjB = SledPrijemnica(brPrjB, brB, FX_VOZAC, FX_KUPAC, 25, 0)
     AssertEq S93Roditelj(prjA) & "|" & S93Roditelj(prjB), UCase$(zbrA) & "|" & UCase$(zbrB), _
-             "401 preduslov: svaka prijemnica nosi svoju zbirnu po E4"
+             "408 preduslov: svaka prijemnica nosi svoju zbirnu po E4"
 
     ' Drugi red dobija ID prvog: isti PrijemnicaID, DRUGI roditelj.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, prjB, COL_PRJ_ID, prjA
@@ -37052,11 +37052,11 @@ Private Sub T_S93_E4DupliIDJeGreska()
     On Error GoTo CleanUp
 
     AssertEq CStr(InStr(1, gRod, prjA, vbTextCompare) > 0), "True", _
-             "401 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj"
+             "408 E4 prijemnica -> zbirna: dupli PrijemnicaID sa dva roditelja je greska koja ga imenuje, ne prvi roditelj"
     AssertEq CStr(InStr(1, gSve, prjA, vbTextCompare) > 0), "True", _
-             "401 E4 zbirna -> prijemnice: ista prijemnica pod dve zbirne je greska, ne dete obe"
+             "408 E4 zbirna -> prijemnice: ista prijemnica pod dve zbirne je greska, ne dete obe"
     AssertEq CStr(InStr(1, gIzv, prjA, vbTextCompare) > 0), "True", _
-             "401 izvoz OtkupiAll: dupli PrijemnicaID obara indeks izvoza, ne bira roditelja"
+             "408 izvoz OtkupiAll: dupli PrijemnicaID obara indeks izvoza, ne bira roditelja"
 
     ' Isti roditelj: drugi red (nadjen po svom broju) vraca se na zbirnu A.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_DETE_ZBIRNA_ROD, zbrA
@@ -37067,14 +37067,14 @@ Private Sub T_S93_E4DupliIDJeGreska()
     On Error GoTo CleanUp
 
     AssertEq CStr(InStr(1, gIsti, prjA, vbTextCompare) > 0), "True", _
-             "401 E4: dupli PrijemnicaID je greska i kad oba reda nose istog roditelja"
+             "408 E4: dupli PrijemnicaID je greska i kad oba reda nose istog roditelja"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_E4DupliIDJeGreska", _
-             "401: rollback je vratio redove svih tabela lanca"
+             "408: rollback je vratio redove svih tabela lanca"
 End Sub
 
 ' Dva lanca sa po jednom prijemnicom (oba istog vlasnika, razliciti brojevi).
@@ -37099,7 +37099,7 @@ Private Function S93DvaLancaZaKvarE4(ByVal oznaka As String, ByVal t As String, 
     S93DvaLancaZaKvarE4 = prjA
 End Function
 
-' 402 -- review #501 (#12): storno zbirne ne cita nepoznatu E4 kao "nema
+' 409 -- review #501 (#12): storno zbirne ne cita nepoznatu E4 kao "nema
 ' prijemnice". ScanZbirna je u ne-strogom pozivu gutao gresku i vracao recnik
 ' bez kljuceva, pa je CorrectionNeedsDialog dobio CBool(Empty) = False -- prost
 ' storno bez dijaloga -- iako njegov handler za gresku namerno nudi pun dijalog;
@@ -37125,31 +37125,31 @@ Private Sub T_S93_StornoZbirneE4KvarTraziDijalog()
     brC = "ZB-S93SDC-" & t
     SledLanacDoZbirne "S93SDC", brC, FX_VOZAC, FX_KUPAC, 20, bC, otpC, zbrC
     AssertEq CStr(modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, brC, "", zbrC)), "False", _
-             "402 preduslov: zbirna bez prijemnice i paleta ne trazi dijalog"
+             "409 preduslov: zbirna bez prijemnice i paleta ne trazi dijalog"
 
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
 
     AssertEq CStr(modStornoFlow.CorrectionNeedsDialog(FLOW_DOC_ZBIRNA, brC, "", zbrC)), "True", _
-             "402 storno zbirne: necitljiva E4 trazi pun dijalog, ne prost storno"
+             "409 storno zbirne: necitljiva E4 trazi pun dijalog, ne prost storno"
     pregled = modStornoFlow.BuildStornoPreview(FLOW_DOC_ZBIRNA, brC, "", zbrC)
     AssertEq CStr(InStr(1, pregled, prjA, vbTextCompare) > 0), "True", _
-             "402 pregled storna zbirne: necitljiva E4 se imenuje, ne pise 'Prijemnica: Ne'"
+             "409 pregled storna zbirne: necitljiva E4 se imenuje, ne pise 'Prijemnica: Ne'"
 
     Set r = modStornoFlow.RunZbirnaCorrection(brC, SV_MODE_DUPLI, False, zbrC)
     uspeh = CStr(CBool(r("success")))
     stornoC = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO)))
     AssertEq uspeh & "|" & CStr(StrComp(stornoC, "Da", vbTextCompare) <> 0), "False|True", _
-             "402 ispravka zbirne (DUPLI): necitljiva E4 odbija ispravku, zbirna ostaje aktivna"
+             "409 ispravka zbirne (DUPLI): necitljiva E4 odbija ispravku, zbirna ostaje aktivna"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoZbirneE4KvarTraziDijalog", _
-             "402: rollback je vratio redove svih tabela lanca"
+             "409: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 403 -- review #501 (#11): lista za storno ne pretvara kvar E4 u praznu ili
+' 410 -- review #501 (#11): lista za storno ne pretvara kvar E4 u praznu ili
 ' staru listu. GetActiveDocumentsForStorno je u EH samo logovao i vracao praznu
 ' kolekciju, a GetWarmStornoDocs je posle neuspelog builda vracao STARI kes.
 ' Ekran je tada pokazivao listu kao da je procitana. Greska sada stize do
@@ -37182,7 +37182,7 @@ Private Sub T_S93_StornoListaE4KvarJeGreska()
     Set c = modStornoFlow.GetActiveDocumentsForStorno("Svi", "")
     Set w = modStornoWarm.GetWarmStornoDocs()
     AssertEq CStr(c.count > 0 And w.count > 0), "True", _
-             "403 preduslov: lista za storno bez kvara nije prazna (direktno i warm)"
+             "410 preduslov: lista za storno bez kvara nije prazna (direktno i warm)"
 
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
 
@@ -37200,14 +37200,14 @@ Private Sub T_S93_StornoListaE4KvarJeGreska()
     On Error GoTo CleanUp
 
     AssertEq CStr(InStr(1, gLista, prjA, vbTextCompare) > 0), "True", _
-             "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista"
+             "410 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista"
     AssertEq CStr(w Is Nothing), "True", _
-             "403 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan"
+             "410 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan"
     ' Gresku meri omotac sa On Error GoTo, ne Resume Next ovde: posle tihog
     ' povratka opis ume da ostane u Err, pa bi progutana greska izgledala dignuta.
     gWarm = S93WarmStornoGreska()
     AssertEq CStr(InStr(1, gWarm, prjA, vbTextCompare) > 0), "True", _
-             "403 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista"
+             "410 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista"
 
     Err.Clear
 CleanUp:
@@ -37218,10 +37218,10 @@ CleanUp:
     modStornoWarm.StopStornoWarm
     On Error GoTo 0
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoListaE4KvarJeGreska", _
-             "403: rollback je vratio redove svih tabela lanca"
+             "410: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 404 -- review #501 (#8): detalj izvestaja ne precutkuje prijemnice kad se E4
+' 411 -- review #501 (#8): detalj izvestaja ne precutkuje prijemnice kad se E4
 ' ne moze procitati. DodajPrijemniceZbirne je citac E4 zvao pod Resume Next i
 ' na gresku izlazio bez reda -- detalj je izgledao kao zbirna bez prijemnice.
 ' Sada red "veza nepoznata" sa razlogom, isto kao za kvar E4 te zbirne.
@@ -37242,24 +37242,24 @@ Private Sub T_S93_DetaljE4KvarImenujeRazlog()
     prjA = S93DvaLancaZaKvarE4("DT", t, brA, bA, zbrA, brB, brPrjB)
     det = S93Linije(modScrIzvestaji.IzDetaljOtkupLista(bA))
     AssertEq CStr(InStr(1, det, "PR-S93DTA-" & t, vbTextCompare) > 0), "True", _
-             "404 preduslov: detalj otkupa bez kvara nosi prijemnicu svoje zbirne"
+             "411 preduslov: detalj otkupa bez kvara nosi prijemnicu svoje zbirne"
 
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
     det = S93Linije(modScrIzvestaji.IzDetaljOtkupLista(bA))
 
     AssertEq CStr(InStr(1, det, Poruka("OTKUI_STAT_NEPOZNATO"), vbTextCompare) > 0 And _
                   InStr(1, det, prjA, vbTextCompare) > 0), "True", _
-             "404 detalj otkupa: necitljiva E4 je red 'veza nepoznata' sa razlogom, ne zbirna bez prijemnice"
+             "411 detalj otkupa: necitljiva E4 je red 'veza nepoznata' sa razlogom, ne zbirna bez prijemnice"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_DetaljE4KvarImenujeRazlog", _
-             "404: rollback je vratio redove svih tabela lanca"
+             "411: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 405 -- review #501 (#3): linija manjka F4 ne nestaje bez reci kad se skup
+' 412 -- review #501 (#3): linija manjka F4 ne nestaje bez reci kad se skup
 ' prijemnica zbirne ne zna. CalculateManjakPreview je i za kvar E4 te zbirne i
 ' za gresku citaca vracao nule, pa linija nije crtana -- isto kao "zbirna nije
 ' izabrana". Broja i dalje nema (izmisljen manjak je gori od prazne linije),
@@ -37287,7 +37287,7 @@ Private Sub T_S93_ManjakE4KvarImenujeRazlog()
     lin = modOtkupUI.ManjakLinijaIzPreview(m)
     AssertEq CStr(InStr(1, lin, Poruka("OTKUI_MNJ_MANJAK"), vbTextCompare) = 1 And _
                   InStr(1, lin, nep, vbTextCompare) = 0), "True", _
-             "405 preduslov: bez kvara linija manjka nosi broj"
+             "412 preduslov: bez kvara linija manjka nosi broj"
 
     ' Kvar E4 zbirne B: njena aktivna prijemnica nema PrijemnicaID.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, ""
@@ -37295,11 +37295,11 @@ Private Sub T_S93_ManjakE4KvarImenujeRazlog()
     razlog = ""
     If UBound(m) >= 4 Then razlog = CStr(m(4))
     AssertEq CStr(InStr(1, razlog, "PrijemnicaID", vbTextCompare) > 0) & "|" & CStr(CDbl(m(0))), "True|0", _
-             "405 manjak F4: kvar E4 zbirne je razlog u rezultatu preview-a, bez broja"
+             "412 manjak F4: kvar E4 zbirne je razlog u rezultatu preview-a, bez broja"
     lin = modOtkupUI.ManjakLinijaIzPreview(m)
     AssertEq CStr(InStr(1, lin, nep, vbTextCompare) > 0 And _
                   InStr(1, lin, "PrijemnicaID", vbTextCompare) > 0), "True", _
-             "405 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje"
+             "412 manjak F4: zbirna ciji se skup prijemnica ne zna ima liniju sa razlogom, ne nestaje"
 
     ' Dupli PrijemnicaID: citac E4 pada za celu tabelu.
     PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
@@ -37307,17 +37307,17 @@ Private Sub T_S93_ManjakE4KvarImenujeRazlog()
     lin = modOtkupUI.ManjakLinijaIzPreview(m)
     AssertEq CStr(InStr(1, lin, nep, vbTextCompare) > 0 And _
                   InStr(1, lin, prjA, vbTextCompare) > 0) & "|" & CStr(CDbl(m(0))), "True|0", _
-             "405 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja"
+             "412 manjak F4: greska citaca E4 je linija sa razlogom, bez izmisljenog broja"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_ManjakE4KvarImenujeRazlog", _
-             "405: rollback je vratio redove svih tabela lanca"
+             "412: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 406 -- review #501: storno zbirne koji je USPEO ne javlja se kao neuspeh kad
+' 413 -- review #501: storno zbirne koji je USPEO ne javlja se kao neuspeh kad
 ' posle upisa pukne citanje prijemnica (E4). StornoIzvrsi cita brojeve
 ' prijemnica zbirne POSLE StornoZbirna_TX; greska citaca je isla u EH, pa je
 ' operater video "neuspeh" za vec storniranu zbirnu -- i ponovio bi storno.
@@ -37347,14 +37347,14 @@ Private Sub T_S93_StornoUspehPosleKvaraE4()
     stornoC = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO)))
 
     AssertEq CStr(StrComp(stornoC, "Da", vbTextCompare) = 0), "True", _
-             "406 preduslov: storno zbirne je upisan i uz necitljivu E4"
+             "413 preduslov: storno zbirne je upisan i uz necitljivu E4"
     AssertEq CStr(ok) & "|" & CStr(InStr(1, poruka, prjA, vbTextCompare) > 0), "True|True", _
-             "406 storno zbirne: upisan storno je uspeh i kad citanje prijemnica posle upisa padne, poruka nosi razlog"
+             "413 storno zbirne: upisan storno je uspeh i kad citanje prijemnica posle upisa padne, poruka nosi razlog"
 
     Err.Clear
 CleanUp:
     errNum = Err.Number
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoUspehPosleKvaraE4", _
-             "406: rollback je vratio redove svih tabela lanca"
+             "413: rollback je vratio redove svih tabela lanca"
 End Sub

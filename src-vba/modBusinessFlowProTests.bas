@@ -10748,7 +10748,7 @@ End Sub
 ' SABOTAZE: s8r2a1-pregled-po-broju, s8r2a1-uvid-po-broju, s8r2a1-ki039-bez-provere,
 ' s8r2a1-pregled-obecava-skidanje, s93-bez-traga-nepoznat-clan, s93-prijemnica-bez-traga-po-broju
 ' (s8r2a1-scope-po-paletama povucena u 2b-2: paletna stavka traga zbirne nema;
-' s8r2a1-obim-nesuzen preseljena u S9-3 na 397 -- ovde se raise vise ne dostize).
+' s8r2a1-obim-nesuzen preseljena u S9-3 na 404 -- ovde se raise vise ne dostize).
 Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     Const SRC As String = "Test_S8R2a1_PaleteZbirnePoPrijemnicama"
     Dim tx As clsTransaction

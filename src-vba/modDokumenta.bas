@@ -9743,7 +9743,7 @@ Public Function CalculateManjakPreview(ByVal brojZbirne As String, _
     ' dve aktivne zbirne -- A2) nema liniju. Zbirna ciji se skup prijemnica ne zna
     ' (kvar E4 te zbirne ili greska citanja) nema BROJ -- izmisljen manjak je gori
     ' od prazne linije -- ali nosi RAZLOG kao peti clan rezultata, pa linija kaze
-    ' zasto je nema (review #501, test 405; ispisuje ga ManjakLinijaIzPreview).
+    ' zasto je nema (review #501, test 412; ispisuje ga ManjakLinijaIzPreview).
     ' Bez razloga bi izgledala isto kao "zbirna nije izabrana".
     Dim zbirnaKg As Double, prijKg As Double
     Dim id As ZbirnaIdent, zbrID As String

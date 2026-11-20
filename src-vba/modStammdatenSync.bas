@@ -1216,10 +1216,10 @@ End Function
 ' 14.67). Ugovor kolona se ne menja.
 '
 ' Vraca: Dictionary (CompareMode tekst) ZbirnaID -> Array(PrijemnicaID,
-' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 396.
+' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 403.
 '
 ' Kvar citanja (strog citac E4 bez kolone, dupli PrijemnicaID) se DIZE, ne
-' guta (S93-REV-01, test 400): zbirna koje u indeksu nema izvozi se kao
+' guta (S93-REV-01, test 407): zbirna koje u indeksu nema izvozi se kao
 ' Primljeno "Ne", pa bi progutan kvar postao status koji izgleda procitano.
 Public Function PrijemniceZaIzvozPoZbirni() As Object
     Const SOURCE As String = "PrijemniceZaIzvozPoZbirni"

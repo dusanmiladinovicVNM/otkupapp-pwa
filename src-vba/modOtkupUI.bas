@@ -10038,7 +10038,7 @@ Public Function ManjakLinija(ByVal zbrKg As Double, ByVal prijKg As Double, _
 End Function
 
 ' Natpis linije manjka iz rezultata CalculateManjakPreview -- jedini put kojim
-' ide SetManjakLine, pa ga test meri kroz isti poziv (review #501, test 405).
+' ide SetManjakLine, pa ga test meri kroz isti poziv (review #501, test 412).
 ' Peti clan je RAZLOG kad se skup prijemnica zbirne ne zna (kvar E4 ili greska
 ' citanja): linija tada kaze zasto, bez broja.
 Public Function ManjakLinijaIzPreview(ByVal m As Variant) As String
