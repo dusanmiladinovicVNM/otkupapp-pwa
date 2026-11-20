@@ -794,6 +794,11 @@ Public Sub RunAllTests()
     RunOne 411
     RunOne 412
     RunOne 413
+    ' S9-4 (plan 14.68): generacija nije identitet.
+    RunOne 414
+    RunOne 415
+    RunOne 416
+    RunOne 417
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1457,6 +1462,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 411: TestName = "T_S93_DetaljE4KvarImenujeRazlog"
         Case 412: TestName = "T_S93_ManjakE4KvarImenujeRazlog"
         Case 413: TestName = "T_S93_StornoUspehPosleKvaraE4"
+        Case 414: TestName = "T_S94_OporavakPreveziPoID"
+        Case 415: TestName = "T_S94_PrevezivanjeKapijaVlasnika"
+        Case 416: TestName = "T_S94_PrevezivanjeRazlogDoOperatera"
+        Case 417: TestName = "T_S94_PrefillPoOldDocID"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1878,6 +1887,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 411: T_S93_DetaljE4KvarImenujeRazlog
         Case 412: T_S93_ManjakE4KvarImenujeRazlog
         Case 413: T_S93_StornoUspehPosleKvaraE4
+        Case 414: T_S94_OporavakPreveziPoID
+        Case 415: T_S94_PrevezivanjeKapijaVlasnika
+        Case 416: T_S94_PrevezivanjeRazlogDoOperatera
+        Case 417: T_S94_PrefillPoOldDocID
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -3472,7 +3485,9 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     Dim s As String
 
     ' --- OTKUPNI LIST: 400 kg, 40 gajbi, kooperant, parcela ---
-    s = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "1/TEST", "")
+    ' S9-4 (S94-ODL-04): prefill bira red SAMO po OldDocID -- bez njega nema
+    ' prefill-a (do S9-4 je ovde stajao prazan ID i pad na broj).
+    s = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "1/TEST", FX_BLOK)
     AssertEq (Len(s) > 0), True, "prefill otkupa nije prazan"
     AssertEq SpecVal(s, "kol1"), "400", "otkup daje SVOJU kolicinu (ne otpremnicinu)"
     AssertEq SpecVal(s, "amb1"), "40", "otkup daje svoje gajbe"
@@ -3502,7 +3517,7 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     AssertEq SpecVal(s, "ambpr"), "40", "izdata ambalaza se preuzima iz storniranog"
 
     ' --- OTPREMNICA: isti BROJ, druga tabela, druge kolicine ---
-    s = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, "1/TEST", "")
+    s = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, "1/TEST", FX_OTP_ID)
     AssertEq SpecVal(s, "kol1"), "1000", "otpremnica daje SVOJU kolicinu"
     AssertEq SpecVal(s, "amb1"), "100", "otpremnica daje svoje gajbe"
     AssertEq SpecVal(s, "omid"), FX_STANICA, "otpremnica nosi otkupno mesto"
@@ -3517,16 +3532,16 @@ Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
     ' tome koja se KOLONA ZAGLAVLJA cita. Zaglavlje ih vise ne nosi (pisac ih od
     ' PR3 ostavlja prazne), pa se meri da kolicina dolazi sa stavke. Broj je isti
     ' jer fixture nosi iste vrednosti na oba mesta; menja se IZVOR.
-    s = modStornoDok.PrefillIzStorniranog(STIP_ZBIRNA, FX_ZBIRNA, "")
+    s = modStornoDok.PrefillIzStorniranog(STIP_ZBIRNA, FX_ZBIRNA, "ZBI-TEST-1")
     AssertEq SpecVal(s, "kol1"), "1000", "zbirna cita kolicinu sa STAVKE"
     AssertEq SpecVal(s, "amb1"), "100", "zbirna cita gajbe sa STAVKE"
     AssertEq SpecVal(s, "cena"), "", "zbirna NEMA cenu (nema je ni tabela)"
     AssertEq SpecVal(s, "brzbirne"), "", "zbirna ne preuzima samu sebe kao broj zbirne"
 
     ' --- nepostojeci dokument i tip koji se ne prefiluje ---
-    AssertEq modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "NE-POSTOJI", ""), "", _
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "NE-POSTOJI", "OTK-NE-POSTOJI"), "", _
              "nepostojeci dokument ne daje prefill"
-    AssertEq modStornoDok.PrefillIzStorniranog(STIP_IZVOD, "1/TEST", ""), "", _
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_IZVOD, "1/TEST", FX_BLOK), "", _
              "izvod se ne prefiluje (nije dokument unosa)"
 End Sub
 
@@ -3837,31 +3852,9 @@ Private Sub T_Oporavak_CiljneListe()
     AssertEq (InStr(vozaci, FX_KUPAC) > 0), True, _
              "vlasnik je kompozit -- uz vozaca se vidi i kupac"
 
-    ' --- ISTA KOLIZIJA U KANONSKOM OBLIKU: bez generacije ---
-    '
-    ' Fixture zbirne nose GeneracijaID, pa iznad red grupise IDENTITET, a kljuc
-    ' broj + vlasnik se ne izvrsava (sabotaza oporavak-cilj-po-broju nije
-    ' obarala nista, dokaz 19.11.2026). Kanonski pisac generaciju NE pise
-    ' (CreateZbirna_TX; A20), pa je bas taj kljuc put svake zbirne koju aplikacija
-    ' pravi. Generacija se brise i vraca PRE tvrdnje, uz kes liste u oba smera.
-    Dim pGenD1 As String, pGenD2 As String, duplihBezGen As Long
-    pGenD1 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID))
-    pGenD2 = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID))
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID, ""
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID, ""
-    modUiData.ResetCache
-    d = modScrOporavak.Scr_Rows("sve", "")
-    If IsArray(d) Then
-        redovi = d(1)
-        For i = 1 To CLng(d(2))
-            If CStr(redovi(i, 1)) = FX_ZBIRNA_DUPL Then duplihBezGen = duplihBezGen + 1
-        Next i
-    End If
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", COL_GENERACIJA_ID, pGenD1
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", COL_GENERACIJA_ID, pGenD2
-    modUiData.ResetCache
-    AssertEq duplihBezGen, 2, _
-             "i bez generacije isti broj kod dva vozaca daje DVA cilja -- kljuc je broj + vlasnik"
+    ' Kljuc reda je ZbirnaID (S9-4, plan 14.68): dva dokumenta su dva reda bez
+    ' obzira na generaciju i vlasnika. Do S9-4 je ovde stajao blok "bez generacije
+    ' kljuc je broj + vlasnik" -- to pravilo vise ne postoji; meri ga 414.
 
     ' --- KOLIZIJA BROJEVA: dva kupca, isti broj -> DVA reda ---
     modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
@@ -29250,9 +29243,22 @@ End Sub
 '   ista generacija    -> JEDNA stavka   (dvoklasna zbirna)
 '   razlicite generacije -> DVE stavke    (anomalija; F4 je odbija, B8 prijavljuje)
 ' Bez druge grane bi tvrdnja bila zelena i kad picker spaja sve po broju.
+' 171. Picker BROJ ZBIRNE: JEDNA stavka po DOKUMENTU, a dokument je RED tblZbirna
+' (S9-4, plan 14.68, S94-ODL-05).
+'
+' Do S9-4 je picker spajao redove iste GeneracijaID u jednu stavku (MIG-005b,
+' stari model: Kl.I + Kl.II na dva zaglavlja) i lepio njihove ZbirnaID-eve sa
+' "|". Kanonski pisac pravi jedno zaglavlje i generaciju ne pise, pa je spajanje
+' u produkciji bilo no-op -- a nad sveskom koja kolonu nosi (migracija kopira
+' kolone po imenu) sakrivalo bi DRUGI dokument istog broja.
+'
+' Test pravi par od ZB-TEST-SLDD i vraca ga. Meri oba smera nad istim redovima:
+'   ISTI vlasnik i ISTA generacija -> DVE stavke, svaka sa SVOJIM ZbirnaID-om
+'   razlicite generacije           -> DVE stavke (anomalija; F4 je odbija, B8)
+' SABOTAZA: s94-picker-tudji-id.
 Private Sub T_Zbirne_PickerJednaStavkaPoDokumentu()
     Dim f As frmOtkupUI, CB As Object
-    Dim r As Long, jedanDok As Long, dvaDok As Long
+    Dim r As Long, nIste As Long, nRazl As Long, nD1 As Long, nD2 As Long, zid As String
     Dim genD1 As String, genD2 As String
     Dim vozD2 As String, kupD2 As String
     Dim stD1 As String, stD2 As String
@@ -29271,27 +29277,33 @@ Private Sub T_Zbirne_PickerJednaStavkaPoDokumentu()
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_STORNIRANO, ""
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_STORNIRANO, ""
 
-    ' A) JEDAN dokument na dva reda: izjednaci vlasnika I generaciju.
+    ' A) ISTI vlasnik i ISTA generacija na dva reda (sinteticki: oblik koji je
+    '    picker do S9-4 spajao).
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_VOZAC, _
                      NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_VOZAC))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_ZBR_KUPAC, _
                      NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_ZBR_KUPAC))
-    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD1
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_GENERACIJA_ID, "GEN-S94-ISTA"
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, "GEN-S94-ISTA"
     modUiData.ResetCache          ' picker cita CachedTable -- bez ovoga meri bajato
     modOtkupUI.FillZbirneCombo f
     For r = 0 To CB.ListCount - 1
         If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
-            jedanDok = jedanDok + 1
+            nIste = nIste + 1
+            zid = Trim$(CStr(CB.List(r, 1)))
+            If StrComp(zid, "ZBI-SLED-D1", vbTextCompare) = 0 Then nD1 = nD1 + 1
+            If StrComp(zid, "ZBI-SLED-D2", vbTextCompare) = 0 Then nD2 = nD2 + 1
         End If
     Next r
 
-    ' B) DVA dokumenta pod istim brojem: vrati D2 svoju generaciju.
+    ' B) DVA dokumenta pod istim brojem, svaki sa svojom generacijom.
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_GENERACIJA_ID, genD1
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D2", COL_GENERACIJA_ID, genD2
     modUiData.ResetCache
     modOtkupUI.FillZbirneCombo f
     For r = 0 To CB.ListCount - 1
         If StrComp(Trim$(CStr(CB.List(r))), FX_ZBIRNA_SLDD, vbTextCompare) = 0 Then
-            dvaDok = dvaDok + 1
+            nRazl = nRazl + 1
         End If
     Next r
 
@@ -29303,13 +29315,10 @@ Private Sub T_Zbirne_PickerJednaStavkaPoDokumentu()
     modUiData.ResetCache
     ReleaseOtkupUIForm f
 
-    AssertEq (Len(genD1) > 0), True, _
-             "preduslov/ZBR-IDENT-01: fixture red nosi GeneracijaID"
-    AssertEq (genD1 <> genD2), True, _
-             "preduslov: par u fixture-u nosi RAZLICITE generacije"
-
-    AssertEq jedanDok, 1, "dva reda ISTOG dokumenta daju JEDNU stavku"
-    AssertEq dvaDok, 2, "dva RAZLICITA dokumenta istog broja ostaju dve stavke"
+    AssertEq nIste, 2, "dva reda iste generacije su DVA dokumenta: dve stavke (S9-4)"
+    AssertEq CStr(nD1) & "|" & CStr(nD2), "1|1", _
+             "svaka stavka pickera nosi SVOJ ZbirnaID, jedan, bez spajanja"
+    AssertEq nRazl, 2, "dva RAZLICITA dokumenta istog broja ostaju dve stavke"
 End Sub
 
 ' Da li nalaz sa datom sifrom sadrzi dati tekst. Blok pocinje redom cija je PRVA
@@ -37357,4 +37366,281 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoUspehPosleKvaraE4", _
              "413: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' ============================================================
+' S9-4: GENERACIJA NIJE IDENTITET (plan 14.68; docs/DOMEN/SLEDLJIVOST.md
+' SLED-IDENT-02). Oporavak "Prevezi prijemnicu" bira cilj po ZbirnaID, pisac
+' prevezivanja je strog po ID-u i prolazi kapiju pisca prijemnice (PRJ-ZBR-01),
+' razlog odbijanja stize do ekrana (KI-055), prefill ispravke cita tacno
+' OldDocID. Obrazac S9-3: kanonski pisci posle pocetka spoljne transakcije,
+' tvrdnja o rollback-u na kraju.
+' ============================================================
+
+' Siroce prijemnica vozaca 1 i kupca 1: kanonski lanac, prijemnica kroz F4, pa
+' storno njene zbirne (StornoZbirna_TX). Prijemnica ostaje aktivna, a njen
+' roditelj (E4) je storniran -- kao posle storna zbirne u produkciji.
+Private Function S94SirocePrijemnica(ByVal oznaka As String, ByVal t As String, _
+                                     ByRef outZbirna As String) As String
+    Dim b As String, o As String, brZ As String, pid As String
+    brZ = "ZB-S94" & oznaka & "-" & t
+    SledLanacDoZbirne "S94" & oznaka, brZ, FX_VOZAC, FX_KUPAC, 40, b, o, outZbirna
+    pid = SledPrijemnica("PR-S94" & oznaka & "-" & t, brZ, FX_VOZAC, FX_KUPAC, 35, 0)
+    AssertEq modStorno.StornoZbirna_TX(outZbirna), True, _
+             "S9-4 preduslov: roditelj siroce prijemnice je storniran"
+    S94SirocePrijemnica = pid
+End Function
+
+' Red liste ciljeva u mrezi Oporavka cija kolona `kolona` nosi `vrednost`; 0 kad
+' ga nema. Mreza se puni kroz pravi ekran (GridTestLoad -> Scr_Rows), ista
+' koju cita Scr_Event "row:N".
+Private Function S94RedCilja(ByVal kolona As Long, ByVal vrednost As String) As Long
+    Dim i As Long
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        If StrComp(Trim$(CStr(modOtkupUI.GridCell(i, kolona))), vrednost, vbTextCompare) = 0 Then
+            S94RedCilja = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Broj redova liste ciljeva sa datim brojem u koloni 1.
+Private Function S94RedovaBroja(ByVal broj As String) As Long
+    Dim i As Long
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        If StrComp(Trim$(CStr(modOtkupUI.GridCell(i, 1))), broj, vbTextCompare) = 0 Then
+            S94RedovaBroja = S94RedovaBroja + 1
+        End If
+    Next i
+End Function
+
+' Lista ciljeva ZBIRNE kroz pravi ekran, sveza (kes ljuske je sirova tabela).
+Private Sub S94UcitajCiljeve()
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    modUiData.ResetCache
+    modOtkupUI.GridTestLoad "OPORAVAK"
+End Sub
+
+' Klik na red liste ciljeva (bira cilj), pa jezgro "Prevezi prijemnicu" nad
+' izabranim redom izvora. Red 0 = cilj nije u listi: ne bira se nista i ne
+' prevezuje se nista (prazan izbor ne sme u mutirajuci poziv).
+Private Function S94Prevezi(ByVal redCilja As Long, ByVal prjID As String, _
+                            ByRef outRazlog As String) As Boolean
+    outRazlog = ""
+    If redCilja <= 0 Then Exit Function
+    modScrOporavak.Scr_Event "row:" & CStr(redCilja), "Click"
+    S94Prevezi = modScrOporavak.PreveziPrijemnicuCore(S93BrojPrijemnice(prjID), prjID, outRazlog)
+End Function
+
+' 414 -- S9-4 (plan 14.68, N7): Oporavak "Prevezi prijemnicu" bira cilj po
+' ZbirnaID. Dve AKTIVNE IZDATE zbirne istog broja i ISTOG vlasnika (kanonski
+' lanci; isti broj nastaje prepisom labele, obrazac 356) i siroce prijemnica tog
+' vlasnika. Lista ciljeva ih pokazuje kao DVA reda, svaki sa svojim ZbirnaID-om,
+' a prevezivanje ide na IZABRANU. Do S9-4: kolona 7 je bila GeneracijaID (prazna
+' za kanonsku zbirnu), dve zbirne istog broja i vlasnika su bile JEDAN red, a
+' pisac je po broju upisivao prazan E4 uz True.
+' SABOTAZE: s94-opo-cilj-generacija, s94-opo-izbor-bez-id, s94-prevezi-e4-prazan.
+Private Sub T_S94_OporavakPreveziPoID()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, br As String, razlog As String, ok As Boolean
+    Dim bA As String, otpA As String, zbrA As String
+    Dim bB As String, otpB As String, zbrB As String
+    Dim zbrP As String, prjP As String, redA As Long, redB As Long, nBroja As Long
+    Dim os As Variant, i As Long, uSirocadi As Boolean, labela As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    br = "ZB-S94O-" & t
+    SledLanacDoZbirne "S94OB", br, FX_VOZAC, FX_KUPAC, 70, bB, otpB, zbrB
+    SledLanacDoZbirne "S94OA", br & "A", FX_VOZAC, FX_KUPAC, 60, bA, otpA, zbrA
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbrA, COL_ZBR_BROJ, br
+    prjP = S94SirocePrijemnica("OP", t, zbrP)
+
+    S94UcitajCiljeve
+    nBroja = S94RedovaBroja(br)
+    redA = S94RedCilja(7, zbrA)
+    redB = S94RedCilja(7, zbrB)
+    AssertEq nBroja, 2, "414 dve zbirne istog broja i vlasnika su DVA cilja u Oporavku"
+    AssertEq CStr(redA > 0) & "|" & CStr(redB > 0), "True|True", _
+             "414 red cilja nosi ZbirnaID svoje zbirne (kolona 7)"
+
+    ok = S94Prevezi(redB, prjP, razlog)
+    labela = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjP, COL_PRJ_BROJ_ZBIRNE)))
+    os = modDokumenta.GetOsirocenePrijemnice()
+    If IsArray(os) Then
+        For i = 1 To UBound(os, 1)
+            If StrComp(CStr(os(i, 8)), prjP, vbTextCompare) = 0 Then uSirocadi = True
+        Next i
+    End If
+
+    AssertEq S93Roditelj(prjP), UCase$(zbrB), _
+             "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID"
+    AssertEq CStr(ok) & "|" & labela, "True|" & br, _
+             "414 prevezivanje uspe, a labela prijemnice je broj izabrane zbirne"
+    AssertEq uSirocadi, False, "414 prevezena prijemnica vise nije siroce"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_OporavakPreveziPoID", _
+             "414: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 415 -- S9-4 (plan 14.68, P1 iz #477, PRJ-ZBR-01): prevezivanje prolazi istu
+' kapiju kao pisac prijemnice (ZbirnaRoditeljPrijemnice). Prijemnica kupca 1 i
+' vozaca 1 ne ide pod zbirnu drugog kupca i vozaca ni pod nacrt -- pisac odbija
+' razlogom koji ih imenuje, a E4 ostaje kakav je bio. Nacrt nosi robu (prvi izvor
+' je donosi), pa ga ne odbija kapija robe nego kapija izdatog. Do S9-4 je
+' Oporavak oba vezivao (lista nudi i nacrte i tudje zbirne).
+' SABOTAZA: s94-prevezi-bez-kapije-vlasnika.
+Private Sub T_S94_PrevezivanjeKapijaVlasnika()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, zbrP As String, prjP As String
+    Dim bT As String, otpT As String, zbrT As String, brT As String
+    Dim zbrN As String, brN As String, redT As Long, redN As Long
+    Dim okT As Boolean, okN As Boolean, razT As String, razN As String
+    Dim e4T As String, e4N As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjP = S94SirocePrijemnica("KP", t, zbrP)
+    brT = "ZB-S94KT-" & t
+    SledLanacDoZbirne "S94KT", brT, FX_VOZAC2, FX_KUPAC2, 50, bT, otpT, zbrT
+    zbrN = S6K6Zbirna("S94KN", False, brN)
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbrN, COL_ZBR_VRSTA, FX_VRSTA
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbrN, COL_ZBR_SORTA, FX_SORTA
+
+    S94UcitajCiljeve
+    redT = S94RedCilja(1, brT)
+    redN = S94RedCilja(1, brN)
+    AssertEq CStr(redT > 0) & "|" & CStr(redN > 0), "True|True", _
+             "415 preduslov: zbirna drugog kupca i nacrt su u listi ciljeva"
+
+    okT = S94Prevezi(redT, prjP, razT)
+    e4T = S93Roditelj(prjP)
+    okN = S94Prevezi(redN, prjP, razN)
+    e4N = S93Roditelj(prjP)
+
+    AssertEq CStr(okT) & "|" & CStr(InStr(1, razT, FX_KUPAC2, vbTextCompare) > 0) & "|" & e4T, _
+             "False|True|" & UCase$(zbrP), _
+             "415 P1: prijemnica kupca 1 ne ide pod zbirnu drugog kupca i vozaca; razlog imenuje kupca"
+    AssertEq CStr(okN) & "|" & CStr(InStr(1, razN, "nije izdata", vbTextCompare) > 0) & "|" & e4N, _
+             "False|True|" & UCase$(zbrP), _
+             "415 P1: prijemnica ne ide pod nacrt zbirne; razlog kaze da nije izdata"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_PrevezivanjeKapijaVlasnika", _
+             "415: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 416 -- S9-4 (plan 14.68, KI-055): razlog odbijenog prevezivanja stize do
+' ekrana. Zbirna istog vlasnika a druge vrste (PRJ-ZBR-02) i ZbirnaID koga nema
+' se odbijaju, a jezgro Oporavka vraca razlog pisca -- ne opstu poruku "proveri
+' da li je ciljna zbirna aktivna" (ciljna zbirna jeste aktivna). Do S9-4 je pisac
+' vracao samo True/False.
+' SABOTAZA: s94-prevezi-razlog-se-gubi.
+Private Sub T_S94_PrevezivanjeRazlogDoOperatera()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, zbrP As String, prjP As String
+    Dim zbrV As String, brV As String, redV As Long
+    Dim okV As Boolean, okX As Boolean, razV As String, razX As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjP = S94SirocePrijemnica("RP", t, zbrP)
+    zbrV = S6K6Zbirna("S94RV", True, brV, FX_VOZAC, FX_KUPAC, "S94DRUGA", FX_SORTA)
+
+    S94UcitajCiljeve
+    redV = S94RedCilja(1, brV)
+    AssertEq (redV > 0), True, "416 preduslov: zbirna druge vrste je u listi ciljeva"
+    okV = S94Prevezi(redV, prjP, razV)
+
+    ' Cilj koji ne postoji: seam bira red kakav lista ne moze da ponudi.
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "ZB-S94-NEMA", "", "ZBI-S94-NEMA"
+    okX = modScrOporavak.PreveziPrijemnicuCore(S93BrojPrijemnice(prjP), prjP, razX)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+
+    AssertEq CStr(okV) & "|" & CStr(InStr(1, razV, Poruka("DOKUNOS_ERR_PRJ_VRSTA_ZBIRNE"), vbTextCompare) > 0), _
+             "False|True", _
+             "416 KI-055: zbirna druge vrste se odbija, a razlog (vrsta) stize do ekrana"
+    AssertEq CStr(okX) & "|" & CStr(InStr(1, razX, "ZBI-S94-NEMA", vbTextCompare) > 0), "False|True", _
+             "416 ZbirnaID cilja koga nema se odbija, a razlog ga imenuje"
+    AssertEq S93Roditelj(prjP), UCase$(zbrP), "416 odbijeno prevezivanje ne menja E4"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_PrevezivanjeRazlogDoOperatera", _
+             "416: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 417 -- S9-4 (plan 14.68, S94-ODL-04): prefill ispravke cita TACNO dokument
+' OldDocID. Dva otkupa nose istu GeneracijaID (sinteticki kvar: kolona stize
+' migracijom iz starije sveske, modMigracija.KopirajTabelu kopira po imenu).
+' Do S9-4 je prefill uzimao NAJNOVIJI red generacije, pa je ispravka jednog
+' otkupa nosila podatke drugog; bez OldDocID-a je padao na poslednji red istog
+' broja. Sada: svaki nosi svoje, prazan OldDocID ne daje nista.
+' SABOTAZA: s94-prefill-pk-ignorisan.
+Private Sub T_S94_PrefillPoOldDocID()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, gen As String, otkA As String, otkB As String
+    Dim brA As String, brB As String, sA As String, sB As String, s0 As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    otkA = SledBlok("S94PA", FX_STANICA, 41, 0)
+    otkB = SledBlok("S94PB", FX_STANICA, 57, 0)
+    gen = "GEN-S94-" & t
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, otkA, COL_GENERACIJA_ID, gen
+    PostaviPoljePoPK TBL_OTKUP, COL_OTK_ID, otkB, COL_GENERACIJA_ID, gen
+    brA = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkA, COL_OTK_BR_DOK)))
+    brB = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, otkB, COL_OTK_BR_DOK)))
+
+    sA = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brA, otkA)
+    sB = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brB, otkB)
+    s0 = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brA, "")
+
+    AssertEq SpecVal(sA, "kol1") & "|" & SpecVal(sB, "kol1"), "41|57", _
+             "417 ispravka svakog otkupa nosi SVOJ dokument i kad dva dele generaciju"
+    AssertEq s0, "", "417 prazan OldDocID ne daje prefill (bez pada na broj)"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_PrefillPoOldDocID", _
+             "417: rollback je vratio redove svih tabela lanca"
 End Sub

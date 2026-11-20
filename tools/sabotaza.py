@@ -1878,20 +1878,9 @@ SABOTAZE = {
         "T_F8_IzabranRedOstajeIzabran",
         "recovery zapis pokazuje na IZABRAN dokument",
     ),
-    # Kljuc grupisanja u ciljnoj listi kad generacije NEMA. Nije "zatecen zapis":
-    # kanonski pisac zbirne generaciju ne pise (A20), pa je to put svake nove
-    # zbirne. Fixture zbirne generaciju nose, pa je ovaj kljuc bio neizvrsen i
-    # sabotaza nije obarala nista (dokaz 19.11.2026); test sada brise generaciju
-    # para ZB-TEST-DUPL i meri listu i bez nje.
-    # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
-    # cine vlasnika, ova sam kljuc.
-    "oporavak-cilj-po-broju": (
-        "modScrOporavak.bas",
-        "            kljuc = broj & Chr$(1) & vlasnik\n",
-        "            kljuc = broj   ' SABOTAZA: dva vlasnika istog broja postaju jedan cilj\n",
-        "T_Oporavak_CiljneListe",
-        "i bez generacije isti broj kod dva vozaca daje DVA cilja -- kljuc je broj + vlasnik",
-    ),
+    # oporavak-cilj-po-broju je povucena u S9-4 (plan 14.68, S94-ODL-03): kljuc reda
+    # cilja je ZbirnaID, pa grane "broj + vlasnik" vise nema. Meri ga 414
+    # (s94-opo-cilj-generacija).
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
     # okine i relabel prepravi header cele palete.
@@ -7010,13 +6999,9 @@ SABOTAZE = {
         "T_BrojKapija_IstoZaSvakiCase",
         "DistinctActiveValues: razmaci ne menjaju decu",
     ),
-    "picker-ne-spaja-redove-dokumenta": (
-        "modOtkupUI.bas",
-        "                    uzmi = False          \' drugi red ISTOG dokumenta\n",
-        "                    uzmi = True   \' SABOTAZA: svaki red je svoja stavka\n",
-        "T_Zbirne_PickerJednaStavkaPoDokumentu",
-        "dva reda ISTOG dokumenta daju JEDNU stavku",
-    ),
+    # picker-ne-spaja-redove-dokumenta je povucena u S9-4 (plan 14.68, S94-ODL-05): red
+    # tblZbirna je dokument, picker vise ne spaja redove; 171 meri suprotno pravilo
+    # (s94-picker-tudji-id).
     "zbirna-i1-ne-gleda-prijemnice": (
         "modDokumenta.bas",
         "    DodajBrojeve res, TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, \"P\", SRC\n",

@@ -341,7 +341,8 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, prijemnicaID, mCiljZbirnaGen) Then
+    Dim razlog As String
+    If PreveziPrijemnicuCore(brojPrij, prijemnicaID, razlog) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
                              " " & ChrW(8594) & " " & mCiljZbirna, False
@@ -355,6 +356,16 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
 EH:
     LogErr "modScrOporavak.PreveziPrijemnicu"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' JEZGRO "Prevezi prijemnicu" (S9-4): prijemnica izabranog reda izvora na
+' izabrani cilj, bez MsgBox-a potvrde, da bi se merilo (uzor PreveziPaleteCore).
+' outRazlog nosi razlog odbijanja za poruku operateru.
+Public Function PreveziPrijemnicuCore(ByVal brojPrij As String, ByVal prijemnicaID As String, _
+                                      ByRef outRazlog As String) As Boolean
+    outRazlog = ""
+    PreveziPrijemnicuCore = ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, prijemnicaID, _
+                                                          mCiljZbirnaGen)
 End Function
 
 ' Osirotele paletne stavke prelaze na aktivnu prijemnicu. force=True je
