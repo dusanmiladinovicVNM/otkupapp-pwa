@@ -6530,7 +6530,9 @@ Public Sub OsveziNavBrojace()
     Set mNavBroj = CreateObject("Scripting.Dictionary")
     For Each r In modUiScreens.ScrRows()
         kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        If gPerfOn Then PerfPocni "NAV|" & kljuc
         mNavBroj(kljuc) = modUiScreens.ScrBrojac(kljuc)
+        If gPerfOn Then PerfKraj "NAV|" & kljuc
     Next r
     For Each nm In mNavKey.keys
         z.Controls(CStr(nm) & "B").caption = _

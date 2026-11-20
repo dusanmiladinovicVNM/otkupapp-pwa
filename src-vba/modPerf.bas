@@ -45,6 +45,8 @@ Option Explicit
 '                                delovi REF.* (ResetCache/Kpi/NavBrojaci/ZbirneCombo/
 '                                MaticniCombos/Prikaz/OtpTraka), KPI.* i GRID.Ucitaj/
 '                                GRID.Crtaj (ReloadGrid) -- rasclanjavanje 20.11.
+'   modOtkupUI.OsveziNavBrojace  NAV|<ekran> po znacki menija; Oporavak
+'                                (modStornoRecovery.GetNedovrseno) OPO.* po delu
 '   modOtkupUI.Dijalog           UI.CekaOperatera (oduzima se od aktivnog)
 '   modOtkupUnos.PotvrdiManjak.. UI.CekaOperatera (pitanje o manjku gajbi)
 '   modDataAccess.GetTableData   BROJ "DA.GTD|<tabela>" (celije) i
