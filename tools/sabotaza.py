@@ -1805,7 +1805,9 @@ SABOTAZE = {
         "T_OtkupStornoPoID_NeDiraTudjeOM",
         "storniran je izabran dokument (B)",
     ),
-    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
+    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem. Od S9-3 se
+    # deca biraju po ID-u, pa kaskada bez kapije PROLAZI (nizvodno je vise nista
+    # ne zaustavlja) -- obara se prva tvrdnja testa, ne tvrdnja o razlogu.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
         "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, scopeID)\n"
@@ -1813,7 +1815,7 @@ SABOTAZE = {
         "    razPon = ZbirnaScopeRazlog(brojZbirne, zbrID, scopeID)\n"
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n",
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
-        "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
+        "ponistenje lanca staje dok broj nose dva aktivna dokumenta",
     ),
 
     # S5-3b: kapija iz review-a #362 je razlog zasto hladnjacka kaskada u
@@ -15000,10 +15002,14 @@ SABOTAZE = {
     ),
     # S9-3: BFP S8R2A1-REV-01 posle promene premise -- obim zbirne cija druga
     # prijemnica broja nema trag je siguran po ID-u (strog uvid validan) ...
-    "s93-uvid-bez-id": (
-        "modStornoFlow.bas",
-        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)\n",
-        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), vbNullString, scopeID)   ' SABOTAZA: uvid bez ID-a zbirne\n",
+    # Sabotaza mora biti osetljiva na TRAG: obim bez ID-a ubija scenario 1 istog
+    # testa (dve zbirne istog broja, FATAL 424) pre tvrdnje. Ovde citac E4 tretira
+    # prijemnicu bez traga kao nepoznatog clana zbirne svoje labele (fail-closed
+    # citanje, suprotno odluci S9-3) -- zbirna D1 postaje kvar, strog uvid pada.
+    "s93-bez-traga-nepoznat-clan": (
+        "modAutoHladnjaca.bas",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod))))\n",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod)))): If Len(rod) = 0 Then rod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID)))): If Len(rod) > 0 Then d(i, cId) = \"\"   ' SABOTAZA: prijemnica bez traga je nepoznat clan zbirne svoje labele\n",
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: strog uvid zbirne D1 je validan -- prijemnica bez traga nije dete (S9-3)",
     ),

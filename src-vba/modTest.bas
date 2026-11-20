@@ -4941,10 +4941,12 @@ Private Sub T_ZbirnaKaskada_StajeNaDvosmislenom()
     AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
     AssertEq CBool(res("success")), False, _
              "ponistenje lanca staje dok broj nose dva aktivna dokumenta"
-    ' Sama BEZBEDNOST dolazi od zatecene kapije u StornoZbirna -- kaskada bi
-    ' pala i bez moje provere. Ono sto moja provera dodaje je RAZLOG: staje
-    ' pre transakcije i kaze operateru sta je problem, umesto generickog
-    ' "nije uspelo". Bas to se ovde tvrdi.
+    ' Do S9-3 je BEZBEDNOST dolazila i od zatecene kapije nizvodno (deca po
+    ' broju), pa bi kaskada pala i bez ove provere, a provera je dodavala RAZLOG.
+    ' Od S9-3 se deca biraju po ID-u (plan 14.67): kaskada bez ove kapije PROLAZI
+    ' i dira samo svoju decu -- ova kapija je jedina koja broj dva vlasnika
+    ' zaustavlja (ZBR-MUT-01). Zato sabotaza zbirna-kaskada-bez-kapije obara prvu
+    ' tvrdnju ispod, a razlog meri druga.
     AssertEq (InStr(1, CStr(res("message")), "pripadao VISE vlasnika", _
                     vbTextCompare) > 0), True, _
              "odbijanje imenuje dvosmislen broj, ne samo neuspeh"
