@@ -4486,10 +4486,13 @@ Private Sub RefreshKpi(frm As Object)
 
     ' kg dana je zbir STAVKI: zaglavlje novog otkupa ne nosi kolicinu, pa je
     ' plocica za nov dokument pokazivala 0 (REFAKTOR S14.7).
+    If gPerfOn Then PerfPocni "KPI.Danas"
     st = "danas": z.Controls("kpiV0").caption = FmtBroj(modOtkup.KgOtkupaZaDan(Int(Now)), 0)
     ' 0 kg je TACAN podatak, ne odsustvo podatka - zato ostaje nula, a ne crta
     KpiSub z, 0, CountForDate(TBL_OTKUP, COL_OTK_DATUM, Int(Now)) & " " & Poruka("OTKUI_KPI_SUB_DOK")
 
+    If gPerfOn Then PerfKraj "KPI.Danas"
+    If gPerfOn Then PerfPocni "KPI.SaldoOM"
     st = "OM saldo": om = SelectedStanicaID(frm)
     If Len(om) > 0 Then
         sal = SaldoOMUkupno(om)
@@ -4501,14 +4504,17 @@ Private Sub RefreshKpi(frm As Object)
         KpiPrazno z, 1
     End If
 
+    If gPerfOn Then PerfKraj "KPI.SaldoOM"
     ' otvoreno kg jos nema izvor u semi - dok ga nema, plocica je tiha
     KpiPrazno z, 2
 
+    If gPerfOn Then PerfPocni "KPI.Dokumenti"
     st = "dokumenata"
     cOtp = CountForDate(TBL_OTPREMNICA, COL_OTP_DATUM, Int(Now))
     cPrj = CountForDate(TBL_PRIJEMNICA, COL_PRJ_DATUM, Int(Now))
     z.Controls("kpiV3").caption = cOtp & " otpr " & ChrW(183) & " " & cPrj & " prij"
 
+    If gPerfOn Then PerfKraj "KPI.Dokumenti"
     z.Controls("kpiV4").caption = Poruka("OTKUI_KPI_SPREMNO")
     z.Controls("kpiV4").ForeColor = C_GREEN
     KpiSub z, 4, Poruka("OTKUI_KPI_SUB_OK")
@@ -6551,22 +6557,36 @@ End Function
 Public Sub RefreshFromData()
     On Error Resume Next
     If gPerfOn Then PerfAkcijaPocni "REFRESH"
+    If gPerfOn Then PerfPocni "REF.ResetCache"
     modUiData.ResetCache
     ' i izvedene mape aktivnog ekrana - kasno vezano, ekran ne mora da ima
     Application.Run modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), _
                                           SCR_MODUL) & ".Scr_ResetCache"
     Err.Clear
+    If gPerfOn Then PerfKraj "REF.ResetCache"
     Set mPartMap = Nothing
     Set mColSpec = CreateObject("Scripting.Dictionary")
     mColSpec.CompareMode = 1
+    If gPerfOn Then PerfPocni "REF.Kpi"
     RefreshKpi mFrm
+    If gPerfOn Then PerfKraj "REF.Kpi"
+    If gPerfOn Then PerfPocni "REF.NavBrojaci"
     OsveziNavBrojace
+    If gPerfOn Then PerfKraj "REF.NavBrojaci"
+    If gPerfOn Then PerfPocni "REF.ZbirneCombo"
     FillZbirneCombo mFrm      ' nove zbirne u picker
+    If gPerfOn Then PerfKraj "REF.ZbirneCombo"
+    If gPerfOn Then PerfPocni "REF.MaticniCombos"
     RefillMaticniCombos mFrm  ' nova stanica / vozac u kontekst
+    If gPerfOn Then PerfKraj "REF.MaticniCombos"
     mPartnerFor = ""          ' partner lista se ponovo puni
+    If gPerfOn Then PerfPocni "REF.Prikaz"
     OsveziPrikaz
+    If gPerfOn Then PerfKraj "REF.Prikaz"
     ' traka otpremnice: upis, vezivanje i izdavanje menjaju njene brojeve
+    If gPerfOn Then PerfPocni "REF.OtpTraka"
     RefreshOtpTraka mFrm
+    If gPerfOn Then PerfKraj "REF.OtpTraka"
     If gPerfOn Then PerfAkcijaZavrsi "REFRESH"
 End Sub
 
@@ -7130,9 +7150,13 @@ Private Sub ReloadGrid()
     ' Od S4b SVI ekrani idu istim putem: mreza pita aktivan ekran za redove.
     ' Ranije je ekran dokumenata imao svoj put (FillGrid je pisao pravo u
     ' stanje ljuske), pa je mreza umela da sluzi samo njega.
+    If gPerfOn Then PerfPocni "GRID.Ucitaj"
     LoadGridFromScreen
+    If gPerfOn Then PerfKraj "GRID.Ucitaj"
     mPage = 1
+    If gPerfOn Then PerfPocni "GRID.Crtaj"
     RenderGrid
+    If gPerfOn Then PerfKraj "GRID.Crtaj"
     ' Uspelo citanje gasi PRETHODNU gresku mreze. Crveni toast nema tajmer -
     ' namerno, greska ne sme da nestane sama - pa je bez ovoga ostajao na
     ' ekranu i posle poteza koji je sve doveo u red.

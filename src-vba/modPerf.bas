@@ -42,6 +42,9 @@ Option Explicit
 '                                postaje sekcija AKCIJA.UI.Change.*
 '   modOtkupUI.CommitDokument    UI.Commit.ScrSave / .ClearForm / .Refresh
 '   modOtkupUI.RefreshFromData   AKCIJA "REFRESH" (ugnjezdena ili samostalna)
+'                                delovi REF.* (ResetCache/Kpi/NavBrojaci/ZbirneCombo/
+'                                MaticniCombos/Prikaz/OtpTraka), KPI.* i GRID.Ucitaj/
+'                                GRID.Crtaj (ReloadGrid) -- rasclanjavanje 20.11.
 '   modOtkupUI.Dijalog           UI.CekaOperatera (oduzima se od aktivnog)
 '   modOtkupUnos.PotvrdiManjak.. UI.CekaOperatera (pitanje o manjku gajbi)
 '   modDataAccess.GetTableData   BROJ "DA.GTD|<tabela>" (celije) i
@@ -49,6 +52,8 @@ Option Explicit
 '   clsTransaction.AddTableSnap. TX.Snapshot|<tabela>
 '   modPrint.OutputOtkupniList   PRINT.OtkupniList
 '   modScrDokumenti.Scr_Save     OTK.AutoLanacHladnjaca
+'   modAutoHladnjaca.AutoLanac.. LNC.PostojeciLanac/.Brojevi/.Otpremnica/.Zbirna/
+'                                .Prijemnica (rasclanjavanje 20.11.)
 '   modMasterSync.AutoZbirnaZa.. DOK.NevezaneOtpremnice
 '   modScrIzvestaji.PuniSnimak   IZV.PuniSnimak|<lista>|<P/Z>
 '   modJournaling.AutoSaveTick   AKCIJA "ONTIME.AUTOSAVE"
