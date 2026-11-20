@@ -14712,7 +14712,7 @@ SABOTAZE = {
         "T_KesTabele_RollbackZastareva",
         "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
     ),
-    # --- Merni tajmer (modPerf), testovi 392-398 ---
+    # --- Merni tajmer (modPerf), testovi 393-399 ---
     # Iskljucen merac otvara akciju -- merenje bi radilo i kad je ugaseno.
     "perf-iskljucen-otvara-akciju": (
         "modPerf.bas",
@@ -14723,7 +14723,7 @@ SABOTAZE = {
         "        If mAkcijaDub > 0 Then\n"
         "            If SadMs() - mAkcijaT0 > PERF_ZASTARELA_MS Then\n",
         "T_Perf_IskljucenNistaNeBelezi",
-        "392 iskljucen merac ne otvara akciju",
+        "393 iskljucen merac ne otvara akciju",
     ),
     # Self ne oduzima decu -- spoljna sekcija bi nosila vreme unutrasnje dvaput.
     "perf-self-bez-dece": (
@@ -14731,7 +14731,7 @@ SABOTAZE = {
         "    mSelf(k) = mSelf(k) + d - mStDete(mDub)\n",
         "    mSelf(k) = mSelf(k) + d   ' SABOTAZA: self ne oduzima decu\n",
         "T_Perf_UgnjezdenoSelfIUkupno",
-        "393 self spoljne sekcije = ukupno minus deca",
+        "394 self spoljne sekcije = ukupno minus deca",
     ),
     # Zaostala sekcija se zatvara tiho -- izlaz kroz gresku se ne bi video.
     "perf-nezatvorena-tiho": (
@@ -14740,7 +14740,7 @@ SABOTAZE = {
         "                mNezatvorenih = mNezatvorenih + 1\n",
         "            Do While mDub > nadjen   ' SABOTAZA: zaostala sekcija se ne broji\n",
         "T_Perf_TolerantStek",
-        "394 zaostala sekcija se broji kao nezatvorena",
+        "395 zaostala sekcija se broji kao nezatvorena",
     ),
     # Ugnjezdena akcija drugog imena se gubi -- npr. programski Change unutar
     # Sacuvaj (UI-7) ne bi bio vidljiv u merenju.
@@ -14749,7 +14749,7 @@ SABOTAZE = {
         "                PerfPocni PERF_UGNJ & naziv\n",
         "                ' SABOTAZA: ugnjezdena akcija se ne belezi\n",
         "T_Perf_UgnjezdenaAkcija",
-        "395 ugnjezdena akcija drugog imena je sekcija spoljne",
+        "396 ugnjezdena akcija drugog imena je sekcija spoljne",
     ),
     # Merac brise Err pozivaoca -- kuka pod On Error Resume Next bi menjala ishod.
     "perf-brise-err": (
@@ -14759,7 +14759,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: Err pozivaoca se ne vraca\n"
         "        Err.Number = errNum\n",
         "T_Perf_ErrNeutralan",
-        "396 pocetak sekcije ne menja Err pozivaoca",
+        "397 pocetak sekcije ne menja Err pozivaoca",
     ),
     # Sat ide unazad -- sva trajanja bi bila negativna.
     "perf-sat-unazad": (
@@ -14767,7 +14767,7 @@ SABOTAZE = {
         "        SadMs = CDbl(c - mQpcBaza) * mMsPoJedinici\n",
         "        SadMs = -CDbl(c - mQpcBaza) * mMsPoJedinici   ' SABOTAZA: sat ide unazad\n",
         "T_Perf_QpcMonoton",
-        "397 sat je monoton",
+        "398 sat je monoton",
     ),
     # Kuka u GetTableData ne broji citanje sa lista -- brojaci pre/posle bi
     # pokazivali nulu.
@@ -14776,7 +14776,27 @@ SABOTAZE = {
         '    If gPerfOn Then PerfVelicina "DA.GTD|" & tblName, tblName, lo.DataBodyRange.rows.count, lo.DataBodyRange.Columns.count\n',
         "    ' SABOTAZA: citanje sa lista se ne broji\n",
         "T_Perf_GetTableDataBroji",
-        "398 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)",
+        "399 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)",
+    ),
+    # D1 (merenje 20.11.2026): dokaz integriteta knjige ambalaze se u prozoru
+    # citanja ne cita iz kesa -- svaki citalac dokazuje iznova (stanje pre reza).
+    "kes-knjiga-dokaz-gluv": (
+        "modAmbalaza.bas",
+        "    If Not modDataAccess.IzvedenoTryGet(KNJIGA_DOKAZ_KLJUC & CStr(UBound(data, 1)), memo) Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: dokaz knjige se ne cita iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 drugo citanje knjige u prozoru ide iz kesa",
+    ),
+    # D1: upis ne prazni kes izvedenih nizova -- zapamcen dokaz integriteta
+    # nadzivi upis kvara u knjigu, pa pokvarena knjiga prolazi citanje
+    # (AMB-INV-11). Isto sidro kao izv3-upis-ne-prazni, druga tvrdnja: 392 meri
+    # bas knjigu.
+    "kes-knjiga-upis-ne-obara-dokaz": (
+        "modDataAccess.bas",
+        "    If Not mIzvCache Is Nothing Then mIzvCache.RemoveAll\n",
+        "    ' SABOTAZA: upis ne obara dokaz knjige iz kesa\n",
+        "T_KesKnjiga_DokazJednomUProzoru",
+        "392 upis kvara u prozoru obara zapamcen dokaz",
     ),
 }
 

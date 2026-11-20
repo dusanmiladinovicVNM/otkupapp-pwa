@@ -34,6 +34,9 @@ Public Const AMB_ERR_PRAZNE_NEMA As Long = vbObjectError + 4477
 Public Const AMB_ERR_IZDAVANJE_KUPCU As Long = vbObjectError + 4478
 Private Const AMB_ERR_KNJIGA_KVAR As Long = vbObjectError + 4473
 Private Const AMB_ERR_KNJIGA_ULAZ As Long = vbObjectError + 4474
+' Kljuc dokaza integriteta knjige u kesu izvedenih nizova prozora citanja
+' (KnjigaZaCitanje). Broj redova ide u kljuc: dokaz vazi samo za istu knjigu.
+Private Const KNJIGA_DOKAZ_KLJUC As String = "modAmbalaza.KnjigaIntegritet|"
 
 ' TEST SEAM (10d, review #414 P3): pad ispravke reversa NEPOSREDNO pre commit-a,
 ' kad su storno, nov revers, trag i veza vec napisani. Jedini nacin da se izmeri
@@ -821,18 +824,67 @@ End Function
 ' indekse i preskocio proveru -- a tacno taj oblik propusta je i bio P2: citalac
 ' obaveze je proveravao identitet, citalac salda nije.
 '
-' CENA JE JEDAN PROLAZ PO POZIVU CITAOCA, i to je svesno. Nad fixture-om se ne meri;
-' nad pravom knjigom ce 10c morati da izmeri, a ako zaboli, odgovor je kes po
-' transakciji -- ne slabije citanje.
+' CENA JE JEDAN PROLAZ PO POZIVU CITAOCA -- VAN PROZORA CITANJA. Izmereno nad
+' pravom knjigom (20.11.2026, 5.246 redova): oko 325 ms po dokazu. Zbirni saldo
+' po OM je dokazivao ISTU knjigu jednom po stanici (2,9 od 4,4 s klika), a
+' snimanje otkupa 15 puta. Odgovor je kes, ne slabije citanje (D1, analiza brzine
+' 2026-11):
+'
+' U PROZORU CITANJA (BeginTableCache/EndTableCache) dokaz se pamti posle PRVOG
+' uspeha i vazi do prvog upisa. Kes je modDataAccess.IzvedenoTryGet/IzvedenoPut,
+' isti onaj koji svaki upis kroz modDataAccess, rollback i KesTabeleZastareo
+' prazne CEO -- pa upis u knjigu u istom prozoru znaci nov, pun dokaz nad novim
+' redovima. Pamti se samo uspeh (KnjigaIntegritet dize pre upisa u kes), a
+' citalac dobija NOV recnik vrsta, ne deljen objekat (D3). Van prozora kesa nema,
+' pa je ponasanje isto kao pre: dokaz pri svakom pozivu.
+'
+' Svi citaoci predaju PUNU knjigu iz GetTableData; u prozoru je to ista kopija za
+' sve, pa je dokaz o njoj isti. Audit (AmbKnjigaNalazi) ne ide ovuda i dokazuje
+' uvek iznova.
 Private Function KnjigaZaCitanje(ByRef data As Variant, ByVal sourceName As String, _
                                  ByRef outVrste As Object) As Object
     Dim kol As Object
     Set kol = KnjigaIndeksi(sourceName)
-    If gPerfOn Then PerfPocni "AMB.KnjigaIntegritet"
-    Set outVrste = KnjigaIntegritet(data, kol, sourceName)
-    If gPerfOn Then PerfKraj "AMB.KnjigaIntegritet"
+    If Not KnjigaDokazIzKesa(data, outVrste) Then
+        If gPerfOn Then PerfPocni "AMB.KnjigaIntegritet"
+        Set outVrste = KnjigaIntegritet(data, kol, sourceName)
+        If gPerfOn Then PerfKraj "AMB.KnjigaIntegritet"
+        KnjigaDokazUKes data, outVrste
+    ElseIf gPerfOn Then
+        PerfBroji "AMB.KnjigaDokaz.KES"
+    End If
     Set KnjigaZaCitanje = kol
 End Function
+
+' True = ista knjiga je u ovom prozoru vec dokazana; outVrste je tada NOV recnik
+' AmbID -> VrstaKretanja, sagradjen iz zapamcenog niza (kopija po vrednosti).
+Private Function KnjigaDokazIzKesa(ByRef data As Variant, ByRef outVrste As Object) As Boolean
+    Dim memo As Variant, vrste As Object, i As Long
+    If Not IsArray(data) Then Exit Function
+    If Not modDataAccess.IzvedenoTryGet(KNJIGA_DOKAZ_KLJUC & CStr(UBound(data, 1)), memo) Then Exit Function
+    Set vrste = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(memo, 1)
+        vrste(CStr(memo(i, 1))) = memo(i, 2)
+    Next i
+    Set outVrste = vrste
+    KnjigaDokazIzKesa = True
+End Function
+
+' Upis uspesnog dokaza u kes prozora: recnik vrsta kao 2D niz (AmbID, Vrsta).
+' Van prozora IzvedenoPut ne radi nista. Prazan recnik se ne pamti.
+Private Sub KnjigaDokazUKes(ByRef data As Variant, ByVal vrste As Object)
+    Dim memo() As Variant, k As Variant, i As Long
+    If Not IsArray(data) Then Exit Sub
+    If vrste Is Nothing Then Exit Sub
+    If vrste.count = 0 Then Exit Sub
+    ReDim memo(1 To vrste.count, 1 To 2)
+    For Each k In vrste.keys
+        i = i + 1
+        memo(i, 1) = CStr(k)
+        memo(i, 2) = vrste(k)
+    Next k
+    modDataAccess.IzvedenoPut KNJIGA_DOKAZ_KLJUC & CStr(UBound(data, 1)), memo
+End Sub
 
 ' Nalog kao kljuc, i neuredjen PAR naloga kao kljuc.
 '

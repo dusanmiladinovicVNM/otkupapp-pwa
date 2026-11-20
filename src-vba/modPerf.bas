@@ -58,6 +58,7 @@ Option Explicit
 '                                zbirni: IZV.Zbirni.Stanice (rascl. 20.11.)
 '   modAmbalaza (knjiga)         AMB.SemaKapija, AMB.KnjigaIntegritet,
 '                                AMB.DokVlasnikMapa (odluka D1, analiza)
+'                                BROJ AMB.KnjigaDokaz.KES: dokaz iz kesa (D1-IZV)
 '   modTest.ResetSeamova         PerfIskljuciTiho
 ' ============================================================
 
