@@ -248,7 +248,7 @@ commit):
   Pušteno 19.11.: 386, 387, 390 zeleni (tabele posle testa iste, i audit, pa je
   potvrđena i vernost rollback-a); dokaz `izv3-`, `izv2-naziv`, `hld1-` 4/4.
 - **Tajmer 19.11.** (grana `claude/merenje-modperf`): testovi 392–398 (od 20.11.
-  394–400: 392 je D1-IZV, 393 D1-UPIS) zeleni,
+  396–402: 392 D1-IZV, 393 D1-UPIS, 394–395 UI-7/UI-1) zeleni,
   dokaz `perf-` 7/7. Test 396 potvrđuje da merač ne dira `Err` pozivaoca.
 - **Ostaje pred merge** (ručno, nad kopijom prave sveske):
   - pun prolaz `python tools/run_vba.py` posle izmene testova 386, 387, 390;
