@@ -267,8 +267,8 @@ commit):
   - za UI-7 i UI-1: ~~testovi 394 i 395, dokaz `ui7 ui1` 4/4 i pun prolaz~~
     (zeleno 20.11.: 12 suite-ova, `RunAllTests` 395/395, BFP 3.499/3.499,
     GREEN marker); ~~merenje snimanja~~ (20.11.: osvežavanje 2,25 → 1,46 s);
-    ostaje ručno: posle snimanja zaglavlje ne sme da kaže „Nesačuvan unos”, a
-    posle isplate bloka lista blokova ga ne nudi.
+    ~~ručno~~ (operater 20.11.: posle snimanja nema „Nesačuvan unos”, isplaćen
+    blok se više ne nudi, deaktiviran izabran OM se prazni iz izbora).
     - Usput, nije formalno merenje: BFP je na istoj mašini trajao 483 s umesto
       629 s posle D1-IZV (−23%), a `RunAllTests` 241 s umesto 259 s. BFP
       stalno knjiži ambalažu, pa je to prvi znak da nastavak dokaza radi u
