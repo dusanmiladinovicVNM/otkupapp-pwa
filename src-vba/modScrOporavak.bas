@@ -1148,3 +1148,10 @@ Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
     mCiljZbirnaID = ciljZbirnaID
     mCiljPrijemnicaID = ciljPrijemnicaID
 End Sub
+
+' TEST SEAM (KI-085): brojke zone kakve bi ekran pokazao,
+' "nedovrseno|osiroceno|undo". Samo posmatra; tvrdo gejtovano.
+Public Function Scr_OpoZonaTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_OpoZonaTest = CStr(mBrNedovrseno) & "|" & CStr(mBrOsirocene) & "|" & CStr(mBrUndo)
+End Function

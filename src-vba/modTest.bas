@@ -799,6 +799,7 @@ Public Sub RunAllTests()
     RunOne 415
     RunOne 416
     RunOne 417
+    RunOne 418
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1466,6 +1467,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 415: TestName = "T_S94_PrevezivanjeKapijaVlasnika"
         Case 416: TestName = "T_S94_PrevezivanjeRazlogDoOperatera"
         Case 417: TestName = "T_S94_PrefillPoOldDocID"
+        Case 418: TestName = "T_S94_ZonaOporavkaSveza"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1891,6 +1893,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 415: T_S94_PrevezivanjeKapijaVlasnika
         Case 416: T_S94_PrevezivanjeRazlogDoOperatera
         Case 417: T_S94_PrefillPoOldDocID
+        Case 418: T_S94_ZonaOporavkaSveza
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -37619,4 +37622,70 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S94_PrefillPoOldDocID", _
              "417: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' Brojke zone Oporavka iz SAMIH izvora lista: "nedovrseno|osiroceno|undo".
+' Osiroceno je zbir obe vrste siroticica (prijemnice i prijemnice sa osirotelim
+' paletama) -- pravilo zone, komentar uz modScrOporavak.ZbirOsirocenih.
+Private Function S94ZonaIzIzvora() As String
+    Dim c As Collection, a As Variant, b As Variant
+    Dim nN As Long, nO As Long, nU As Long
+    Set c = modStornoRecovery.GetNedovrseno()
+    If Not c Is Nothing Then nN = c.count
+    a = modDokumenta.GetOsirocenePrijemnice()
+    If IsArray(a) Then nO = nO + UBound(a, 1)
+    b = modDokumenta.GetPrijemniceSaOsirocenimPaletama()
+    If IsArray(b) Then nO = nO + UBound(b, 1)
+    Set c = modStornoZurnal.GetUndoableStornoOperations()
+    If Not c Is Nothing Then nU = c.count
+    S94ZonaIzIzvora = CStr(nN) & "|" & CStr(nO) & "|" & CStr(nU)
+End Function
+
+' 418 -- S9-4 (KI-085): brojke zone Oporavka (NEDOVRSENO, OSIROCENO, ZA VRACANJE)
+' su sveze bez obzira koja je lista otvorena. Do S9-4 je svaka nastajala tek
+' citanjem SVOJE liste: OSIROCENO i ZA VRACANJE su stajale na 0 ili na staroj
+' vrednosti dok operater ne otvori te liste, a NEDOVRSENO je zaostajao posle
+' radnje na drugoj listi (operater, 04.11. i 20.11.2026). Otvorena je lista
+' ciljeva zbirne, koja sama ne broji nista; promena podataka je nova siroce
+' prijemnica, a ljuska posle upisa zove RefreshFromData (modUiData.ResetCache).
+' SABOTAZE: s94-zona-ne-racuna, s94-zona-zamrznuta.
+Private Sub T_S94_ZonaOporavkaSveza()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, zbrP As String, prjP As String, d As Variant
+    Dim zona1 As String, ocek1 As String, zona2 As String, ocek2 As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    modUiData.ResetCache
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    d = modScrOporavak.Scr_Rows("sve", "")
+    zona1 = modScrOporavak.Scr_OpoZonaTest()
+    ocek1 = S94ZonaIzIzvora()
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjP = S94SirocePrijemnica("ZN", t, zbrP)
+    modUiData.ResetCache
+    d = modScrOporavak.Scr_Rows("sve", "")
+    zona2 = modScrOporavak.Scr_OpoZonaTest()
+    ocek2 = S94ZonaIzIzvora()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+
+    AssertEq zona1, ocek1, _
+             "418 zona pri ulasku pokazuje sve tri brojke iz izvora, ne samo brojku otvorene liste"
+    AssertEq zona2, ocek2, _
+             "418 posle promene podataka zona se osvezava i kad je otvorena druga lista"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_ZonaOporavkaSveza", _
+             "418: rollback je vratio redove svih tabela lanca"
 End Sub
