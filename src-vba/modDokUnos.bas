@@ -1033,7 +1033,7 @@ End Function
 ' TEST SEAM, tvrdo gejtovan, isti obrazac kao modOtkupUnos.PotvrdiManjakAmbalaze
 ' (.claude/rules/testovi.md S4): u test rezimu se pitanje BELEZI umesto da se
 ' otvori, a odgovor je UVEK "Ne" -- seam samo posmatra i zabranjuje. MsgBox u
-' nevidljivom Excelu visi do timeout-a i ostavlja Excel u [break], pa test 368
+' nevidljivom Excelu visi do timeout-a i ostavlja Excel u [break], pa test 398
 ' bez ovoga ne bi mogao da udje u granu pitanja.
 Public Function PotvrdiDuplaPrijemnicu(ByVal brojZbirne As String, _
                                        ByVal postojeca As String) As Boolean

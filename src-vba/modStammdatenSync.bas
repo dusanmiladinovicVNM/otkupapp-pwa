@@ -1216,7 +1216,7 @@ End Function
 ' 14.67). Ugovor kolona se ne menja.
 '
 ' Vraca: Dictionary (CompareMode tekst) ZbirnaID -> Array(PrijemnicaID,
-' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 366.
+' BrojPrijemnice, KupacID, DatumPrijema "yyyy-mm-dd"). Public: seam testa 396.
 Public Function PrijemniceZaIzvozPoZbirni() As Object
     Const SOURCE As String = "PrijemniceZaIzvozPoZbirni"
 
