@@ -793,6 +793,7 @@ Public Sub RunAllTests()
     RunOne 403
     RunOne 404
     RunOne 405
+    RunOne 406
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1455,6 +1456,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 403: TestName = "T_S93_StornoListaE4KvarJeGreska"
         Case 404: TestName = "T_S93_DetaljE4KvarImenujeRazlog"
         Case 405: TestName = "T_S93_ManjakE4KvarImenujeRazlog"
+        Case 406: TestName = "T_S93_StornoUspehPosleKvaraE4"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1875,6 +1877,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 403: T_S93_StornoListaE4KvarJeGreska
         Case 404: T_S93_DetaljE4KvarImenujeRazlog
         Case 405: T_S93_ManjakE4KvarImenujeRazlog
+        Case 406: T_S93_StornoUspehPosleKvaraE4
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -37301,4 +37304,46 @@ CleanUp:
     errDesc = Err.description
     SledKraj tx, redoviPre, errNum, errDesc, "T_S93_ManjakE4KvarImenujeRazlog", _
              "405: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 406 -- review #501: storno zbirne koji je USPEO ne javlja se kao neuspeh kad
+' posle upisa pukne citanje prijemnica (E4). StornoIzvrsi cita brojeve
+' prijemnica zbirne POSLE StornoZbirna_TX; greska citaca je isla u EH, pa je
+' operater video "neuspeh" za vec storniranu zbirnu -- i ponovio bi storno.
+' Dostizno od S93-REV-02 (dupli PrijemnicaID odbija citac): ni kapija pred
+' stornom ni StornoZbirna_TX E4 ne citaju. Storno ostaje uspeh, poruka nosi razlog.
+' SABOTAZA: s93-storno-uspeh-javljen-kao-neuspeh.
+Private Sub T_S93_StornoUspehPosleKvaraE4()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, brA As String, bA As String, zbrA As String, brB As String
+    Dim brPrjB As String, prjA As String, brC As String, bC As String, otpC As String
+    Dim zbrC As String, ok As Boolean, poruka As String, stornoC As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    prjA = S93DvaLancaZaKvarE4("SU", t, brA, bA, zbrA, brB, brPrjB)
+    brC = "ZB-S93SUC-" & t
+    SledLanacDoZbirne "S93SUC", brC, FX_VOZAC, FX_KUPAC, 20, bC, otpC, zbrC
+
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrjB, COL_PRJ_ID, prjA
+    ok = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, brC, "", poruka, zbrC)
+    stornoC = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrC, COL_STORNIRANO)))
+
+    AssertEq CStr(StrComp(stornoC, "Da", vbTextCompare) = 0), "True", _
+             "406 preduslov: storno zbirne je upisan i uz necitljivu E4"
+    AssertEq CStr(ok) & "|" & CStr(InStr(1, poruka, prjA, vbTextCompare) > 0), "True|True", _
+             "406 storno zbirne: upisan storno je uspeh i kad citanje prijemnica posle upisa padne, poruka nosi razlog"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S93_StornoUspehPosleKvaraE4", _
+             "406: rollback je vratio redove svih tabela lanca"
 End Sub
