@@ -101,9 +101,10 @@ Public Function GetWarmStornoDocs() As Collection
 EH:
     LogErr MOD_NAME & ".GetWarmStornoDocs"
     ' Ultimativni fallback: gradi direktno (bez keza) da forma nikad ne ostane prazna.
-    ' Njegova greska se DIZE pozivaocu (review #501, test 403): pod Resume Next je
-    ' vracen Nothing, pa je ekran pokazao praznu listu kao da nema dokumenata.
-    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.
+    ' Greska nastala u AKTIVNOM handleru ide pozivaocu -- tu je do review-a #501
+    ' stajao On Error Resume Next koji to nije menjao (mrtva naredba; dokaz.py je
+    ' pokazao da je mutant sa njom ekvivalentan). Ekran (RowsLanac -> Scr_Rows)
+    ' gresku prikazuje sa razlogom.
     Set GetWarmStornoDocs = GetActiveDocumentsForStorno("Svi", "")
 End Function
 

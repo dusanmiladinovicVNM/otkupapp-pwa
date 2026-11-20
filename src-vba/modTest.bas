@@ -37151,11 +37151,19 @@ End Sub
 
 ' 403 -- review #501 (#11): lista za storno ne pretvara kvar E4 u praznu ili
 ' staru listu. GetActiveDocumentsForStorno je u EH samo logovao i vracao praznu
-' kolekciju; GetWarmStornoDocs je posle neuspelog builda vracao STARI kes, a
-' poslednja mreza pod Resume Next -- Nothing. Ekran je tada pokazivao listu
-' kao da je procitana. Greska sada stize do Scr_Rows (UI-PAD-01) sa razlogom.
-' SABOTAZE: s93-storno-lista-guta-kvar, s93-storno-warm-guta-kvar,
-' s93-storno-warm-stari-kes.
+' kolekciju, a GetWarmStornoDocs je posle neuspelog builda vracao STARI kes.
+' Ekran je tada pokazivao listu kao da je procitana. Greska sada stize do
+' Scr_Rows (UI-PAD-01) sa razlogom.
+' SABOTAZE: s93-storno-lista-guta-kvar, s93-storno-warm-stari-kes.
+Private Function S93WarmStornoGreska() As String
+    Dim w As Collection
+    On Error GoTo EH
+    Set w = modStornoWarm.GetWarmStornoDocs()
+    Exit Function
+EH:
+    S93WarmStornoGreska = Err.description
+End Function
+
 Private Sub T_S93_StornoListaE4KvarJeGreska()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, brA As String, bA As String, zbrA As String, brB As String
@@ -37195,6 +37203,9 @@ Private Sub T_S93_StornoListaE4KvarJeGreska()
              "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista"
     AssertEq CStr(w Is Nothing), "True", _
              "403 lista za storno (warm): neuspeo build ne vraca stari skup kao procitan"
+    ' Gresku meri omotac sa On Error GoTo, ne Resume Next ovde: posle tihog
+    ' povratka opis ume da ostane u Err, pa bi progutana greska izgledala dignuta.
+    gWarm = S93WarmStornoGreska()
     AssertEq CStr(InStr(1, gWarm, prjA, vbTextCompare) > 0), "True", _
              "403 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista"
 

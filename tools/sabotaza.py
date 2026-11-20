@@ -15041,16 +15041,6 @@ SABOTAZE = {
         "T_S93_StornoListaE4KvarJeGreska",
         "403 lista za storno: kvar E4 je greska koja ga imenuje, ne prazna lista",
     ),
-    "s93-storno-warm-guta-kvar": (
-        "modStornoWarm.bas",
-        "    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.\n"
-        "    Set GetWarmStornoDocs = GetActiveDocumentsForStorno(\"Svi\", \"\")\n",
-        "    ' Greska nastala u handleru ide pozivaocu, ne nazad ovde.\n"
-        "    On Error Resume Next   ' SABOTAZA: poslednja mreza guta gresku\n"
-        "    Set GetWarmStornoDocs = GetActiveDocumentsForStorno(\"Svi\", \"\")\n",
-        "T_S93_StornoListaE4KvarJeGreska",
-        "403 lista za storno (warm): neuspeo build je greska koja imenuje kvar, ne prazna lista",
-    ),
     "s93-storno-warm-stari-kes": (
         "modStornoWarm.bas",
         "    Set g_stornoDocs = Nothing\n"
