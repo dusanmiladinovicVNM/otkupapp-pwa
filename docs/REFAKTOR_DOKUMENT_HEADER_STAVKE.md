@@ -12552,6 +12552,31 @@ obrazac `OTKUI_HDO_PRJ_ID` (prioritet 3, S6 korak 8); konvencija projekta za ide
   sabotaže sa sidrom u `modScrOporavak` i sve `s94-*`, „DOKAZANO (grupno, izbor)", snimak izvora `61ed65b2e3a24a73`
   isti pre i posle). Ručna provera tačke 3 i 4 se menja: kolone ID u Oporavku se ne vide.
 
+#### Brojke zone u Oporavku (`KI-085`, 21.11.2026) — zatvoreno u ovom rezu
+
+Operater je na snimcima posle `452163d0` pokazao zonu **OSIROČENO 30** uz listu od 1 reda i **ZA VRAĆANJE 0**
+koje postaje 6 tek kad se otvori „Vrati storno". Merenje čitanjem:
+- **OSIROČENO 30 nije pogrešan zbir:** zona namerno sabira osiroćene prijemnice i prijemnice sa osiroćenim paletama
+  (`ZbirOsirocenih`; „koliko posla ukupno čeka").
+- **Kvar je lenjost brojki:** svaka je nastajala kao uzgredni ishod čitanja SVOJE liste (`RowsNedovrseno`, `Rows2D`,
+  `RowsUndo`), pa je zona do otvaranja te liste pokazivala 0 ili staru vrednost — šira klasa od `KI-085`
+  (NEDOVRŠENO zaostaje posle radnje), koji je tražio ispravku „uz sledeći rez koji dira Oporavak".
+
+**Ispravka (`4e312208` test prvi, `f83b7aac` kod):** `OsveziBrojkeZone` računa sve tri brojke zajedno, iz istih izvora
+kao njihove liste (`GetNedovrseno` kao meni, `ZbirOsirocenih`, `GetUndoableStornoOperations`), jednom po generaciji
+podataka (obrazac snimka Integriteta: ne na svaki znak pretrage); `Scr_ResetCache` je obara, a ljuska menja generaciju na
+svaki upis (`RefreshFromData`). Pad izvora daje „?" i zapis u logu, ne nulu — `ZbirOsirocenih` više ne guta grešku
+(`On Error Resume Next` je od pada pravio nepotpun zbir). Liste više ne pišu brojke; `Rows2D` gubi `brojiUZonu`.
+
+- **Test 418 `T_S94_ZonaOporavkaSveza`:** posle otvaranja liste ciljeva zona pokazuje sve tri brojke iz izvora, i
+  osvežava se posle promene podataka. **Crven nad zatečenom zonom po imenu** (`[9|6|0]` prema `[0|0|0]`, i konačna
+  verzija preko `run_vba --src`), zelen ovde. Seam `Scr_OpoZonaTest` samo čita brojke.
+- **Sabotaže:** `s94-zona-ne-racuna`, `s94-zona-zamrznuta` (katalog **1533**).
+- **Izmereno:** ciljano 14/14 (svi testovi Oporavka); **FULL nad `f83b7aac`: 12/12, marker upisan** (izvor
+  `b2edb063ff88`) — `RunAllTests` **418/0**, BFP 3488/0, Banka 241/0, Storno 111/0; **`dokaz.py` 19/19** (sve sabotaže
+  sa sidrom u `modScrOporavak`, „DOKAZANO (grupno, izbor)", snimak izvora `cc2e5d9b7544be5a` isti pre i posle).
+  **`KI-085` zatvoren.**
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
