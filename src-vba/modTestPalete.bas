@@ -466,15 +466,19 @@ Private Sub T10_ZbirnaRepointStavke()
                                 COL_ZBR_VRSTA, COL_ZBR_SORTA), _
               Array("TSTZBR-A", "TST-Z10A", "", TST_VRSTA, "TST-S10")
     TstZbirnaStavka "TSTZBR-A", 50
+    ' Cilj je IZDATA zbirna (PRJ-ZBR-01): prevezivanje od S9-4 prolazi istu kapiju
+    ' kao pisac prijemnice, a nacrt nije roditelj. Vlasnik (kupac, vozac) je prazan
+    ' i na zbirni i na prijemnici, pa je isti.
     TstAppend TBL_ZBIRNA, Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_STORNIRANO, _
-                                COL_ZBR_VRSTA, COL_ZBR_SORTA), _
-              Array("TSTZBR-B", "TST-Z10B", "", TST_VRSTA, "TST-S10")
+                                COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_TRACE_IZDATO_STATUS), _
+              Array("TSTZBR-B", "TST-Z10B", "", TST_VRSTA, "TST-S10", IZDATO_IZDATO)
     TstZbirnaStavka "TSTZBR-B", 50
 
     MakePrij "TSTPRJ-19", "TST-P13", "TST-Z10A", "I", 50, 5, "TST-S10"
     Paletize "TSTPRJ-19", "I", 50, 5, "TST-S10"
 
-    Chk ReassignPrijemnicaToZbirna_TX("TST-P13", "TST-Z10B"), S & "re-point uspeo"
+    ' S9-4: pisac je strog po ID-u (prijemnica, ciljna zbirna).
+    Chk ReassignPrijemnicaToZbirna_TX("TSTPRJ-19", "TSTZBR-B"), S & "re-point uspeo"
 
     Dim prjRow As Long: prjRow = FindRows(TBL_PRIJEMNICA, COL_PRJ_BROJ, "TST-P13").item(1)
     Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)

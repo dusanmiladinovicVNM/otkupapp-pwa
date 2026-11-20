@@ -314,7 +314,6 @@ Private Sub BfpDeo1()
     ' RF-05 (frmDokumenta unos + storno set)
     If BfpIzabran("Test_ManjakPreviewJeZbirnaMinusPrijem") Then Test_ManjakPreviewJeZbirnaMinusPrijem
     If BfpIzabran("Test_OpenFaktureExcludeStornirano") Then Test_OpenFaktureExcludeStornirano
-    If BfpIzabran("Test_PrefillBiraPoslednjuGeneraciju") Then Test_PrefillBiraPoslednjuGeneraciju
     If BfpIzabran("Test_StornoPoBrojuOdbijaDvaVlasnika") Then Test_StornoPoBrojuOdbijaDvaVlasnika
     If BfpIzabran("Test_ZbirnaRowDataColumnMapped") Then Test_ZbirnaRowDataColumnMapped
     If BfpIzabran("Test_OMUlazSmerObavezan") Then Test_OMUlazSmerObavezan
@@ -2458,68 +2457,10 @@ EH:
     LogFatal "Test_OpenFaktureExcludeStornirano", Err.Number, Err.description
 End Sub
 
-Private Sub Test_PrefillBiraPoslednjuGeneraciju()
-    On Error GoTo EH
-
-    ' Sinteticka 2D tabela (1-based): 1=Broj 2=Klasa 3=ID 4=GeneracijaID.
-    ' REGRESIJA: uzastopni ID-evi preko granice generacije (30=I i 31=II stare,
-    ' 32=I nove) -- heuristika ID kontinuiteta bi spojila novu Kl.I sa starom Kl.II.
-    Dim d As Variant
-    ReDim d(1 To 3, 1 To 4)
-    d(1, 1) = "DOK-1": d(1, 2) = "I":  d(1, 3) = "OTP-00030": d(1, 4) = "GEN-00001"
-    d(2, 1) = "DOK-1": d(2, 2) = "II": d(2, 3) = "OTP-00031": d(2, 4) = "GEN-00001"
-    d(3, 1) = "DOK-1": d(3, 2) = "I":  d(3, 3) = "OTP-00032": d(3, 4) = "GEN-00002"
-
-    Dim rI As Long, rII As Long
-
-    ' Anchor = PK stornirane (novi Kl.I red).
-    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "OTP-00032", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz generacije anchor reda"
-    AssertEquals "0", CStr(rII), _
-                 "Prefill: stara Kl.II (ID 31) se NE spaja sa novom Kl.I (ID 32)"
-
-    ' Anchor na STAROJ generaciji -> prefiluje se ona, ne najnovija.
-    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "OTP-00030", rI, rII
-    AssertEquals "1", CStr(rI), "Prefill: anchor odredjuje generaciju (Kl.I stare)"
-    AssertEquals "2", CStr(rII), "Prefill: Kl.II iste (stare) generacije"
-
-    ' Bez anchor PK-a -> poslednje upisan red datog broja + njegova generacija.
-    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill fallback: poslednje upisan red broja"
-    AssertEquals "0", CStr(rII), "Prefill fallback: ostaje u generaciji tog reda"
-
-    ' KLJUCNO: dva vlasnika dele isti BROJ (razlicite generacije) -- prefill po PK
-    ' ostaje kod svog dokumenta i ne prelazi na tudji.
-    Dim x As Variant
-    ReDim x(1 To 4, 1 To 4)
-    x(1, 1) = "1/050826": x(1, 2) = "I":  x(1, 3) = "PRJ-00010": x(1, 4) = "GEN-00100"
-    x(2, 1) = "1/050826": x(2, 2) = "II": x(2, 3) = "PRJ-00011": x(2, 4) = "GEN-00100"
-    x(3, 1) = "1/050826": x(3, 2) = "I":  x(3, 3) = "PRJ-00012": x(3, 4) = "GEN-00101"
-    x(4, 1) = "1/050826": x(4, 2) = "II": x(4, 3) = "PRJ-00013": x(4, 4) = "GEN-00101"
-
-    PickPrefillRows x, 1, 2, 3, 4, "1/050826", "PRJ-00010", rI, rII
-    AssertEquals "1", CStr(rI), "Prefill: Kl.I ostaje kod svog vlasnika (isti broj, drugi kupac)"
-    AssertEquals "2", CStr(rII), "Prefill: Kl.II ostaje kod svog vlasnika"
-
-    ' Bez generacije (red stariji od kolone) -> samo anchor.
-    Dim f As Variant
-    ReDim f(1 To 2, 1 To 4)
-    f(1, 1) = "DOK-4": f(1, 2) = "I":  f(1, 3) = "OTP-00060": f(1, 4) = ""
-    f(2, 1) = "DOK-4": f(2, 2) = "II": f(2, 3) = "OTP-00061": f(2, 4) = ""
-
-    PickPrefillRows f, 1, 2, 3, 4, "DOK-4", "OTP-00060", rI, rII
-    AssertEquals "1", CStr(rI), "Prefill bez generacije: samo anchor red"
-    AssertEquals "0", CStr(rII), "Prefill bez generacije: druga klasa ostaje prazna"
-
-    ' Nepoznat broj / nepoznat PK -> nista.
-    PickPrefillRows d, 1, 2, 3, 4, "DOK-NEMA", "", rI, rII
-    AssertEquals "00", CStr(rI) & CStr(rII), "Prefill: nepoznat broj ne vraca red"
-
-    Exit Sub
-
-EH:
-    LogFatal "Test_PrefillBiraPoslednjuGeneraciju", Err.Number, Err.description
-End Sub
+' Test_PrefillBiraPoslednjuGeneraciju je obrisan u S9-4 (plan 14.68, S94-ODL-04):
+' merio je PickPrefillRows (klase i "poslednja generacija" anchor-a), a prefill
+' od S9-4 bira red samo po OldDocID (modDokumenta.PrefillRedPoID). Pravilo meri
+' modTest 417 T_S94_PrefillPoOldDocID i 22 T_Prefill_PoIdentitetuNePoBroju.
 
 ' Storno po BROJU zahvata sve aktivne redove tog broja. Kad broj nije jedinstven
 ' (dva kupca), to bi tiho storniralo i tudji dokument -> mora biti ODBIJENO.
@@ -19875,13 +19816,13 @@ Private Sub Test_S6K8_PrijemnicaRobaKaoZbirna()
     ' Prevezivanje (Oporavak "Prevezi prijemnicu"): cilj druge vrste se odbija bez
     ' ijedne izmene, cilj iste robe prolazi.
     Dim ok As Boolean
-    ok = ReassignPrijemnicaToZbirna_TX(brOk, brC, r)
+    ok = ReassignPrijemnicaToZbirna_TX(r, zC)
     AssertEquals "False|" & brA & "|" & zA, _
                  CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
                  "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
                  "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)"
 
-    ok = ReassignPrijemnicaToZbirna_TX(brOk, brB, r)
+    ok = ReassignPrijemnicaToZbirna_TX(r, zB)
     AssertEquals "True|" & brB & "|" & zB, _
                  CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
                  "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _

@@ -1359,7 +1359,14 @@ Private Sub OtvoriIspravku(ByVal tip As String, ByVal broj As String, _
     modOtkupUI.IdiNaEkran "DOKUMENTI"
     modOtkupUI.IdiNaRezim RezimZaTip(tip)
     spec = modStornoDok.PrefillIzStorniranog(tip, broj, modStornoDok.StorniraniDocID(correctionID))
-    If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
+    If Len(spec) > 0 Then
+        modOtkupUI.ApplyPrefill spec
+    Else
+        ' Prefill bira stari dokument SAMO po PK-u (S9-4): bez OldDocID-a nema
+        ' pada na broj. Prazna forma bez reci izgledala bi kao dokument bez
+        ' podataka, pa operater dobija poruku i unosi rucno.
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_ISPRAVKA_BEZ_STAROG") & " " & broj, True
+    End If
     ' "On Error Resume Next" PRIGUSUJE gresku, ali je ne brise -- ona prezivi
     ' povratak i stigne do ljuske, koja je onda prijavi kao "Radnja nije uspela"
     ' iako je ispravka uredno otvorena. Operater je to video kao crven toast

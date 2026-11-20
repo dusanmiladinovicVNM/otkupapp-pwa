@@ -102,6 +102,12 @@ Kolonu ipak čitaju četiri živa produkciona mesta (plan §14.64, N6), a jedno 
 „Prevezi prijemnicu" prenosi generaciju umesto `ZbirnaID`, pa pisac razrešava ciljnu zbirnu po
 broju (N7). **Vlasnik posle S9:** rez S9-4 i kapija `NEMA_GENERACIJE`.
 
+**Zatvoreno u S9-4 (plan §14.68):** sva četiri mesta biraju po PK-u (picker: red je dokument;
+Oporavak: kolona 7 je `ZbirnaID`; prefill: `OldDocID`; pisac prevezivanja: `ZbirnaID`, uz kapiju
+pisca prijemnice PRJ-ZBR-01), a API generacije je obrisan. Kapija je izvedena grupa popisa
+`nema_generacije`, prag 0: broji **svako** produkciono mesto kolone i API-ja generacije, i mrtvo,
+van imenovanog setup-a šeme (`GENERACIJA_SETUP`, do S9-6).
+
 ## 4) Invarijante
 
 **`SLED-INV-01` — svaka ivica razrešava tačno jednom.** Za svaki red nosioca ivice (E2–E10)

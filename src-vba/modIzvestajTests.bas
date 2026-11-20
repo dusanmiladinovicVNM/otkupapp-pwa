@@ -290,7 +290,7 @@ Private Sub T_PrijemVlasnikRazresenje()
     r = PrijemZaZbirnu(1, True, 3, 3, 900#)
     IzvChk CBool(r(0)) = True, S & "jedan vlasnik: prazan vlasnik na prijemnici ne smeta"
 
-    ' Vlasnik kljuc: ista definicija kao modStorno.RequireJedanVlasnikPoBroju.
+    ' Vlasnik kljuc: ista definicija kao modStorno.VlasniciPoBroju.
     IzvChkEqText ZbirnaVlasnikKljuc("1/010126", "VZ-1", "KP-1"), "1/010126|VZ-1|KP-1", _
                  S & "vlasnik kljuc = broj|vozac|kupac"
     IzvChkEqText ZbirnaVlasnikKljuc(" 1/010126 ", " VZ-1", "KP-1 "), "1/010126|VZ-1|KP-1", _

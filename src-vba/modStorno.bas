@@ -262,22 +262,11 @@ Public Function StornoOtpremnica(ByVal otpremnicaID As String, _
 EH:
     LogAndReraise SRC
 End Function
-' generacijaID: identitet izabrane zbirne. Sa njim se storniraju SAMO redovi te
-' generacije.
-'
-' Napomena: broj zbirne generator drzi jedinstvenim (SuggestNextBroj za ZBR
-' bumpuje dok BrojZbirneExists ne kaze da je slobodan), pa je generacija ovde
-' pojas za RUCNI UNOS -- ne za redovan tok.
-'
-' OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
-' KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde.
-'
-' Ovo NIJE tvrdnja da podataka nema: kaskade vec umeju BrojZbirne + VozacID
-' (otpremnica) i + KupacID (prijemnica), a palete nose PrijemnicaID. Znaci
-' scope se moze izvesti -- samo child mutacije jos nisu sve dovedene dotle.
-' Do tada je fail-closed bezbedan izbor, ne dokaz nemogucnosti. Kad broj nose dve
-' aktivne zbirne, kaskada bi dirala i tudju decu, pa te putanje staju
-' (RequireJedanVlasnikPoBroju). Sam storno zaglavlja je i tada tacan.
+' zbirnaID: PK izabrane zbirne; storno zaglavlja ide po njemu i bira TACNO jedan
+' red. Deca su za zbirnu vezana ID-om: prijemnica ivicom E4 (ZbirnaRoditeljID,
+' S9-3), otpremnica clanstvom (tblZbirnaIzvori), paleta preko linije prijemnice
+' (S8 rez 2b-2). Do S4-2 je ovde stajao parametar generacijaID (S9-4 je obrisao
+' i poslednje citaoce generacije, plan 14.68).
 Public Function StornoZbirna_TX(ByVal zbirnaID As String) As Boolean
     Const SRC As String = "StornoZbirna_TX"
 
@@ -1956,83 +1945,13 @@ Private Sub MarkRowStornirano(ByVal tblName As String, _
     RequireUpdateCell tblName, rowIndex, COL_STORNIRANO, STORNO_DA, sourceName
 End Sub
 
-' Storno po BROJU dokumenta zahvata SVE aktivne redove tog broja (Klasa I + II
-' dele broj). Broj medjutim nije globalno jedinstven: GenerateBrojPrijemnice
-' racuna sekvencu po kupcu a x-deo je fiksno "1", pa dva kupca istog dana mogu
-' imati "1/ddmmyy". Bez ove provere storno jednog dokumenta tiho stornira i tudji.
-'
-' Guard: ako aktivni redovi broja pripadaju vise od jednog vlasnika -> greska
-' unutar transakcije (rollback, nijedan red nije promenjen). Za normalan slucaj
-' (jedan vlasnik, obe klase) ponasanje je nepromenjeno.
-'
-' vlasnikCols: jedna ili vise kolona koje cine vlasnika (zbirna = VozacID+KupacID,
-' jer se broj generise po vozacu a dokument pripada kupcu). Sve moraju postojati --
-' RequireColumnIndex, NE fail-open: schema drift ne sme da ugasi safety guard.
-'
-' Poziva se iz SVAKE putanje koja mutira po broju (wrapperi u modStorno + core
-' StornoZbirna + atomic varijante u modStornoFlow). Puni identitetski storno
-' (po PK/GeneracijaID) je zaseban paket -- ovo je zastita od tihe destrukcije.
-' Broj razlicitih vlasnika pod istim brojem. JEDAN racun za obe kapije ispod.
-'
-' Izdvojen zato sto se dve kopije istog brojanja neizbezno razidju, a razlika
-' izmedju kapija je tacno JEDNA zastavica -- da li se stornirani broje.
-Private Function BrojVlasnikaPoBroju(ByVal tblName As String, _
-                                     ByVal brojCol As String, _
-                                     ByVal broj As String, _
-                                     ByVal sourceName As String, _
-                                     ByVal ikad As Boolean, _
-                                     ByVal vlasnikCols As Variant) As Long
-    If UBound(vlasnikCols) < LBound(vlasnikCols) Then
-        Err.Raise ERR_STORNO_BASE + 12, sourceName, _
-                  "RequireJedanVlasnikPoBroju: nije zadata nijedna vlasnik kolona."
-    End If
-    BrojVlasnikaPoBroju = VlasniciPoBroju(tblName, brojCol, broj, sourceName, _
-                                          ikad, vlasnikCols).count
-End Function
+' Kapije RequireJedanVlasnikPoBroju i RequireJedanVlasnikIkadPoBroju (i njihov
+' zajednicki racun BrojVlasnikaPoBroju) obrisane su u S9-4 (plan 14.68): jedini
+' pozivalac bio je pisac prevezivanja prijemnice, koji je sada strog po ID-u.
 
-Public Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
-                                      ByVal brojCol As String, _
-                                      ByVal broj As String, _
-                                      ByVal sourceName As String, _
-                                      ParamArray vlasnikCols() As Variant)
-    Dim n As Long
-    n = BrojVlasnikaPoBroju(tblName, brojCol, broj, sourceName, False, _
-                            ScopeColsToArray(vlasnikCols))
-    If n > 1 Then
-        Err.Raise ERR_STORNO_BASE + 11, sourceName, _
-                  "Broj '" & broj & "' nije jedinstven: aktivni dokumenti pripadaju " & _
-                  CStr(n) & " razlicita vlasnika. Storno po broju bi " & _
-                  "zahvatio i tudji dokument. Storniraj pojedinacno (po ID-u dokumenta) " & _
-                  "ili razdvoj brojeve."
-    End If
-End Sub
-
-' ISTA kapija, jedna jedina razlika: STORNIRAN vlasnik se BROJI.
-'
-' Storniran vlasnik i dalje ima AKTIVNU decu, pa mutacija po broju zahvati i
-' njih. Kapija koja broji samo aktivne to NE vidi: posle storna je aktivan
-' jedan, pa broj izgleda jednoznacan. To je zapisana cena iz v6-ui-138.
-'
-' Ovo je kapija za MUTACIJU PO BROJU. Kad se radi po ID-u dokumenta, ne treba.
-Public Sub RequireJedanVlasnikIkadPoBroju(ByVal tblName As String, _
-                                          ByVal brojCol As String, _
-                                          ByVal broj As String, _
-                                          ByVal sourceName As String, _
-                                          ParamArray vlasnikCols() As Variant)
-    Dim n As Long
-    n = BrojVlasnikaPoBroju(tblName, brojCol, broj, sourceName, True, _
-                            ScopeColsToArray(vlasnikCols))
-    If n > 1 Then
-        Err.Raise ERR_STORNO_BASE + 14, sourceName, _
-                  "Broj '" & broj & "' nije jedinstven: dokumenti pod njim su IKAD " & _
-                  "pripadali " & CStr(n) & " razlicita vlasnika. Racunaju se i " & _
-                  "stornirani, jer storniran vlasnik i dalje ima AKTIVNU decu -- " & _
-                  "mutacija po broju bi zahvatila i tudje. Radi po ID-u dokumenta " & _
-                  "ili razdvoj brojeve."
-    End If
-End Sub
-
-' Recnik razlicitih VLASNIKA koji pod istim brojem imaju dokument.
+' Recnik razlicitih VLASNIKA koji pod istim brojem imaju dokument. Od S9-4
+' nema produkcionog pozivaoca (pisac prevezivanja je po ID-u); ostaje kao merilo
+' preduslova u testovima (kolizija broja u fixture-u).
 '
 ' Jedan racun za dve upotrebe koje se razlikuju u jednoj jedinoj stvari - da li
 ' se stornirani redovi broje:
@@ -2042,9 +1961,8 @@ End Sub
 '                                  storniran dokument; brojanje samo aktivnih
 '                                  bi tu uvek dalo nulu i kapija ne bi radila
 '
-' Vlasnik je KOMPOZITAN i razlicit po tipu dokumenta - isti spisak koji vec
-' koristi modDokumenta.ApplyGeneracijaID: otpremnica StanicaID, prijemnica
-' KupacID, zbirna VozacID + KupacID.
+' Vlasnik je KOMPOZITAN i razlicit po tipu dokumenta: otpremnica StanicaID,
+' prijemnica KupacID, zbirna VozacID + KupacID.
 Public Function VlasniciPoBroju(ByVal tblName As String, ByVal brojCol As String, _
                                 ByVal broj As String, ByVal sourceName As String, _
                                 ByVal ukljuciStornirane As Boolean, _
@@ -2081,16 +1999,6 @@ Public Function VlasniciPoBroju(ByVal tblName As String, ByVal brojCol As String
             End If
         End If
     Next i
-End Function
-
-' ParamArray se ne prosledjuje dalje kao ParamArray - prepakuje se u obican niz.
-Private Function ScopeColsToArray(ByVal p As Variant) As Variant
-    Dim out() As Variant, i As Long
-    ReDim out(LBound(p) To UBound(p))
-    For i = LBound(p) To UBound(p)
-        out(i) = p(i)
-    Next i
-    ScopeColsToArray = out
 End Function
 
 Private Sub RequireNonBlank(ByVal value As String, _

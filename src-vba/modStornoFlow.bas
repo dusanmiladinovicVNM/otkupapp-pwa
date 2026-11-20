@@ -1779,8 +1779,8 @@ Private Function ZbirnaScopeRazlog(ByVal broj As String, ByVal zbirnaID As Strin
 End Function
 
 Private Function ZbirnaMutRazlog(ByVal broj As String, _
-                                 Optional ByVal scopedPoGeneraciji As Boolean = False) As String
-    ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj, scopedPoGeneraciji)
+                                 Optional ByVal scopedPoID As Boolean = False) As String
+    ZbirnaMutRazlog = modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj(broj, scopedPoID)
 End Function
 
 ' Poruka za operatera. Uzrok se NE stapa u jednu recenicu: "dva vlasnika" i "dva
@@ -2216,28 +2216,6 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
     res("message") = modStorno.StornoRazlogOperateru(errDescK)
-End Function
-
-' Distinktni OtpremnicaID-jevi za dati BrojOtpremnice (ukljucuje i stornirane,
-' jer blokovi mogu jos pokazivati na storniran ID).
-' Red pripada IZABRANOM dokumentu: po generaciji kad je poznata, inace po
-' broju. Isto pravilo kao RedJeIzabranogDokumenta u modStorno -- ovde zaseban
-' jer modStornoFlow radi nad svojim ucitanim nizovima.
-Private Function RedJeGeneracije(ByRef data As Variant, ByVal i As Long, _
-                                 ByVal cBroj As Long, ByVal cGen As Long, _
-                                 ByVal broj As String, ByVal gen As String) As Boolean
-    If Len(Trim$(gen)) = 0 Then
-        RedJeGeneracije = (Trim$(CStr(data(i, cBroj))) = broj)
-        Exit Function
-    End If
-    ' Zadata generacija a kolone nema: tih pad na broj bi znacio da se dira
-    ' nesto drugo. Isto pravilo kao RedJeIzabranogDokumenta u modStorno.
-    If cGen = 0 Then
-        Err.Raise ERR_STORNO_FW_BASE + 63, MOD_NAME & ".RedJeGeneracije", _
-                  "Zadata je generacija dokumenta, a tabela nema kolonu " & _
-                  COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
-    End If
-    RedJeGeneracije = (Trim$(NzToText(data(i, cGen))) = Trim$(gen))
 End Function
 
 ' ============================================================

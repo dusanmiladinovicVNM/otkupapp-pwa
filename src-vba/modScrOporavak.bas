@@ -70,10 +70,11 @@ Private mLista As String          ' kljuc aktivne liste
 ' javlja umesto da preveze na nesto nasumicno.
 Private mCiljZbirna As String
 Private mCiljPrijemnica As String
-' Identitet izabranog CILJA: generacija zbirne (ZBR-IDENT-01) i PrijemnicaID
-' prijemnice (S6 korak 8). Drzi se uz broj, ne umesto njega: broj i dalje ide u
-' prikaz i u labele na stavkama, identitet samo bira dokument.
-Private mCiljZbirnaGen As String
+' Identitet izabranog CILJA: ZbirnaID zbirne (S9-4) i PrijemnicaID prijemnice
+' (S6 korak 8). Drzi se uz broj, ne umesto njega: broj ide u prikaz i poruke,
+' identitet bira dokument. Do S9-4 je za zbirnu ovde stajala GeneracijaID --
+' prazna za svaku kanonsku zbirnu, pa je pisac birao cilj po broju.
+Private mCiljZbirnaID As String
 Private mCiljPrijemnicaID As String
 Private mStep As String           ' korak za poruku o gresci
 ' Brojke u zoni; racuna ih Scr_Rows u istom prolazu kroz podatke.
@@ -253,7 +254,7 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
                 If Len(broj) > 0 Then
                     mCiljZbirna = broj
-                    mCiljZbirnaGen = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
+                    mCiljZbirnaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
                     OsveziZonu
                 End If
             Case "CILJPRIJ"
@@ -277,7 +278,7 @@ EH:
 End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
-' Identitet dokumenta iz reda mreze (generacija zbirne, PrijemnicaID). Kolona je
+' Identitet dokumenta iz reda mreze (ZbirnaID, PrijemnicaID). Kolona je
 ' prioriteta 3, pa se na uskom ekranu ne CRTA - ali podatak ostaje u mView, a
 ' GridCell cita njega, ne sirinu.
 Private Function IdentitetIzReda(ByVal red As Long, ByVal kolona As Long) As String
@@ -327,13 +328,14 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
-' Osirotela prijemnica dobija novu zbirnu. Menja se SAMO BrojZbirne -
-' PrijemnicaID ostaje, pa faktura i palete ostaju ispravne. Ceo posao radi
-' postojeci ReassignPrijemnicaToZbirna_TX, ukljucujuci proveru da je cilj
-' aktivna zbirna.
+' Osirotela prijemnica dobija novu zbirnu: labela BrojZbirne i roditelj (E4,
+' ZbirnaRoditeljID), u istom potezu. PrijemnicaID ostaje, pa faktura i palete
+' ostaju ispravne. Ceo posao i sve kapije (cilj aktivan, izdat, istog kupca i
+' vozaca, iste robe) drzi pisac ReassignPrijemnicaToZbirna_TX; ekran samo
+' potvrdjuje i pokazuje razlog odbijanja (KI-055).
 Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
     On Error GoTo EH
-    If Len(mCiljZbirna) = 0 Then
+    If Len(mCiljZbirnaID) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
@@ -348,9 +350,10 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID 
                              " " & ChrW(8594) & " " & mCiljZbirna, False
         PreveziPrijemnicu = True
     Else
-        ' Rutina vraca samo True/False; razlog (cilj ne postoji ili je
-        ' storniran) se ne prosledjuje, pa poruka kaze sta da se proveri.
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_PRI") & " " & mCiljZbirna, True
+        ' Razlog je pisceva poruka (KI-055): roba, vlasnik, nacrt, storno, ID koga
+        ' nema. Do S9-4 je ovde stajala opsta poruka "proveri da li je ciljna
+        ' zbirna aktivna" i kad je zbirna bila aktivna.
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_PRI") & " " & razlog, True
     End If
     Exit Function
 EH:
@@ -358,14 +361,18 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
-' JEZGRO "Prevezi prijemnicu" (S9-4): prijemnica izabranog reda izvora na
-' izabrani cilj, bez MsgBox-a potvrde, da bi se merilo (uzor PreveziPaleteCore).
-' outRazlog nosi razlog odbijanja za poruku operateru.
+' JEZGRO "Prevezi prijemnicu" (S9-4): prijemnica izabranog reda izvora
+' (PrijemnicaID, kolona 8) na izabrani cilj (mCiljZbirnaID, kolona 7 liste
+' ZBIRNE), bez MsgBox-a potvrde, da bi se merilo (uzor PreveziPaleteCore). Oba
+' kraja idu po ID-u; broj je samo za trag. outRazlog nosi razlog odbijanja.
 Public Function PreveziPrijemnicuCore(ByVal brojPrij As String, ByVal prijemnicaID As String, _
                                       ByRef outRazlog As String) As Boolean
     outRazlog = ""
-    PreveziPrijemnicuCore = ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, prijemnicaID, _
-                                                          mCiljZbirnaGen)
+    PreveziPrijemnicuCore = ReassignPrijemnicaToZbirna_TX(prijemnicaID, mCiljZbirnaID, outRazlog)
+    If Not PreveziPrijemnicuCore Then
+        LogWarn MOD_TRAG, "Prevezivanje prijemnice " & brojPrij & " (" & prijemnicaID & ") na zbirnu " & _
+                mCiljZbirna & " (" & mCiljZbirnaID & ") odbijeno: " & outRazlog
+    End If
 End Function
 
 ' Osirotele paletne stavke prelaze na aktivnu prijemnicu. force=True je
@@ -392,9 +399,9 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
         Exit Function
     End If
-    ' Kapija nad dvosmislenim CILJEM vise nije ovde: ista provera sada stoji u
-    ' samom writeru (VlasniciPoBroju / RequireJedanVlasnikPoBroju), pa vazi za
-    ' SVAKOG pozivaoca, i za legacy formu. Ekran samo prikaze razlog.
+    ' Kapija nad CILJEM nije ovde: pisac (ReassignPaleteToPrijemnica_TX) je od S8
+    ' reza 1b strog po ID-u na obe strane, pa vazi za SVAKOG pozivaoca. Ekran
+    ' samo prikaze razlog.
     ' Potvrda imenuje dokument i kupca (KI-056, S8R1B-REV-02): broj nose
     ' dokumenti vise kupaca, a radnja ide tacno po izabranom ID-u.
     If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
@@ -838,20 +845,19 @@ Private Function CiljZbirnaGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_GENERACIJA||txt|110|3")
+        "OTKUI_HDO_ZBR_ID||txt|110|3")
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
-    ' Vlasnistvo zbirne je VOZAC + KUPAC. Broj zbirne generator drzi
-    ' jedinstvenim, pa se dva reda istog broja mogu pojaviti samo iz rucnog
-    ' unosa ili uvoza; tada sam kupac ne razlikuje dokumenta.
+    ' Vlasnistvo zbirne je VOZAC + KUPAC i vidi se u koloni 3. Identitet reda je
+    ' ZbirnaID (S9-4): dve zbirne istog broja, i istog vlasnika, su dva reda.
     ' Kilaza dolazi sa STAVKI (S4-1).
     RowsAktivneZbirne = RowsAktivni(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
                                     COL_ZBR_VRSTA, COL_ZBR_SORTA, _
                                     Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
                                     CiljZbirnaGridCols(), q, _
                                     modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID, _
-                                    COL_GENERACIJA_ID)
+                                    COL_ZBR_ID)
 End Function
 
 Private Function CiljPrijGridCols() As Variant
@@ -868,8 +874,7 @@ End Function
 ' Kilaza dolazi sa STAVKI (S6 korak 3): zaglavlje prijemnice od koraka 2 ne nosi
 ' Kolicinu, pa je dokument novog oblika u listi cilja imao 0 kg -- a operater
 ' bira cilj prevezivanja paleta bas po kilazi.
-' Identitet reda je PrijemnicaID (S6 korak 8): dokument je jedan red, pa
-' generacije nema.
+' Identitet reda je PrijemnicaID (S6 korak 8): dokument je jedan red.
 Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
     RowsAktivnePrijemnice = RowsAktivni(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
                                         COL_PRJ_VRSTA, COL_PRJ_SORTA, _
@@ -878,33 +883,29 @@ Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
                                         COL_PRJ_ID)
 End Function
 
-' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU.
+' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU, a
+' dokument je PK (colIdentitet: ZbirnaID, PrijemnicaID -- S9-4, plan 14.68).
 '
-' "Jedan red po dokumentu" NIJE isto sto i "jedan red po broju", i ta razlika
-' je razlog zasto ova rutina izgleda ovako:
+' "Jedan red po dokumentu" NIJE isto sto i "jedan red po broju": broj se racuna
+' po kupcu (prijemnica) i po vozacu (zbirna), pa dva dokumenta lako dele broj.
+' Do S9-4 je kljuc bio "generacija, inace broj + vlasnik" -- dve zbirne istog
+' broja i istog vlasnika su tako bile JEDAN red sa sabranim kg, a operater nije
+' mogao da izabere onu koja mu treba. Kljuc je sada sam PK, a vlasnik se
+' PRIKAZUJE: kolizija mora da bude vidljiva, ne samo tacno obradjena.
 '
-'   klase I i II dele broj I VLASNIKA -> to je jedan dokument, jedan red
-'   dva kupca sa istim brojem         -> to su DVA dokumenta, dva reda
-'
-' Broj se racuna PO KUPCU (GenerateBrojPrijemnice), pa je drugi slucaj
-' svakodnevan, ne teorijski. Dedup samo po broju sveo bi ta dva dokumenta na
-' jedan red - operater bi izabrao "cilj" ne znajuci ciji je, a prevezivanje bi
-' otislo na onaj koji zatekne poslednji.
-'
-' Zato je kljuc grupisanja broj + VLASNIK, a vlasnik se i PRIKAZUJE: kolizija
-' mora da bude vidljiva, ne samo tacno obradjena.
+' Red bez PK-a se NE nudi: radnja ga ne bi mogla poslati piscu, a prazan PK je
+' integritetski nalaz (B9), ne cilj. Kolona identiteta koja ne postoji je kvar
+' poziva, pa dize gresku umesto da tiho isprazni listu.
 ' colVlasnik je NIZ kolona, ne jedna: vlasnistvo zbirne je vozac + kupac, isti
-' kompozit koji koriste StornoZbirna, ApplyGeneracijaID i kapija u
-' ReassignPrijemnicaToZbirna_TX. Sa samim kupcem bi dve zbirne istog broja i
-' istog kupca a razlicitih vozaca -- u jezgru dva dokumenta -- pale u JEDAN red,
-' pa operater ne bi mogao ni da izabere onaj koji mu treba.
+' kompozit koji koriste StornoZbirna i kapija roditelja u
+' ReassignPrijemnicaToZbirna_TX (ZbirnaRoditeljPrijemnice).
 ' kgPoDok + colDokID: kilaza dokumenta ne dolazi iz zaglavlja nego iz recnika
 ' stavki (kljuc = ID dokumenta u redu). Zbirna od PR3 UkupnoKolicina ostavlja
 ' praznu, a prijemnica od S6 koraka 2 Kolicinu, pa bi bez ovoga cela cilj lista
 ' pokazala 0 kg -- a operater bira CILJ ispravke bas po kilazi. Oba tipa salju
 ' recnik (S6 korak 3), pa ova funkcija ostaje JEDNA.
 ' colIdentitet: kolona koja je IDENTITET dokumenta i ide u 7. kolonu reda --
-' GeneracijaID za zbirnu (ZBR-IDENT-01), PrijemnicaID za prijemnicu (S6 korak 8).
+' ZbirnaID za zbirnu (S9-4), PrijemnicaID za prijemnicu (S6 korak 8).
 Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colDatum As String, ByVal colVrsta As String, _
                              ByVal colSorta As String, _
@@ -943,6 +944,11 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     Next v
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
     iIdent = modUiData.ColIdx(tbl, colIdentitet)
+    If iIdent = 0 Then
+        Err.Raise vbObjectError + 1963, "modScrOporavak.RowsAktivni", _
+                  "Kolona " & colIdentitet & " ne postoji u " & tbl & _
+                  ", a identitet reda cilja je PK dokumenta."
+    End If
     Dim iDokID As Long
     If Not kgPoDok Is Nothing Then
         iDokID = modUiData.ColIdx(tbl, colDokID)
@@ -957,10 +963,8 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Exit Function
     End If
 
-    ' Klase I i II su JEDAN dokument: dele broj i vlasnika. Prvi red pravi
-    ' izlazni red, svaki sledeci samo DODAJE svoje kilograme - ranije se
-    ' preskakao, pa je dvoklasni dokument prikazivao samo Klasu I, a i zbir
-    ' u podnozju je bio manji od stvarnog.
+    ' Red sa PK-om koji je vec vidjen (dupli PK, integritetski nalaz B9) samo
+    ' dodaje svoje kilograme, ne pravi drugi cilj istog ID-a.
     '
     ' Filter se primenjuje PRE nego sto se dokument upamti: da se prvo pamti,
     ' dokument koji ne pogadja pretragu prvim redom ne bi mogao da je pogodi
@@ -982,16 +986,10 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
             End If
         Next v
 
-        ' Kljuc grupisanja: IDENTITET kad postoji, inace broj + pun vlasnik.
-        ' Redovi istog dokumenta dele identitet, pa se i dalje sabiraju u jedan
-        ' red; dva razlicita dokumenta ga ne dele, pa se ne spajaju.
-        ident = ""
-        If iIdent > 0 Then ident = modUiData.CellS(src, r, iIdent)
-        If Len(ident) > 0 Then
-            kljuc = "g" & Chr$(1) & ident
-        Else
-            kljuc = broj & Chr$(1) & vlasnik
-        End If
+        ' Kljuc reda je PK dokumenta; red bez njega se ne nudi (v. gore).
+        ident = modUiData.CellS(src, r, iIdent)
+        If Len(ident) = 0 Then GoTo Sledeci
+        kljuc = ident
         hay = broj & "|" & vlasnik & "|" & modUiData.CellS(src, r, iVr) & _
               "|" & modUiData.CellS(src, r, iSo)
         If Len(q) > 0 Then
@@ -1000,7 +998,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Dim kgReda As Double
         kgReda = KgDokumenta(src, r, kgPoDok, iDokID)
         If seen.Exists(kljuc) Then
-            ' druga klasa istog dokumenta - samo dopuni kolicinu
+            ' isti PK dvaput (B9) - samo dopuni kolicinu
             outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + kgReda
             sumKg = sumKg + kgReda
             GoTo Sledeci
@@ -1137,12 +1135,12 @@ End Function
 ' isto kao Scr_OtpTestSet - van test-rezima ne radi nista.
 Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
                           ByVal ciljPrijemnica As String, _
-                          Optional ByVal ciljZbirnaGen As String = "", _
+                          Optional ByVal ciljZbirnaID As String = "", _
                           Optional ByVal ciljPrijemnicaID As String = "")
     If Not IsTestMode() Then Exit Sub
     mLista = lista
     mCiljZbirna = ciljZbirna
     mCiljPrijemnica = ciljPrijemnica
-    mCiljZbirnaGen = ciljZbirnaGen
+    mCiljZbirnaID = ciljZbirnaID
     mCiljPrijemnicaID = ciljPrijemnicaID
 End Sub

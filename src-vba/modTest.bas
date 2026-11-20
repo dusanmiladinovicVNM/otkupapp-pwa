@@ -1099,7 +1099,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 26: TestName = "T_IspravkaPrijemnice_SkipIRelink"
         Case 27: TestName = "T_RelinkPoGeneraciji_NeDiraTudjDokument"
         Case 28: TestName = "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu"
-        Case 29: TestName = "T_ZadataGeneracijaKojeNema_Staje"
+        Case 29: TestName = "T_ZadatIdentitetKogaNema_Staje"
         Case 30: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 31: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 32: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
@@ -1526,7 +1526,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 26: T_IspravkaPrijemnice_SkipIRelink
         Case 27: T_RelinkPoGeneraciji_NeDiraTudjDokument
         Case 28: T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu
-        Case 29: T_ZadataGeneracijaKojeNema_Staje
+        Case 29: T_ZadatIdentitetKogaNema_Staje
         Case 30: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 31: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 32: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
@@ -7690,7 +7690,7 @@ End Function
 ' prijemnice (ZbirnaNaStavci je izvedena). Tvrdnje o paletama zato mere da paleta
 ' i dalje pripada SVOJOJ prijemnici, pa ide sa njom -- a tudja ostaje sa tudjom.
 Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
-    Dim ok As Boolean
+    Dim ok As Boolean, razlog As String, pIzd As String
 
 
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), FX_ZBIRNA_MIRNA, _
@@ -7698,7 +7698,13 @@ Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
     AssertEq ZbirnaNaStavci("PST-TEST-Z2"), FX_ZBIRNA_MIRNA, _
              "preduslov: tudja paleta pocinje na staroj zbirni"
 
-    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "PRJ-TEST-Z1")
+    ' S9-4: pisac je strog po ID-u na obe strane, a cilj mora biti IZDAT
+    ' (PRJ-ZBR-01). Fixture zbirne IzdatoStatus ne nose, pa ga test postavlja
+    ' i vraca (sinteticki; vlasnik ZBI-TEST-2 je vlasnik PRJ-TEST-Z1).
+    pIzd = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS))
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    ok = ReassignPrijemnicaToZbirna_TX("PRJ-TEST-Z1", "ZBI-TEST-2", razlog)
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS, pIzd
     AssertEq ok, True, "prevezivanje po identitetu je proslo"
 
     ' Svoj dokument -- oba reda, i prijemnica i njena paleta.
@@ -7718,27 +7724,26 @@ End Sub
 ' ============================================================
 ' 29. Zadat identitet koga nema NIJE poziv na fallback po broju
 ' ============================================================
-' Prazan argument i zadat-ali-nepostojeci su dva razlicita stanja:
-'
-'   ""        pozivalac ne zna identitet (zatecen zapis) -> fallback po broju,
-'             ali tek kroz kapiju nad jednoznacnoscu
-'   "PRJ-X"   pozivalac je rekao BAS TAJ dokument. Ako ga nema, pad na broj bi
-'             znacio da se dira NESTO DRUGO -- tise i gore od greske.
-Private Sub T_ZadataGeneracijaKojeNema_Staje()
+' Pozivalac je rekao BAS TAJ dokument. Ako ga nema, pad na broj bi znacio da se
+' dira NESTO DRUGO -- tise i gore od greske. Od S9-4 pisac prevezivanja broj ni
+' ne prima (plan 14.68), pa je ovde ostalo da odbijanje NOSI RAZLOG koji imenuje
+' ID (KI-055). Do S9-4 se test zvao T_ZadataGeneracijaKojeNema_Staje.
+Private Sub T_ZadatIdentitetKogaNema_Staje()
     Dim ok As Boolean, upoz As String, gajbDiff As Boolean
-    Dim preZbirna As String, preStavki As Long
+    Dim preZbirna As String, preStavki As Long, razlog As String
 
     preZbirna = ZbirnaNaPrijemnici("PRJ-TEST-Z2")
     preStavki = StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA)
 
-    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "PRJ-NE-POSTOJI")
-    AssertEq ok, False, "zadat identitet prijemnice koga nema zaustavlja upis"
+    ok = ReassignPrijemnicaToZbirna_TX("PRJ-NE-POSTOJI", "ZBI-TEST-2", razlog)
+    AssertEq CStr(ok) & "|" & CStr(InStr(1, razlog, "PRJ-NE-POSTOJI", vbTextCompare) > 0), "False|True", _
+             "zadat identitet prijemnice koga nema zaustavlja upis"
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), preZbirna, _
              "posle odbijanja nijedan dokument nije pomeren"
 
-    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, _
-                                       "PRJ-TEST-Z1", "GEN-ZBIRNE-NEMA")
-    AssertEq ok, False, "zadata generacija CILJNE zbirne koje nema zaustavlja upis"
+    ok = ReassignPrijemnicaToZbirna_TX("PRJ-TEST-Z1", "ZBI-ZBIRNE-NEMA", razlog)
+    AssertEq CStr(ok) & "|" & CStr(InStr(1, razlog, "ZBI-ZBIRNE-NEMA", vbTextCompare) > 0), "False|True", _
+             "zadat ZbirnaID CILJA koga nema zaustavlja upis"
 
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
                                        gajbDiff, "PRJ-NE-POSTOJI", "PRJ-TEST-A")
@@ -22223,32 +22228,21 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
              "zaglavlje ambalaznog dokumenta i dalje nosi storno"
 End Sub
 
-' TEST 125: cilj bez generacije mora biti AKTIVAN i ISTORIJSKI jednoznacan.
+' TEST 125: cilj prevezivanja mora biti AKTIVAN, i to po ID-u.
 '
-' Recovery panel u frmDokumenta zove ReassignPrijemnicaToZbirna_TX sa DVA
-' argumenta -- bez generacije i bez ijedne spoljne kapije -- pa se funkcija
-' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE), dakle broj,
-' ne identitet.
+' Do S9-4 je ovde stajalo "cilj bez generacije mora biti AKTIVAN i ISTORIJSKI
+' jednoznacan": pisac je cilj birao po BROJU, pa je test merio tri kapije nad
+' brojem (istorijski dvosmislen, bez aktivne, mala slova). Pisac od S9-4 broj ne
+' prima (plan 14.68, S94-ODL-01) -- poziv sa brojem bi bio zelen iz pogresnog
+' razloga (placebo), pa test meri ono sto ostaje: stornirana zbirna nije cilj ni
+' kad je zadata tacno po ID-u, a odbijanje imenuje razlog (KI-055).
 '
-' Zatecen kod je cilj birao kroz LookupValue po broju, sto vraca PRVI red i ne
-' gleda ni identitet ni storno. Taj oblik je ovde subsumiran: pitanje vise
-' nije "da li je prvi red storniran" nego "ima li AKTIVNOG cilja" i "da li je
-' broj IKAD pripadao dvama vlasnicima".
-'
-' Merene vrednosti fixture-a na ovom mestu u nizu:
-'   ZB-TEST-KASK  ikad=2 akt=1  (prvi red storniran)
-'   ZB-TEST-OLDU  ikad=1 akt=0  (prvi red storniran, aktivnog nema)
-' To stanje u punom prolazu ostavljaju testovi 41 (ZBI-KASK-1) i 44
-' (ZBI-OLDU-1); pusten SAM (izbor), test ga pravi sam -- v. pripremu (S-4a).
-'
-' Stoji POSLEDNJI u nizu: kad bi neka tvrdnja popustila, poziv bi stvarno
-' prevezao i pomerio fixture.
+' Priprema (S-4a): isti produkcioni pisac kao testovi 41 i 44, i SAMO kad stanja
+' nema -- u punom prolazu su obe zbirne vec stornirane.
+' SABOTAZA: s94-prevezi-cilj-storniran.
 Private Sub T_CiljZbirna_NePoPrvomRedu()
-    Dim ikad As Long, akt As Long
-    Dim okDvosmislen As Boolean, okBezAktivnog As Boolean, okMala As Boolean
+    Dim okKask As Boolean, okOldu As Boolean, razKask As String, razOldu As String
 
-    ' PRIPREMA (S-4a): isti produkcioni pisac kao testovi 41 i 44, i SAMO kad
-    ' stanja nema -- u punom prolazu su oba vec stornirana, pa se grana preskace.
     If Not StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1") Then
         AssertEq StornoZbirna_TX("ZBI-KASK-1"), True, _
                  "priprema: prvi vlasnik broja KASK je storniran"
@@ -22258,52 +22252,14 @@ Private Sub T_CiljZbirna_NePoPrvomRedu()
                  "priprema: jedina zbirna broja OLDU je stornirana"
     End If
 
-    ikad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
-                           "T_Cilj", True, _
-                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-    akt = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
-                          "T_Cilj", False, _
-                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-    AssertEq ikad, 2, "preduslov: broj je IKAD pripadao dvama vlasnicima"
-    AssertEq akt, 1, _
-             "preduslov: aktivan je jedan -- broj IZGLEDA jednoznacan"
-    ' Preduslov za OLDU je do sada cutao: tvrdnja "bez aktivnog cilja" ispod
-    ' meri samo ako pod tim brojem zaista nema aktivne zbirne.
-    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_OLDU, _
-                             "T_Cilj", False, _
-                             Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 0, _
-             "preduslov: broj OLDU nema nijednu aktivnu zbirnu"
+    okKask = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-STL-T", "ZBI-KASK-1", razKask)
+    okOldu = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-STL-T", "ZBI-OLDU-1", razOldu)
 
-    ' ISTORIJSKA DVOSMISLENOST. Kapija po AKTIVNIMA ovde vidi jedan vlasnik i
-    ' pusta -- a storniran vlasnik i dalje ima aktivnu decu, pa bi prijemnica
-    ' zavrsila vezana golom labelom za broj koji nose dva vlasnicka toka.
-    okDvosmislen = modDokumenta.ReassignPrijemnicaToZbirna_TX( _
-                       FX_PRIJEMNICA_STALE, FX_ZBIRNA_KASK)
-    AssertEq okDvosmislen, False, _
-             "istorijski dvosmislen broj ne prolazi bez generacije"
-
-    ' NEMA AKTIVNOG CILJA. Pod tim brojem postoje samo stornirani redovi, pa
-    ' prevezivanje nema na sta da veze -- a IKAD kapija ga ne bi zaustavila
-    ' (vlasnik je jedan).
-    okBezAktivnog = modDokumenta.ReassignPrijemnicaToZbirna_TX( _
-                        FX_PRIJEMNICA_STALE, FX_ZBIRNA_OLDU)
-    AssertEq okBezAktivnog, False, _
-             "prevezivanje na broj bez ijedne aktivne zbirne ne prolazi"
-
-    ' BROJ DOKUMENTA JE CASE-SENSITIVE KROZ CELU PUTANJU.
-    '
-    ' Prva verzija ove popravke je postojanje pitala kroz ZbirnaPostoji, koji
-    ' poredi bez obzira na velicinu slova, dok kapije ispod porede TACNO. Tada
-    ' bi mala slova prosla kao "postoji", kapije bi videle nula vlasnika pa ne
-    ' bi okinule, i u tblPrijemnica i tblPaletaStavka bi se upisala labela
-    ' POZIVAOCA umesto one iz tabele.
-    okMala = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJEMNICA_STALE, _
-                                                        LCase$(FX_ZBIRNA_KASK))
-    AssertEq okMala, False, _
-             "broj sa drugom velicinom slova nije isti broj"
-
-    ' Bez sopstvene sabotaze, namerno: svaka od zamena iznad obara neku raniju
-    ' tvrdnju. Stoji kao pozitivna kontrola da nijedan poziv nije nista upisao.
+    AssertEq CStr(okKask) & "|" & CStr(InStr(1, razKask, "stornirana", vbTextCompare) > 0), "False|True", _
+             "stornirana zbirna nije cilj ni kad je zadata po ID-u; razlog kaze da je stornirana"
+    AssertEq CStr(okOldu) & "|" & CStr(InStr(1, razOldu, "stornirana", vbTextCompare) > 0), "False|True", _
+             "zbirna broja bez ijedne aktivne nije cilj ni po ID-u"
+    ' Pozitivna kontrola: nijedan poziv nije nista upisao.
     AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
              "u prijemnici je ostala KANONSKA labela iz tabele"
 End Sub
@@ -22908,8 +22864,9 @@ Private Sub T_ZonaBankaNalozi_PoljaIRaspored()
 End Sub
 
 Private Sub T_Prijemnica_PomeraSamoAktivan()
-    Dim ikad As Long, akt As Long, ciljIkad As Long
-    Dim ok As Boolean
+    Dim tx As clsTransaction, ok As Boolean, okSt As Boolean
+    Dim raz As String, razSt As String, prvaI2 As String, prvaI1 As String
+    Dim errNum As Long, errDesc As String
 
     ' PRIPREMA (S-4a): u punom prolazu dokument prvog kupca (PRJ-TEST-I1)
     ' stornira test 35 kroz ISPRAVKU -- storno bez skidanja paleta. Pusten SAM,
@@ -22919,30 +22876,42 @@ Private Sub T_Prijemnica_PomeraSamoAktivan()
         AssertEq modStorno.StornoPrijemnica_TX("PRJ-TEST-I1", False), True, _
                  "priprema: dokument prvog kupca je storniran"
     End If
-
-    ikad = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
-                           "T_Prij", True, Array(COL_PRJ_KUPAC)).count
-    akt = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
-                          "T_Prij", False, Array(COL_PRJ_KUPAC)).count
-    ciljIkad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA, _
-                               "T_Prij", True, _
-                               Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-
-    AssertEq ikad, 2, "preduslov: broj su IKAD nosila dva kupca"
-    AssertEq akt, 1, "preduslov: aktivan je tacno jedan"
-    AssertEq ciljIkad, 1, "preduslov: ciljna zbirna je jednoznacna"
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I2"), FX_ZBIRNA_MIRNA, _
              "preduslov: aktivan dokument stoji na staroj zbirnoj"
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I1"), FX_ZBIRNA_MIRNA, _
              "preduslov: i storniran tudji dokument stoji na istoj"
 
-    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ISPRAVKA, FX_ZBIRNA)
+    ' S9-4 (plan 14.68): izvor i cilj su ID-evi, a cilj prolazi kapiju pisca
+    ' prijemnice (PRJ-ZBR-01: izdata zbirna ISTOG kupca i vozaca). Do S9-4 je
+    ' ovde aktivan dokument kupca 2 prevezivan na zbirnu kupca 1 -- bas ono sto
+    ' P1 (#477) zabranjuje. Cilj je ZBI-SLED-D1 (vozac 1, kupac 2); fixture zbirne
+    ' IzdatoStatus ne nose, pa ga test postavlja. Sve u transakciji testa: fixture
+    ' ostaje kakav jeste.
+    On Error GoTo CleanUp
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_PRIJEMNICA
+    tx.AddTableSnapshot TBL_ZBIRNA
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    okSt = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-TEST-I1", "ZBI-SLED-D1", razSt)
+    prvaI1 = ZbirnaNaPrijemnici("PRJ-TEST-I1")
+    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-TEST-I2", "ZBI-SLED-D1", raz)
+    prvaI2 = ZbirnaNaPrijemnici("PRJ-TEST-I2")
+    tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
 
-    AssertEq ok, True, "legitiman oporavak po broju PROLAZI"
-    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I2"), FX_ZBIRNA, _
-             "aktivan dokument JESTE prevezan na novu zbirnu"
-    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I1"), FX_ZBIRNA_MIRNA, _
-             "storniran dokument DRUGOG kupca nije pomeren"
+    AssertEq CStr(ok) & "|" & raz, "True|", "legitiman oporavak po ID-u PROLAZI"
+    AssertEq prvaI2, FX_ZBIRNA_SLDD, "aktivan dokument JESTE prevezan na novu zbirnu"
+    AssertEq CStr(okSt) & "|" & CStr(InStr(1, razSt, "stornirana", vbTextCompare) > 0), "False|True", _
+             "storniran izvor se ne prevezuje; razlog kaze da je storniran"
+    AssertEq prvaI1, FX_ZBIRNA_MIRNA, "storniran dokument DRUGOG kupca nije pomeren"
+    Exit Sub
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    If Not tx Is Nothing Then tx.RollbackTx
+    Err.Raise errNum, "T_Prijemnica_PomeraSamoAktivan", errDesc
 End Sub
 
 ' ============================================================
@@ -37480,10 +37449,11 @@ Private Sub T_S94_OporavakPreveziPoID()
         Next i
     End If
 
+    AssertEq CStr(ok) & "|" & razlog, "True|", _
+             "414 izbor reda cilja i prevezivanje prolaze bez odbijanja"
     AssertEq S93Roditelj(prjP), UCase$(zbrB), _
              "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID"
-    AssertEq CStr(ok) & "|" & labela, "True|" & br, _
-             "414 prevezivanje uspe, a labela prijemnice je broj izabrane zbirne"
+    AssertEq labela, br, "414 labela prijemnice je broj izabrane zbirne"
     AssertEq uSirocadi, False, "414 prevezena prijemnica vise nije siroce"
 
     Err.Clear

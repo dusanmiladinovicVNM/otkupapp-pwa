@@ -13,12 +13,10 @@ Option Explicit
 '
 ' Ugovor i acceptance testovi: docs/DOMEN/ZBR_IDENTITET.md
 '
-' Broj zbirne je LABELA, ne identitet. Identitet logickog dokumenta je
-' GeneracijaID; broj + VozacID + KupacID je SCOPE u kome se generacija nalazi
-' ili kuje. U STAROM modelu je dvoklasna zbirna bila JEDAN dokument na DVA
-' reda: pisac je isti broj, vozaca i kupca upisivao dvaput, pa su oba reda
-' nosila istu generaciju. Kanon to vise ne radi -- klase su stavke jednog
-' zaglavlja -- ali resolver i dalje mora da procita zateceni dvoredni oblik.
+' Broj zbirne je LABELA, ne identitet. Identitet dokumenta je ZbirnaID: resolver
+' broji po COL_ZBR_ID (S4-3b), a od S9-4 GeneracijaID ne cita nijedan zivi
+' citalac (plan 14.68). Kanonski pisac pravi JEDNO zaglavlje po dokumentu, a
+' klase su stavke tog zaglavlja.
 '
 ' Resolver odgovara na DVA NEZAVISNA pitanja, i to je cela poenta razdvajanja:
 '   resolutionStatus     -- da li je broj SADA jednoznacno razresiv (bez storniranih)
@@ -26,8 +24,8 @@ Option Explicit
 ' UNIQUE uz historicalOwnerCount = 2 je VALIDNO stanje, ne kontradikcija: broj je
 ' danas jednoznacan, a u proslosti ga je drzao i drugi vlasnik.
 '
-' activeLogicalCount i activeOwnerCount se NE izvode jedan iz drugog: dvoklasna
-' zbirna daje 1/1 iz dva reda, dva zasebna unosa istog vozaca daju 2/1.
+' activeLogicalCount i activeOwnerCount se NE izvode jedan iz drugog: dva
+' zasebna unosa istog vozaca daju 2/1.
 ' ============================================================
 Public Const ZBR_INT_OK As String = "OK"
 Public Const ZBR_INT_ERROR As String = "INTEGRITY_ERROR"
@@ -83,9 +81,9 @@ Private mSimPadPiscaOtp As Boolean
 ' razresen), pa se na njega ne moze racunati bez provere.
 '
 ' Rutina koja decu bira po broju zato i dalje zahvata SVE dokumente tog broja --
-' osim kad je izbor scoped po generaciji (faza 3), a to zna samo pozivalac.
-' Otud `scopedPoGeneraciji` parametar nize: kapija popusta tek kad akter dokaze
-' da bira po generaciji, i to za CELU svoju operaciju.
+' osim kad je izbor scoped po ZbirnaID-u (S4-3c), a to zna samo pozivalac.
+' Otud `scopedPoID` parametar nize: kapija popusta tek kad akter dokaze da bira
+' po ZbirnaID-u, i to za CELU svoju operaciju.
 '
 ' Dva razloga su RAZLICITA i ne smeju se stopiti:
 '   VLASNIK   -- broj je IKAD pripadao vise od jednog (VozacID, KupacID).
@@ -104,14 +102,6 @@ Private mSimPadPiscaOtp As Boolean
 Public Const ZBR_MUT_INTEGRITET As String = "INTEGRITET"
 Public Const ZBR_MUT_VISE_VLASNIKA As String = "VISE_VLASNIKA"
 Public Const ZBR_MUT_VISE_DOKUMENATA As String = "VISE_DOKUMENATA"
-
-' ZBR-CHILD-01 faza 2: ZASTO backfill preskace broj. Tri razloga, ne jedan --
-' prvo merenje nad pravim podacima je dalo 85 popunjenih i 4572 preskocena, a
-' poruka je sva tri prijavljivala kao "broj je IKAD nosio vise dokumenata".
-' Migracija koja ne ume da kaze STA je zatekla ne moze da vodi sledeci korak.
-Public Const ZBR_BF_INTEGRITET As String = "INTEGRITET"
-Public Const ZBR_BF_NEMA_GENERACIJE As String = "NEMA_GENERACIJE"
-Public Const ZBR_BF_VISE_GENERACIJA As String = "VISE_GENERACIJA"
 
 Public Type ZbirnaIdent
     normalizedBroj As String
@@ -215,8 +205,8 @@ Public Function ZbirnaBrojNorm(ByVal broj As String) As String
     ZbirnaBrojNorm = Trim$(NzToText(broj))
 End Function
 
-' Vlasnik zbirne je KOMPOZITAN: VozacID + KupacID. Isti spisak koji koriste
-' ApplyGeneracijaID i modStorno.VlasniciPoBroju.
+' Vlasnik zbirne je KOMPOZITAN: VozacID + KupacID. Isti spisak koji koristi
+' modStorno.VlasniciPoBroju.
 Private Function ZbirnaVlasnikKljuc(ByVal vozacID As Variant, _
                                     ByVal kupacID As Variant) As String
     ZbirnaVlasnikKljuc = UCase$(Trim$(NzToText(vozacID))) & "|" & _
@@ -227,7 +217,7 @@ End Function
 ' tabele: sirov niz nosi IKAD, ExcludeStornirano nad njim nosi SADA.
 '
 ' Zasto ExcludeStornirano a ne sopstveni test na kolonu Stornirano: to je ISTI
-' filtar koji zovu ZbirnaPostoji i GeneracijaIDZaBrojArr. Resolver, picker i
+' filtar koji zove ZbirnaPostoji. Resolver, picker i
 ' writer time gledaju istu definiciju "aktivne" i ne mogu da se raziidju.
 '
 ' Zasto NE modStorno.VlasniciPoBroju, koja je istog oblika: ona poredi broj
@@ -437,26 +427,25 @@ End Function
 ' ISTORIJA JE DEO BEZBEDNOSTI, ne samo sadasnje stanje. UNIQUE danas uz broj koji
 ' je IKAD drzalo vise vlasnika i dalje nije bezbedan roditelj: nizvodna operacija
 ' koja ide po broju moze da zahvati i tudje. Prijemnica od faze 1 ima FK na
-' generaciju, ali on sme biti prazan, pa sam po sebi ne ukida ovu kapiju.
-' Zato postoji i modStorno.RequireJedanVlasnikIkadPoBroju -- ista kapija za
-' mutaciju po broju.
+' ZbirnaID (E4), ali on sme biti prazan, pa sam po sebi ne ukida ovu kapiju.
 ' ZBR-MUT-01 -- sme li se po BROJU mutirati ono sto visi o zbirni.
 '
 ' Trece pitanje, uz kapiju za kreiranje (F3) i za roditelja (F4). Ovde se ne pita
 ' "sme li nov unos" ni "koji je roditelj", nego: SME LI RUTINA KOJA DECU BIRA PO
-' BROJU da radi. Izbor po broju zahvata sve dokumente tog broja; generacija na
-' detetu postoji od faze 1, ali sme biti prazna, pa je popustanje uslovljeno --
-' v. scopedPoGeneraciji.
+' BROJU da radi. Izbor po broju zahvata sve dokumente tog broja; ZbirnaID na
+' detetu postoji od faze 1, ali sme biti prazan, pa je popustanje uslovljeno --
+' v. scopedPoID.
 '
 ' Vraca prazno kad sme. Razlog se ne stapa u jednu poruku: vise vlasnika i vise
 ' dokumenata istog vlasnika su dva razlicita poteza za operatera.
 '
 ' Namerno NE gleda historicalLogicalCount -- v. komentar uz ZBR_MUT_* konstante.
-' `scopedPoGeneraciji` je faza 4: kapija SME da pusti dva aktivna dokumenta pod
-' istim brojem, ali samo tamo gde akter vise ne bira decu po broju.
+' `scopedPoID` je faza 4: kapija SME da pusti dva aktivna dokumenta pod istim
+' brojem, ali samo tamo gde akter vise ne bira decu po broju nego po ZbirnaID-u
+' (do S9-4 se parametar zvao scopedPoGeneraciji; nosio je isto).
 '
 ' Default je False i to nije opreznost nego nuznost: kapiju zove vise mesta, a
-' samo deo njih bira decu po generaciji. Ostali i dalje biraju PO BROJU, pa bi
+' samo deo njih bira decu po ZbirnaID-u. Ostali i dalje biraju PO BROJU, pa bi
 ' bezuslovna grana pustila aktera na tudje redove -- tiho i u kilogramima. To je
 ' ZBR-MUT-01 naopako: ne sirenjem aktera nego suzavanjem kapije.
 '
@@ -464,11 +453,11 @@ End Function
 ' BrojZbirne) je obrisan sa okvirom ispravke. Pravilo nije -- DUPLI i
 ' PONISTENJE decu i dalje biraju brojem.
 '
-' Pozivalac NE sme da salje "postoji generacija" nego BAS onu odluku koju vec
-' racuna za svoju selekciju (`genEff <> ""`). Kapija i akter tako gledaju isti
-' izraz, ne dva slicna.
+' Pozivalac NE sme da salje "postoji ID" nego BAS onu odluku koju vec racuna za
+' svoju selekciju (modStornoFlow.ZbirnaScopeRazlog: Len(outScopeID) > 0). Kapija
+' i akter tako gledaju isti izraz, ne dva slicna.
 Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent, _
-                                            Optional ByVal scopedPoGeneraciji As Boolean = False) As String
+                                            Optional ByVal scopedPoID As Boolean = False) As String
     If id.integrityStatus <> ZBR_INT_OK Then
         ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_INTEGRITET
         Exit Function
@@ -484,9 +473,9 @@ Public Function ZbirnaMutacijaPoBrojuRazlog(ByRef id As ZbirnaIdent, _
     ' SADA: samo aktivni dokumenti konkurisu za decu. Dva aktivna istog vlasnika
     ' (A17) owner-brojac ne vidi -- zbog toga ova grana i postoji.
     '
-    ' Faza 4: kad akter bira decu po generaciji, "dva aktivna dokumenta" mu vise
+    ' Faza 4: kad akter bira decu po ZbirnaID-u, "dva aktivna dokumenta" mu vise
     ' nije opasnost -- dira samo svoje. Grana tada nema sta da brani.
-    If scopedPoGeneraciji Then Exit Function
+    If scopedPoID Then Exit Function
 
     If id.activeLogicalCount > 1 Then
         ZbirnaMutacijaPoBrojuRazlog = ZBR_MUT_VISE_DOKUMENATA
@@ -499,12 +488,12 @@ End Function
 ' kapiju isto sto i "ne mutiraj". Prazan broj nije nerazresen nego "nema
 ' roditelja" -- nema sta da se mutira.
 Public Function ZbirnaMutacijaPoBrojuRazlogZaBroj(ByVal broj As String, _
-                                                 Optional ByVal scopedPoGeneraciji As Boolean = False) As String
+                                                 Optional ByVal scopedPoID As Boolean = False) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
     If Len(Trim$(NzToText(broj))) = 0 Then Exit Function
     id = ZbirnaIdentResolve(broj)
-    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZbirnaMutacijaPoBrojuRazlog(id, scopedPoGeneraciji)
+    ZbirnaMutacijaPoBrojuRazlogZaBroj = ZbirnaMutacijaPoBrojuRazlog(id, scopedPoID)
     Exit Function
 EH:
     LogErr "modDokumenta.ZbirnaMutacijaPoBrojuRazlogZaBroj"
@@ -8125,198 +8114,14 @@ EH:
     ValidateZbirna = Array(0#, 0#, 0#, False, 0&, 0&, 0&)
 End Function
 
-' ============================================================
-' Generacija dokumenta (COL_GENERACIJA_ID)
-'
-' PRAVILO (jedno mesto, svi writer-i): red nasledjuje generaciju od AKTIVNIH
-' (nestorniranih) redova ISTOG broja dokumenta; ako takvih nema -> nova generacija.
-'
-' Time bez ijednog dodatnog parametra vazi:
-'   - Klasa I i Klasa II istog upisa dele generaciju (druga nasledjuje od prve),
-'     bez obzira da li ih pise Multi_TX, AutoChainHladnjaca (dva zasebna _TX
-'     poziva), malina auto-zbirna (red po red) ili backfill prijemnice;
-'   - ISPRAVKA posle storna dobija NOVU generaciju -- svi stariji redovi tog broja
-'     su tada stornirani, pa se nema sta naslediti;
-'   - dopuna aktivnog dokumenta ostaje u njegovoj generaciji.
-'
-' Kolona je obavezna (RequireColumnIndex): stvara je modSetup.EnsureSledljivostSchema
-' na svakom startu. Bez nje upis pada umesto da tiho nastane red bez generacije.
-' ============================================================
-
-' Generacija za red koji se upisuje pod datim brojem dokumenta.
-' scopePairs: parovi (kolona, vrednost) koji uz broj cine IDENTITET dokumenta --
-' broj sam po sebi NIJE globalno jedinstven (npr. GenerateBrojPrijemnice racuna
-' sekvencu po kupcu, pa dva kupca istog dana oba dobiju "1/050826").
-Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
-                                   ByVal brojCol As String, _
-                                   ByVal broj As String, _
-                                   ParamArray scopePairs() As Variant) As String
-    GeneracijaIDZaBroj = GeneracijaIDZaBrojArr(tableName, brojCol, broj, _
-                                               ScopePairsToArray(scopePairs, "modDokumenta.GeneracijaIDZaBroj"))
-End Function
-
-' Radna varijanta (scope kao obican niz) -- ParamArray se ne prosledjuje dalje.
-Private Function GeneracijaIDZaBrojArr(ByVal tableName As String, _
-                                       ByVal brojCol As String, _
-                                       ByVal broj As String, _
-                                       ByVal sc As Variant) As String
-    Const SRC As String = "modDokumenta.GeneracijaIDZaBroj"
-
-    Dim cGen As Long
-    cGen = RequireColumnIndex(tableName, COL_GENERACIJA_ID, SRC)
-
-    Dim target As String
-    target = Trim$(broj)
-
-    If Len(target) > 0 Then
-        Dim data As Variant
-        data = GetTableData(tableName)
-
-        If IsArray(data) Then data = ExcludeStornirano(data, tableName)
-
-        If IsArray(data) Then
-            Dim cBr As Long
-            cBr = RequireColumnIndex(tableName, brojCol, SRC)
-
-            Dim scCols() As Long
-            Dim i As Long
-            If IsArray(sc) Then
-                ReDim scCols(0 To UBound(sc))
-                For i = 0 To UBound(sc) Step 2
-                    scCols(i) = RequireColumnIndex(tableName, CStr(sc(i)), SRC)
-                Next i
-            End If
-
-            Dim best As Double, bestGen As String
-            Dim r As Long, g As String, rank As Double
-            Dim inScope As Boolean
-            best = -1
-
-            For r = 1 To UBound(data, 1)
-                If Trim$(NzToText(data(r, cBr))) = target Then
-                    inScope = True
-                    If IsArray(sc) Then
-                        For i = 0 To UBound(sc) Step 2
-                            If Trim$(NzToText(data(r, scCols(i)))) <> Trim$(NzToText(sc(i + 1))) Then
-                                inScope = False
-                                Exit For
-                            End If
-                        Next i
-                    End If
-
-                    If inScope Then
-                        g = Trim$(NzToText(data(r, cGen)))
-                        If Len(g) > 0 Then
-                            rank = IdRank(g)
-                            If rank > best Then
-                                best = rank
-                                bestGen = g
-                            End If
-                        End If
-                    End If
-                End If
-            Next r
-
-            If Len(bestGen) > 0 Then
-                GeneracijaIDZaBrojArr = bestGen
-                Exit Function
-            End If
-        End If
-    End If
-
-    GeneracijaIDZaBrojArr = NewGeneracijaID(tableName)
-End Function
-
-' ParamArray -> obican niz (parni: kolona, neparni: vrednost). Prazan -> Empty.
-Private Function ScopePairsToArray(ByVal scopePairs As Variant, _
-                                   ByVal sourceName As String) As Variant
-    If Not IsArray(scopePairs) Then Exit Function
-    If UBound(scopePairs) < LBound(scopePairs) Then Exit Function
-
-    Dim n As Long
-    n = UBound(scopePairs) - LBound(scopePairs) + 1
-
-    If (n Mod 2) <> 0 Then
-        Err.Raise vbObjectError + 1017, sourceName, _
-                  "scopePairs mora imati parove (kolona, vrednost)."
-    End If
-
-    Dim out() As Variant
-    ReDim out(0 To n - 1)
-
-    Dim i As Long
-    For i = 0 To n - 1
-        out(i) = scopePairs(LBound(scopePairs) + i)
-    Next i
-
-    ScopePairsToArray = out
-End Function
-
-' Nova generacija za dokument-tabelu ("GEN-00042").
-Public Function NewGeneracijaID(ByVal tableName As String) As String
-    Const SRC As String = "modDokumenta.NewGeneracijaID"
-
-    RequireColumnIndex tableName, COL_GENERACIJA_ID, SRC
-
-    NewGeneracijaID = GetNextID(tableName, COL_GENERACIJA_ID, "GEN-")
-
-    If Len(Trim$(NewGeneracijaID)) = 0 Then
-        Err.Raise vbObjectError + 1015, SRC, _
-                  "GetNextID nije vratio GeneracijaID za " & tableName & "."
-    End If
-End Function
-
-' Izracunaj i upisi generaciju na upravo dodat red. Koriste je i writer-i koji
-' ne idu kroz Save* (PWA import, invariant rekalkulacija).
-Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, _
-                             ByVal brojCol As String, ByVal broj As String, _
-                             ParamArray vlasnikPairs() As Variant)
-    Const SRC As String = "modDokumenta.ApplyGeneracijaID"
-
-    If rowIndex <= 0 Then
-        Err.Raise vbObjectError + 1016, SRC, _
-                  "Neispravan red za upis generacije (" & tableName & ")."
-    End If
-
-    ' Identitet dokumenta = broj + vlasnik: broj sam nije jedinstven. Vlasnik je
-    ' otpremnica -> StanicaID, prijemnica -> KupacID, zbirna -> VozacID + KupacID
-    ' (sekvenca se broji po vozacu, a dokument pripada kupcu; sam BROJ je
-    ' jedinstven -- SuggestNextBroj za ZBR vrti petlju dok ne nadje slobodan).
-    RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
-                      GeneracijaIDZaBrojArr(tableName, brojCol, broj, _
-                                            ScopePairsToArray(vlasnikPairs, SRC)), SRC
-End Sub
-
-' Pecati NOVU generaciju na upravo dodat red -- bez gledanja na to sta jos stoji
-' pod istim brojem.
-'
-' ApplyGeneracijaID resava DRUGI problem: tamo dva fizicka reda cine JEDAN
-' dokument (Kl.I + Kl.II), pa drugi red mora da nasledi generaciju prvog. Nasledje
-' je tacno samo za pisca koji jedan dokument deli na vise redova.
-'
-' Pisac koji svaki red pise kao ZASEBAN dokument mora ovo. Za njega je nasledje
-' aktivno stetno: dva odvojena dokumenta bi dobila isti GeneracijaID, pa bi
-'   - ZbirnaIdentResolve izbrojao activeLogicalCount = 1 (broji GENERACIJE),
-'     dakle UNIQUE -- F4 pusta, B8 cuti, kolizija se ne prijavljuje;
-'   - StornoZbirna, koji redove bira po generaciji (RedJeIzabranogDokumenta),
-'     stornirao OBA dokumenta na jedan storno;
-'   - modScrStorno vise ne bi mogao ni da ih razlikuje: skrivena kolona
-'     identiteta u gridu je bas COL_GENERACIJA_ID (modScrDokumenti.IdKolonaTipa).
-'
-' Prvi korisnik je modMasterSync: PWA import pise JEDAN red po ClientRecordID-u
-' (obe klase sabrane u "I/II"), a IsDuplicateZbirnaInMaster odbija ponovljen CRID
-' pre upisa -- svaki red koji stigne do AppendRow je dokument koji nikad nije
-' vidjen.
-' ZBR-CHILD-01: generacija roditeljske zbirne za dati BROJ, ili prazno.
+' ZBR-CHILD-01: ZbirnaID JEDINE aktivne zbirne datog BROJA, ili prazno.
 '
 ' FAIL-CLOSED: prazno se vraca za sve sto nije jednoznacno -- nema aktivne zbirne,
-' dvosmislen broj, pokvaren identitet. Dete tada ostaje bez generacije, sto je
-' legitimno stanje i znaci "citaj po broju, kao i do sada". Pogadjati identitet
-' iz broja je tacno ono protiv cega cela ZBR-IDENT celina i postoji.
+' dvosmislen broj, pokvaren identitet. Pogadjati identitet iz broja je tacno ono
+' protiv cega cela ZBR-IDENT celina i postoji: pozivalac koji vec zna ZbirnaID
+' ovo ne zove (S9-4: pisac prevezivanja vise ne).
 '
-' Zove se JEDNOM PO BROJU, ne po redu: ZbirnaIdentResolve cita celu tblZbirna, pa
-' bi poziv u petlji nad decom bio O(n*m). Petlje zato uzimaju gen jednom i salju
-' ga u PoveziDeteNaZbirnu.
+' Zove se JEDNOM PO BROJU, ne po redu: ZbirnaIdentResolve cita celu tblZbirna.
 Public Function ZbirnaIDZaBroj(ByVal broj As String) As String
     Dim id As ZbirnaIdent
     On Error GoTo EH
@@ -8332,9 +8137,9 @@ End Function
 
 ' ZBR-CHILD-01: JEDINI put kojim dete dobija zbirnu u DVA upisa.
 '
-' Broj i generacija se upisuju ZAJEDNO. Dva odvojena upisa bi se pre ili kasnije
-' razisla: neko doda putanju koja postavlja broj a zaboravi generaciju, i dete
-' ostane sa TUDJOM generacijom -- gore od prazne, jer prazna bar znaci "ne znam".
+' Broj (labela) i ZbirnaID roditelja (E4, ZbirnaRoditeljID) se upisuju ZAJEDNO.
+' Dva odvojena upisa bi se pre ili kasnije razisla: neko doda putanju koja
+' postavlja broj a zaboravi roditelja, i dete ostane sa TUDJIM roditeljem.
 '
 ' Zovu ga i SaveOtpremnica/SavePrijemnica posle AppendRow, iako je broj vec u
 ' rowData: prepis iste vrednosti je jeftin, a druga putanja bi znacila da se par
@@ -8342,74 +8147,36 @@ End Function
 ' i tamo rizika nema -- oba polja idu u ISTOM append pozivu, pa ih nema sta da
 ' razdvoji.
 '
-' gen se prosledjuje, ne racuna ovde: pozivaoci su cesto petlje nad decom istog
-' broja (v. ZbirnaIDZaBroj).
+' zbirnaID se prosledjuje, ne racuna ovde: pozivalac ga je vec dokazao (kapija
+' roditelja pisca, ZbirnaRoditeljPrijemnice).
 Public Sub PoveziDeteNaZbirnu(ByVal tableName As String, ByVal rowIndex As Long, _
                               ByVal brojCol As String, ByVal brojZbirne As String, _
-                              ByVal gen As String, ByVal sourceName As String)
+                              ByVal zbirnaID As String, ByVal sourceName As String)
     RequireUpdateCell tableName, rowIndex, brojCol, brojZbirne, sourceName
-    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_ROD, gen, sourceName
+    RequireUpdateCell tableName, rowIndex, COL_DETE_ZBIRNA_ROD, zbirnaID, sourceName
 End Sub
 
 ' ZBR-CHILD-01: dete se odvezuje od zbirne -- oba polja, u istom potezu.
 '
-' Bez ovoga bi odvezano dete zadrzalo generaciju stornirane zbirne i izgledalo kao
+' Bez ovoga bi odvezano dete zadrzalo ZbirnaID stornirane zbirne i izgledalo kao
 ' da joj i dalje pripada, dok mu je broj prazan.
 Public Sub OdveziDeteOdZbirne(ByVal tableName As String, ByVal rowIndex As Long, _
                               ByVal brojCol As String, ByVal sourceName As String)
     PoveziDeteNaZbirnu tableName, rowIndex, brojCol, "", "", sourceName
 End Sub
 
-' Bira redove dokumenta za prefill ispravke (frmDokumenta.Prefill*FromStornirana).
-'
-' Polazi od ANCHOR reda -- konkretnog PK-a stornirane (OldDocID iz correction
-' context-a). Broj dokumenta se NE koristi kao identitet: nije globalno jedinstven
-' (GenerateBrojPrijemnice racuna sekvencu po kupcu, pa dva kupca istog dana dobiju
-' isti broj), pa bi pretraga po broju mogla da prefiluje tudji dokument.
-'
-' Kad anchor PK nije poznat (stariji context bez OldDocID), fallback je poslednje
-' upisan red datog broja -- i tada se ostaje unutar generacije tog reda, pa se
-' redovi dva vlasnika ne mesaju.
-'
-' Iz anchor-a se cita generacija (COL_GENERACIJA_ID) i uzimaju Kl.I i Kl.II SAMO
-' iz nje. Bez generacije (red stariji od uvodjenja kolone) prefiluje se samo sam
-' anchor -- konzervativno, jer pripadnost druge klase nije dokaziva.
 ' ============================================================
 ' IDENTITET DOKUMENTA NA GRANICI PREVEZIVANJA
 '
 ' Broj dokumenta je LABELA, ne identitet: BrojPrijemnice se racuna po kupcu
 ' (GenerateBrojPrijemnice), broj zbirne po vozacu. Dva dokumenta lako dele broj.
-'
-' Identitet logickog dokumenta zbirne je GeneracijaID (ZBR-IDENT-01) -- kolonu
-' pravi modSetup.EnsureSledljivostSchema na SVAKOM startu, a pecate je pisci
-' kroz ApplyGeneracijaID, sa kompozitnim vlasnistvom (zbirna VozacID + KupacID).
-' Prijemnica od S6 koraka 8 generaciju NEMA: dokument je jedan red, pa je
-' identitet sam PrijemnicaID (IdDokumentaSkup).
-'
-' Rutine prevezivanja su do sada primale samo broj i skenirale tabelu po njemu.
-' Ove funkcije im daju identitet.
+' Identitet je PK: ZbirnaID, PrijemnicaID (dokument je jedan red; S9-4 je
+' uklonio poslednje citaoce GeneracijaID-a, plan 14.68).
 ' ============================================================
 
-' Da li red tabele pripada izvornom dokumentu. Sa poznatim identitetom odlucuje
-' iskljucivo PK; bez njega broj (pozivalac je pre toga dokazao jednoznacnost).
-' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
-Public Function PripadaIzvoru(ByRef data As Variant, ByVal rowIdx As Long, _
-                              ByVal cBroj As Long, ByVal cId As Long, _
-                              ByVal broj As String, ByVal srcIds As Object) As Boolean
-    If Not srcIds Is Nothing Then
-        If srcIds.count > 0 Then
-            If cId > 0 Then
-                PripadaIzvoru = srcIds.Exists(Trim$(NzToText(data(rowIdx, cId))))
-                Exit Function
-            End If
-        End If
-    End If
-    If cBroj > 0 Then PripadaIzvoru = (Trim$(NzToText(data(rowIdx, cBroj))) = Trim$(broj))
-End Function
-
 ' Skup PK-eva dokumenta koji je JEDAN red (prijemnica od S6 koraka 2): sam ID,
-' ako red sa njim postoji. Isti oblik kao IdoviGeneracije, pa ga PripadaIzvoru i
-' kapije "zadat identitet koji se ne razresava" citaju bez izmene.
+' ako red sa njim postoji. Kapije "zadat identitet koji se ne razresava" ga citaju
+' kao skup (modPaletniList).
 '
 ' Prazan ID vraca prazan recnik, NE sve redove: pozivalac tada mora da padne na
 ' kapiju nad brojem. Zadat ID koga nema takodje vraca prazan recnik -- pozivalac
@@ -8426,170 +8193,29 @@ Public Function IdDokumentaSkup(ByVal tableName As String, ByVal idCol As String
     If FindRows(tableName, idCol, docID).count > 0 Then res(docID) = True
 End Function
 
-' Svi PK-evi koji pripadaju datoj generaciji. To je "koji su redovi OVAJ
-' dokument" - i Klasa I i Klasa II, i nijedan tudji.
+' Red dokumenta za prefill ispravke (S9-4, plan 14.68, S94-ODL-04): red sa
+' zadatim PK-om -- OldDocID iz correction context-a, ili ID izabranog reda.
 '
-' Prazna generacija vraca prazan recnik, NE sve redove: pozivalac tada mora da
-' padne na kapiju nad brojem, ne na tiho zahvatanje svega.
-Public Function IdoviGeneracije(ByVal tableName As String, ByVal idCol As String, _
-                                ByVal gen As String) As Object
-    Dim res As Object
-    Set res = CreateObject("Scripting.Dictionary")
-    res.CompareMode = vbTextCompare
-    Set IdoviGeneracije = res
-
-    On Error Resume Next
-    gen = Trim$(gen)
-    If Len(gen) = 0 Then Exit Function
-
-    Dim data As Variant: data = GetTableData(tableName)
-    If IsEmpty(data) Then Exit Function
-
-    Dim cId As Long, cGen As Long
-    cId = GetColumnIndex(tableName, idCol)
-    cGen = GetColumnIndex(tableName, COL_GENERACIJA_ID)
-    If cId = 0 Or cGen = 0 Then Exit Function
-
-    Dim i As Long, k As String
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cGen))) = gen Then
-            k = Trim$(NzToText(data(i, cId)))
-            If Len(k) > 0 Then res(k) = True
-        End If
-    Next i
-End Function
-
-Public Sub PickPrefillRows(ByVal data As Variant, _
-                           ByVal cBroj As Long, ByVal cKlasa As Long, _
-                           ByVal cId As Long, ByVal cGen As Long, _
-                           ByVal broj As String, ByVal oldDocID As String, _
-                           ByRef outRowI As Long, ByRef outRowII As Long)
-    outRowI = 0
-    outRowII = 0
-
-    If Not IsArray(data) Then Exit Sub
-
-    Dim anchor As Long
-    anchor = FindAnchorRow(data, cBroj, cId, broj, oldDocID)
-    If anchor = 0 Then Exit Sub
-
-    Dim genTop As String
-    If cGen > 0 Then genTop = Trim$(NzToText(data(anchor, cGen)))
-
-    If Len(genTop) = 0 Then
-        If RowKlasaII(data, anchor, cKlasa) Then
-            outRowII = anchor
-        Else
-            outRowI = anchor
-        End If
-        Exit Sub
-    End If
-
-    Dim bestI As Double, bestII As Double
-    Dim r As Long, rank As Double
-    bestI = -1
-    bestII = -1
-
-    For r = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(r, cGen))) = genTop Then
-            rank = RowRank(data, r, cId)
-
-            If RowKlasaII(data, r, cKlasa) Then
-                If rank > bestII Then
-                    bestII = rank
-                    outRowII = r
-                End If
-            Else
-                If rank > bestI Then
-                    bestI = rank
-                    outRowI = r
-                End If
-            End If
-        End If
-    Next r
-End Sub
-
-' Anchor: red sa datim PK-om; ako PK nije poznat -> poslednje upisan red datog broja.
-Private Function FindAnchorRow(ByVal data As Variant, ByVal cBroj As Long, _
-                               ByVal cId As Long, ByVal broj As String, _
+' Broj dokumenta se NE koristi: nije globalno jedinstven (GenerateBrojPrijemnice
+' racuna sekvencu po kupcu), pa bi pretraga po broju prefilovala tudji dokument.
+' Prazan ili nepostojeci PK daje 0 -- pozivalac tada nema prefill, bez pada na
+' "poslednji red istog broja". Do S9-4 je red sa GeneracijaID-om vodio na
+' NAJNOVIJI red iste generacije, dakle mozda na drugi dokument; klasa je od S1b
+' na stavkama, pa je dokument jedan red i generacija nema sta da doda.
+'
+' Stornirano se ne filtrira: u ispravci je stari dokument vec storniran.
+Public Function PrefillRedPoID(ByVal data As Variant, ByVal cId As Long, _
                                ByVal oldDocID As String) As Long
     Dim r As Long
+    If Not IsArray(data) Then Exit Function
 
     If Len(Trim$(oldDocID)) > 0 And cId > 0 Then
         For r = 1 To UBound(data, 1)
             If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then
-                FindAnchorRow = r
+                PrefillRedPoID = r
                 Exit Function
             End If
         Next r
-        ' PK je ZADAT ali ga u tabeli NEMA -> vrati prazno, bez fallback-a.
-        '
-        ' Fallback po broju postoji samo za STARE kontekste koji OldDocID
-        ' uopste nemaju. Kad kontekst tvrdi konkretan dokument a njega nema,
-        ' "uzmi poslednji red istog broja" znaci: prefiluj TUDJI dokument.
-        ' Broj nije jedinstven (GenerateBrojPrijemnice broji po kupcu), pa je
-        ' to realan scenario, a ne teorijski.
-        Exit Function
-    End If
-
-    If cBroj <= 0 Then Exit Function
-
-    Dim target As String
-    target = Trim$(broj)
-    If Len(target) = 0 Then Exit Function
-
-    Dim best As Double, rank As Double
-    best = -1
-
-    For r = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(r, cBroj))) = target Then
-            rank = RowRank(data, r, cId)
-            If rank >= best Then
-                best = rank
-                FindAnchorRow = r
-            End If
-        End If
-    Next r
-End Function
-
-' Rang reda: numericki sufiks ID-a (GetNextID je monoton), inace indeks reda.
-' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
-Private Function RowRank(ByRef data As Variant, ByVal rowIndex As Long, _
-                         ByVal cId As Long) As Double
-    RowRank = -1
-
-    If cId > 0 Then RowRank = IdRank(NzToText(data(rowIndex, cId)))
-    If RowRank < 0 Then RowRank = CDbl(rowIndex)
-End Function
-
-' Klasa reda je II (prazna/nepoznata klasa se tretira kao I, kao u ostatku koda).
-' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
-Private Function RowKlasaII(ByRef data As Variant, ByVal rowIndex As Long, _
-                            ByVal cKlasa As Long) As Boolean
-    If cKlasa <= 0 Then Exit Function
-    RowKlasaII = (UCase$(Trim$(NzToText(data(rowIndex, cKlasa)))) = "II")
-End Function
-
-' Numericki sufiks ID-a ("OTP-00042" -> 42); -1 ako ga nema. GetNextID je monoton
-' po tabeli, pa je veci sufiks = kasnije upisan red.
-Private Function IdRank(ByVal idText As String) As Double
-    Dim s As String
-    s = Trim$(idText)
-
-    Dim i As Long, ch As String, digits As String
-    For i = Len(s) To 1 Step -1
-        ch = Mid$(s, i, 1)
-        If ch >= "0" And ch <= "9" Then
-            digits = ch & digits
-        Else
-            Exit For
-        End If
-    Next i
-
-    If Len(digits) = 0 Then
-        IdRank = -1
-    Else
-        IdRank = Val(digits)
     End If
 End Function
 
@@ -8967,8 +8593,8 @@ Private Function SavePrijemnicaDokument(ByVal tx As clsTransaction, _
     ' Od S6 koraka 2 se veze JEDNOM -- dokument je jedan.
     tx.BindSourceDocument DOK_TIP_PRIJEMNICA, newID
 
-    ' ZBR-CHILD-01: generacija roditeljske zbirne (v. isti komentar u
-    ' SaveOtpremnica). Prijemnica roditelja obicno IMA, pa je ovde retko prazna.
+    ' ZBR-CHILD-01: ZbirnaID roditeljske zbirne (E4), dokazan kapijom roditelja
+    ' iznad (ZbirnaRoditeljPrijemnice ili razresenje broja).
     PoveziDeteNaZbirnu TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ_ZBIRNE, brojZbirne, _
                        roditeljID, "modDokumenta.SavePrijemnicaDokument"
 
@@ -10589,208 +10215,82 @@ EH:
     Err.Raise errNum, "modDokumenta.GetPrijemniceSaOsirocenimPaletama", errDesc
 End Function
 
-' Re-point prijemnice na drugu (aktivnu) zbirnu po BrojZbirne. Koristi se posle
-' storna otpremnice+zbirne (van autohladnjace): operater napravi novu otpremnicu+
-' zbirnu pa "osirocenu" prijemnicu prevezuje na nju. Handle = BrojPrijemnice
-' (citljiv, eksteran kad nije autohladnjaca); stvarna veza lanca = BrojZbirne.
-' PrijemnicaID se NE dira -> faktura-stavke i paleta-stavke ostaju ispravne.
-' prijemnicaID / zbirnaGeneracijaID: identitet prijemnice koja se prevezuje
-' (PK; do S6 koraka 8 njena generacija) i zbirne na koju ide (ZBR-IDENT-01). Kad
-' su poznati, bira se BAS taj dokument, a broj ostaje labela. Oba su opciona
-' zbog zatecenih pozivalaca - bez njih vazi kapija nad jednoznacnoscu broja, na
-' svakoj strani zasebno.
-Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
-                                              ByVal targetBrZbirne As String, _
-                                              Optional ByVal prijemnicaID As String = "", _
-                                              Optional ByVal zbirnaGeneracijaID As String = "") As Boolean
+' OPORAVAK "Prevezi prijemnicu" (S9-4, plan 14.68, S94-ODL-01/02): prijemnica
+' koja je ostala bez aktivne zbirne (storno roditelja, siroce) dobija drugu.
+'
+' STROGO PO ID-u, na obe strane: prijemnicaID je izabran red izvora, ciljZbirnaID
+' izabran red cilja. Broj se ne prima -- labela se cita iz tblZbirna po ID-u
+' cilja, pa ne moze da opise tudji dokument. Do S9-4 je cilj biran po
+' generaciji (koja je tada isla i u E4 kao "GEN-...") ili po broju, a za dve
+' aktivne zbirne istog broja istog vlasnika pisac je upisivao prazan E4 uz True.
+' PrijemnicaID se ne menja, pa faktura i palete (paletna stavka zna samo liniju
+' prijemnice, S8 rez 2b-2) ostaju ispravne.
+'
+' Cilj prolazi ISTU kapiju kao pisac prijemnice (ZbirnaRoditeljPrijemnice,
+' PRJ-ZBR-01: tacno jedna, nije stornirana, isti kupac i vozac, izdata), pa robu
+' (PRJ-ZBR-02, KI-047). Prevezivanje je druga ulazna tacka iste ivice E4, pa ne
+' sme biti sire od pisca (P1, #477 LZP-ODL-13). E4 je ZbirnaID cilja kako stoji u
+' tabeli: prazan E4 posle uspeha nije moguc.
+'
+' outRazlog: razlog odbijanja za operatera (KI-055). Odbijanje ne menja nista.
+Public Function ReassignPrijemnicaToZbirna_TX(ByVal prijemnicaID As String, _
+                                              ByVal ciljZbirnaID As String, _
+                                              Optional ByRef outRazlog As String) As Boolean
     Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
-    Dim tx As clsTransaction
+    Dim tx As clsTransaction, redovi As Collection, red As Long
+    Dim brojCilja As String, roditeljID As String, robaRazlog As String
+    Dim errNum As Long, errDesc As String
+    outRazlog = ""
     On Error GoTo EH
 
-    brPrijemnice = Trim$(brPrijemnice)
-    targetBrZbirne = Trim$(targetBrZbirne)
-    If Len(brPrijemnice) = 0 Or Len(targetBrZbirne) = 0 Then Exit Function
-
-    ' Cilj mora biti AKTIVNA zbirna (postoji + nije stornirana). ZbirnaID je uvek
-    ' popunjen -> dokaz postojanja; Stornirano je blank za aktivnu pa se NE sme
-    ' koristiti kao dokaz postojanja.
-    ' Sa generacijom cilj se bira po IDENTITETU: LookupValue po broju uzima prvi
-    ' pogodak. Broj zbirne JESTE jedinstven kad ga da generator (SuggestNextBroj
-    ' za ZBR bumpuje sekvencu dok BrojZbirneExists ne kaze da je slobodan), ali
-    ' ne i kad je unet rucno -- auto-broj se moze iskljuciti u Podesavanjima.
-    Dim tgtIds As Object
-    Set tgtIds = IdoviGeneracije(TBL_ZBIRNA, COL_ZBR_ID, zbirnaGeneracijaID)
-
-    If Len(Trim$(zbirnaGeneracijaID)) > 0 And tgtIds.count = 0 Then Exit Function
-
-    Dim tId As Variant
-    If tgtIds.count > 0 Then
-        tId = tgtIds.Keys()(0)
-        If UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, CStr(tId), _
-                                             COL_STORNIRANO)))) = "DA" Then Exit Function
-        ' Labela koja se upisuje mora da opisuje BAS izabrani dokument. Kad
-        ' generacija odlucuje, broj se cita iz nje - ne veruje se onome sto je
-        ' pozivalac poslao, jer bi neuskladjen par tiho upisao tudji broj.
-        targetBrZbirne = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, CStr(tId), _
-                                                    COL_ZBR_BROJ)))
-        If Len(targetBrZbirne) = 0 Then Exit Function
-    Else
-        ' CILJ SE NE RAZRESAVA PO REDU KOJI JE SLUCAJNO PRVI.
-        '
-        ' LookupValue po broju vraca PRVI pogodak i ne gleda storno. Posle
-        ' storna jednog vlasnika prvi red sa tim brojem moze biti storniran
-        ' dok pod istim brojem stoji AKTIVNA zbirna -- a tada je legitimno
-        ' prevezivanje TIHO stajalo: bez poruke, bez loga, samo False.
-        '
-        ' ZbirnaPostoji gleda samo AKTIVNE redove, pa jedno tacno pitanje
-        ' ("ima li aktivnog cilja pod ovim brojem") zamenjuje dva pogresna
-        ' ("postoji li ijedan red" + "da li je PRVI storniran"). Test 125.
-        '
-        ' RAZRESAVA SE ISTIM POREDJENJEM KOJIM RADI KAPIJA ISPOD.
-        '
-        ' ZbirnaPostoji ovde NE valja iako pita pravu stvar: on poredi bez
-        ' obzira na velicinu slova (StrComp vbTextCompare), a VlasniciPoBroju
-        ' -- koji stoji iza kapije -- poredi TACNO. Sa "zb-test-kask" bi
-        ' postojanje reklo DA, kapija bi videla NULA vlasnika (a ona hvata samo
-        ' n > 1, pa bi propustila), i u tblPrijemnica i tblPaletaStavka bi se
-        ' upisala labela POZIVAOCA umesto one iz tabele. Postojanje i
-        ' vlasnistvo bi govorili o dve razlicite stvari.
-        '
-        ' Jedan poziv daje oba odgovora: broj AKTIVNIH vlasnika pod tim brojem.
-        ' Nula znaci "nema aktivnog cilja", a vise od jedan hvata kapija ispod
-        ' -- koja ostaje zbog svoje poruke. Test 125.
-        Dim aktivniVlasnici As Long
-        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                          targetBrZbirne, SRC, False, _
-                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-        If aktivniVlasnici = 0 Then Exit Function
-
-        ' Bez generacije CILJ MORA BITI JEDNOZNACAN, i to ISTORIJSKI.
-        '
-        ' Vlasnistvo zbirne je vozac + kupac, isti par koji koriste
-        ' StornoZbirna i ApplyGeneracijaID. Broji se IKAD, ne samo aktivni:
-        ' storniran vlasnik i dalje ima AKTIVNU decu, pa posle njegovog storna
-        ' ostane jedan aktivan i broj IZGLEDA jednoznacan -- a nije.
-        '
-        ' Ovde je to obavezno, ne opciono: recovery panel u frmDokumenta zove
-        ' ovu funkciju sa DVA argumenta (bez generacije) i BEZ ijedne spoljne
-        ' kapije, pa se funkcija mora braniti sama. Putanje iz modStornoFlow
-        ' imaju ZbirnaBrojJeDvosmislenIkad iznad sebe; ta nema nista.
-        '
-        ' Veza koja se upisuje je gola labela (COL_PRJ_BROJ_ZBIRNE), pa bi
-        ' dete zavrsilo vezano za broj koji
-        ' pripada dvama vlasnickim tokovima. Test 125.
-        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _
-                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC
+    prijemnicaID = Trim$(prijemnicaID)
+    ciljZbirnaID = Trim$(ciljZbirnaID)
+    If Len(prijemnicaID) = 0 Or Len(ciljZbirnaID) = 0 Then
+        Err.Raise vbObjectError + 1441, SRC, _
+                  "Prevezivanje trazi PrijemnicaID izvora i ZbirnaID cilja (prijemnica '" & _
+                  prijemnicaID & "', zbirna '" & ciljZbirnaID & "')."
     End If
 
-    Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
-    cBrPrij = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
-    cBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
-    If cBrPrij = 0 Or cBrZbr = 0 Then Exit Function
-
-    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
-    If IsEmpty(data) Then Exit Function
-
-    ' IZVOR SE BIRA PO IDENTITETU. Sa poznatim PrijemnicaID-om menja se samo taj
-    ' dokument, i nijedan tudji. Bez njega ostaje izbor po broju, ali tek posto se
-    ' dokaze da je broj jednoznacan - inace bi se prevezala i prijemnica drugog
-    ' kupca koja deli broj.
-    Dim srcIds As Object
-    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
-    If Len(Trim$(prijemnicaID)) > 0 Then
-        ' ZADAT identitet koji se ne razresava je GRESKA, ne poziv na fallback.
-        ' Pad na broj bi znacio: pozivalac je rekao "bas ovaj dokument", nije
-        ' nadjen, pa se dira nesto drugo. Prazan argument je nesto sasvim drugo
-        ' (legacy zapis) i za njega fallback ostaje.
-        If srcIds.count = 0 Then Exit Function
-    Else
-        ' AKTIVNI vlasnik mora biti jedan. NAMERNO nije IKAD -- probano pa
-        ' povuceno, jer je bila sira zabrana bez dokaza pogresne mutacije.
-        '
-        ' Zastita je zaglavlje prijemnice: u targetRows ulaze samo AKTIVNI
-        ' redovi, pa storniran dokument drugog kupca ne moze da se pomeri (test
-        ' 126). Paletni sloj (stavke birane po ID-u, legacy stavka bez ID-a po
-        ' broju) otisao je u S8 rezu 2b-2: paletna stavka zbirnu ne nosi.
-        '
-        ' IKAD kapija ovde bi zabranila i potpuno resiv legacy oporavak: broj
-        ' prijemnice je numerisan PO KUPCU, pa je kolizija ocekivana, a writer
-        ' vec ume da razdvoji aktivan dokument. Sira zabrana bi operatera
-        ' terala na rucni rad bez ijedne izmerene koristi.
-        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
-                                   COL_PRJ_KUPAC
+    ' IZVOR: tacno jedna AKTIVNA prijemnica. Stornirana se ne prevezuje -- njen
+    ' nastavak je ispravka, ne nova zbirna.
+    RequireTacnoJedan TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, "PrijemnicaID (izvor prevezivanja)", SRC
+    Set redovi = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
+    red = CLng(redovi(1))
+    If UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
+                                         COL_STORNIRANO)))) = "DA" Then
+        Err.Raise vbObjectError + 1442, SRC, _
+                  "Prijemnica " & prijemnicaID & " je stornirana -- ne prevezuje se."
     End If
-    Dim cPrjId As Long: cPrjId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
 
-    ' Aktivni red(ovi) izabrane prijemnice: sa identitetom jedan, bez njega svi
-    ' aktivni redovi jednoznacnog broja.
-    Dim targetRows As Collection: Set targetRows = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then
-            If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> "DA" Then
-                targetRows.Add i
-            End If
-        End If
-    Next i
-    If targetRows.count = 0 Then Exit Function                  ' nema aktivne prijemnice
-
-    ' PRJ-ZBR-02 (KI-047): cilj mora da nosi ISTU robu kao prijemnica koja se
-    ' prevezuje. Prevezivanje je druga ulazna tacka iste veze, pa prolazi kroz istu
-    ' kapiju kao pisac. Cilj se cita po ID-u: izabran (generacija) ili jedini
-    ' vlasnik broja, dokazan iznad. Odbijanje dize gresku -- EH je zapise i vrati
-    ' False, pre ijedne izmene.
-    Dim ciljID As String, robaRazlog As String, cVr As Long, cSo As Long
-    If tgtIds.count > 0 Then
-        ciljID = CStr(tId)
-    Else
-        ciljID = ZbirnaIDZaBroj(targetBrZbirne)
-        If Len(ciljID) = 0 Then
-            ciljID = Trim$(NzToText(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                                   targetBrZbirne, COL_ZBR_ID)))
-        End If
-    End If
-    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
-    cSo = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
-    For i = 1 To targetRows.count
-        robaRazlog = PrijemnicaRobaRazlog(ciljID, NzToText(data(targetRows(i), cVr)), _
-                                          NzToText(data(targetRows(i), cSo)))
-        If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog
-    Next i
-
-    ' ZBR-CHILD-01: generacija CILJA, jednom za sve redove.
-    '
-    ' Kad je pozivalac zadao generaciju, ona JE identitet cilja -- iznad je vec
-    ' dokazano da se razresava (tgtIds). Kad nije, izvodi se iz broja i prazna je
-    ' ako broj nije jednoznacan; tada dete ostaje bez generacije, sto je isto
-    ' stanje kao pre ove kolone.
-    Dim genCilja As String
-    genCilja = Trim$(NzToText(zbirnaGeneracijaID))
-    If Len(genCilja) = 0 Then genCilja = ZbirnaIDZaBroj(targetBrZbirne)
+    ' CILJ: kapija pisca prijemnice. Broj koji ona poredi je broj samog cilja, pa
+    ' ta provera ovde uvek prolazi -- ostaju postojanje, storno, vlasnik i izdato.
+    brojCilja = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, ciljZbirnaID, COL_ZBR_BROJ)))
+    roditeljID = ZbirnaRoditeljPrijemnice(ciljZbirnaID, brojCilja, _
+                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_KUPAC)), _
+                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_VOZAC)), _
+                     SRC)
+    robaRazlog = PrijemnicaRobaRazlog(roditeljID, _
+                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_VRSTA)), _
+                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_SORTA)))
+    If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog
 
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_PRIJEMNICA
-
-    Dim k As Long
-    For k = 1 To targetRows.count
-        PoveziDeteNaZbirnu TBL_PRIJEMNICA, targetRows(k), COL_PRJ_BROJ_ZBIRNE, _
-                           targetBrZbirne, genCilja, SRC
-    Next k
-
+    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, roditeljID, SRC
     ' Paletne stavke se NE diraju (S8 rez 2b-2, PAL-ODL-03): paleta zna samo liniju
-    ' prijemnice, a zbirnu cita iz zaglavlja prijemnice. Do 2b-2 je ovde stajao
-    ' upis BrojZbirne i ZbirnaRoditeljID na paletne stavke -- skriven pisac koji je
-    ' mogao da se razidje sa zaglavljem (plan 14.58).
-
+    ' prijemnice, a zbirnu cita iz zaglavlja prijemnice.
     tx.CommitTx
     Set tx = Nothing
     ReassignPrijemnicaToZbirna_TX = True
     Exit Function
 EH:
+    ' Opis se cita PRE rollback-a i loga: oba umeju da obrisu Err.
+    errNum = Err.Number
+    errDesc = Err.description
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
+    LogError SRC, errDesc, errNum
+    outRazlog = errDesc
     ReassignPrijemnicaToZbirna_TX = False
 End Function
 

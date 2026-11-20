@@ -515,7 +515,7 @@ End Function
 Private Function GldBrojStorno(ByVal tbl As String, ByVal scopeKol As String, _
                                ByVal scopeVal As String, ByVal brojKol As String) As Long
     Dim data As Variant
-    Dim cScope As Long, cBroj As Long, cGen As Long, cSt As Long
+    Dim cScope As Long, cId As Long, cSt As Long
     Dim i As Long
     Dim d As Object
     Dim k As String
@@ -526,9 +526,8 @@ Private Function GldBrojStorno(ByVal tbl As String, ByVal scopeKol As String, _
     If IsEmpty(data) Then Exit Function
 
     cScope = RequireColumnIndex(tbl, scopeKol, "GldBrojStorno")
-    cBroj = RequireColumnIndex(tbl, brojKol, "GldBrojStorno")
+    cId = RequireColumnIndex(tbl, GldIdKol(tbl), "GldBrojStorno")
     cSt = RequireColumnIndex(tbl, COL_STORNIRANO, "GldBrojStorno")
-    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
 
     Set d = CreateObject("Scripting.Dictionary")
     d.CompareMode = vbTextCompare
@@ -536,9 +535,7 @@ Private Function GldBrojStorno(ByVal tbl As String, ByVal scopeKol As String, _
     For i = 1 To UBound(data, 1)
         If StrComp(Trim$(NzToText(data(i, cScope))), scopeVal, vbTextCompare) = 0 Then
             If UCase$(Trim$(NzToText(data(i, cSt)))) = "DA" Then
-                k = ""
-                If cGen > 0 Then k = Trim$(NzToText(data(i, cGen)))
-                If Len(k) = 0 Then k = "BR:" & Trim$(NzToText(data(i, cBroj)))
+                k = Trim$(NzToText(data(i, cId)))
                 If Not d.Exists(k) Then d.Add k, True
             End If
         End If
@@ -573,14 +570,14 @@ End Function
 ' otpremnice po 500 kg ostavio bi agregat isti i test ZELEN -- bas kvar zbog
 ' kojeg je sekcija i dodata.
 '
-' Identitet dokumenta danas: GeneracijaID ako ga red nosi, inace poslovni broj.
-' modOtkup NE pise GeneracijaID, pa se otkup broji po BrojDokumenta; otpremnica,
-' zbirna i prijemnica ga imaju. Posle Otkup cutover-a sve postaje COUNT(DISTINCT <Doc>ID) --
-' menja se OVAJ adapter, golden ostaje isti.
+' Identitet dokumenta je PK tabele: COUNT(DISTINCT <Doc>ID) (S9-4, plan 14.68).
+' Do S9-4 je ovde stajalo "GeneracijaID ako ga red nosi, inace poslovni broj" --
+' generaciju vise niko ne pise, a broj nije identitet (dva dokumenta istog broja
+' bi se brojala kao jedan). brojKol ostaje u potpisu radi poziva; ne cita se.
 Private Function GldBrojDok(ByVal tbl As String, ByVal scopeKol As String, _
                             ByVal scopeVal As String, ByVal brojKol As String) As Long
     Dim data As Variant
-    Dim cScope As Long, cBroj As Long, cGen As Long
+    Dim cScope As Long, cId As Long
     Dim i As Long
     Dim d As Object
     Dim k As String
@@ -593,22 +590,30 @@ Private Function GldBrojDok(ByVal tbl As String, ByVal scopeKol As String, _
     If IsEmpty(data) Then Exit Function
 
     cScope = RequireColumnIndex(tbl, scopeKol, "GldBrojDok")
-    cBroj = RequireColumnIndex(tbl, brojKol, "GldBrojDok")
-    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
+    cId = RequireColumnIndex(tbl, GldIdKol(tbl), "GldBrojDok")
 
     Set d = CreateObject("Scripting.Dictionary")
     d.CompareMode = vbTextCompare
 
     For i = 1 To UBound(data, 1)
         If StrComp(Trim$(NzToText(data(i, cScope))), scopeVal, vbTextCompare) = 0 Then
-            k = ""
-            If cGen > 0 Then k = Trim$(NzToText(data(i, cGen)))
-            If Len(k) = 0 Then k = "BR:" & Trim$(NzToText(data(i, cBroj)))
+            k = Trim$(NzToText(data(i, cId)))
             If Not d.Exists(k) Then d.Add k, True
         End If
     Next i
 
     GldBrojDok = d.count
+End Function
+
+' PK dokumenta tabele koju golden broji (DOKUMENTI i STATUS).
+Private Function GldIdKol(ByVal tbl As String) As String
+    Select Case tbl
+        Case TBL_OTKUP: GldIdKol = COL_OTK_ID
+        Case TBL_ZBIRNA: GldIdKol = COL_ZBR_ID
+        Case TBL_PRIJEMNICA: GldIdKol = COL_PRJ_ID
+        Case Else
+            Err.Raise GLD_ERR, "GldIdKol", "golden ne zna PK tabele " & tbl
+    End Select
 End Function
 
 ' Otpremnice SCENARIJA: clanovi zbirnih pod kljucem scenarija (tblZbirnaIzvori).
@@ -1267,9 +1272,9 @@ End Sub
 ' GldIdentitetZbirni, pa bi golden izlaz postao "kg=0.00" i sidro bi se pomerilo
 ' bez ijedne promene u ponasanju koje ovaj scenario meri.
 '
-' Seed zato pravi ZATECENI oblik reda, isti koji je pisac pravio, i pecati
-' generaciju istim scope-om (broj + vozac + kupac) -- GldStornoZbirne je cita iz
-' reda. I seed i citaoci zaglavlja nestaju zajedno u S3e-2.
+' Seed zato pravi ZATECENI oblik reda, isti koji je pisac pravio. Generaciju
+' vise ne pecati (S9-4): API je obrisan, a storno i brojanje idu po ZbirnaID-u.
+' I seed i citaoci zaglavlja nestaju zajedno u S3e-2.
 Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
                               ByVal kolI As Double)
     Dim zbirnaID As String
@@ -1299,8 +1304,7 @@ Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
     GldCelija nr, TBL_ZBIRNA, COL_ZBR_KOL_AMB, 50
     GldCelija nr, TBL_ZBIRNA, COL_ZBR_KLASA, KLASA_I
 
-    ' Red se trazi PO ID-u, ne preko nr.Index: ApplyGeneracijaID ocekuje indeks u
-    ' istoj konvenciji koju vraca AppendRow, a ta dva se ne moraju poklapati.
+    ' Red se trazi PO ID-u: seed mora da je upisao TACNO jedan red.
     Dim redovi As Collection
     Set redovi = FindRows(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID)
     If redovi Is Nothing Then
@@ -1309,9 +1313,6 @@ Private Sub GldZbirnaZaVozaca(ByVal broj As String, ByVal vozac As String, _
     If redovi.count <> 1 Then
         Err.Raise GLD_ERR, "GldZbirnaZaVozaca", "zbirna nije nadjena tacno jednom"
     End If
-
-    ApplyGeneracijaID TBL_ZBIRNA, CLng(redovi(1)), COL_ZBR_BROJ, broj, _
-                      COL_ZBR_VOZAC, vozac, COL_ZBR_KUPAC, GLD_KUPAC
 
     ' Zaglavlje bez stavki obara strog citalac zbirne nad CELIM registrom
     ' (S4-1), a golden se vrti pre ostalih suite-a i ostavlja svoje redove u
@@ -1350,16 +1351,13 @@ End Sub
 
 ' Storno JEDNE od vise zbirnih pod istim brojem.
 '
-' Danas StornoZbirna_TX trazi broj + generaciju, jer broj sam nije identitet --
-' adapter generaciju cita iz reda koji je writer vratio. Posle Zbirna
-' cutover-a ide
-' StornoZbirna_TX(ZbirnaID); scenario i golden ostaju isti.
+' Storno ide po ZbirnaID-u (StornoZbirna_TX, S4-2): broj sam nije identitet.
 Private Sub GldStornoZbirne(ByVal idx As Long)
     Dim data As Variant
-    Dim cID As Long, cGen As Long, cBroj As Long
+    Dim cID As Long, cBroj As Long
     Dim i As Long
     Dim ciljID As String
-    Dim gen As String, broj As String
+    Dim broj As String
 
     ciljID = Trim$(CStr(m_Zbr(idx)))
 
@@ -1370,12 +1368,10 @@ Private Sub GldStornoZbirne(ByVal idx As Long)
 
     cID = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "GldStornoZbirne")
     cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "GldStornoZbirne")
-    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
 
     For i = 1 To UBound(data, 1)
         If StrComp(Trim$(NzToText(data(i, cID))), ciljID, vbTextCompare) = 0 Then
             broj = Trim$(NzToText(data(i, cBroj)))
-            If cGen > 0 Then gen = Trim$(NzToText(data(i, cGen)))
             Exit For
         End If
     Next i
@@ -1384,8 +1380,8 @@ Private Sub GldStornoZbirne(ByVal idx As Long)
         Err.Raise GLD_ERR, "GldStornoZbirne", "zbirna " & ciljID & " nije nadjena"
     End If
 
-    ' Storno ide po ZbirnaID-u (S4-2) -- a ciljID je bas on, pa se broj i
-    ' generacija ovde vise ne razresavaju. Broj ostaje samo za poruku ispod.
+    ' Storno ide po ZbirnaID-u (S4-2) -- a ciljID je bas on. Broj sluzi samo
+    ' kao dokaz da red postoji (poruka iznad).
     If Not StornoZbirna_TX(ciljID) Then
         Err.Raise GLD_ERR, "GldStornoZbirne", "storno zbirne nije uspeo"
     End If
@@ -1696,8 +1692,8 @@ End Sub
 
 ' G2: DVA dokumenta sa istim poslovnim brojem.
 '
-' Kapija G2 ugovora: storno jednog ne sme da dirne drugi. Danas to drzi
-' GeneracijaID; posle Otkup cutover-a drzi DocumentID, a golden ostaje isti.
+' Kapija G2 ugovora: storno jednog ne sme da dirne drugi. To drzi ZbirnaID
+' (storno po PK-u, S4-2); do S9-4 je seed pecatio i GeneracijaID.
 Private Sub Gld_G2_IstiBrojDvaDokumenta()
     Dim tx As clsTransaction
     Dim gldDesc As String

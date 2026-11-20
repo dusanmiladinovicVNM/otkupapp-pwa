@@ -119,61 +119,19 @@ SABOTAZE = {
     # je dokaz bio kruzan. Sada se obara tvrdnja o tome sta se STVARNO pomeri.
     "prijemnica-izvor-i-stornirani": (
         "modDokumenta.bas",
-        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
-        "            If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> \"DA\" Then\n"
-        "                targetRows.Add i\n"
-        "            End If\n"
-        "        End If\n",
-        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
-        "            targetRows.Add i   ' SABOTAZA: i storniran tudji dokument ulazi\n"
-        "        End If\n",
+        "    If UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _\n"
+        "                                         COL_STORNIRANO)))) = \"DA\" Then\n",
+        "    If False Then   ' SABOTAZA: i storniran izvor se prevezuje\n",
         "T_Prijemnica_PomeraSamoAktivan",
-        "storniran dokument DRUGOG kupca nije pomeren",
+        "storniran izvor se ne prevezuje; razlog kaze da je storniran",
     ),
-    # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
-    # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa
-    # prijemnica zavrsi vezana GOLOM LABELOM za broj koji nose dva vlasnicka
-    # toka. Recovery panel u frmDokumenta zove bas ovu putanju, bez ijedne
-    # spoljne kapije.
-    "cilj-zbirna-kapija-samo-aktivni": (
-        "modDokumenta.bas",
-        "        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
-        "                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC\n",
-        "        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
-        "                                   SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC   ' SABOTAZA\n",
-        "T_CiljZbirna_NePoPrvomRedu",
-        "istorijski dvosmislen broj ne prolazi bez generacije",
-    ),
-    # Bez provere da AKTIVAN cilj postoji, prevezivanje ide i na broj pod kojim
-    # su svi redovi stornirani -- IKAD kapija ga ne zaustavlja jer je vlasnik
-    # jedan. Ovo je ono sto je zatecena provera prvog reda pokusavala da radi,
-    # samo je gledala red koji je SLUCAJNO prvi.
-    # (v. POZNATI_NALAZI_DOKAZ -- od PRJ-ZBR-02 ne obara nista.)
-    "cilj-zbirna-bez-provere-postojanja": (
-        "modDokumenta.bas",
-        "        If aktivniVlasnici = 0 Then Exit Function\n",
-        "        ' SABOTAZA: nema provere da aktivan cilj uopste postoji\n",
-        "T_CiljZbirna_NePoPrvomRedu",
-        "prevezivanje na broj bez ijedne aktivne zbirne ne prolazi",
-    ),
-    # Postojanje cilja pitano DRUGACIJIM poredjenjem nego kapija ispod:
-    # ZbirnaPostoji ide kroz StrComp vbTextCompare, a VlasniciPoBroju poredi
-    # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
-    # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
-    # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
-    # (v. POZNATI_NALAZI_DOKAZ -- od ZBR-NORM-02 ne obara nista nad fixture-om.)
-    "cilj-zbirna-case-mesano": (
-        "modDokumenta.bas",
-        "        Dim aktivniVlasnici As Long\n"
-        "        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _\n"
-        "                                          targetBrZbirne, SRC, False, _\n"
-        "                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count\n"
-        "        If aktivniVlasnici = 0 Then Exit Function\n",
-        "        ' SABOTAZA: postojanje poredi drugacije nego kapija ispod\n"
-        "        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function\n",
-        "T_CiljZbirna_NePoPrvomRedu",
-        "broj sa drugom velicinom slova nije isti broj",
-    ),
+    # cilj-zbirna-kapija-samo-aktivni je povucena u S9-4 (plan 14.68): pisac prevezivanja ne prima broj,
+    # pa kapije po broju vise nema (S94-ODL-01). Test 114 meri cilj po ID-u.
+
+    # cilj-zbirna-bez-provere-postojanja je povucena u S9-4 (plan 14.68): grana cilja po broju je obrisana.
+
+    # cilj-zbirna-case-mesano je povucena u S9-4 (plan 14.68): grana cilja po broju je obrisana.
+
     # Kes indeksa kolone je pamtio i NULU, pa je jedan trenutan neuspeh vazio
     # za ceo BeginTableCache prozor -- svaki sledeci poziv nad istom kolonom
     # dobijao je istu nulu bez novog pokusaja, a RequireColumnIndex na to staje.
@@ -1405,15 +1363,9 @@ SABOTAZE = {
         "Test_OTP_F8StornoPoID",
         "OTP F8: storno dira OTP-B",
     ),
-    # --- identitet dokumenta i fail-closed grane (hardening posle review-a) ---
-    "prefill-fallback-po-broju": (
-        "modDokumenta.bas",
-        "        ' to realan scenario, a ne teorijski.\n"
-        "        Exit Function\n",
-        "        ' SABOTAZA: nepostojeci PK opet pada nazad na broj\n",
-        "T_Prefill_PoIdentitetuNePoBroju",
-        "nepoznat PK ne pogadja tudji dokument istog broja",
-    ),
+    # prefill-fallback-po-broju je povucena u S9-4 (plan 14.68): prefill nema pad na broj
+    # (PrefillRedPoID ne prima broj, S94-ODL-04), pa nema sta da se vrati.
+
     "prefill-anchor-broj": (
         "modDokumenta.bas",
         "    If Len(Trim$(oldDocID)) > 0 And cId > 0 Then\n"
@@ -1454,20 +1406,9 @@ SABOTAZE = {
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "roba je stigla na dokument kupca 1 (40 gajbica)",
     ),
-    # "relink-cilj-bez-kapije" je povucen u S8 rezu 1b (N2): kapija dvosmislenog
-    # CILJA po broju je obrisana sa celom granom po broju. Prevezivanje bez ID-a
-    # sada odbija ulazna kapija (s8r1b-prevezivanje-bez-izvornog-id, test 311).
-    # zbirna-paleta-po-broju je povucena u S8 rezu 2b-2: prevezivanje prijemnice na
-    # zbirnu vise ne pise na paletne stavke (paletni rep ReassignPrijemnicaToZbirna_TX
-    # je obrisan), pa nema upisa koji bi isao po broju. Test 28 meri izvedenu zbirnu.
-    # Zadata generacija koje nema nije poziv na fallback po broju.
-    "generacija-nema-pa-po-broju": (
-        "modDokumenta.bas",
-        "        If srcIds.count = 0 Then Exit Function\n",
-        "        If False Then Exit Function   ' SABOTAZA: pada na broj\n",
-        "T_ZadataGeneracijaKojeNema_Staje",
-        "zadat identitet prijemnice koga nema zaustavlja upis",
-    ),
+    # generacija-nema-pa-po-broju je povucena u S9-4 (plan 14.68): izvor je ID ili nista; mutant koji
+    # skida RequireTacnoJedan je ekvivalentan (FindRows prazan -> greska -> False).
+
     # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
     # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
     "verdikt-po-broju": (
@@ -11886,14 +11827,8 @@ SABOTAZE = {
         "Test_S6K8_PrijemnicaStareKoloneSelfHeal",
         "S6K8 self-heal: EnsureSledljivostSchema ne vraca GeneracijaID prijemnici",
     ),
-    # R8: "Prevezi prijemnicu" -- izvor se ne razresava po PrijemnicaID-u.
-    "s6k8-prevezi-pri-bez-id": (
-        "modDokumenta.bas",
-        "    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)\n",
-        "    Set srcIds = IdDokumentaSkup(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")   ' SABOTAZA: izvor bez ID-a\n",
-        "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
-        "prevezivanje po identitetu je proslo",
-    ),
+    # s6k8-prevezi-pri-bez-id je povucena u S9-4 (plan 14.68): pisac nema put "izvor bez ID-a".
+
     # R8: red liste osirotelih paleta ne nosi identitet dokumenta (kolona 7).
     "s6k8-osir-palete-bez-id": (
         "modDokumenta.bas",
@@ -11947,8 +11882,8 @@ SABOTAZE = {
     ),
     "s6k8-prevezi-bez-provere-robe": (
         "modDokumenta.bas",
-        "        If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog\n",
-        "        ' SABOTAZA: prevezivanje bez provere robe\n",
+        "    If Len(robaRazlog) > 0 Then Err.Raise vbObjectError + 1440, SRC, robaRazlog\n",
+        "    ' SABOTAZA: prevezivanje bez provere robe\n",
         "Test_S6K8_PrijemnicaRobaKaoZbirna",
         "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)",
     ),
@@ -14116,8 +14051,8 @@ SABOTAZE = {
     # se u fontu jednake sirine znaka -- svaki deo sa svojom sabotazom.
     "zbr-opis-bez-vozaca": (
         "modOtkupUI.bas",
-        "                If zbrVoz.Exists(z) Then\n",
-        "                If False Then   ' SABOTAZA: opis bez vozaca\n",
+        "    If zbrVoz.Exists(zid) Then\n",
+        "    If False Then   ' SABOTAZA: opis bez vozaca\n",
         "T_Zbirne_PickerOpisMestaKgAmb",
         "370 F4: vozac zbirne je kolona pre otkupnih mesta",
     ),
@@ -15093,6 +15028,93 @@ SABOTAZE = {
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: uvid zbirne D1 nosi robu svoje prijemnice, ne robu prijemnice bez traga",
     ),
+    # --- S9-4: generacija nije identitet (plan 14.68) ---------------------
+    # Lista ciljeva Oporavka: identitet reda je ZbirnaID. Vracena generacija je
+    # prazna za svaku kanonsku zbirnu, pa red bez PK-a ispada iz liste.
+    "s94-opo-cilj-generacija": (
+        "modScrOporavak.bas",
+        "                                    modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID, _\n"
+        "                                    COL_ZBR_ID)\n",
+        "                                    modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID, _\n"
+        "                                    COL_GENERACIJA_ID)   ' SABOTAZA: identitet reda je generacija\n",
+        "T_S94_OporavakPreveziPoID",
+        "414 dve zbirne istog broja i vlasnika su DVA cilja u Oporavku",
+    ),
+    # Izbor reda pamti broj umesto ZbirnaID-a: pisac dobija labelu kao ID.
+    "s94-opo-izbor-bez-id": (
+        "modScrOporavak.bas",
+        "                    mCiljZbirnaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)\n",
+        "                    mCiljZbirnaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 1)   ' SABOTAZA: cilj po broju\n",
+        "T_S94_OporavakPreveziPoID",
+        "414 izbor reda cilja i prevezivanje prolaze bez odbijanja",
+    ),
+    # Pisac prevezivanja ne upise E4 (stanje do S9-4 za dvosmislen broj).
+    "s94-prevezi-e4-prazan": (
+        "modDokumenta.bas",
+        "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, roditeljID, SRC\n",
+        "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, \"\", SRC   ' SABOTAZA: E4 prazan\n",
+        "T_S94_OporavakPreveziPoID",
+        "414 prevezivanje zavrsi na IZABRANOJ zbirni: E4 = njen ZbirnaID",
+    ),
+    # Labela ne opisuje izabranu zbirnu: E4 je tacan, a broj na prijemnici nije.
+    # (Mutant nad citanjem brojCilja bi oborio kapiju broja u
+    # ZbirnaRoditeljPrijemnice pre upisa -- pala bi tvrdnja o E4, ne o labeli.)
+    "s94-prevezi-labela-prazna": (
+        "modDokumenta.bas",
+        "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, brojCilja, roditeljID, SRC\n",
+        "    PoveziDeteNaZbirnu TBL_PRIJEMNICA, red, COL_PRJ_BROJ_ZBIRNE, \"\", roditeljID, SRC   ' SABOTAZA: labela prazna\n",
+        "T_S94_OporavakPreveziPoID",
+        "414 labela prijemnice je broj izabrane zbirne",
+    ),
+    # P1 (#477): bez kapije pisca prijemnice cilj moze biti tudja zbirna ili nacrt.
+    "s94-prevezi-bez-kapije-vlasnika": (
+        "modDokumenta.bas",
+        "    roditeljID = ZbirnaRoditeljPrijemnice(ciljZbirnaID, brojCilja, _\n"
+        "                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_KUPAC)), _\n"
+        "                     NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_VOZAC)), _\n"
+        "                     SRC)\n",
+        "    roditeljID = ciljZbirnaID   ' SABOTAZA: bez kapije pisca prijemnice\n",
+        "T_S94_PrevezivanjeKapijaVlasnika",
+        "415 P1: prijemnica kupca 1 ne ide pod zbirnu drugog kupca i vozaca; razlog imenuje kupca",
+    ),
+    # KI-055: razlog odbijanja ne stize do ekrana.
+    "s94-prevezi-razlog-se-gubi": (
+        "modDokumenta.bas",
+        "    outRazlog = errDesc\n"
+        "    ReassignPrijemnicaToZbirna_TX = False\n",
+        "    outRazlog = \"\"   ' SABOTAZA: razlog se gubi\n"
+        "    ReassignPrijemnicaToZbirna_TX = False\n",
+        "T_S94_PrevezivanjeRazlogDoOperatera",
+        "416 KI-055: zbirna druge vrste se odbija, a razlog (vrsta) stize do ekrana",
+    ),
+    # Storniran cilj prolazi kapiju roditelja (deli je pisac prijemnice).
+    "s94-prevezi-cilj-storniran": (
+        "modDokumenta.bas",
+        "    If ZbirnaJeStornirana(zbirnaID) Then\n"
+        "        Err.Raise vbObjectError + 1433, src, _\n",
+        "    If False Then   ' SABOTAZA: storniran cilj prolazi\n"
+        "        Err.Raise vbObjectError + 1433, src, _\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "stornirana zbirna nije cilj ni kad je zadata po ID-u; razlog kaze da je stornirana",
+    ),
+    # Prefill ne poredi PK: prvi red sa bilo kojim ID-om je "stari dokument".
+    "s94-prefill-pk-ignorisan": (
+        "modDokumenta.bas",
+        "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n"
+        "                PrefillRedPoID = r\n",
+        "            If Len(Trim$(NzToText(data(r, cId)))) > 0 Then   ' SABOTAZA: PK se ne poredi\n"
+        "                PrefillRedPoID = r\n",
+        "T_S94_PrefillPoOldDocID",
+        "417 ispravka svakog otkupa nosi SVOJ dokument i kad dva dele generaciju",
+    ),
+    # Picker: stavka nosi tudji ZbirnaID u skrivenoj koloni.
+    "s94-picker-tudji-id": (
+        "modOtkupUI.bas",
+        "        CB.List(CB.ListCount - 1, 1) = zid(i)\n",
+        "        CB.List(CB.ListCount - 1, 1) = zid(1)   ' SABOTAZA: stavka nosi tudji ZbirnaID\n",
+        "T_Zbirne_PickerJednaStavkaPoDokumentu",
+        "svaka stavka pickera nosi SVOJ ZbirnaID, jedan, bez spajanja",
+    ),
 }
 
 
@@ -15331,39 +15353,9 @@ POZNATI_NALAZI_DOKAZ = {
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
 
-    # Dve sabotaze nad T_CiljZbirna_NePoPrvomRedu ne obaraju NISTA, ni u izboru
-    # ni celom suite-om (mereno 17.11.2026, S-4a). Obe su zatecene, ne posledica
-    # S-4a -- izbor ih je samo prvi put pustio. Razlozi su razliciti:
-    #
-    # MASKIRANA (PRJ-ZBR-02, 60a7957d), nad DANASNJIM fixture-om: bez provere
-    # nula aktivnih vlasnika OLDU prodje IKAD kapiju (vlasnik je jedan), ciljID
-    # ostane prazan (ZbirnaIDZaBroj je fail-closed, LookupActiveID nema
-    # aktivnog), pa PrijemnicaRobaRazlog("") ne nadje robu i Reassign digne
-    # gresku -- EH vrati False, isti Boolean kao tihi Exit. Maska stoji na
-    # LookupValue nad PRAZNIM kljucem, koji pogadja prvi red tblZbirna bez
-    # ZbirnaID-a (B9 anomalija, test je pravi i vraca). Kad takav red nosi
-    # robu prijemnice, mutant upise i vrati True -- tako se i obara.
-    "cilj-zbirna-bez-provere-postojanja": "NE OBARA NISTA",
-    #
-    # NE OBARA NISTA NAD FIXTURE-OM (ZBR-NORM-02, be9464ff), ali NIJE
-    # ekvivalentna: broj ZbirnaPostoji i VlasniciPoBroju danas porede isto
-    # (Trim + vbTextCompare), pa mala slova KASK staje IKAD kapija kao i tacan
-    # case. Razlikuju se u oznaci STORNA: ZbirnaPostoji (ExcludeStornirano)
-    # poredi binarno '<> "Da"' bez Trim-a, VlasniciPoBroju (IsStorniranoValue)
-    # UCase+Trim. Red sa Stornirano = "DA" je jednom aktivan, drugom nije --
-    # na takvom redu mutant upise. Pisci pisu "Da", pa fixture to ne vidi.
-    "cilj-zbirna-case-mesano": "NE OBARA NISTA",
-    #
-    # Vlasnik: zaseban rez posle S-4a (pre-flight -- dira razresavanje broja
-    # zbirne). Obe sabotaze su oborive drugim stanjem, pa se ne brisu nego se
-    # test dopunjava tim stanjem ili tvrdnjom po RAZLOGU. Zastareli komentari
-    # koje rez ispravlja: "VlasniciPoBroju poredi TACNO" (modDokumenta, test
-    # 125, ova sabotaza) i "recovery panel u frmDokumenta zove sa DVA
-    # argumenta" (modDokumenta, test 125, cilj-zbirna-kapija-samo-aktivni) --
-    # forme vise nema; grana bez generacije se danas dosize iz
-    # modScrOporavak.PreveziPrijemnicu, sa kanonskom labelom iz tabele i
-    # generacijom koju vise niko ne pise. Ovi upisi se tada brisu -- dokaz sam
-    # prijavi upis koji vise nista ne pokriva.
+    # Unosi cilj-zbirna-bez-provere-postojanja i cilj-zbirna-case-mesano su
+    # obrisani u S9-4 (plan 14.68) zajedno sa sabotazama: grana cilja po broju u
+    # ReassignPrijemnicaToZbirna_TX ne postoji, pa nema sta da maskira.
 
     # NEDOSTIZNA KAPIJA, ne slab test (dokaz 19.11.2026, nad PR #491 i nad
     # main-om isto). Od S6 koraka 4 identitet prijemnice je PrijemnicaID, a par

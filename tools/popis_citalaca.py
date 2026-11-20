@@ -123,6 +123,12 @@ GRUPE = collections.OrderedDict([
     ("fak_broj_prj", re.compile(r"\b(LookupValue|FindRows|LookupActiveID|BuildLookupDict|RowsAktivni"
                                 r"|CheckDuplicate|RequireTacnoJedan)\s*\(?\s*TBL_FAKTURA_STAVKE\s*,\s*"
                                 r"(COL_FS_BROJ_PRIJEMNICE\b|\"BrojPrijemnice\")")),
+    # S9-4 (plan 14.68, S94-ODL-08), kapija NEMA_GENERACIJE: GeneracijaID nije
+    # identitet. Osnovna grupa meri SVA pominjanja kolone i API-ja generacije, bez
+    # praga; kapija je izvedena grupa nema_generacije ispod. Za razliku od
+    # prj_generacija (samo TBL_PRIJEMNICA), ova vidi i zbirnu, otkup i otpremnicu.
+    ("generacija", re.compile(r"(?i)\b(COL_GENERACIJA_ID|\w*GeneracijaID\w*|IdoviGeneracije"
+                              r"|GeneracijaPoID|RedJeGeneracije|\w*ZbirnaGen\w*|scopedPoGeneraciji)\b")),
 ])
 # S9-3 (plan 14.67), kapija NEMA_BROJA_KAO_FK: Prijemnica.BrojZbirne je LABELA
 # (SLED-ODL-08) -- papir, prikaz, pretraga, prefill, pisci labele i detektori
@@ -198,6 +204,49 @@ def prj_broj_zastareli_unosi(spisak):
             if unos not in zivi:
                 out.append((ime, unos))
     return out
+
+
+# S9-4 (plan 14.68): izvedena grupa nema_generacije, prag 0. Broji SVAKO PROD
+# mesto osnovne grupe generacija -- zivo, mrtvo, samo-test -- van imenovanog
+# setup-a. Status se namerno ne gleda: API koji je S9-4 obrisao (ApplyGeneracijaID,
+# NewGeneracijaID, GeneracijaIDZaBroj, RedJeGeneracije) bio je upravo MRTAV ili
+# SAMO_TEST, pa bi prag nad zivim mestima njegov povratak pustio.
+#
+# Izuzetak je samo setup sema (S9-6 brise kolonu i ove unose): dodavanje kolone,
+# preimenovanje stare ZbirnaGeneracijaID i brisanje kolone sa tabela koje je vise
+# ne nose. Unos bez mesta obara --check (spisak ne sme da istruli).
+GENERACIJA_SETUP = frozenset([
+    ("modSetup", "EnsureRuntimeSchema"),           # ZbirnaGeneracijaID -> ZbirnaRoditeljID
+    ("modSetup", "EnsureSledljivostSchema"),       # EnsureKolonaSaTragom COL_GENERACIJA_ID
+    ("modSetup", "ObrisiStareKolonePrijemnice"),
+    ("modSetup", "ObrisiStareKoloneFakture"),
+    ("modSetup", "ObrisiStareKolonePaletneStavke"),
+])
+
+
+def nema_generacije(spisak):
+    """Izvedena grupa: PROD mesto grupe generacija van GENERACIJA_SETUP, bilo kog statusa."""
+    out = []
+    for r in spisak:
+        if r["grupa"] != "generacija" or r["tip"] != "PROD":
+            continue
+        if (r["modul"], r["procedura"]) in GENERACIJA_SETUP:
+            continue
+        k = dict(r)
+        k["grupa"] = "nema_generacije"
+        out.append(k)
+    return out
+
+
+def generacija_zastareli_unosi(spisak):
+    """Unos GENERACIJA_SETUP bez ijednog PROD mesta u grupi generacija."""
+    ima = {(r["modul"], r["procedura"]) for r in spisak
+           if r["grupa"] == "generacija" and r["tip"] == "PROD"}
+    return [("GENERACIJA_SETUP", u) for u in sorted(GENERACIJA_SETUP) if u not in ima]
+
+
+# Grupe ciji prag broji SVA PROD mesta, ne samo ziva (v. nema_generacije).
+PRAG_SVA_MESTA = frozenset(["nema_generacije"])
 
 
 # Prosirene grupe: ono sto konstante ne vide (kriticar pokrivenosti, 15.09).
@@ -329,7 +378,8 @@ PRAGOVI = collections.OrderedDict([
     ("prj_zbr_cfg", 0),
     # Deo 2 (stavka 209): kolone su obrisane iz kanona, a identitet u Oporavku i
     # F4 ispravci je PrijemnicaID. Konstanti vise nema, pa bi vraceno mesto
-    # palo i na compile-u; prag cuva i povratak generacije kao identiteta.
+    # palo i na compile-u. prj_generacija meri samo TBL_PRIJEMNICA -- povratak
+    # generacije kao identiteta za SVE tabele cuva nema_generacije (S9-4).
     ("prj_linija", 0),
     ("prj_kes", 0),
     ("prj_generacija", 0),
@@ -348,6 +398,9 @@ PRAGOVI = collections.OrderedDict([
     # prj_broj_spoj ispod: 15 spojeva je preslo na E4 (ZbirnaRoditeljID), pa je
     # prag 0. Integritet (S9-5) i labele su imenovani u PRJ_BROJZBIRNE_*.
     ("prj_broj_spoj", 0),
+    # S9-4 (plan 14.68): generacija nije identitet -- nijedno PROD mesto van
+    # setup-a seme (GENERACIJA_SETUP), ni zivo ni mrtvo.
+    ("nema_generacije", 0),
     ("fak_broj_prj", 0),
     ("pal_broj", 0),
     # S9-2 (plan 14.66): broj-oblik traga ispravke (IspravkaOd / ZamenjenSa) vise
@@ -1116,6 +1169,7 @@ def napravi(commit=None):
         r["status_mesta"] = "PAUZIRAN" if (kap_m and s.startswith("ZIV")) else s
         r["kapija"] = kap_m or kap
     spisak += prj_broj_spoj(spisak)
+    spisak += nema_generacije(spisak)
     return moduli, graf, st, spisak, upozorenja
 
 
@@ -1137,7 +1191,7 @@ def sazetak(moduli, graf, st, spisak, upozorenja, commit):
     print("ulazne tacke: " + ", ".join("%s=%d" % kv for kv in sorted(kor.items())))
     print("kapije: " + (", ".join("%s (%s:%d)" % (k, v[0], v[1]) for k, v in graf.kapije.items()) or "nema"))
     print()
-    grupe = list(GRUPE) + ["prj_broj_spoj"] + list(GRUPE_X) + ["x_literal", "x_indeks"]
+    grupe = list(GRUPE) + ["prj_broj_spoj", "nema_generacije"] + list(GRUPE_X) + ["x_literal", "x_indeks"]
     print("%-16s %5s %5s | %s" % ("grupa", "PROD", "TEST", "PROD po statusu mesta"))
     for g in grupe:
         rows = [r for r in spisak if r["grupa"] == g]
@@ -1171,12 +1225,12 @@ def provera(spisak):
     pao = False
     for g, prag in PRAGOVI.items():
         ziv = [r for r in spisak if r["grupa"] == g and r["tip"] == "PROD"
-               and r["status_mesta"].startswith("ZIV")]
+               and (g in PRAG_SVA_MESTA or r["status_mesta"].startswith("ZIV"))]
         n = len(ziv)
         if n > prag:
             pao = True
             print("  %-16s %3d > prag %d  PAO" % (g, n, prag))
-            for r in sorted(ziv, key=lambda r: (r["modul"], r["linija"]))[:12]:
+            for r in sorted(ziv, key=lambda r: (r["modul"], r["linija"]))[:40]:
                 print("      %s.%s:%d  %s" % (r["modul"], r["procedura"], r["linija"],
                                               ", ".join(r["izrazi"])))
         elif n < prag:
@@ -1184,7 +1238,7 @@ def provera(spisak):
             print("  %-16s %3d < prag %d  PRAG ZASTAREO -- spusti ga u PRAGOVI" % (g, n, prag))
         else:
             print("  %-16s %3d = prag %d  ok" % (g, n, prag))
-    for ime, unos in prj_broj_zastareli_unosi(spisak):
+    for ime, unos in prj_broj_zastareli_unosi(spisak) + generacija_zastareli_unosi(spisak):
         pao = True
         print("  %-16s ZASTAREO UNOS %s.%s -- nema zivog mesta, skini ga sa spiska"
               % (ime, unos[0], unos[1]))
