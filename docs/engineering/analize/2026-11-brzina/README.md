@@ -260,7 +260,8 @@ commit):
     marker); ~~ponovno merenje zbirnog prikaza~~ (20.11.: 4,41 → 1,80 s).
   - za D1-UPIS: ~~test 393, dokaz `knjiga-nastavak` 3/3 i pun prolaz~~ (zeleno
     20.11.: 12 suite-ova, `RunAllTests` 393/393, BFP 3.499/3.499, GREEN marker);
-    ostaje merenje snimanja otkupa.
+    ~~merenje snimanja otkupa~~ (20.11.: prosek ≈5,6 s, bez ijedne pune
+    provere knjige).
     - Usput, nije formalno merenje: BFP je na istoj mašini trajao 483 s umesto
       629 s posle D1-IZV (−23%), a `RunAllTests` 241 s umesto 259 s. BFP
       stalno knjiži ambalažu, pa je to prvi znak da nastavak dokaza radi u
@@ -456,6 +457,30 @@ grani, jedan klik):
   čitalac knjige, pa ide kroz `pre-flight`.
 - **Usput izmereno:** Roba pojedinačno (jedan OM) traje 1,57 s, bez
   raščlanjavanja (`ReportOtkupRoba` nema sekcije).
+
+**Snimanje otkupa posle D1-UPIS** (četvrto merenje 20.11.: 4 snimanja, 2
+hladnjačka i 2 obična, isti odnos kao u §3a):
+
+| | Pre (`main`) | Posle OTK-1/HLD-1 | Posle D1-UPIS |
+|---|---|---|---|
+| Snimanje otkupa, prosek | 12,5 s | 10,5 s | **≈5,6 s** (prvo 6,1 s; ostala 4,6–7,1 s) |
+| Pune provere knjige po snimanju | — | 15 (4,8 s) | **0**; 49 nastavaka u 4 snimanja, ≈32 ms svaki |
+| Upis (`ScrSave` van sekcija), po snimanju | — | ≈3,7 s | ≈1,2 s |
+| Hladnjački lanac, po hladnjačkom snimanju | 6,5 s | 4,5 s | 2,3 s |
+| PDF otkupnog lista | 2,27 s | 1,27 s | 0,94 s |
+| Osvežavanje posle snimanja | 2,8 s | 2,8 s | 2,2 s |
+
+- Jedina puna provera u sesiji je bila prvo čitanje posle otvaranja sveske
+  (329 ms, klik pre prvog snimanja). Posle nje knjiga se samo nastavlja.
+- Unosi nisu identični onima iz §3a, a snimanja je četiri. Odnos je zato
+  pouzdan, decimale nisu.
+- **Šta sada nosi snimanje** (≈5,5 s):
+  - osvežavanje posle snimanja 2,2 s; u njemu KPI dvaput računa
+    `ReportSaldoOM` (UI-1) i ide kaskada `Change` na OM-u (UI-7, 12× ≈170 ms
+    u 4 snimanja);
+  - ostatak hladnjačkog lanca ≈1,9 s po hladnjačkom snimanju, neraščlanjeno;
+  - upis ≈1,2 s; PDF 0,94 s;
+  - nastavak dokaza ≈0,4 s i šema-kapija knjige ≈0,16 s po snimanju.
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
