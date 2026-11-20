@@ -10453,14 +10453,15 @@ SABOTAZE = {
         "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
         "S8R2a1: pregled ne obecava skidanje robe sa preradjene palete",
     ),
-    # S8R2A1-REV-01: nesiguran obim zbirne se odbija; prazan scope bi uvid jedne
-    # zbirne pustio na sva deca tog broja (i palete druge zbirne).
+    # S8R2A1-REV-01: nesiguran obim zbirne se odbija. Od S9-3 (plan 14.67) se
+    # obim bira po ID-u, pa scenario BFP-a raise vise ne dostize; ostaje razlog
+    # ZBR-MUT-01 (broj dva vlasnika), koji meri kontra-tvrdnja 367.
     "s8r2a1-obim-nesuzen": (
         "modStornoFlow.bas",
         "    If Len(razlogObima) > 0 Then Err.Raise ERR_UI_BASE + 42, SRC, \"Obim zbirne \" & Trim$(broj) & \" se ne moze suziti: \" & razlogObima\n",
         "    ' SABOTAZA: nesiguran obim se cita nesuzeno po broju\n",
-        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
-        "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne",
+        "T_S93_StornoPoID",
+        "367 obim kaskade nad brojem dva vlasnika se odbija (ZBR-MUT-01 ostaje, van S9-3)",
     ),
     # S8 rez 2a-2 (R11, PAL-ODL-08): A3 meri stavku koja je IKAD bila na paleti --
     # i kad je sva njena roba skinuta (N7 iz istorije).
@@ -14996,6 +14997,24 @@ SABOTAZE = {
         "        If False Then   ' SABOTAZA: clanstvo na zbirnu koje nema se precutkuje\n",
         "T_S93_TekucaPredajaBezZbirne",
         "369 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne",
+    ),
+    # S9-3: BFP S8R2A1-REV-01 posle promene premise -- obim zbirne cija druga
+    # prijemnica broja nema trag je siguran po ID-u (strog uvid validan) ...
+    "s93-uvid-bez-id": (
+        "modStornoFlow.bas",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), zbirnaID, scopeID)\n",
+        "    razlogObima = ZbirnaScopeRazlog(Trim$(broj), vbNullString, scopeID)   ' SABOTAZA: uvid bez ID-a zbirne\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: strog uvid zbirne D1 je validan -- prijemnica bez traga nije dete (S9-3)",
+    ),
+    # ... i prijemnica bez traga ne pada na zbirnu po broju (regresija koju S9-3
+    # zabranjuje: citac E4 "dopuni" prazan ZbirnaRoditeljID iz labele broja).
+    "s93-prijemnica-bez-traga-po-broju": (
+        "modAutoHladnjaca.bas",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod))))\n",
+        "        rod = UCase$(Trim$(NzToText(d(i, cRod)))): If Len(rod) = 0 Then rod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, d(i, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: prijemnica bez traga pada na zbirnu po broju\n",
+        "Test_S8R2a1_PaleteZbirnePoPrijemnicama",
+        "S8R2a1: uvid zbirne D1 nosi robu svoje prijemnice, ne robu prijemnice bez traga",
     ),
 }
 

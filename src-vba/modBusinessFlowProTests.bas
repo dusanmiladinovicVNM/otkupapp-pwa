@@ -10738,15 +10738,17 @@ End Sub
 '   3) KI-039: zbirna C (svoj broj), prijemnica na PRERADJENOJ paleti (druga sveza
 '      paleta). Pregled ne obecava skidanje; PONISTENJE se odbija razlogom koji
 '      imenuje preradu, BEZ zapisa ispravke, a prijemnica ostaje aktivna;
-'   4) S8R2A1-REV-01: dve zbirne istog broja, prijemnica druge BEZ traga roditelja
-'      (synthetic anomaly) -- obim se ne moze suziti, pa uvid zbirne D1 ne sme da
-'      padne na sva deca tog broja i ponese robu D2.
+'   4) S8R2A1-REV-01, premisa promenjena u S9-3: dve zbirne istog broja, prijemnica
+'      druge BEZ traga roditelja (synthetic anomaly). Do S9-3 obim nije mogao da se
+'      suzi; od S9-3 prijemnica bez traga nije dete nijedne zbirne (plan 14.67), pa
+'      je obim D1 siguran -- uvid nosi robu prjD1, ne robu prijemnice bez traga.
 '
 ' Nivo: FIZICKE paletne stavke po PrijemnicaID-u; zapisi ispravke kao redovi
 ' tblStornoVeze. Sve u transakciji koja se uvek vraca.
 ' SABOTAZE: s8r2a1-pregled-po-broju, s8r2a1-uvid-po-broju, s8r2a1-ki039-bez-provere,
-' s8r2a1-pregled-obecava-skidanje, s8r2a1-obim-nesuzen (s8r2a1-scope-po-paletama
-' povucena u 2b-2: paletna stavka traga zbirne nema).
+' s8r2a1-pregled-obecava-skidanje, s93-uvid-bez-id, s93-prijemnica-bez-traga-po-broju
+' (s8r2a1-scope-po-paletama povucena u 2b-2: paletna stavka traga zbirne nema;
+' s8r2a1-obim-nesuzen preseljena u S9-3 na 367 -- ovde se raise vise ne dostize).
 Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     Const SRC As String = "Test_S8R2a1_PaleteZbirnePoPrijemnicama"
     Dim tx As clsTransaction
@@ -10873,9 +10875,12 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
     AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjC), _
                "S8R2a1: prijemnica zbirne C ostaje aktivna"
 
-    ' --- 4) S8R2A1-REV-01: obim se ne moze suziti -> uvid ne nosi tudju robu ---
-    ' Mere se oba rezima: strog (ekran Storno) mora da bude nevalidan, a blag ne
-    ' sme da nosi palete druge zbirne (review #463, P3).
+    ' --- 4) S8R2A1-REV-01 posle S9-3: prijemnica bez traga nije dete ---
+    ' Do S9-3 se obim nije mogao suziti (prjD2 bez ZbirnaRoditeljID), pa je strog
+    ' uvid bio nevalidan, a blag bez robe (review #463, P3). Od S9-3 se prijemnice
+    ' zbirne biraju po ivici E4 (plan 14.67, red 9): prjD2 nije dete NIJEDNE zbirne
+    ' (Oporavak je pokazuje kao siroce), pa je obim D1 siguran. Mere se oba rezima:
+    ' strog je validan, blag nosi robu prjD1 (2 gajbe) -- ne i robu prjD2 (3).
     Dim brojD As String, otpD1 As String, otpD2 As String, zbrD1 As String, zbrD2 As String
     Dim prjD1 As String, prjD2 As String, hD1 As Object, hD2 As Object
     brojD = TEST_PREFIX & "-ZBR-S8D-" & scenario
@@ -10903,7 +10908,7 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
                "S8R2a1: preduslov -- dve zbirne istog broja, druga sa prijemnicom bez traga"
     Dim uvS As Object
     Set uvS = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, True)
-    AssertTrue Not CBool(uvS("valid")), "S8R2a1: strog uvid odbija nesiguran obim"
+    AssertTrue CBool(uvS("valid")), "S8R2a1: strog uvid zbirne D1 je validan -- prijemnica bez traga nije dete (S9-3)"
     Dim uvD As Object, palD As Collection, pD As Variant, gajbD As Long
     Set uvD = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, brojD, "", zbrD1, False)
     gajbD = -1
@@ -10914,7 +10919,7 @@ Private Sub Test_S8R2a1_PaleteZbirnePoPrijemnicama()
             gajbD = gajbD + CLng(Val(nz(pD("thisGajb"), 0)))
         Next pD
     End If
-    AssertEquals 0, gajbD, "S8R2a1: uvid zbirne bez sigurnog obima ne nosi robu druge zbirne"
+    AssertEquals 2, gajbD, "S8R2a1: uvid zbirne D1 nosi robu svoje prijemnice, ne robu prijemnice bez traga"
 
 Kraj:
     tx.RollbackTx

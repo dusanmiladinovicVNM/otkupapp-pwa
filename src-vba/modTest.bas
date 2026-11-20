@@ -36524,6 +36524,19 @@ Private Function S93Roditelj(ByVal prjID As String) As String
                                                     COL_DETE_ZBIRNA_ROD))))
 End Function
 
+' Gasi (CANCELLED) svaku ispravku prijemnice na cekanju. Zove se SAMO unutar
+' transakcije testa, ciji rollback ih vraca (TBL_STORNO_VEZE je u S6K8Snimak).
+Private Sub S93UgasiIspravkePrijemnice()
+    Dim cid As String, n As Long
+    Do
+        cid = modStornoContext.FindLatestPending(FLOW_DOC_PRIJEMNICA, SV_MODE_ISPRAVKA)
+        If Len(cid) = 0 Then Exit Do
+        If Not modStornoContext.CancelCorrectionContext(cid, "test 368") Then Exit Do
+        n = n + 1
+        If n > 50 Then Exit Do
+    Loop
+End Sub
+
 ' Broj prijemnice po ID-u.
 Private Function S93BrojPrijemnice(ByVal prjID As String) As String
     S93BrojPrijemnice = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prjID, COL_PRJ_BROJ)))
@@ -36700,7 +36713,8 @@ End Sub
 ' otkupna mesta reda (dva OM-a), a poruka posle storna zbirne imenuje NJENU
 ' prijemnicu, ne prvu sa tim brojem.
 ' SABOTAZE: s93-scan-zbirne-po-broju, s93-scan-prijemnice-po-broju,
-' s93-obim-kaskade-po-broju, s93-mesta-po-broju, s93-poruka-storna-po-broju.
+' s93-obim-kaskade-po-broju, s93-mesta-po-broju, s93-poruka-storna-po-broju,
+' s8r2a1-obim-nesuzen (kontra: broj dva vlasnika se ne suzava).
 Private Sub T_S93_StornoPoID()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, brojZ As String, pos As String, obim As Object, obimErr As String
@@ -36747,6 +36761,15 @@ Private Sub T_S93_StornoPoID()
     End If
     AssertEq obimErr & "|" & kljuc, "|" & UCase$(prjC) & ";", _
              "367 obim kaskade zbirne: tacno njena prijemnica po ID-u, ne odbijanje zbog labele starog oblika"
+    ' Kontra: broj koji su drzala dva vlasnika obim ne suzava ni uz ID --
+    ' ZBR-MUT-01 (historicalOwnerCount > 1) ostaje, van S9-3.
+    Set obim = Nothing
+    On Error Resume Next
+    Set obim = modStornoFlow.PrijemniceUObimuZbirne(brojZ, zbrA)
+    obimErr = Err.description
+    On Error GoTo CleanUp
+    AssertEq CStr(InStr(1, obimErr, ZBR_MUT_VISE_VLASNIKA, vbBinaryCompare) > 0), "True", _
+             "367 obim kaskade nad brojem dva vlasnika se odbija (ZBR-MUT-01 ostaje, van S9-3)"
 
     st1 = Trim$(NzToText(LookupValue(TBL_STANICE, "StanicaID", FX_STANICA, "Naziv")))
     Set vozDict = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
@@ -36798,6 +36821,12 @@ Private Sub T_S93_F4IOporavakPoID()
     Set tx = New clsTransaction
     tx.BeginTx
     S6K8Snimak tx
+
+    ' Ispravka prijemnice na cekanju (u punom prolazu je ostavlja test 35) otvara
+    ' pitanje u validatoru PRE provere duple prijemnice, i to MsgBox-om van seama:
+    ' test bi merio odgovor dijaloga. Gasi se U transakciji testa (rollback je vraca).
+    S93UgasiIspravkePrijemnice
+    AssertEq S6K6IspravkeNaCekanju(), 0, "368 preduslov: nema ispravke prijemnice na cekanju"
 
     t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
     SledLanacDoZbirne "S93FF", "ZB-S93FF-" & t, FX_VOZAC, FX_KUPAC, 40, bF, otpF, zbrF
