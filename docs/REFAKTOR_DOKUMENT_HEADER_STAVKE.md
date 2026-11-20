@@ -12234,8 +12234,32 @@ Uz to:
     koji ugovor imenuje — prijemnicu starog oblika sa brojem C kao labelom: stari kod {C, mamac}, nov {C},
     `s93-obim-kaskade-bez-id` prazan skup. Ostale tvrdnje 367 ostaju na dve zbirne istog broja.
 - **Zeleno nad granom:** 366–369 4/4.
-- **NIJE izvršeno:** pune suite, `dokaz.py s93-` i preslagana sidra, ručni Compile, ručna provera. Razlog: Excel je
-  20.11. zauzimala druga sesija (A/B merenje `ImportAllVBA`).
+- **Prvi FULL nad granom je našao dve stvari (obe u testovima, ne u kodu reza):**
+  - **BFP `Test_S8R2a1`, scenario 4 (`S8R2A1-REV-01`) je tvrdio staru premisu**: obim zbirne čija druga prijemnica
+    broja nema trag „ne može da se suzi", pa strog uvid nevalidan, a blag bez robe. Ovaj ugovor kaže suprotno
+    („Važi", red 9): prijemnica bez `ZbirnaRoditeljID` nije dete nijedne zbirne, pa je obim D1 siguran po E4.
+    Dobijene 2 gajbe su roba prjD1, ne prjD2 (3). Tvrdnje su sada: strog uvid validan; uvid nosi tačno 2 —
+    nad starim kodom obe crvene po imenu, nad granom zelene. Merenje pre koda je brojalo čitaoce, a ne
+    **testove koji tvrde staro pravilo**; to je propust merenja, ne koda (`7556fcfc`).
+  - **368 u punom prolazu**: test 35 ostavlja ispravku prijemnice na čekanju, a validator F4 o njoj pita
+    `MsgBox`-om van seama **pre** provere duple — test je merio odgovor watchdog-a. 368 sada gasi ispravke
+    prijemnice u svojoj transakciji (rollback ih vraća) i tvrdi preduslov po imenu (`7556fcfc`).
+- **Sabotaže posle FULL-a (`7556fcfc`, `33c129df`):** `s8r2a1-obim-nesuzen` meri kontra-tvrdnju 367 (broj dva
+  vlasnika se ne sužava — `ZBR-MUT-01` ostaje), jer scenario 4 raise više ne dostiže;
+  `zbirna-kaskada-bez-kapije` obara prvu tvrdnju testa 41 (od S9-3 kaskada bez kapije **prolazi** i dira samo
+  svoju decu — zastareo komentar testa ispravljen); nove `s93-bez-traga-nepoznat-clan` (čitač E4 tretira
+  prijemnicu bez traga kao nepoznatog člana zbirne svoje labele) i `s93-prijemnica-bez-traga-po-broju` (pada na
+  zbirnu po broju) za scenario 4. Obim bez ID-a tu ne može da bude sabotaža: ubija scenario 1 istog testa
+  (FATAL 424) pre tvrdnje. Katalog 1426.
+- **FULL nad `33c129df`: 12/12 zeleno, marker upisan** — `RunAllTests` 369/0, BFP 3491/0, Banka 241/0, Storno
+  111/0, Palete (115 provera), Faktura 39, Agrohemija 25, Golden, JSON 72, Izveštaji, StornoCentar, License.
+- **`dokaz.py` nad istim izvorom: 30/30 crveno po imenu** (20 `s93-*`, 9 preslaganih sidara,
+  `s8r2a1-obim-nesuzen`), `--grupe --izbor`: ciljani test je pušten sam, 22 od 30 grupno. Pun pojedinačni
+  dokaz u redosledu suite-a (bez `--grupe`/`--izbor`) ide pred release.
+- **Jeftine kapije nad `33c129df`:** `vba_check` i `--self-test`, `sabotaza.py --self-test`, `run_vba --self-test`,
+  `who_writes --check` i `--check-ownership`, `gen_schema_module --check`, `popis_citalaca --check`
+  (`prj_broj_spoj` 0 = prag 0), `vba_gate --popis`.
+- **NIJE izvršeno:** ručni Compile i ručna provera (operater; spisak gore, uz ostatak iz S9-2).
 
 ## 15) Backlog — namerno van opsega
 
