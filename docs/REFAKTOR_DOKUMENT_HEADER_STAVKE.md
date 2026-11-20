@@ -12281,6 +12281,43 @@ Uz to:
     `popis_citalaca --check` (`prj_broj_spoj` 0 = prag 0), `vba_gate --popis`.
 - **NIJE izvršeno:** ručni Compile i ručna provera (operater; spisak gore, uz ostatak iz S9-2).
 
+#### Review `#501` (20.11.2026) — osam nalaza, sedam zatvoreno u ovom PR-u
+
+Nezavisni review PR-a `#501` je dao `S93-REV-01..03` (odluka: HOLD do REV-01, REV-02 i ručnog acceptance-a).
+Revizija **svih** pozivalaca čitača E4 je našla još pet mesta istog obrasca kao REV-01 — **greška čitača postaje ishod
+koji izgleda pročitano**; operater je odlučio da se zatvore u ovom PR-u. Testovi su pisani prvi (`afdc739c`,
+`584331fb`, `08490000`), crveni nad zatečenim kodom po imenu, pa zeleni. Kvar E4 u testovima je dupli `PrijemnicaID`
+(REV-02 ga čini greškom čitača), za 400 seam keša kolone (`KesKoloneTestSet`).
+
+| Nalaz | Mesto | Šta je bilo | Sada | Test · sabotaže |
+|---|---|---|---|---|
+| `S93-REV-01` (P1) | `modStammdatenSync.PrijemniceZaIzvozPoZbirni` | EH je vraćao prazan/delimičan indeks, pa izvoz `Primljeno "Ne"` / `in_transport` | greška se diže; `ExportOtkupiAll` javlja neuspeh izvoza (`partial export N/8`) | 400 · `s93-izvoz-guta-kvar-e4` |
+| `S93-REV-02` (P2) | `modAutoHladnjaca.AktivnePrijemnicePoZbirni` | dupli aktivni `PrijemnicaID`: obrnuta mapa uzme prvog roditelja | čitač odbija dupli ID (i uz istog roditelja), greška imenuje ID i redove | 401 · `s93-e4-dupli-id-prvi` |
+| `S93-REV-04` | `modStornoFlow.ScanZbirna` (ne-strog poziv) | greška progutana: `CorrectionNeedsDialog` False (prost storno), pregled „Prijemnica: Ne", DUPLI ide dalje | greška se diže; handleri pozivalaca daju pun dijalog / „Pregled nije dostupan" / „Greska: …" | 402 · `s93-scan-zbirne-guta-kvar` |
+| `S93-REV-05` | `GetActiveDocumentsForStorno`, `modStornoWarm` | prazna lista; neuspeo build vraćao stari skup | greška liste stiže do `Scr_Rows` (UI-PAD-01); neuspeo build briše skup | 403 · `s93-storno-lista-guta-kvar`, `s93-storno-warm-stari-kes` |
+| `S93-REV-06` | `modScrIzvestaji.DodajPrijemniceZbirne` | `Resume Next`, izlaz bez reda | red „veza nepoznata" sa razlogom (opis se čita pre `Poruka()`, koja briše `Err`) | 404 · `s93-detalj-prijemnice-guta-kvar` |
+| `S93-REV-07` | `modDokumenta.CalculateManjakPreview` | kvar E4 zbirne i greška čitanja: nule, linija nestaje | peti član rezultata je razlog; `ManjakLinijaIzPreview` (jedini put `SetManjakLine`) piše „MANJAK Veza nepoznata: …", bez broja | 405 · `s93-manjak-kvar-bez-razloga`, `s93-manjak-greska-bez-razloga`, `s93-manjak-linija-bez-razloga` |
+| `S93-REV-08` | `modStornoDok.StornoIzvrsi` | brojevi prijemnica se čitaju POSLE `StornoZbirna_TX`; greška čitača je javljala neuspeh za već storniranu zbirnu (dostižno od REV-02) | storno ostaje uspeh, poruka nosi razlog | 406 · `s93-storno-uspeh-javljen-kao-neuspeh` |
+| `S93-REV-03` (P2) | `modHelpers.BuildManjakDict` | ključ stavke je vlasnik (broj + vozač + kupac + klasa), ne `ZbirnaID` | **otvoreno → S9-5** (red „manjak po ID-u"), `KI-097` | — |
+
+- **Odluka `S93-ODL-02` (REV-02):** dupli `PrijemnicaID` obara čitač E4 za **celu** tabelu, ne po zbirni — ne zna se
+  koja je zbirna pogođena. Cena: automatski lanac hladnjače staje sa razlogom za svaku zbirnu dok se identitet ne
+  popravi. Centralne kapije jedinstvenosti pred čitaocima nema (`modProductionHealthCheck` samo broji, `modFaktura`
+  proverava tek pri fakturi).
+- **Revizija pozivalaca** (agent, samo čitanje; #8, #11, #12 i REV-08 potvrđeni čitanjem koda i crvenim testom): ostali
+  pozivaoci grešku već vode do vidljivog neuspeha — lanac (`LanacStao`), izveštaji (`IzvRethrow` → `Scr_Rows`), jezgro
+  grafa (`m_E4Kvar`), kaskada i uvid storna, Oporavak (`AddNedovrseniLanci` → „GRESKA").
+- **Netačna tvrdnja revizije, ispravljena merenjem:** `On Error Resume Next` u handleru `GetWarmStornoDocs` NIJE
+  gutao grešku — greška nastala u aktivnom handleru ide pozivaocu. Sabotaža koja ga vraća bila je ekvivalentan mutant
+  (`dokaz.py`: NE OBARA NISTA i uz omotač sa `On Error GoTo`), pa je izbačena (`02220475`); naredba je uklonjena kao
+  mrtva. Poruka commita `073b086f` to tvrdi pogrešno.
+- **Merenje:** crveno nad zatečenim kodom 7/7 po imenu (400–406; 403 i 405 ponovo posle raščlanjivanja tvrdnji, nad
+  `584331fb` + nov `modTest`), zeleno 11/11 (396–406). **FULL nad `02220475`: 12/12 zeleno, marker upisan** (izvor `47000def20bf`) — `RunAllTests` 406/0, BFP 3499/0, Banka 241/0, Storno 111/0, Palete, Faktura, Agrohemija, Golden, JSON, Izveštaji, StornoCentar, License.
+- **`dokaz.py` nad istim izvorom: 40/40 crveno po imenu** (sve S9-3 sabotaže: 30 ranijih + 10 iz review-a; `--grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)", snimak izvora `cdac7357ff11f480` isti pre i posle; 33 od 40 grupno). Pun pojedinačni dokaz bez `--grupe`/`--izbor` ide pred release.
+- Ključ `OTKUI_STAT_NEPOZNATO` nije nov (S9-2): fixture ga nema, pa testovi porede sa `Poruka()` istog ključa.
+- **NIJE izvršeno:** ručni Compile i ručna provera (uz spisak gore: F4 linija manjka „Veza nepoznata" nad pokvarenim
+  podacima se ručno ne pravi — meri je 405).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
