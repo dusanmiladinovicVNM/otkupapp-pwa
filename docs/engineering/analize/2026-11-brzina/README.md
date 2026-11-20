@@ -223,6 +223,8 @@ commit):
 | PERF-REV-03 (pregled 19.11.) | `modDataAccess.KesTabeleZastareo`: rollback (`RestoreTable`) i oznaka sinhronizacije (`BulkPushPendingForStanica`) obaraju keš čitanja, pa ugovor ne zavisi od pretpostavke da u prozoru niko ne piše. | `modTest` 391 `T_KesTabele_RollbackZastareva` | **zeleno 19.11.** (FULL + dokaz) |
 | D1-IZV (20.11., posle merenja §3a) | Dokaz integriteta knjige ambalaže se u **prozoru čitanja** pamti posle prvog uspeha (`modAmbalaza.KnjigaZaCitanje` kroz `IzvedenoTryGet`/`IzvedenoPut`). Svaki upis, rollback i `KesTabeleZastareo` ga brišu, a pamti se samo uspeh. Van prozora, dakle i u svakom upisu, dokaz ide kao pre. Audit (`AmbKnjigaNalazi`) dokazuje uvek iznova. Pre koda je prošao `pre-flight`. | `modTest` 392 `T_KesKnjiga_DokazJednomUProzoru`; sabotaže `kes-knjiga-dokaz-gluv`, `kes-knjiga-upis-ne-obara-dokaz` | **zeleno 20.11.** (FULL + dokaz `kes-knjiga` 2/2) |
 | D1-UPIS (20.11.) | Van prozora čitanja `KnjigaZaCitanje` pamti **dokazan prefiks** knjige: ćelije u 12 kolona koje dokaz čita, raspored kolona i rečnik vrsta. Sledeće čitanje poredi prefiks ćeliju po ćeliju (isti tip, tekst binarno), a **istu** funkciju `KnjigaIntegritet`, pokrenutu od prvog novog reda, prolaze samo dodati redovi. Promenjen, skraćen ili premešten prefiks, druge kolone ili greška u ćeliji znače pun dokaz. Ne zavisi od toga ko je pisao (upis mimo `modDataAccess`, ručna izmena, rollback). Pre koda je prošao `pre-flight`; dokaz je čista funkcija 12 kolona knjige (`AmbPrenosStrukturaProblem` ne čita tabele). | `modTest` 393 `T_KnjigaDokaz_NastavakIstiSud`; sabotaže `knjiga-nastavak-gluv`, `knjiga-nastavak-ne-poredi-dokazano`, `knjiga-nastavak-ne-dokazuje-nove` | **zeleno 20.11.** (FULL + dokaz `knjiga-nastavak` 3/3) |
+| UI-7 (20.11., posle merenja §3a) | `RefillMaticniCombos` puni liste konteksta (OM, vozač, vrsta, sorta, tip ambalaže) pod `mMaticniFill`, pa njihov programski `Change` ne pokreće handlere. Izbor koji se punjenjem **stvarno** promeni (npr. deaktivirano otkupno mesto) ide kroz handler jednom, posle punjenja. Otvoreni blokovi se posle upisa osvežavaju eksplicitno (do sada ih je osvežavala usputna kaskada). `RefreshFromData` ne prlja čistu formu: rešen je i terenski simptom „Nesačuvan unos” posle snimanja i Sync-a. | `modTest` 394 `T_Refresh_MaticneListeBezKaskade`; sabotaže `ui7-liste-bez-garda`, `ui7-nestao-izbor-bez-handlera`, `ui7-osvezavanje-prlja-formu` | **neverifikovano** (web sesija; ovde zelene samo statičke provere) |
+| UI-1 (20.11.) | `RefreshFromData` radi u prozoru čitanja, posle `ResetCache` do kraja. Keš ostaje ispravan i kad se usput piše: upis kroz `modDataAccess`, rollback i `KesTabeleZastareo` ga brišu, a kaskada je pod gardom UI-7. Test seam `CitanjaSaListaTest*` broji čitanja sa lista po tabeli. | `modTest` 395 `T_Refresh_CitaTabeluJednom`; sabotaža `ui1-osvezavanje-bez-prozora` | **neverifikovano** (web sesija; ovde zelene samo statičke provere) |
 
 - **Ovde je zeleno:** sve statičke provere iz CI-ja (`vba_check`, `sabotaza`,
   `who_writes`, `gen_schema_module`, kapije self-update-a, `vba_gate`).
@@ -246,7 +248,7 @@ commit):
   Pušteno 19.11.: 386, 387, 390 zeleni (tabele posle testa iste, i audit, pa je
   potvrđena i vernost rollback-a); dokaz `izv3-`, `izv2-naziv`, `hld1-` 4/4.
 - **Tajmer 19.11.** (grana `claude/merenje-modperf`): testovi 392–398 (od 20.11.
-  394–400: 392 je D1-IZV, 393 D1-UPIS) zeleni,
+  396–402: 392 D1-IZV, 393 D1-UPIS, 394–395 UI-7/UI-1) zeleni,
   dokaz `perf-` 7/7. Test 396 potvrđuje da merač ne dira `Err` pozivaoca.
 - **Ostaje pred merge** (ručno, nad kopijom prave sveske):
   - pun prolaz `python tools/run_vba.py` posle izmene testova 386, 387, 390;
@@ -262,6 +264,9 @@ commit):
     20.11.: 12 suite-ova, `RunAllTests` 393/393, BFP 3.499/3.499, GREEN marker);
     ~~merenje snimanja otkupa~~ (20.11.: prosek ≈5,6 s, bez ijedne pune
     provere knjige).
+  - za UI-7 i UI-1: testovi 394 i 395, `dokaz.py --izbor ui7 ui1`, pun prolaz,
+    merenje snimanja i ručno: posle snimanja zaglavlje ne sme da kaže
+    „Nesačuvan unos”, a posle isplate bloka lista blokova ga ne nudi.
     - Usput, nije formalno merenje: BFP je na istoj mašini trajao 483 s umesto
       629 s posle D1-IZV (−23%), a `RunAllTests` 241 s umesto 259 s. BFP
       stalno knjiži ambalažu, pa je to prvi znak da nastavak dokaza radi u
@@ -481,6 +486,23 @@ hladnjačka i 2 obična, isti odnos kao u §3a):
   - ostatak hladnjačkog lanca ≈1,9 s po hladnjačkom snimanju, neraščlanjeno;
   - upis ≈1,2 s; PDF 0,94 s;
   - nastavak dokaza ≈0,4 s i šema-kapija knjige ≈0,16 s po snimanju.
+
+**Raščlanjavanje osvežavanja posle snimanja** (merne tačke `REF.*`, `NAV|*`,
+`OPO.*`, `KPI.*`, `GRID.*`, `LNC.*`; 20.11., 4 snimanja, po snimanju):
+
+| Deo | Trajanje | Šta je unutra |
+|---|---|---|
+| Osvežavanje ukupno | 2,25 s | |
+| Značke menija | 1,05 s | **Bankovni nalozi 0,73 s** (`BuildBlokIsplataList` za svaki prikaz, da bi se prebrojali blokovi); Oporavak 0,32 s (lanci 0,10, palete 0,08, blokovi 0,08, prijemnice 0,05) |
+| Liste konteksta | 0,55 s | skoro sve je kaskada `Change` na OM-u, 3× (UI-7): handler, KPI ponovo |
+| KPI pločice | 0,36 s | saldo OM-a (`ReportSaldoOM`); „danas” se računa 4× po snimanju |
+| Prikaz i mreža | 0,23 s | učitavanje 0,18, crtanje 0,04 |
+
+- **Hladnjački lanac**, po hladnjačkom snimanju: otpremnica 1,22 s,
+  prijemnica 0,82 s, zbirna 0,21 s, ostalo malo.
+- Rez za ovo su UI-7 i UI-1 iz §3. Brojač „Bankovni nalozi” ostaje skup i u
+  prozoru, jer je trošak računanje. Ako merenje posle UI-1 to potvrdi, sledeći
+  korak je da značka ne gradi ceo spisak samo da bi ga prebrojala.
 - **Snimanje D1-IZV ne dira.** U putu upisa nema prozora čitanja, a kapija
   deficita dokazuje knjigu pre svake odluke. Isti dokaz u upisu (memo po
   transakciji, D1) je sledeći najveći pojedinačni dobitak, oko 4,5 s po
@@ -537,7 +559,7 @@ Pre izmene treba izabrati jedan mehanizam (pun tekst je na kraju
 ## 5. Tajmer (detalji: `03-tajmer.md`)
 
 **Urađen 19.11.2026** na grani `claude/merenje-modperf` (testovi 392–398, od
-20.11. 394–400), uz
+20.11. 396–402), uz
 granu `claude/merenje-modperf-pre` za merenje „pre". Uputstvo: `04-merenje.md`.
 Ispod je prvobitni dizajn.
 

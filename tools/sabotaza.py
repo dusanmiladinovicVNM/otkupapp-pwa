@@ -14712,7 +14712,7 @@ SABOTAZE = {
         "T_KesTabele_RollbackZastareva",
         "391 posle rollback-a otvoren prozor ne vraca staru kopiju tabele",
     ),
-    # --- Merni tajmer (modPerf), testovi 394-400 ---
+    # --- Merni tajmer (modPerf), testovi 396-402 ---
     # Iskljucen merac otvara akciju -- merenje bi radilo i kad je ugaseno.
     "perf-iskljucen-otvara-akciju": (
         "modPerf.bas",
@@ -14723,7 +14723,7 @@ SABOTAZE = {
         "        If mAkcijaDub > 0 Then\n"
         "            If SadMs() - mAkcijaT0 > PERF_ZASTARELA_MS Then\n",
         "T_Perf_IskljucenNistaNeBelezi",
-        "394 iskljucen merac ne otvara akciju",
+        "396 iskljucen merac ne otvara akciju",
     ),
     # Self ne oduzima decu -- spoljna sekcija bi nosila vreme unutrasnje dvaput.
     "perf-self-bez-dece": (
@@ -14731,7 +14731,7 @@ SABOTAZE = {
         "    mSelf(k) = mSelf(k) + d - mStDete(mDub)\n",
         "    mSelf(k) = mSelf(k) + d   ' SABOTAZA: self ne oduzima decu\n",
         "T_Perf_UgnjezdenoSelfIUkupno",
-        "395 self spoljne sekcije = ukupno minus deca",
+        "397 self spoljne sekcije = ukupno minus deca",
     ),
     # Zaostala sekcija se zatvara tiho -- izlaz kroz gresku se ne bi video.
     "perf-nezatvorena-tiho": (
@@ -14740,7 +14740,7 @@ SABOTAZE = {
         "                mNezatvorenih = mNezatvorenih + 1\n",
         "            Do While mDub > nadjen   ' SABOTAZA: zaostala sekcija se ne broji\n",
         "T_Perf_TolerantStek",
-        "396 zaostala sekcija se broji kao nezatvorena",
+        "398 zaostala sekcija se broji kao nezatvorena",
     ),
     # Ugnjezdena akcija drugog imena se gubi -- npr. programski Change unutar
     # Sacuvaj (UI-7) ne bi bio vidljiv u merenju.
@@ -14749,7 +14749,7 @@ SABOTAZE = {
         "                PerfPocni PERF_UGNJ & naziv\n",
         "                ' SABOTAZA: ugnjezdena akcija se ne belezi\n",
         "T_Perf_UgnjezdenaAkcija",
-        "397 ugnjezdena akcija drugog imena je sekcija spoljne",
+        "399 ugnjezdena akcija drugog imena je sekcija spoljne",
     ),
     # Merac brise Err pozivaoca -- kuka pod On Error Resume Next bi menjala ishod.
     "perf-brise-err": (
@@ -14759,7 +14759,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: Err pozivaoca se ne vraca\n"
         "        Err.Number = errNum\n",
         "T_Perf_ErrNeutralan",
-        "398 pocetak sekcije ne menja Err pozivaoca",
+        "400 pocetak sekcije ne menja Err pozivaoca",
     ),
     # Sat ide unazad -- sva trajanja bi bila negativna.
     "perf-sat-unazad": (
@@ -14767,7 +14767,7 @@ SABOTAZE = {
         "        SadMs = CDbl(c - mQpcBaza) * mMsPoJedinici\n",
         "        SadMs = -CDbl(c - mQpcBaza) * mMsPoJedinici   ' SABOTAZA: sat ide unazad\n",
         "T_Perf_QpcMonoton",
-        "399 sat je monoton",
+        "401 sat je monoton",
     ),
     # Kuka u GetTableData ne broji citanje sa lista -- brojaci pre/posle bi
     # pokazivali nulu.
@@ -14776,7 +14776,7 @@ SABOTAZE = {
         '    If gPerfOn Then PerfVelicina "DA.GTD|" & tblName, tblName, lo.DataBodyRange.rows.count, lo.DataBodyRange.Columns.count\n',
         "    ' SABOTAZA: citanje sa lista se ne broji\n",
         "T_Perf_GetTableDataBroji",
-        "400 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)",
+        "402 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)",
     ),
     # D1 (merenje 20.11.2026): dokaz integriteta knjige ambalaze se u prozoru
     # citanja ne cita iz kesa -- svaki citalac dokazuje iznova (stanje pre reza).
@@ -14824,6 +14824,43 @@ SABOTAZE = {
         "        Set vrste = KopijaRecnika(mDokazVrste)   ' SABOTAZA: novi redovi se ne dokazuju\n",
         "T_KnjigaDokaz_NastavakIstiSud",
         "393 dodat red sa duplim AmbID-em pada i kroz nastavak",
+    ),
+    # UI-7 (merenje 20.11.2026): liste konteksta bez garda -- programski Change
+    # posle svakog upisa pokrece ceo handler otkupnog mesta (stanje pre reza).
+    "ui7-liste-bez-garda": (
+        "modOtkupUI.bas",
+        '            Case "cbOM", "cbVozac", "cbVrsta", "cbSorta", "fgTipAmbT": Exit Sub\n',
+        '            Case "_SABOTAZA_": Exit Sub   \' SABOTAZA: liste konteksta bez garda\n',
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja",
+    ),
+    # UI-7: izbor koji punjenje stvarno promeni ne ide kroz handler -- lock i
+    # broj deaktiviranog otkupnog mesta ostaju, KPI pokazuje staro mesto.
+    "ui7-nestao-izbor-bez-handlera": (
+        "modOtkupUI.bas",
+        '    If StrComp(GetComboID(ctx.Controls("cbOM")), omPre, vbTextCompare) <> 0 Then UiChange "cbOM"\n',
+        "    ' SABOTAZA: promenjen izbor otkupnog mesta ne ide kroz handler\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom",
+    ),
+    # UI-7: osvezavanje ostavlja praznu formu "Nesacuvan unos" (terenski simptom).
+    "ui7-osvezavanje-prlja-formu": (
+        "modOtkupUI.bas",
+        "    If bioCist And mDirty Then MarkClean\n",
+        "    ' SABOTAZA: osvezavanje ostavlja formu prljavom\n",
+        "T_Refresh_MaticneListeBezKaskade",
+        "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane",
+    ),
+    # UI-1: RefreshFromData bez prozora citanja -- iste tabele se citaju sa lista
+    # po vise puta (tblKooperanti ~190 po snimanju, merenje 20.11.2026).
+    "ui1-osvezavanje-bez-prozora": (
+        "modOtkupUI.bas",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    BeginTableCache\n",
+        "    ' kraju bez obzira na gresku (On Error Resume Next).\n"
+        "    ' SABOTAZA: osvezavanje bez prozora citanja\n",
+        "T_Refresh_CitaTabeluJednom",
+        "395 osvezavanje cita svaku tabelu sa lista najvise jednom",
     ),
 }
 

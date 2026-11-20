@@ -735,13 +735,13 @@ Public Sub RunAllTests()
 
     ' Merni tajmer (modPerf): cist mehanizam merenja i kuka u GetTableData.
     ' Svaki test gasi merac sam; ResetSeamova ga gasi posle pada.
-    RunOne 394
-    RunOne 395
     RunOne 396
     RunOne 397
     RunOne 398
     RunOne 399
     RunOne 400
+    RunOne 401
+    RunOne 402
 
     ' Cenovnik (docs/DOMEN/CENOVNIK.md, CEN-01..13). 372-373 su ciste funkcije
     ' bez sveske; 374-381 rade nad SVOJIM praznim tblCenovnik u transakciji
@@ -775,6 +775,9 @@ Public Sub RunAllTests()
     RunOne 392
     ' Merenje 20.11.2026: snimanje otkupa dokazuje knjigu ambalaze 15 puta (D1-UPIS).
     RunOne 393
+    ' Merenje 20.11.2026: osvezavanje posle snimanja (UI-7 kaskada, UI-1 prozor).
+    RunOne 394
+    RunOne 395
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1020,6 +1023,8 @@ Private Sub ResetSeamova()
     modMaticniEkran.CenPitanjeTestReset
     ' Podmetnut pad upisa cene (381): zaostao seam bi oborio svaki sledeci unos.
     modCenovnik.CenUpisPadaTestSet False
+    ' Brojac citanja sa lista (395): zaostao bi brojao tudje citanje.
+    modDataAccess.CitanjaSaListaTestKraj
     Err.Clear
 End Sub
 
@@ -1392,13 +1397,13 @@ Private Function TestName(ByVal idx As Long) As String
         Case 369: TestName = "T_RezimZbirne_F1NeNasledjuje"
         Case 370: TestName = "T_Zbirne_PickerOpisMestaKgAmb"
         Case 371: TestName = "T_Ljuska_DvoklikVanRedaNeUcitava"
-        Case 394: TestName = "T_Perf_IskljucenNistaNeBelezi"
-        Case 395: TestName = "T_Perf_UgnjezdenoSelfIUkupno"
-        Case 396: TestName = "T_Perf_TolerantStek"
-        Case 397: TestName = "T_Perf_UgnjezdenaAkcija"
-        Case 398: TestName = "T_Perf_ErrNeutralan"
-        Case 399: TestName = "T_Perf_QpcMonoton"
-        Case 400: TestName = "T_Perf_GetTableDataBroji"
+        Case 396: TestName = "T_Perf_IskljucenNistaNeBelezi"
+        Case 397: TestName = "T_Perf_UgnjezdenoSelfIUkupno"
+        Case 398: TestName = "T_Perf_TolerantStek"
+        Case 399: TestName = "T_Perf_UgnjezdenaAkcija"
+        Case 400: TestName = "T_Perf_ErrNeutralan"
+        Case 401: TestName = "T_Perf_QpcMonoton"
+        Case 402: TestName = "T_Perf_GetTableDataBroji"
         Case 372: TestName = "T_Cen_VazecaCenaTabelaC1C19"
         Case 373: TestName = "T_Cen_PreduslovIBezCene"
         Case 374: TestName = "T_Cen_UnosOdbijaIPusta"
@@ -1421,6 +1426,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 391: TestName = "T_KesTabele_RollbackZastareva"
         Case 392: TestName = "T_KesKnjiga_DokazJednomUProzoru"
         Case 393: TestName = "T_KnjigaDokaz_NastavakIstiSud"
+        Case 394: TestName = "T_Refresh_MaticneListeBezKaskade"
+        Case 395: TestName = "T_Refresh_CitaTabeluJednom"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1800,13 +1807,13 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 369: T_RezimZbirne_F1NeNasledjuje
         Case 370: T_Zbirne_PickerOpisMestaKgAmb
         Case 371: T_Ljuska_DvoklikVanRedaNeUcitava
-        Case 394: T_Perf_IskljucenNistaNeBelezi
-        Case 395: T_Perf_UgnjezdenoSelfIUkupno
-        Case 396: T_Perf_TolerantStek
-        Case 397: T_Perf_UgnjezdenaAkcija
-        Case 398: T_Perf_ErrNeutralan
-        Case 399: T_Perf_QpcMonoton
-        Case 400: T_Perf_GetTableDataBroji
+        Case 396: T_Perf_IskljucenNistaNeBelezi
+        Case 397: T_Perf_UgnjezdenoSelfIUkupno
+        Case 398: T_Perf_TolerantStek
+        Case 399: T_Perf_UgnjezdenaAkcija
+        Case 400: T_Perf_ErrNeutralan
+        Case 401: T_Perf_QpcMonoton
+        Case 402: T_Perf_GetTableDataBroji
         Case 372: T_Cen_VazecaCenaTabelaC1C19
         Case 373: T_Cen_PreduslovIBezCene
         Case 374: T_Cen_UnosOdbijaIPusta
@@ -1829,6 +1836,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 391: T_KesTabele_RollbackZastareva
         Case 392: T_KesKnjiga_DokazJednomUProzoru
         Case 393: T_KnjigaDokaz_NastavakIstiSud
+        Case 394: T_Refresh_MaticneListeBezKaskade
+        Case 395: T_Refresh_CitaTabeluJednom
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -24658,6 +24667,129 @@ CleanUp:
 End Sub
 
 ' ============================================================
+' 394. OSVEZAVANJE POSLE UPISA: LISTE KONTEKSTA BEZ KASKADE (brzina, UI-7).
+' ============================================================
+' Merenje 20.11.2026: RefillMaticniCombos je posle svakog snimanja punio listu
+' otkupnih mesta ispocetka, a svaki programski Change (3 po snimanju) je pokretao
+' ceo handler OM-a -- OnStanicaChanged, saldo, otvorene blokove, KPI (~0,5 s) -- i
+' prljao praznu formu ("Nesacuvan unos", opazeno i posle Sync-a).
+' Mera:
+'  (a) izbor koji punjenje ne menja: handler OM-a ne radi nijednom, izbor ostaje,
+'      forma ostaje cista;
+'  (b) izbor koji punjenje stvarno menja (deaktivirano otkupno mesto): handler
+'      radi TACNO jednom, KPI ostaje bez otkupnog mesta, a forma ostaje cista.
+' Fixture: normal production state; deaktivacija je u transakciji koju rollback vraca.
+Private Sub T_Refresh_MaticneListeBezKaskade()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim tx As clsTransaction, txZapoceta As Boolean
+    Dim rows As Collection, red As Long
+    Dim omID As String, nesac As String
+    Dim h0 As Long, hA As Long, hB As Long
+    Dim omA As String, omB As String, kpiB As String
+    Dim prljavoA As Boolean, prljavoB As Boolean
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    omID = GetComboID(cbOM)
+    nesac = Poruka("OTKUI_HDR_NESACUVANO")
+
+    ' (a) Cista forma posle upisa, izbor se ne menja.
+    modOtkupUI.ClearForm
+    h0 = modOtkupUI.OmPromenaBrojTest()
+    modOtkupUI.RefreshFromData
+    hA = modOtkupUI.OmPromenaBrojTest() - h0
+    omA = GetComboID(cbOM)
+    prljavoA = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+
+    ' (b) Izabrano mesto deaktivirano: punjenje ga izbacuje iz liste.
+    If Len(omID) > 0 Then
+        Set rows = FindRows(TBL_STANICE, "StanicaID", omID)
+        If Not rows Is Nothing Then
+            If rows.count > 0 Then red = rows(1)
+        End If
+    End If
+    If red > 0 Then
+        Set tx = New clsTransaction
+        tx.BeginTx
+        txZapoceta = True
+        tx.AddTableSnapshot TBL_STANICE
+        UpdateCell TBL_STANICE, red, "Aktivan", STATUS_NEAKTIVAN
+        h0 = modOtkupUI.OmPromenaBrojTest()
+        modOtkupUI.RefreshFromData
+        hB = modOtkupUI.OmPromenaBrojTest() - h0
+        omB = GetComboID(cbOM)
+        kpiB = CStr(f.Controls("zKpi").Controls("kpiV1").caption)
+        prljavoB = (CStr(f.Controls("zHdr").Controls("hdrSaved").caption) = nesac)
+        tx.RollbackTx
+        txZapoceta = False
+    End If
+    ReleaseOtkupUIForm f
+
+    AssertEq (Len(omID) > 0), True, "394 preduslov: otkupno mesto je izabrano"
+    AssertEq omA, omID, "394 izbor otkupnog mesta prezivljava osvezavanje"
+    AssertEq hA, 0, "394 osvezavanje ne pokrece handler otkupnog mesta kad se izbor ne menja"
+    AssertEq (red > 0), True, "394 preduslov: izabrano mesto postoji u tblStanice"
+    AssertEq omB, "", "394 preduslov: deaktivirano mesto nestaje iz izbora"
+    AssertEq hB, 1, "394 nestao izbor ide kroz handler otkupnog mesta tacno jednom"
+    AssertEq kpiB, ChrW(8212), "394 posle nestalog izbora KPI je bez otkupnog mesta"
+    AssertEq (prljavoA Or prljavoB), False, _
+             "394 osvezavanje ne prlja praznu formu, ni kad izbor nestane"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    If txZapoceta Then tx.RollbackTx
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_MaticneListeBezKaskade", errDesc
+End Sub
+
+' ============================================================
+' 395. OSVEZAVANJE POSLE UPISA CITA SVAKU TABELU JEDNOM (brzina, UI-1).
+' ============================================================
+' Merenje 20.11.2026: osvezavanje posle snimanja (KPI, znacke menija, liste,
+' mreza) je istu tabelu citalo sa lista iznova -- tblKooperanti ~190 puta po
+' snimanju. Sada RefreshFromData radi u prozoru citanja. Mera: brojac citanja sa
+' lista po tabeli (test seam u modDataAccess) -- najvise jedno po tabeli, a prozor
+' se zatvara. Bez upisa usput (izbor se ne menja), pa nema ni invalidacije.
+Private Sub T_Refresh_CitaTabeluJednom()
+    Dim f As frmOtkupUI, cbOM As MSForms.ComboBox
+    Dim maxC As Long, tabela As String, dub As Long
+    Dim errNum As Long, errDesc As String
+
+    Set f = NewOtkupUIForm()
+    On Error GoTo EH
+    modOtkupUI.FillCombos f
+    Set cbOM = f.Controls("zCtx").Controls("cbOM")
+    If cbOM.ListCount > 0 Then cbOM.ListIndex = 0
+    modOtkupUI.ClearForm
+
+    modDataAccess.CitanjaSaListaTestPocni
+    modOtkupUI.RefreshFromData
+    maxC = modDataAccess.CitanjaSaListaTestMax(tabela)
+    modDataAccess.CitanjaSaListaTestKraj
+    dub = modDataAccess.TableCacheDepth()
+    ReleaseOtkupUIForm f
+
+    If maxC > 1 Then Debug.Print "395: najvise citanja sa lista: " & tabela & " x" & maxC
+    AssertEq (maxC >= 1), True, "395 preduslov: osvezavanje cita tabele sa lista (seam broji)"
+    AssertEq maxC, 1, "395 osvezavanje cita svaku tabelu sa lista najvise jednom"
+    AssertEq dub, 0, "395 prozor kesa je zatvoren posle osvezavanja"
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    On Error Resume Next
+    modDataAccess.CitanjaSaListaTestKraj
+    ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "modTest.T_Refresh_CitaTabeluJednom", errDesc
+End Sub
+
+' ============================================================
 ' 385. OTKUPNI LIST: STAVKE KANONSKIM REDOSLEDOM, JEDNIM PROLAZOM (brzina, OTK-1).
 ' ============================================================
 ' FillOtkupSablon je za svaki redni broj 1..UBound(tabele) prolazio CELU
@@ -36143,7 +36275,7 @@ EH:
 End Sub
 
 ' ============================================================
-' 394-400. MERNI TAJMER (modPerf) -- analiza brzine 2026-11, protokol merenja.
+' 396-402. MERNI TAJMER (modPerf) -- analiza brzine 2026-11, protokol merenja.
 ' ============================================================
 ' Merac sam ne sme da menja ponasanje: iskljucen ne belezi nista, ukljucen ne
 ' dira Err pozivaoca i ne obara stek na neuparenom kraju. Brojke koje daje
@@ -36152,7 +36284,7 @@ End Sub
 ' (PerfIskljuciTiho); posle pada ga gasi ResetSeamova.
 
 ' Ceka ms milisekundi po satu meraca; posle 2 s po Timer-u odustaje, da
-' pokvaren sat (sabotaza 399) ne zaglavi suite.
+' pokvaren sat (sabotaza 401) ne zaglavi suite.
 Private Sub PerfCekaj(ByVal ms As Double)
     Dim t0 As Double, tStart As Single
     t0 = modPerf.PerfSadMs()
@@ -36162,117 +36294,117 @@ Private Sub PerfCekaj(ByVal ms As Double)
     Loop
 End Sub
 
-' 394. Iskljucen merac ne otvara akciju i ne belezi sekciju.
+' 396. Iskljucen merac ne otvara akciju i ne belezi sekciju.
 Private Sub T_Perf_IskljucenNistaNeBelezi()
     Dim akc As Long, sek As Double
     modPerf.PerfIskljuciTiho
-    modPerf.PerfAkcijaPocni "T394"
+    modPerf.PerfAkcijaPocni "T396"
     akc = modPerf.PerfMetaTest("Akcija")
-    modPerf.PerfPocni "T394.S"
-    modPerf.PerfKraj "T394.S"
-    modPerf.PerfBroji "T394.B"
-    modPerf.PerfAkcijaZavrsi "T394"
-    sek = modPerf.PerfStatTest("T394.S", "poziva")
+    modPerf.PerfPocni "T396.S"
+    modPerf.PerfKraj "T396.S"
+    modPerf.PerfBroji "T396.B"
+    modPerf.PerfAkcijaZavrsi "T396"
+    sek = modPerf.PerfStatTest("T396.S", "poziva")
     modPerf.PerfIskljuciTiho
 
-    AssertEq akc, 0, "394 iskljucen merac ne otvara akciju"
-    AssertEq sek, -1, "394 iskljucen merac ne belezi sekciju"
+    AssertEq akc, 0, "396 iskljucen merac ne otvara akciju"
+    AssertEq sek, -1, "396 iskljucen merac ne belezi sekciju"
 End Sub
 
-' 395. Ugnjezdene sekcije: ukupno spoljne obuhvata unutrasnju, self = ukupno - deca.
+' 397. Ugnjezdene sekcije: ukupno spoljne obuhvata unutrasnju, self = ukupno - deca.
 Private Sub T_Perf_UgnjezdenoSelfIUkupno()
     Dim uA As Double, sA As Double, uB As Double, pA As Double
     modPerf.Perf_Ukljuci
-    modPerf.PerfAkcijaPocni "T395"
-    modPerf.PerfPocni "T395.A"
+    modPerf.PerfAkcijaPocni "T397"
+    modPerf.PerfPocni "T397.A"
     PerfCekaj 20
-    modPerf.PerfPocni "T395.B"
+    modPerf.PerfPocni "T397.B"
     PerfCekaj 10
-    modPerf.PerfKraj "T395.B"
-    modPerf.PerfKraj "T395.A"
-    modPerf.PerfAkcijaZavrsi "T395"
-    uA = modPerf.PerfStatTest("T395.A", "ukupno")
-    sA = modPerf.PerfStatTest("T395.A", "self")
-    uB = modPerf.PerfStatTest("T395.B", "ukupno")
-    pA = modPerf.PerfStatTest("T395.A", "poziva")
+    modPerf.PerfKraj "T397.B"
+    modPerf.PerfKraj "T397.A"
+    modPerf.PerfAkcijaZavrsi "T397"
+    uA = modPerf.PerfStatTest("T397.A", "ukupno")
+    sA = modPerf.PerfStatTest("T397.A", "self")
+    uB = modPerf.PerfStatTest("T397.B", "ukupno")
+    pA = modPerf.PerfStatTest("T397.A", "poziva")
     modPerf.PerfIskljuciTiho
 
-    AssertEq (uB >= 9), True, "395 preduslov: unutrasnja sekcija traje bar 9 ms"
-    AssertEq (uA >= uB + 15), True, "395 spoljna sekcija obuhvata unutrasnju"
-    AssertEq (Abs(sA - (uA - uB)) < 0.01), True, "395 self spoljne sekcije = ukupno minus deca"
-    AssertEq pA, 1, "395 sekcija je zatvorena tacno jednom"
+    AssertEq (uB >= 9), True, "397 preduslov: unutrasnja sekcija traje bar 9 ms"
+    AssertEq (uA >= uB + 15), True, "397 spoljna sekcija obuhvata unutrasnju"
+    AssertEq (Abs(sA - (uA - uB)) < 0.01), True, "397 self spoljne sekcije = ukupno minus deca"
+    AssertEq pA, 1, "397 sekcija je zatvorena tacno jednom"
 End Sub
 
-' 396. Tolerantan stek: kraj spoljne zatvara zaostalu unutrasnju (izlaz kroz
+' 398. Tolerantan stek: kraj spoljne zatvara zaostalu unutrasnju (izlaz kroz
 ' gresku), a kraj bez para se samo broji.
 Private Sub T_Perf_TolerantStek()
     Dim dub As Long, nez As Long, neu As Long, pB As Double
     modPerf.Perf_Ukljuci
-    modPerf.PerfAkcijaPocni "T396"
-    modPerf.PerfPocni "T396.A"
-    modPerf.PerfPocni "T396.B"
-    modPerf.PerfKraj "T396.A"
-    modPerf.PerfKraj "T396.NIKAD"
+    modPerf.PerfAkcijaPocni "T398"
+    modPerf.PerfPocni "T398.A"
+    modPerf.PerfPocni "T398.B"
+    modPerf.PerfKraj "T398.A"
+    modPerf.PerfKraj "T398.NIKAD"
     dub = modPerf.PerfMetaTest("Dubina")
     nez = modPerf.PerfMetaTest("Nezatvorenih")
     neu = modPerf.PerfMetaTest("Neuparenih")
-    modPerf.PerfAkcijaZavrsi "T396"
-    pB = modPerf.PerfStatTest("T396.B", "poziva")
+    modPerf.PerfAkcijaZavrsi "T398"
+    pB = modPerf.PerfStatTest("T398.B", "poziva")
     modPerf.PerfIskljuciTiho
 
-    AssertEq dub, 0, "396 kraj spoljne sekcije zatvara i zaostalu unutrasnju"
-    AssertEq nez, 1, "396 zaostala sekcija se broji kao nezatvorena"
-    AssertEq neu, 1, "396 kraj bez para se broji i ne obara stek"
-    AssertEq pB, 1, "396 zaostala sekcija ima svoje merenje"
+    AssertEq dub, 0, "398 kraj spoljne sekcije zatvara i zaostalu unutrasnju"
+    AssertEq nez, 1, "398 zaostala sekcija se broji kao nezatvorena"
+    AssertEq neu, 1, "398 kraj bez para se broji i ne obara stek"
+    AssertEq pB, 1, "398 zaostala sekcija ima svoje merenje"
 End Sub
 
-' 397. Ugnjezdena akcija drugog imena je sekcija spoljne; istog imena se broji.
+' 399. Ugnjezdena akcija drugog imena je sekcija spoljne; istog imena se broji.
 Private Sub T_Perf_UgnjezdenaAkcija()
     Dim unutra As Double, jos As Long, posle As Long
     modPerf.Perf_Ukljuci
-    modPerf.PerfAkcijaPocni "T397"
-    modPerf.PerfAkcijaPocni "T397.UNUTRA"
-    modPerf.PerfAkcijaZavrsi "T397.UNUTRA"
-    modPerf.PerfAkcijaPocni "T397"
-    modPerf.PerfAkcijaZavrsi "T397"
+    modPerf.PerfAkcijaPocni "T399"
+    modPerf.PerfAkcijaPocni "T399.UNUTRA"
+    modPerf.PerfAkcijaZavrsi "T399.UNUTRA"
+    modPerf.PerfAkcijaPocni "T399"
+    modPerf.PerfAkcijaZavrsi "T399"
     jos = modPerf.PerfMetaTest("Akcija")
-    modPerf.PerfAkcijaZavrsi "T397"
+    modPerf.PerfAkcijaZavrsi "T399"
     posle = modPerf.PerfMetaTest("Akcija")
-    unutra = modPerf.PerfStatTest("AKCIJA.T397.UNUTRA", "poziva")
+    unutra = modPerf.PerfStatTest("AKCIJA.T399.UNUTRA", "poziva")
     modPerf.PerfIskljuciTiho
 
-    AssertEq unutra, 1, "397 ugnjezdena akcija drugog imena je sekcija spoljne"
-    AssertEq jos, 1, "397 ugnjezdena akcija istog imena ne zatvara spoljnu"
-    AssertEq posle, 0, "397 poslednji kraj zatvara akciju"
+    AssertEq unutra, 1, "399 ugnjezdena akcija drugog imena je sekcija spoljne"
+    AssertEq jos, 1, "399 ugnjezdena akcija istog imena ne zatvara spoljnu"
+    AssertEq posle, 0, "399 poslednji kraj zatvara akciju"
 End Sub
 
-' 398. Merenje ne dira Err pozivaoca. Kuke stoje i u procedurama pod
+' 400. Merenje ne dira Err pozivaoca. Kuke stoje i u procedurama pod
 ' On Error Resume Next (UiEvent, RefreshFromData), gde pozivalac cita Err posle
 ' koraka; merac koji bi ga obrisao promenio bi ishod.
 Private Sub T_Perf_ErrNeutralan()
     Dim n1 As Long, s1 As String, d1 As String, n2 As Long, n0 As Long
     modPerf.Perf_Ukljuci
-    modPerf.PerfAkcijaPocni "T398"
+    modPerf.PerfAkcijaPocni "T400"
     On Error Resume Next
-    Err.Raise vbObjectError + 398, "T398.izvor", "T398 opis"
-    modPerf.PerfPocni "T398.S"
+    Err.Raise vbObjectError + 400, "T400.izvor", "T400 opis"
+    modPerf.PerfPocni "T400.S"
     n1 = Err.Number: s1 = Err.Source: d1 = Err.description
-    modPerf.PerfKraj "T398.S"
+    modPerf.PerfKraj "T400.S"
     n2 = Err.Number
     Err.Clear
-    modPerf.PerfBroji "T398.B"
+    modPerf.PerfBroji "T400.B"
     n0 = Err.Number
     On Error GoTo 0
-    modPerf.PerfAkcijaZavrsi "T398"
+    modPerf.PerfAkcijaZavrsi "T400"
     modPerf.PerfIskljuciTiho
 
-    AssertEq CStr(n1) & "|" & s1 & "|" & d1, CStr(vbObjectError + 398) & "|T398.izvor|T398 opis", _
-             "398 pocetak sekcije ne menja Err pozivaoca"
-    AssertEq n2, vbObjectError + 398, "398 kraj sekcije ne menja Err pozivaoca"
-    AssertEq n0, 0, "398 merenje ne podmece gresku kad je nema"
+    AssertEq CStr(n1) & "|" & s1 & "|" & d1, CStr(vbObjectError + 400) & "|T400.izvor|T400 opis", _
+             "400 pocetak sekcije ne menja Err pozivaoca"
+    AssertEq n2, vbObjectError + 400, "400 kraj sekcije ne menja Err pozivaoca"
+    AssertEq n0, 0, "400 merenje ne podmece gresku kad je nema"
 End Sub
 
-' 399. Sat ide kroz QueryPerformanceCounter, monoton je i napreduje.
+' 401. Sat ide kroz QueryPerformanceCounter, monoton je i napreduje.
 Private Sub T_Perf_QpcMonoton()
     Dim i As Long, t As Double, pre As Double, t0 As Double
     Dim qpc As Long, pad As Boolean, proteklo As Double
@@ -36289,12 +36421,12 @@ Private Sub T_Perf_QpcMonoton()
     proteklo = modPerf.PerfSadMs() - t0
     modPerf.PerfIskljuciTiho
 
-    AssertEq qpc, 1, "399 sat ide kroz QueryPerformanceCounter"
-    AssertEq pad, False, "399 sat je monoton"
-    AssertEq (proteklo >= 14), True, "399 sat napreduje u milisekundama"
+    AssertEq qpc, 1, "401 sat ide kroz QueryPerformanceCounter"
+    AssertEq pad, False, "401 sat je monoton"
+    AssertEq (proteklo >= 14), True, "401 sat napreduje u milisekundama"
 End Sub
 
-' 400. Kuka u GetTableData broji svako citanje sa lista (sa brojem celija) i,
+' 402. Kuka u GetTableData broji svako citanje sa lista (sa brojem celija) i,
 ' odvojeno, pogodak kesa -- to su brojaci kojima se pre/posle dokazuje
 ' "N citanja tabele po akciji".
 Private Sub T_Perf_GetTableDataBroji()
@@ -36302,22 +36434,22 @@ Private Sub T_Perf_GetTableDataBroji()
     Dim dubina As Long, ocekCelija As Double
     dubina = modDataAccess.TableCacheDepth()
     modPerf.Perf_Ukljuci
-    modPerf.PerfAkcijaPocni "T400"
+    modPerf.PerfAkcijaPocni "T402"
     d = GetTableData(TBL_KOOPERANTI)
     d = GetTableData(TBL_KOOPERANTI)
     BeginTableCache
     d = GetTableData(TBL_KOOPERANTI)
     d = GetTableData(TBL_KOOPERANTI)
     EndTableCache
-    modPerf.PerfAkcijaZavrsi "T400"
+    modPerf.PerfAkcijaZavrsi "T402"
     citanja = modPerf.PerfStatTest("DA.GTD|" & TBL_KOOPERANTI, "poziva")
     celija = modPerf.PerfStatTest("DA.GTD|" & TBL_KOOPERANTI, "kolicina")
     kes = modPerf.PerfStatTest("DA.GTD.KES|" & TBL_KOOPERANTI, "poziva")
     modPerf.PerfIskljuciTiho
     If IsArray(d) Then ocekCelija = 3# * CDbl(UBound(d, 1)) * CDbl(UBound(d, 2))
 
-    AssertEq dubina, 0, "400 preduslov: nijedan prozor kesa nije otvoren"
-    AssertEq citanja, 3, "400 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)"
-    AssertEq kes, 1, "400 pogodak kesa se broji odvojeno"
-    AssertEq celija, ocekCelija, "400 brojac nosi broj procitanih celija"
+    AssertEq dubina, 0, "402 preduslov: nijedan prozor kesa nije otvoren"
+    AssertEq citanja, 3, "402 svako citanje sa lista se broji (2 van prozora, 1 u prozoru)"
+    AssertEq kes, 1, "402 pogodak kesa se broji odvojeno"
+    AssertEq celija, ocekCelija, "402 brojac nosi broj procitanih celija"
 End Sub
