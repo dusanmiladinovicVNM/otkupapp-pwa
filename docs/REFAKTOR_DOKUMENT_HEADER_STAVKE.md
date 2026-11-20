@@ -12166,7 +12166,7 @@ Uz to:
 - Dokaz u oba smera: vraćen spoj → `PAO` po imenu procedure; zastareo unos spiska → `PAO`; čisto → `ok`.
   **Izmereno:** novi alat nad `aa6c03f1` → `prj_broj_spoj 13 > prag 0 PAO`, sa imenima procedura (13, ne 15:
   `GetActiveDocumentsForStorno` i `GetOsirocenePrijemnice` i posle reza nose labelu, pa su na spisku; njihov
-  spoj mere testovi 367 i 368); unos `ReportZbirniVozac` dodat na spisak → `ZASTAREO UNOS … PAO`; nad granom
+  spoj mere testovi 397 i 398); unos `ReportZbirniVozac` dodat na spisak → `ZASTAREO UNOS … PAO`; nad granom
   → `prj_broj_spoj 0 = prag 0 ok`.
 
 #### ACCEPTANCE CONTRACT — S9-3
@@ -12179,11 +12179,11 @@ Uz to:
   pogodak po broju iz lanca A završi u lancu B; isti broj nastaje prepisom labele posle zasejavanja (obrazac 356).
   Gde stari kod razdvaja vlasnika atributom (manjak, scope storna), mamac je atribut ili prijemnica starog oblika
   (labela bez `ZbirnaRoditeljID`).
-- **Testovi (od 366), svi crveni nad starim kodom po imenu, pa zeleni:**
-  - **366 `T_G2_BrojNijeIdentitet`** — izveštaji 1–3, manjak 4–5, detalj 6, izvoz 7;
-  - **367 `T_S93_StornoPoID`** — 8–13;
-  - **368 `T_S93_F4IOporavakPoID`** — 14–15;
-  - **369 `T_S93_TekucaPredajaBezZbirne`** — `TekucaPredajaOtkupa` imenuje zbirnu koje nema (detalj i seam).
+- **Testovi (od 396), svi crveni nad starim kodom po imenu, pa zeleni:**
+  - **396 `T_G2_BrojNijeIdentitet`** — izveštaji 1–3, manjak 4–5, detalj 6, izvoz 7;
+  - **397 `T_S93_StornoPoID`** — 8–13;
+  - **398 `T_S93_F4IOporavakPoID`** — 14–15;
+  - **399 `T_S93_TekucaPredajaBezZbirne`** — `TekucaPredajaOtkupa` imenuje zbirnu koje nema (detalj i seam).
 - **Sabotaže** (`s93-*`): po jedna za svaku tvrdnju koja meri prevedeno mesto; svaka obara svoju tvrdnju po imenu
   (`dokaz.py s93- --izbor`).
 - **Ne dira:** integritet (S9-5: šest mesta iz tabele gore), generaciju i `ReassignPrijemnicaToZbirna_TX` (S9-4),
@@ -12210,7 +12210,7 @@ Uz to:
 
 #### Izvršeno (18.11.2026, `docs/STANJE_REFAKTORA.md` stavka 334)
 
-- **Commiti:** `ca89a1fa` ugovor · `75af3deb` testovi 366–369 prvi, uz skelu bez promene ponašanja (seam pitanja
+- **Commiti:** `ca89a1fa` ugovor · `75af3deb` testovi 396–399 prvi, uz skelu bez promene ponašanja (seam pitanja
   „dupla prijemnica", opcioni vozač i kupac linije manjka, javni ulaz indeksa izvoza) · `d70267eb` 15 spojeva na
   E4, brisanja, popis, sabotaže · `f7832ed8` fixture i sirovi seed-ovi (`S93-ODL-01`).
 - **Jeftine kapije zelene nad `f7832ed8`:** `vba_check` (194 fajla, 1424 sabotaže) i `--self-test`,
@@ -12222,18 +12222,18 @@ Uz to:
   aplikaciji ga preimenuje `modSetup.PreimenujKolonuAko` na startu), pa je `make_fixture` stao na SEMA čim je SEED
   počeo da piše `ZbirnaRoditeljID`. Dodato preimenovanje u `RENAME_COLS` (`b2ffb413`); potpis `435d2490e80c03a9`.
 - **Crveno nad starim kodom (`run_vba --src`, izvor `75af3deb` uz ispravljene testove):** 4/4 crvena po imenu, svaki
-  iz svog razloga — 366 `[-53|-43]` umesto `[10|7]` (`KI-032`), 367 pregled storna zbirne broji prijemnice broja,
-  368 stari F4 pita „dupla prijemnica" zbog prijemnice starog oblika sa labelom, 369 tekuća predaja ćuti.
+  iz svog razloga — 396 `[-53|-43]` umesto `[10|7]` (`KI-032`), 397 pregled storna zbirne broji prijemnice broja,
+  398 stari F4 pita „dupla prijemnica" zbog prijemnice starog oblika sa labelom, 399 tekuća predaja ćuti.
 - **Dve ispravke testova pre zelenog (merenje, ne kod):**
-  - **368** (`b2ffb413`): unos F4 je imao 0 gajbi, pa je stroga validacija stajala na `OTKUNOS_ERR_GAJBE_I` pre
+  - **398** (`b2ffb413`): unos F4 je imao 0 gajbi, pa je stroga validacija stajala na `OTKUNOS_ERR_GAJBE_I` pre
     provere duple prijemnice (ona je poslednja). Prvi crveni prolaz je zato bio crven iz pogrešnog razloga; posle
     ispravke stari kod crveni baš na pitanju.
-  - **367** (`5e217cfc`): obim kaskade je meren nad dve zbirne istog broja i **dva vlasnika**, a takav broj
+  - **397** (`5e217cfc`): obim kaskade je meren nad dve zbirne istog broja i **dva vlasnika**, a takav broj
     `ZBR-MUT-01` odbija i uz ID (`historicalOwnerCount > 1` → `VISE_VLASNIKA`). Ta grana je van S9-3 (red 9 seče
     samo uslov „sva deca tog broja nose ZbirnaID"). Obim se sada meri nad zbirnom C **jednog vlasnika** uz mamac
     koji ugovor imenuje — prijemnicu starog oblika sa brojem C kao labelom: stari kod {C, mamac}, nov {C},
-    `s93-obim-kaskade-bez-id` prazan skup. Ostale tvrdnje 367 ostaju na dve zbirne istog broja.
-- **Zeleno nad granom:** 366–369 4/4.
+    `s93-obim-kaskade-bez-id` prazan skup. Ostale tvrdnje 397 ostaju na dve zbirne istog broja.
+- **Zeleno nad granom:** 396–399 4/4.
 - **Prvi FULL nad granom je našao dve stvari (obe u testovima, ne u kodu reza):**
   - **BFP `Test_S8R2a1`, scenario 4 (`S8R2A1-REV-01`) je tvrdio staru premisu**: obim zbirne čija druga prijemnica
     broja nema trag „ne može da se suzi", pa strog uvid nevalidan, a blag bez robe. Ovaj ugovor kaže suprotno
@@ -12241,10 +12241,10 @@ Uz to:
     Dobijene 2 gajbe su roba prjD1, ne prjD2 (3). Tvrdnje su sada: strog uvid validan; uvid nosi tačno 2 —
     nad starim kodom obe crvene po imenu, nad granom zelene. Merenje pre koda je brojalo čitaoce, a ne
     **testove koji tvrde staro pravilo**; to je propust merenja, ne koda (`7556fcfc`).
-  - **368 u punom prolazu**: test 35 ostavlja ispravku prijemnice na čekanju, a validator F4 o njoj pita
-    `MsgBox`-om van seama **pre** provere duple — test je merio odgovor watchdog-a. 368 sada gasi ispravke
+  - **398 u punom prolazu**: test 35 ostavlja ispravku prijemnice na čekanju, a validator F4 o njoj pita
+    `MsgBox`-om van seama **pre** provere duple — test je merio odgovor watchdog-a. 398 sada gasi ispravke
     prijemnice u svojoj transakciji (rollback ih vraća) i tvrdi preduslov po imenu (`7556fcfc`).
-- **Sabotaže posle FULL-a (`7556fcfc`, `33c129df`):** `s8r2a1-obim-nesuzen` meri kontra-tvrdnju 367 (broj dva
+- **Sabotaže posle FULL-a (`7556fcfc`, `33c129df`):** `s8r2a1-obim-nesuzen` meri kontra-tvrdnju 397 (broj dva
   vlasnika se ne sužava — `ZBR-MUT-01` ostaje), jer scenario 4 raise više ne dostiže;
   `zbirna-kaskada-bez-kapije` obara prvu tvrdnju testa 41 (od S9-3 kaskada bez kapije **prolazi** i dira samo
   svoju decu — zastareo komentar testa ispravljen); nove `s93-bez-traga-nepoznat-clan` (čitač E4 tretira
@@ -12259,6 +12259,26 @@ Uz to:
 - **Jeftine kapije nad `33c129df`:** `vba_check` i `--self-test`, `sabotaza.py --self-test`, `run_vba --self-test`,
   `who_writes --check` i `--check-ownership`, `gen_schema_module --check`, `popis_citalaca --check`
   (`prj_broj_spoj` 0 = prag 0), `vba_gate --popis`.
+- **Rebase na `main` = `4544e9b3` (20.11.2026).** `main` je posle `aa6c03f1` dobio 44 fajla (radni tok 18.11.,
+  cenovnik, analiza brzine). Konflikt samo u `modTest.bas` (spisak testova i rep fajla — obe strane dopisale) i u
+  repu `tools/sabotaza.py`; razrešeno kao „main, pa S9-3", a svaka rekonstrukcija je proverena prema izvornom
+  commitu. Obim grane po fajlu (`numstat`) je isti pre i posle rebase-a.
+  - **Brojevi testova:** `main` je zauzeo 366–395, a otvorena grana `claude/merenje-modperf` (`#500`) drži
+    396–402. `vba_check` REGISTAR ne pušta rupu (403–406 je pao), pa S9-3 nosi **396–399** (`ae6ceeca`, samo
+    linije koje je grana dodala: spisak, tekstovi tvrdnji, komentari, ciljevi sabotaža). Ko se spoji drugi,
+    prenumeriše se. Tekst iznad koristi nove brojeve; brojevi prolaza „365 → 369" i „369/0" su merenja nad
+    starom bazom.
+  - **Hash-evi iznad su pre rebase-a** (baza `aa6c03f1`), posle: `ca89a1fa`→`45c0b5ec`, `75af3deb`→`65c95d8d`, `d70267eb`→`d27050c0`, `f7832ed8`→`be9ffa49`,
+    `b114b035`→`734b9150`, `b2ffb413`→`f3abdbbe`, `5e217cfc`→`9981e19d`, `020c7ade`→`79c6dd21`,
+    `7556fcfc`→`f28a6acc`, `33c129df`→`439f9aae`, `8babf3bc`→`f18d6bda`.
+  - **Fixture** regenerisan (donor = fixture glavnog checkout-a od 19.11., potpis `1c510b9316787b16`).
+  - **Ciljano 396–399: 4/4 zeleno.** **FULL nad `ae6ceeca`: 12/12 zeleno, marker upisan** (izvor `a0df5d9ead57`) —
+    `RunAllTests` 399/0, BFP 3499/0, Banka 241/0, Storno 111/0, Palete (115 provera), Faktura 39, Agrohemija 25,
+    JSON 72, Golden, Izveštaji, StornoCentar, License.
+  - **`dokaz.py` nad `ae6ceeca`: 30/30 crveno po imenu** (`--grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)", snimak izvora `f0d37e0c3698e7d8` isti pre i posle; 22 od 30 grupno, dve stavke ponovljene same i oborile svoju tvrdnju).
+  - **Jeftine kapije nad `ae6ceeca`:** `vba_check` (194 fajla, katalog 1511) i `--self-test`, `sabotaza.py
+    --self-test`, `run_vba --self-test`, `who_writes --check` i `--check-ownership`, `gen_schema_module --check`,
+    `popis_citalaca --check` (`prj_broj_spoj` 0 = prag 0), `vba_gate --popis`.
 - **NIJE izvršeno:** ručni Compile i ručna provera (operater; spisak gore, uz ostatak iz S9-2).
 
 ## 15) Backlog — namerno van opsega
