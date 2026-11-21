@@ -20,20 +20,29 @@ samo izlistava neusklađene zapise. Kod: `src-vba/modIntegritet.bas`.
 - **Oporavak → lista INTEGRITET** (ljuska `frmOtkupUI`, `modScrOporavak`):
   mreža `Problem | Detalj`, bez radnje (nalaz je opis neslaganja; popravka ide
   kroz svoj tok — Nedovršeno, prevezivanje, storno). Snimak se računa kad se
-  lista otvori i drži do sledećeg upisa.
+  lista otvori i drži do sledećeg upisa. Prvi red je **UKUPNO** (dole), a lista
+  ide **redosledom revizije**: naslov bloka (kod provere), zaglavlje kolona, pa
+  nalazi. Ljuska je ne sortira (`Scr_Sort` = poslovni redosled), a klik na
+  zaglavlje to kaže (`Scr_SortRazlog`) — snimak je izveštaj, i složen po tekstu
+  Detalja gubi vezu nalaza sa proverom (`KI-100`).
 - **Admin panel** → „Integritet provere (tabele)" (`RunIntegritetProvere`) →
   upis u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše pri svakom
   pokretanju): svaki blok naslov + broj zapisa, pa „OK – nema" ili tabela, na
   kraju „UKUPNO" + zbirni `MsgBox`.
 
-**Broj u naslovu liste** je broj **nalaza** istog prolaza (`GetIntegritetRows`,
-izlaz `outUkupno`), ne broj redova snimka — snimak nosi i naslov bloka, zaglavlje
-kolona i prazan red između blokova (`KI-099`, do S9-5 je naslov za dva nalaza u
-dva bloka kazao „7"). **Pala provera** (red `GREŠKA: …` — čitač je odbio tabelu)
-nije nalaz o podacima: ne broji se u nalaze, a naslov je kaže posebno
-(„…, neizvršene provere: N"); isto `MsgBox` posle Admin prolaza. **Pad cele revizije** (van handlera
-pojedinačnih provera) je red `INTEGRITET` sa „GREŠKA: revizija nije izvršena — …" i jedna neizvršena
-provera, nikad prazan snimak sa nulom (`S95-REV-02`).
+**Red UKUPNO** (prvi red liste) nosi broj **nalaza** istog prolaza
+(`GetIntegritetRows`, izlaz `outUkupno`), ne broj redova snimka — snimak nosi i
+naslov bloka, zaglavlje kolona i prazan red između blokova (`KI-099`, do S9-5 je
+broj za dva nalaza u dva bloka bio „7"). Red ne prolazi kroz pretragu: „koliko ih
+ima" ne zavisi od toga šta je operater ukucao. Do ručne provere S9-5 broj je
+stajao u dopuni naslova, ali je naslov labela fiksne širine (180pt) i dopuna se
+odsecala cela — broj je bio tačan, a nije se video; naslov liste zato dopunu
+nema. **Pala provera** (red `GREŠKA: …` — čitač je odbio tabelu) nije nalaz o
+podacima: ne broji se u nalaze, a red UKUPNO je kaže posebno („…, neizvršene
+provere: N"); isto `MsgBox` posle Admin prolaza. **Pad cele revizije** (van
+handlera pojedinačnih provera) je red `INTEGRITET` sa „GREŠKA: revizija nije
+izvršena — …" i jedna neizvršena provera, nikad prazan snimak sa nulom
+(`S95-REV-02`).
 
 Sve provere isključuju stornirane redove (`ExcludeStornirano`), osim gde je
 stornirani dokument baš predmet nalaza (C4, KUL1/KUL2).

@@ -12719,8 +12719,9 @@ Sveska na disku je od 19.11. (pre S9-3), pa je pred run treba regenerisati.
     storniranu su nalazi E4 sa razlogom liste Oporavka; kanonska prijemnica sa praznom **labelom** nije nalaz;
   - **426 `T_S95_KanonskiLanacBezNalaza`** — `SLED-INV-02`: kanonski lanac otkup → otpremnica → zbirna → prijemnica
     (manjak 5%) ne pojavljuje se ni u jednom redu liste;
-  - **427 `T_S95_NaslovBrojiNalaze`** — `KI-099`: broj u naslovu = zbir nalaza po blokovima istog prolaza, ne broj
-    redova snimka; pala provera se ne broji kao nalaz i naslov je kaže;
+  - **427 `T_S95_NaslovBrojiNalaze`** (od ručne provere `T_S95_UkupnoBrojiNalaze`, red UKUPNO) — `KI-099`: broj u
+    naslovu = zbir nalaza po blokovima istog prolaza, ne broj redova snimka; pala provera se ne broji kao nalaz i
+    naslov je kaže;
   - **428 `T_S95_ManjakPoZbirnaID`** — `KI-097`: dve aktivne zbirne istog broja, vozača, kupca i klase, prijemnica
     samo pod prvom: izveštaj manjka ima dva reda, svaki sa svojim kg i prijemom; A2 imenuje drugu kao „ništa primljeno",
     prvu ne;
@@ -12834,6 +12835,41 @@ integritet i health. Dokumenti u petom commit-u.
   i posle, radno stablo nedirnuto; izborom 302/302, grupno 284/302. Katalog sabotaža **1552**.
 - **NIJE izvršeno:** ručni Compile i ručna provera (operater); pun pojedinačni dokaz celom suite-om — pred release.
   Vreme nove provere (N13) nije mereno nad zapreminom.
+
+#### Ručna provera (operater, 21.11.2026)
+
+- **Ručni Compile: prošao** nad `tests/fixtures/rucna_provera_s95_kod.xlsm` (kod `a7614b02`).
+- **Potvrđeno na ekranu (Oporavak → Integritet, četiri snimka):**
+  - E4 je jedan red, `PRJ-STL-T` (`12/TEST`), „nema veze sa zbirnom", isto kao lista „Osiroćene prijem.";
+  - nema blokova A1, B1, B4, B5, B5b ni B6; E2 i E3 su prazni;
+  - A2 ide po dokumentu (`ZB-TEST-SLDD`, `-KASK`, `-DUPL` po dva reda, svaki sa svojim `ZbirnaID`);
+  - nalaza je 40 (A5 16, C3 2, C4 5, A3 1, A2 12, B8 3, E4 1); mreža ima 60 redova (+7 naslova, 7 zaglavlja,
+    6 praznih); OSIROČENO 6 = 1 osiroćena prijemnica + 5 prijemnica sa paletama.
+  - C4 bez otkupnog mesta i proizvođača je tačno za fixture: `make_fixture` ne izvodi `tblZbirnaIzvori`, pa zbirne
+    nemaju članstvo, a `VOZ-TEST-1` nije stanica (fallback). Vrednosti na kanonskom lancu meri 429.
+- **Nađene dve stvari na listi INTEGRITET, obe od MIG-002 (`e0e2c31b`), ne od S9-5:**
+  - **R1 — broj se ne vidi.** Naslov mreže je labela fiksne širine (`grdTitle`, 180pt), „Neusklađeni zapisi (revizija
+    tabela)" je već puni, pa se dopuna „40 neusklađenih zapisa" odsecala **cela**. `KI-099` je bio tačan u kodu, a
+    nevidljiv na ekranu; test 427 je merio tekst dopune, ne vidljivost. Isti razlog je ranije izbacio dopunu iz
+    `modScrBankaUvoz`.
+  - **R2 — lista složena po Detalju (`KI-100`).** `modScrOporavak` nije imao `Scr_Sort`, pa je važilo pravilo ljuske
+    „druga kolona opadajuće" (za datum dokumenta): naslovi blokova su pali na poslednju stranu, zaglavlja među nalaze,
+    a red nalaza nema kod provere — nalaz se nije mogao pripisati proveri.
+- **Odluka operatera:** ispravka u `#503`.
+- **Testovi prvi (`411c2dad`):** 427 preimenovan u `T_S95_UkupnoBrojiNalaze` i, uz 431, čita prvi red liste kroz
+  `Scr_Rows`; **433 `T_S95_UkupnoIznadPretrage`** (red UKUPNO prvi i uz pretragu, naslov bez dopune); **434
+  `T_S95_IntegritetRedosledRevizije`** kroz pravu ljusku (bez sorta, mreža = redosled ekrana, klik na zaglavlje ne
+  preuređuje i kaže razlog ove liste, ostale liste Oporavka na pravilu ljuske).
+- **Ispravka (`e05645eb`):** red UKUPNO je prvi red liste i ne prolazi kroz pretragu (`Rows2D` `nFiksnih`); naslov
+  INTEGRITET bez dopune; `modScrOporavak.Scr_Sort` = `SCR_SORT_POSLOVNI` samo za INTEGRITET; nov **opcioni član
+  ugovora ekrana `Scr_SortRazlog`** (`modUiScreens.ScrSortRazlog`, `vba_check` `SCR_UGOVOR`) — bez njega bi klik
+  rekao razlog kartice („saldo kartice važi samo tim redom"). Sabotaže +5, `s95-ukupno-bez-palih` presidrena; katalog
+  **1557**.
+- **Usput:** CI kapija `who_writes --check` crvena od `26fcee9c` (snimak tabela članstva u Storno suite nije osvežio
+  generisan `WHO_WRITES.md`) — regenerisan (`5862805c`). Pred taj push nije pušten ceo skup CI kapija; od sada jeste.
+- **Kapije za ispravku:** ceo skup iz `static.yml` zelen lokalno (JS harness se lokalno ne pokreće — nedostaje modul,
+  isto i na glavi pre izmene). **NIJE pušteno:** crveno nad `411c2dad`, ciljani testovi (427, 431, 433, 434), FULL,
+  dokaz za 5 novih sabotaža, ponovna ručna provera (nov ključ poruke traži zatvaranje i otvaranje fajla).
 
 ## 15) Backlog — namerno van opsega
 
