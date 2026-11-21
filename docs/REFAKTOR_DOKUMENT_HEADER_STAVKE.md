@@ -12807,6 +12807,34 @@ integritet i health. Dokumenti u petom commit-u.
 - Crveno nad `c2c19b5c` očekivano: 430 i 431 po imenu; 432 je tamo zelen (E2/E3 su već u S9-5), crven nad `main`-om.
 - Izvršne kapije i dalje NISU puštene; očekivano `RunAllTests` 432.
 
+#### Izvršne kapije (21.11.2026, posle pregleda `#503`)
+
+- **Fixture regenerisan** iz zatečene sveske kao donora (sveska je bila pre S9-3; preimenovana kolona
+  `ZbirnaGeneracijaID` → `ZbirnaRoditeljID`), potpis `1c510b9316787b16`.
+- **Crveno nad zatečenim kodom, po imenu:** nad `6ebda5db` svih 8 (423–429 i 363) na očekivanim tvrdnjama; nad
+  `c2c19b5c` 430 i 431. Test 432 je tamo pao na **preduslovu** (kvar E2 podmetnut pre zasejavanja lanca Y — greška
+  testa, `8bbaaf0e`).
+- **FULL #1 (`8bbaaf0e`): 11/12, BFP 384/2451.** Svi padovi kroz `CreateZbirna`: „članstvo pokazuje na zbirnu koja ne
+  postoji tačno jednom: `SVT-Z3-ID-I`". Uzrok je **postojeće curenje harness-a**: `RunStornoTestSuite` radi u
+  spoljnoj transakciji koja se vraća, ali nije snimala `tblZbirnaIzvori` ni `tblOtpremnicaIzvori`, a njen seed tamo
+  piše — red članstva na zbirnu koju rollback obriše preživeo je suite i pao u BFP-u (koji ide posle). Slab E3 čitač
+  ga je do S9-5 tiho trpeo. Ispravka: snimak obe tabele (`26fcee9c`); kod reza nije menjan.
+- **FULL #2 (`26fcee9c`): BFP 3486/3487** — `PR3 dupli par` je tvrdio tekst 1260 („dva aktivna zapisa"); E3 sad dupli
+  par hvata svojim pravilom 1267 („par … postoji više puta", kao 1333 za otpremnicu). Premisa posle `S95-ODL-02`
+  (`65dce9ee`).
+- **Dokaz #1** (`--grupe --izbor --radnika 4 --od origin/main`): **298/299** — `s95-e3-istorija-je-aktivna` je obarala
+  preduslov 432 (pisac nove zbirne bira slobodnu otpremnicu kroz isti čitač) → 432 pravi legalno stanje sirovim
+  prepisom posle zasejavanja; `s93-tekuca-predaja-cuti` ne obara ništa — od `S95-ODL-02` čitač E3 sam imenuje
+  članstvo na zbirnu koje nema (406 i dalje dobija grešku sa imenom), pa je povučena kao i dve `s92-*` (`0e324a25`).
+- **FULL završni nad `0e324a25`: 12/12 zeleno, marker upisan** (izvor `691282af34d7`, ugovor `15a210ff5afb`) —
+  `RunAllTests` **432/0**, BFP **3487/0** (−1 = obrisan `Test_NoCrossZbirnaLinksAudit`), Banka 241/0, Storno 111/0,
+  Agrohemija 25/25; Palete, Faktura, Golden, Izveštaji, JSON, StornoCentar, License OK. `vba_gate --require-green`
+  prolazi.
+- **Dokaz završni: 302/302 crveno po imenu, „DOKAZANO (grupno, izbor)"**, snimak izvora `2cb19f404a75279c` isti pre
+  i posle, radno stablo nedirnuto; izborom 302/302, grupno 284/302. Katalog sabotaža **1552**.
+- **NIJE izvršeno:** ručni Compile i ručna provera (operater); pun pojedinačni dokaz celom suite-om — pred release.
+  Vreme nove provere (N13) nije mereno nad zapreminom.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

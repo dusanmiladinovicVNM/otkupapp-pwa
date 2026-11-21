@@ -11348,6 +11348,13 @@
        i pisca; pad revizije je red GREŠKA i neizvršena provera. Testovi 430–432 prvi (`c2c19b5c`), ispravka
        `6f5f02d3`; 432 odgovara na pitanje pregleda o istorijskom članstvu. Katalog 1553. Izvršne kapije i dalje
        nisu puštene (očekivano `RunAllTests` 432).
+     - **Izvršne kapije (21.11.2026):** fixture regenerisan (`1c510b93`); crveno po imenu nad `6ebda5db` (8/8) i
+       `c2c19b5c` (430, 431). FULL #1 je otkrio postojeće curenje harness-a — `RunStornoTestSuite` nije snimala tabele
+       članstva, pa je red na obrisanu zbirnu oborio BFP (384 pada); ispravljeno snimkom (`26fcee9c`). Premisa BFP
+       `PR3 dupli par` (poruka 1267) i test 432 (sirov prepis) usklađeni; `s93-tekuca-predaja-cuti` povučena.
+       **FULL 12/12 nad `0e324a25`, marker upisan (izvor `691282af34d7`)** — `RunAllTests` 432/0, BFP 3487/0, Banka
+       241/0, Storno 111/0; **dokaz 302/302** (`--od origin/main --grupe --izbor --radnika 4`, „DOKAZANO"); katalog
+       1552. **Čeka:** ručni Compile i ručna provera (operater).
      - **Sledeći brojevi:** test 433 · stavka 337 · KI-100 · plan §14.70.
 
 ## Dug sa imenom (posle S5-5b)
