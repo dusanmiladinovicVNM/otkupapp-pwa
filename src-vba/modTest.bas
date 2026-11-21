@@ -38551,12 +38551,13 @@ Private Sub T_S95_ClanstvoIstorijaNijeKvar()
     AssertEq CStr(S95CitacClanstva("E3") = "") & "|" & CStr(NalazSadrzi(rows, "E3", otpX)), "True|False", _
              "432 E3: clanstvo u storniranoj zbirnoj je istorija, ne kvar"
 
-    ' KVAR: isti izvor u DVA aktivna dokumenta.
+    ' KVAR: isti izvor u DVA aktivna dokumenta. Svi lanci se seju PRE kvara --
+    ' pisac otpremnice cita clanstvo strogo i pokvarenu tabelu odbija.
     blk3 = SledBlok("S95H2B-" & t, FX_STANICA, 20, 0)
     Set c = New Collection: c.Add blk3
     otp3 = SledOtpremnica(c, FX_VOZAC, FX_STANICA)
-    PostaviPoljePoPK TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otp3, COL_OPI_OTKUP_ID, blk
     SledLanacDoZbirne "S95H3Y", "ZB-S95H3Y-" & t, FX_VOZAC, FX_KUPAC, 30, bY, otpY, zbrY
+    PostaviPoljePoPK TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otp3, COL_OPI_OTKUP_ID, blk
     PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpX
     rows = modIntegritet.GetIntegritetRows()
     AssertEq CStr(InStr(1, S95RedNalaza(rows, "E2", UCase$(blk)), "dva aktivna", vbTextCompare) > 0), "True", _
