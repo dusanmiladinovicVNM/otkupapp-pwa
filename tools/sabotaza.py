@@ -15207,8 +15207,8 @@ SABOTAZE = {
     ),
     "s95-ukupno-bez-palih": (
         "modScrOporavak.bas",
-        "            If mIntPalih > 0 Then Scr_NaslovDopuna = Scr_NaslovDopuna & \", \" & _\n",
-        "            ' SABOTAZA: naslov cuti o palim proverama\n            If False Then Scr_NaslovDopuna = Scr_NaslovDopuna & \", \" & _\n",
+        "    If mIntPalih > 0 Then IntegritetUkupnoTekst = IntegritetUkupnoTekst & \", \" & _\n",
+        "    ' SABOTAZA: red UKUPNO cuti o palim proverama\n    If False Then IntegritetUkupnoTekst = IntegritetUkupnoTekst & \", \" & _\n",
         "T_S95_UkupnoBrojiNalaze",
         "427 red UKUPNO kaze koliko provera nije izvrseno",
     ),
@@ -15288,6 +15288,42 @@ SABOTAZE = {
         "        If True Then   ' SABOTAZA: stornirana zbirna i dalje drzi otpremnicu\n",
         "T_S95_ClanstvoIstorijaNijeKvar",
         "432 E3: clanstvo u storniranoj zbirnoj je istorija, ne kvar",
+    ),
+    # S9-5 rucna provera (21.11.2026): red UKUPNO i redosled liste INTEGRITET.
+    "s95-ukupno-filtrira": (
+        "modScrOporavak.bas",
+        "        If Len(q) > 0 And r > nFiksnih Then\n",
+        "        If Len(q) > 0 Then   ' SABOTAZA: red UKUPNO prolazi kroz pretragu\n",
+        "T_S95_UkupnoIznadPretrage",
+        "433 red UKUPNO ostaje prvi i kad pretraga suzi listu (broj ne zavisi od pretrage)",
+    ),
+    "s95-naslov-dopuna-vracena": (
+        "modScrOporavak.bas",
+        "        ' (IntegritetSaUkupnim); isti razlog kao modScrBankaUvoz.\n",
+        "        ' (IntegritetSaUkupnim); isti razlog kao modScrBankaUvoz.\n        Case \"INTEGRITET\": Scr_NaslovDopuna = IntegritetUkupnoTekst()   ' SABOTAZA: broj se vraca u naslov\n",
+        "T_S95_UkupnoIznadPretrage",
+        "433 naslov liste INTEGRITET nema dopunu (labela fiksne sirine je odsece)",
+    ),
+    "s95-integritet-sort-ljuske": (
+        "modScrOporavak.bas",
+        "    If Scr_Lista() = \"INTEGRITET\" Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "    ' SABOTAZA: lista integriteta na pravilu ljuske\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 ljuska ne sortira listu INTEGRITET (redosled revizije)",
+    ),
+    "s95-oporavak-sve-liste-poslovne": (
+        "modScrOporavak.bas",
+        "    If Scr_Lista() = \"INTEGRITET\" Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "    Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI   ' SABOTAZA: sve liste Oporavka poslovne\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 ostale liste Oporavka ostaju na pravilu ljuske",
+    ),
+    "s95-razlog-sorta-kartice": (
+        "modOtkupUI.bas",
+        "            razlogSorta = modUiScreens.ScrSortRazlog(mScreen)\n",
+        "            razlogSorta = \"\"   ' SABOTAZA: ljuska ne pita ekran za razlog\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 klik na zaglavlje kaze razlog liste integriteta, ne kartice",
     ),
     # S94-REV-02: dupli OldDocID tiho daje red umesto greske.
     "s94-prefill-dupli-prvi-red": (

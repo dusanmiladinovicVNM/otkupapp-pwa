@@ -4718,9 +4718,13 @@ Private Sub UiClickCore(ByVal tag As String)
         ' Kartica nosi tekuci saldo: preuredjen red bi pokazao saldo drugog
         ' toka (KART-HRON-01); dokumentna lista je slozena po broju kao broju
         ' (DOC-SORT-01). Klik zato ne sortira, ali to i kaze -- tih klik bi
-        ' izgledao kao kvar.
+        ' izgledao kao kvar. Razlog daje ekran (Scr_SortRazlog; lista
+        ' integriteta je izvestaj, ne kartica), a bez njega vazi razlog kartice.
         If RedosledJePoslovni() Then
-            ShowToast Poruka("OTKUI_MSG_KART_HRONOLOGIJA"), False
+            Dim razlogSorta As String
+            razlogSorta = modUiScreens.ScrSortRazlog(mScreen)
+            If Len(razlogSorta) = 0 Then razlogSorta = Poruka("OTKUI_MSG_KART_HRONOLOGIJA")
+            ShowToast razlogSorta, False
             Exit Sub
         End If
         c = CLng(Mid$(tag, 3)) + 1
