@@ -12620,9 +12620,10 @@ jedinstvenost PK-a u dva čitača i obradu neuspešnih brojača; zatim ručni Co
   zameni red dokumenta koji je već na listi siročadi (dedup po ID-u). Ispravka testa (`f7a8c873`, kod nedirnut):
   sintetički stari dokument (`PRJ-S94-421`), polazna brojka iz testa (`OsveziNavBrojace`), oba preduslova mere izvor
   (meni pre = izvor; nova ispravka = tačno jedan nov red). `s94-predaja-meni-stoji` obara 421 po imenu.
-- **NIJE izvršeno:** ručni Compile nad `f7a8c873` (izvor se promenio posle prošlog); ručna provera: meni = zona posle
-  ispravke iz Storna, i prevezivanje vezane prijemnice se odbija (kroz ekran nedostižno — lista nudi samo siročad, pa
-  to meri test 419).
+- **Ručna provera nad `f7a8c873` (operater, 21.11.2026):** ručni Compile prošao; tačka 3a ✅ — posle ispravke iz
+  Storna broj pored „Oporavak" u meniju je odmah isti kao NEDOVRŠENO u zoni. Tačka 4a (vezana prijemnica se ne
+  prevezuje) kroz ekran je nedostižna — lista nudi samo siročad — pa je meri test 419.
+- **NIJE izvršeno:** pun pojedinačni dokaz celom suite-om — pred release.
 
 ## 15) Backlog — namerno van opsega
 
