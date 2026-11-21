@@ -108,6 +108,12 @@ pisca prijemnice PRJ-ZBR-01), a API generacije je obrisan. Kapija je izvedena gr
 `nema_generacije`, prag 0: broji **svako** produkciono mesto kolone i API-ja generacije, i mrtvo,
 van imenovanog setup-a šeme (`GENERACIJA_SETUP`, do S9-6).
 
+**`S94-ODL-09` — prevezivanje prima samo siroče** (odluka operatera 21.11.2026). „Prevezi
+prijemnicu" u Oporavku menja E4 samo prijemnici bez aktivne zbirne — isto pravilo kao lista
+(`GetOsirocenePrijemnice`): E4 prazan, zbirna ne postoji ili je stornirana. Prijemnica sa aktivnom
+zbirnom se odbija razlogom koji je imenuje; promena zbirne vezane prijemnice je potez lanca (R2,
+`#477`). Vlasnik: `modDokumenta.ReassignPrijemnicaToZbirna_TX` (test 419).
+
 ## 4) Invarijante
 
 **`SLED-INV-01` — svaka ivica razrešava tačno jednom.** Za svaki red nosioca ivice (E2–E10)

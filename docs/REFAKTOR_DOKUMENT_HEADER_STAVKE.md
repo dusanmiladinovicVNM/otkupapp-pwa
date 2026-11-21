@@ -12577,6 +12577,53 @@ svaki upis (`RefreshFromData`). Pad izvora daje „?" i zapis u logu, ne nulu �
   sa sidrom u `modScrOporavak`, „DOKAZANO (grupno, izbor)", snimak izvora `cc2e5d9b7544be5a` isti pre i posle).
   **`KI-085` zatvoren.**
 
+#### Ručna provera i drugi nezavisni pregled (21.11.2026) — `S94-REV-01..05` i brojač menija
+
+**Ručna provera (operater, 21.11.2026, izvor `f83b7aac`):** ručni Compile prošao. Tačke 1–4 i 6 ✅; tačka 5 (uspešno
+prevezivanje) nije rađena — u svesci nema izdate zbirne istog kupca, vozača i robe kao siroče, pa taj put meri samo
+test 414; tačke 7 (F1 „Ispravi blok") i 8 (picker) ✅ po snimku. **Nalaz tačke 6:** posle ispravke iz Storna meni
+pokazuje „Oporavak 30", a zona NEDOVRŠENO 32. Uzrok je namerna prečica ljuske: kad radnja PREDA posao drugom ekranu
+(storno → ispravka → F4), `UiClick` preskače `RefreshFromData` da ne obriše prefill — a to je jedino mesto koje
+osvežava brojače menija. Ista vrsta neslaganja kao `KI-085`, sa druge strane.
+
+**Drugi nezavisni pregled PR `#502`** (CONDITIONAL GO, 9,1/10): pre merge-a zatvoriti zaštitu izvora kod prevezivanja,
+jedinstvenost PK-a u dva čitača i obradu neuspešnih brojača; zatim ručni Compile i UAT.
+
+- **`S94-ODL-09` — prevezivanje prima samo siroče** (odluka operatera 21.11.2026, uz `S94-REV-01`). Oporavak prevezuje
+  prijemnicu koja je ostala bez aktivne zbirne — isto pravilo kao lista (`GetOsirocenePrijemnice`): E4 prazan, zbirna
+  ne postoji ili je stornirana. Prijemnica sa **aktivnom** zbirnom se odbija razlogom koji tu zbirnu imenuje, i E4
+  ostaje. Promena zbirne vezane prijemnice je svoj potez sa svojim pravilima (R2, `#477`), ne Oporavak. Do odluke
+  pisac to nije branio (nijedan ekran nije nudio vezanu prijemnicu, ali pisac ju je prevezivao).
+
+| ID | Nalaz | Ispravka (`1c51f3ed`, testovi prvi u `70604b7e`) | Test | Sabotaža |
+|---|---|---|---|---|
+| `S94-REV-01` | pisac prevezuje i prijemnicu koja ima aktivnu zbirnu | `S94-ODL-09`: Err 1443 imenuje aktivnu zbirnu, E4 netaknut | 419 `T_S94_PrevezivanjeSamoSiroce` | `s94-prevezi-vezana-prolazi` |
+| `S94-REV-02` | `PrefillRedPoID` uzima prvi od dva reda istog `OldDocID` | tačno jedan red; drugi pogodak je Err 1444 koji imenuje ID; poruka `OTKUI_ERR_ISPRAVKA_BEZ_STAROG` kaže „nije pročitan po ID-u (razlog je u logu)" | 422 `T_S94_PrefillDupliPK` | `s94-prefill-dupli-prvi-red` (`s94-prefill-pk-ignorisan` presidrena) |
+| `S94-REV-03` | `RowsAktivni` dva reda istog ID-a sabira u jedan cilj | Err 1964 koji imenuje ID i tabelu | **bez testa** — nedostižno kroz ekran: strogi čitači stavki (argument `kgPoDok`) odbijaju zaglavlje koje nije tačno jednom pre liste, pa bi test merio seam, ne put; ispravka je osigurač | — |
+| `S94-REV-04` | pad izvora zone se čita ponovo na svaki znak pretrage | neuspeh se pamti za tekuću generaciju podataka; nov pokušaj posle promene podataka ili `Scr_ResetCache` | 420 `T_S94_BrojaciPriPaduIzvora` | `s94-zona-pad-ponavlja` |
+| `S94-REV-05` | meni pri padu izvora crta praznu znacku (`Resume Next` od pada pravi 0) | `Scr_Brojac` vraća −1, meni crta „!" (`BrojacTekst`), kao „?" u zoni | 420 | `s94-meni-pad-je-nula` |
+| ručna t. 6 | predaja ekrana ne osvežava meni | `PosleRadnjeEkrana`: na istom ekranu `RefreshFromData`, posle predaje samo `OsveziNavBrojace` (prefill ostaje) | 421 `T_S94_PredajaEkranaOsvezavaMeni` | `s94-predaja-meni-stoji` |
+
+- **Premisa promenjena odlukom, ne izlazom:** testovi 28, 29, 115 i BFP S6K8 roba prevezivali su prijemnicu koja od
+  S9-3 nosi E4 aktivne zbirne. Sada je izvor siroče starog oblika (E4 prazan, labela stoji; C002 ih ima 6): 28 i 115
+  brišu E4 izvora u svojoj transakciji, 29 drugi poziv radi nad `PRJ-STL-T`, BFP S6K8 briše E4 pa tvrdi
+  `False|<broj A>|` (prazan E4 ostaje prazan).
+- **Crveno pre ispravke, po imenu** (nad `70604b7e`): 419 `True` (vezana prijemnica prevezena), 420 meni `0`, 421 `−999`
+  (meni posle predaje nije računat; konačna verzija 421 dokazana sabotažom, v. ispod), 422 `red=1`.
+- **Izmereno:** ciljano 20/20 (`RunAllTests`) i BFP S6K8 8/0; **FULL 12/12 nad `f7a8c873`, marker upisan (izvor `75700029e3a4`) — `RunAllTests` 422/0, BFP 3488/0, Banka 241/0, Storno 111/0**; **`dokaz.py` 56/56 crveno po imenu (`--grupe --izbor --radnika 4 --od 56a12c06`: sve sabotaže koje dira rez od `56a12c06`, „DOKAZANO (grupno, izbor)", snimak izvora `31f39418edf46acb` isti pre i posle)**; katalog sabotaža **1538**;
+  jeftine kapije zelene (`vba_check`, `gen_schema_module --check`, `who_writes --check` i `--check-ownership`, popis
+  `nema_generacije` 0).
+- **FULL nad `1c51f3ed` je pao na preduslovu testa 421** (`RunAllTests` 421/422; ostalih 11 suite-ova zeleno, BFP
+  3488/0). Preduslov je u ciljanom prolazu bio **lažno zelen**: meni tamo nije bio računat (−999), pa je „pre ≠ posle"
+  prolazio sam od sebe. Prvo objašnjenje (brojka ranijeg testa, `dc7d537c`) je bilo pogrešno — test pušten sam, sa
+  svežom polaznom brojkom, pada isto: context nad `PRJ-TEST-S` ne pomera NEDOVRŠENO, jer `GetNedovrseno` context-om
+  zameni red dokumenta koji je već na listi siročadi (dedup po ID-u). Ispravka testa (`f7a8c873`, kod nedirnut):
+  sintetički stari dokument (`PRJ-S94-421`), polazna brojka iz testa (`OsveziNavBrojace`), oba preduslova mere izvor
+  (meni pre = izvor; nova ispravka = tačno jedan nov red). `s94-predaja-meni-stoji` obara 421 po imenu.
+- **NIJE izvršeno:** ručni Compile nad `f7a8c873` (izvor se promenio posle prošlog); ručna provera: meni = zona posle
+  ispravke iz Storna, i prevezivanje vezane prijemnice se odbija (kroz ekran nedostižno — lista nudi samo siročad, pa
+  to meri test 419).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |
