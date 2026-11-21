@@ -12868,8 +12868,19 @@ integritet i health. Dokumenti u petom commit-u.
 - **Usput:** CI kapija `who_writes --check` crvena od `26fcee9c` (snimak tabela članstva u Storno suite nije osvežio
   generisan `WHO_WRITES.md`) — regenerisan (`5862805c`). Pred taj push nije pušten ceo skup CI kapija; od sada jeste.
 - **Kapije za ispravku:** ceo skup iz `static.yml` zelen lokalno (JS harness se lokalno ne pokreće — nedostaje modul,
-  isto i na glavi pre izmene). **NIJE pušteno:** crveno nad `411c2dad`, ciljani testovi (427, 431, 433, 434), FULL,
-  dokaz za 5 novih sabotaža, ponovna ručna provera (nov ključ poruke traži zatvaranje i otvaranje fajla).
+  isto i na glavi pre izmene).
+  - **Crveno nad `411c2dad`** (novi testovi, stari kod; `run_vba --src`): 4/4 po imenu — 427 i 433 „prvi red liste
+    INTEGRITET je red UKUPNO" (dobijeno `E4`), 431 „red UKUPNO liste kaže da revizija nije izvršena", 434 „ljuska ne
+    sortira listu INTEGRITET" (dobijena kolona 2).
+  - **Ciljano nad `c69eb36e`:** 427, 431, 433, 434, `T_KartHron_MrezaNePreuredjuje` (ista grana klika) i
+    `T_Oporavak_CiljneListe` (deli `Rows2D`) — 6/0.
+  - **FULL nad `c69eb36e`: 12/12 zeleno, marker upisan** (izvor `0b8aa9d74dc2`, ugovor `978d1f2e376c`) —
+    `RunAllTests` **434/0**, BFP 3487/0, Banka 241/0, Storno 111/0, Agrohemija 25/25, ostale OK.
+  - **Dokaz** (`--od a7614b02 --izbor --grupe --radnika 4`): **25/25 crveno po imenu, „DOKAZANO (grupno, izbor)"** —
+    5 novih, 3 preimenovane/presidrene `s95-*`, `s95-pad-revizije-je-prazno` i 16 susednih (kartica, KI-014/016,
+    DOC-SORT, AMB-BIL, zona Oporavka); izvor isti pre i posle. Katalog 1557.
+  - **Čeka:** ponovna ručna provera nad `tests/fixtures/rucna_provera_s95_r2_kod.xlsm` (nov ključ poruke traži
+    zatvaranje i otvaranje fajla) i ručni Compile te sveske.
 
 ## 15) Backlog — namerno van opsega
 

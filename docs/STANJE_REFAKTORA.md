@@ -11363,8 +11363,9 @@
        prvi `411c2dad` (427 → `T_S95_UkupnoBrojiNalaze`, 431, nova 433 i 434), ispravka `e05645eb` (red UKUPNO prvi
        i van pretrage; `Scr_Sort` poslovni za INTEGRITET; nov opcioni član ugovora `Scr_SortRazlog`), katalog 1557.
        Usput: CI `who_writes --check` crven od `26fcee9c` (zastareo `WHO_WRITES.md`) — regenerisan (`5862805c`).
-       Ceo skup CI kapija lokalno zelen; **nije pušteno:** crveno nad `411c2dad`, ciljani testovi, FULL, dokaz za 5
-       novih sabotaža, ponovna ručna provera.
+       Ceo skup CI kapija lokalno zelen. Crveno nad `411c2dad` 4/4 po imenu; **FULL 12/12 nad `c69eb36e`, marker
+       upisan (izvor `0b8aa9d74dc2`)** — `RunAllTests` 434/0, BFP 3487/0; **dokaz 25/25** (`--od a7614b02 --izbor
+       --grupe --radnika 4`). **Čeka:** ponovna ručna provera i Compile nad `rucna_provera_s95_r2_kod.xlsm`.
      - **Sledeći brojevi:** test 435 · stavka 337 · KI-101 · plan §14.70.
 
 ## Dug sa imenom (posle S5-5b)
