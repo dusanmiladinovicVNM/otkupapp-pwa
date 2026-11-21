@@ -74,7 +74,9 @@ End Sub
 
 ' Ravan spisak nalaza (samo problemi) kao 2D(1..n,1..2): Provera | Detalj.
 ' Ne dira sheet. Za in-app ListBox prikaz (frmOtkupAPP overlay).
-Public Function GetIntegritetRows() As Variant
+' outUkupno / outPalih: broj nalaza i palih provera ISTOG prolaza (KI-099).
+Public Function GetIntegritetRows(Optional ByRef outUkupno As Long, _
+                                  Optional ByRef outPalih As Long) As Variant
     On Error GoTo EH
 
     m_toSheet = False
@@ -84,6 +86,8 @@ Public Function GetIntegritetRows() As Variant
 
     RunAllChecks
 
+    outUkupno = m_totalIssues
+    outPalih = 0
     GetIntegritetRows = CollToArray(m_rows, 2)
     Exit Function
 

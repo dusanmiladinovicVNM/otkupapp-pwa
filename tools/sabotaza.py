@@ -13861,7 +13861,7 @@ SABOTAZE = {
         "                        nepoznato = True: If Not isStorno Then nNepoznatih = nNepoznatih + 1\n",
         "                        ' SABOTAZA: clanstvo na zbirnu koje nema ostaje Poslato\n",
         "T_S92_StatusVezaNepoznata",
-        "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni",
+        "363 REV-01: clanstvo na zbirnu koje nema je kvar E3 -- citac odbija tabelu (S95-ODL-02)",
     ),
     "s92-detalj-zbirna-koje-nema-cuti": (
         "modScrIzvestaji.bas",
