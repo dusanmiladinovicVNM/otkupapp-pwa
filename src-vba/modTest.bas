@@ -38522,6 +38522,7 @@ Private Sub T_S95_ClanstvoIstorijaNijeKvar()
     Dim t As String, rows As Variant, c As Collection
     Dim blk As String, otp1 As String, otp2 As String, blk3 As String, otp3 As String
     Dim bX As String, otpX As String, zbrX As String, zbrX2 As String
+    Dim bW As String, otpW As String
     Dim bY As String, otpY As String, zbrY As String
 
     redoviPre = SledBrojRedova()
@@ -38539,11 +38540,14 @@ Private Sub T_S95_ClanstvoIstorijaNijeKvar()
     AssertEq modStorno.StornoOtpremnica_TX(otp1), True, "432 preduslov: otpremnica 1 je stornirana"
     Set c = New Collection: c.Add blk
     otp2 = SledOtpremnica(c, FX_VOZAC, FX_STANICA)
-    ' E3: otpremnica u storniranoj zbirnoj, pa u novoj.
+    ' E3: otpremnica u storniranoj zbirnoj, pa u novoj. Nova verzija sastava se
+    ' pravi SIROVIM prepisom posle zasejavanja (zapis zbirne X2 dobija otpremnicu
+    ' X), ne piscem: pisac bira "slobodnu" otpremnicu kroz isti citac clanstva, pa bi
+    ' kvar citaca oborio preduslov pre tvrdnje (sabotaza s95-e3-istorija-je-aktivna).
     SledLanacDoZbirne "S95H3X", "ZB-S95H3X-" & t, FX_VOZAC, FX_KUPAC, 40, bX, otpX, zbrX
+    SledLanacDoZbirne "S95H3W", "ZB-S95H3W-" & t, FX_VOZAC, FX_KUPAC, 40, bW, otpW, zbrX2
     AssertEq modStorno.StornoZbirna_TX(zbrX), True, "432 preduslov: zbirna X je stornirana"
-    Set c = New Collection: c.Add otpX
-    zbrX2 = SledZbirna("ZB-S95H3X2-" & t, c, FX_VOZAC, FX_KUPAC, 40, 0)
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrX2, COL_ZBI_OTPREMNICA_ID, otpX
 
     rows = modIntegritet.GetIntegritetRows()
     AssertEq CStr(S95CitacClanstva("E2") = "") & "|" & CStr(NalazSadrzi(rows, "E2", blk)), "True|False", _

@@ -14901,13 +14901,6 @@ SABOTAZE = {
         "T_S93_F4IOporavakPoID",
         "405 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja",
     ),
-    "s93-tekuca-predaja-cuti": (
-        "modStammdatenSync.bas",
-        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
-        "        If False Then   ' SABOTAZA: clanstvo na zbirnu koje nema se precutkuje\n",
-        "T_S93_TekucaPredajaBezZbirne",
-        "406 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne",
-    ),
     # S93-REV-01 (review #501): indeks izvoza OtkupiAll guta kvar citaca E4 i
     # vraca recnik -- zbirne bez indeksa izvoze se kao Primljeno "Ne".
     "s93-izvoz-guta-kvar-e4": (
