@@ -4120,7 +4120,10 @@ Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
                  "PR3 dupli par: kanon vracen u konzistentno stanje"
 
     AssertEquals "", rez, "PR3 dupli par: upis odbijen"
-    AssertTrue InStr(1, razlog, "dva aktivna zapisa", vbTextCompare) > 0, _
+    ' S9-5 (S95-ODL-02): citac clanstva zbirne drzi pravila E2, pa dupli par ima
+    ' SVOJE pravilo i svoju poruku (1267, kao 1333 za otpremnicu) -- pre nego sto
+    ' bi isti par pao kao "dva aktivna zapisa" (1260).
+    AssertTrue InStr(1, razlog, "postoji vise puta", vbTextCompare) > 0, _
                "PR3 dupli par: kapija imenuje dupli zapis (bilo: " & razlog & ")"
 
     Exit Sub
