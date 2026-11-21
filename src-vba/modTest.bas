@@ -37801,14 +37801,17 @@ End Sub
 ' (prefill bi se obrisao) -- ali brojac menija mora da se osvezi. Operater je posle
 ' ispravke video "Oporavak 30" u meniju i NEDOVRSENO 32 u zoni. Promena podataka je
 ' nova ispravka na cekanju (correction context), kao posle ispravke iz Storna.
-' Polazna brojka menija se postavlja u testu (OsveziNavBrojace, isti poziv koji
-' RefreshFromData pravi posle svakog upisa): bez toga je pre predaje stajala brojka
-' nekog ranijeg testa, koja se u punoj suite slucajno poklopila sa novom.
+' Fixture: SINTETICKI stari dokument (PRJ-S94-421, ne postoji u tabelama), jer
+' context nad dokumentom koji je vec u listi siroce ZAMENI njegov red (dedup u
+' GetNedovrseno) i broj se ne pomeri -- tako je prva verzija nad PRJ-TEST-S bila
+' zelena samo dok meni nije bio racunat (-999). Polaznu brojku test postavlja sam
+' (OsveziNavBrojace, isti poziv koji RefreshFromData pravi posle svakog upisa), a
+' oba preduslova mere izvor, ne meni.
 ' SABOTAZA: s94-predaja-meni-stoji.
 Private Sub T_S94_PredajaEkranaOsvezavaMeni()
     Dim f As frmOtkupUI, tx As clsTransaction, cid As String
     Dim pre As Long, posle As Long, ocek As Long, genPre As Long, genPosle As Long
-    Dim c As Collection, errNum As Long, errDesc As String
+    Dim nedPre As Long, c As Collection, errNum As Long, errDesc As String
 
     On Error GoTo CleanUp
     Set f = NewOtkupUIForm()
@@ -37818,15 +37821,18 @@ Private Sub T_S94_PredajaEkranaOsvezavaMeni()
 
     modOtkupUI.OsveziNavBrojace                         ' meni kakav je posle poslednjeg upisa
     pre = modOtkupUI.NavBrojacTest("OPORAVAK")
+    nedPre = -1
+    Set c = modStornoRecovery.GetNedovrseno()
+    If Not c Is Nothing Then nedPre = c.count
     cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
-              FLOW_DOC_PRIJEMNICA, "PRJ-TEST-S", FX_PRIJ_STORNO, _
-              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , FX_ZBIRNA, _
-              "test 421: ispravka na cekanju")
+              FLOW_DOC_PRIJEMNICA, "PRJ-S94-421", "421/S94", _
+              FLOW_DOC_PRIJEMNICA, , , , , , "test 421: ispravka na cekanju")
     modOtkupUI.GridTestLoad "DOKUMENTI"                 ' radnja je predala posao F4
     genPre = modUiData.DataGeneracija()
     modOtkupUI.PosleRadnjeEkranaTest "STORNO"
     genPosle = modUiData.DataGeneracija()
     posle = modOtkupUI.NavBrojacTest("OPORAVAK")
+    ocek = -1
     Set c = modStornoRecovery.GetNedovrseno()
     If Not c Is Nothing Then ocek = c.count
 
@@ -37837,7 +37843,8 @@ Private Sub T_S94_PredajaEkranaOsvezavaMeni()
     Set f = Nothing
 
     AssertEq (Len(cid) > 0), True, "421 preduslov: ispravka na cekanju je napravljena"
-    AssertEq CStr(pre <> ocek), "True", "421 preduslov: brojac pre predaje ne zna za novu ispravku"
+    AssertEq pre, nedPre, "421 preduslov: polazna brojka menija je ista kao izvor"
+    AssertEq ocek, nedPre + 1, "421 preduslov: nova ispravka je jedan nov red NEDOVRSENO"
     AssertEq posle, ocek, "421 posle predaje ekrana brojac Oporavka u meniju je svez"
     AssertEq genPosle, genPre, "421 predaja ekrana ne radi RefreshFromData (prefill ostaje netaknut)"
     Exit Sub
