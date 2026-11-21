@@ -11365,7 +11365,10 @@
        Usput: CI `who_writes --check` crven od `26fcee9c` (zastareo `WHO_WRITES.md`) — regenerisan (`5862805c`).
        Ceo skup CI kapija lokalno zelen. Crveno nad `411c2dad` 4/4 po imenu; **FULL 12/12 nad `c69eb36e`, marker
        upisan (izvor `0b8aa9d74dc2`)** — `RunAllTests` 434/0, BFP 3487/0; **dokaz 25/25** (`--od a7614b02 --izbor
-       --grupe --radnika 4`). **Čeka:** ponovna ručna provera i Compile nad `rucna_provera_s95_r2_kod.xlsm`.
+       --grupe --radnika 4`). **Ponovna ručna provera** nad `rucna_provera_s95_r2_kod.xlsm`: ručni Compile čist
+       (`vba_gate --mark-compile`, izvor `0b8aa9d74dc2`); red UKUPNO prvi (40 nalaza), lista redom revizije, bez
+       strelice sorta. Ručno nepotvrđeno: poruka na klik, pretraga, ostale liste (mere 433/434), izveštaj manjka i
+       Admin. **Čeka:** merge review.
      - **Sledeći brojevi:** test 435 · stavka 337 · KI-101 · plan §14.70.
 
 ## Dug sa imenom (posle S5-5b)

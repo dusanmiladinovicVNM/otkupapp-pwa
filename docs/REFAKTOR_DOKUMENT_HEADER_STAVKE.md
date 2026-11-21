@@ -12879,8 +12879,14 @@ integritet i health. Dokumenti u petom commit-u.
   - **Dokaz** (`--od a7614b02 --izbor --grupe --radnika 4`): **25/25 crveno po imenu, „DOKAZANO (grupno, izbor)"** —
     5 novih, 3 preimenovane/presidrene `s95-*`, `s95-pad-revizije-je-prazno` i 16 susednih (kartica, KI-014/016,
     DOC-SORT, AMB-BIL, zona Oporavka); izvor isti pre i posle. Katalog 1557.
-  - **Čeka:** ponovna ručna provera nad `tests/fixtures/rucna_provera_s95_r2_kod.xlsm` (nov ključ poruke traži
-    zatvaranje i otvaranje fajla) i ručni Compile te sveske.
+  - **Ponovna ručna provera (operater, 21.11.2026)** nad `tests/fixtures/rucna_provera_s95_r2_kod.xlsm`: **ručni
+    Compile čist**, zapisan u marker (`vba_gate --mark-compile`, izvor `0b8aa9d74dc2`; `--require-green
+    --require-compile` prolazi). Na ekranu (tri snimka): prvi red je `UKUPNO | 40 neusklađenih zapisa` (nov ključ
+    učitan, dijakritika ispravna); lista ide redom revizije — E4, A2, B8, C4, C3, A3, A5, svaki blok naslov,
+    zaglavlje, nalazi; zaglavlje kolone bez strelice sorta; 61 red = 60 + UKUPNO.
+  - **Ručno nije potvrđeno** (nije na snimcima): poruka na klik po zaglavlju, pretraga uz red UKUPNO i datum na
+    ostalim listama Oporavka — meri ih 433 i 434 kroz pravu ljusku; izveštaj manjka (meri 428) i Admin → Integritet
+    provere (sheet i `MsgBox`, ispravka ih ne dira).
 
 ## 15) Backlog — namerno van opsega
 
