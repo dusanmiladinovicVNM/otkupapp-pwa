@@ -15106,9 +15106,9 @@ SABOTAZE = {
     "s94-prefill-pk-ignorisan": (
         "modDokumenta.bas",
         "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n"
-        "                PrefillRedPoID = r\n",
+        "                If PrefillRedPoID > 0 Then\n",
         "            If Len(Trim$(NzToText(data(r, cId)))) > 0 Then   ' SABOTAZA: PK se ne poredi\n"
-        "                PrefillRedPoID = r\n",
+        "                If PrefillRedPoID > 0 Then\n",
         "T_S94_PrefillPoOldDocID",
         "417 ispravka svakog otkupa nosi SVOJ dokument i kad dva dele generaciju",
     ),
@@ -15157,6 +15157,50 @@ SABOTAZE = {
         "    If mZonaIma Then Exit Sub   ' SABOTAZA: zona se ne osvezava posle promene podataka\n",
         "T_S94_ZonaOporavkaSveza",
         "418 posle promene podataka zona se osvezava i kad je otvorena druga lista",
+    ),
+    # S94-REV-01: pisac prevezuje i prijemnicu koja ima AKTIVNU zbirnu.
+    "s94-prevezi-vezana-prolazi": (
+        "modDokumenta.bas",
+        "            If Not ZbirnaJeStornirana(roditeljPre) Then\n",
+        "            If False Then   ' SABOTAZA: i vezana prijemnica se prevezuje\n",
+        "T_S94_PrevezivanjeSamoSiroce",
+        "419 prijemnica sa aktivnom zbirnom se ne prevezuje; razlog imenuje njenu zbirnu",
+    ),
+    # S94-REV-05: meni od pada izvora pravi "nema posla".
+    "s94-meni-pad-je-nula": (
+        "modScrOporavak.bas",
+        "    Scr_Brojac = -1\n",
+        "    Scr_Brojac = 0   ' SABOTAZA: pad izvora je prazna znacka\n",
+        "T_S94_BrojaciPriPaduIzvora",
+        "420 meni pri padu izvora pokazuje 'ne znam' (-1), ne nulu",
+    ),
+    # S94-REV-04: neuspeh zone se ne pamti -- svaki znak pretrage cita izvor ponovo.
+    "s94-zona-pad-ponavlja": (
+        "modScrOporavak.bas",
+        "    mZonaIma = True\n"
+        "    LogWarn MOD_TRAG, \"Brojke zone Oporavka nisu procitane: \" & errDesc\n",
+        "    mZonaIma = False   ' SABOTAZA: neuspeh se ne pamti\n"
+        "    LogWarn MOD_TRAG, \"Brojke zone Oporavka nisu procitane: \" & errDesc\n",
+        "T_S94_BrojaciPriPaduIzvora",
+        "420 pad izvora se ne cita ponovo na svaki znak pretrage (ista generacija)",
+    ),
+    # KI-085: predaja ekrana (storno -> ispravka) ostavlja meni sa starom brojkom.
+    "s94-predaja-meni-stoji": (
+        "modOtkupUI.bas",
+        "    Else\n"
+        "        OsveziNavBrojace\n",
+        "    Else\n"
+        "        ' SABOTAZA: predaja ekrana ne osvezava meni\n",
+        "T_S94_PredajaEkranaOsvezavaMeni",
+        "421 posle predaje ekrana brojac Oporavka u meniju je svez",
+    ),
+    # S94-REV-02: dupli OldDocID tiho daje red umesto greske.
+    "s94-prefill-dupli-prvi-red": (
+        "modDokumenta.bas",
+        "                If PrefillRedPoID > 0 Then\n",
+        "                If False Then   ' SABOTAZA: dupli OldDocID daje red\n",
+        "T_S94_PrefillDupliPK",
+        "422 dupli OldDocID je greska koja ga imenuje, ne prvi red",
     ),
 }
 

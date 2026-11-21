@@ -8204,6 +8204,11 @@ End Function
 ' na stavkama, pa je dokument jedan red i generacija nema sta da doda.
 '
 ' Stornirano se ne filtrira: u ispravci je stari dokument vec storniran.
+'
+' TACNO JEDAN red (S94-REV-02): OldDocID koji se nalazi dvaput nije dokument, pa
+' se dize greska koja ga imenuje -- ne uzima se "prvi". Strogi citac stavki bi isti
+' kvar zaustavio i kasnije, ali izbor reda ne sme da zavisi od toga sta se cita
+' posle njega.
 Public Function PrefillRedPoID(ByVal data As Variant, ByVal cId As Long, _
                                ByVal oldDocID As String) As Long
     Dim r As Long
@@ -8212,8 +8217,12 @@ Public Function PrefillRedPoID(ByVal data As Variant, ByVal cId As Long, _
     If Len(Trim$(oldDocID)) > 0 And cId > 0 Then
         For r = 1 To UBound(data, 1)
             If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then
+                If PrefillRedPoID > 0 Then
+                    Err.Raise vbObjectError + 1444, "modDokumenta.PrefillRedPoID", _
+                              "OldDocID " & Trim$(oldDocID) & " se nalazi u vise redova -- " & _
+                              "to nije jedan dokument, pa se prefill ne pravi."
+                End If
                 PrefillRedPoID = r
-                Exit Function
             End If
         Next r
     End If
@@ -10238,7 +10247,7 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal prijemnicaID As String, _
                                               Optional ByRef outRazlog As String) As Boolean
     Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
     Dim tx As clsTransaction, redovi As Collection, red As Long
-    Dim brojCilja As String, roditeljID As String, robaRazlog As String
+    Dim brojCilja As String, roditeljID As String, robaRazlog As String, roditeljPre As String
     Dim errNum As Long, errDesc As String
     outRazlog = ""
     On Error GoTo EH
@@ -10260,6 +10269,23 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal prijemnicaID As String, _
                                          COL_STORNIRANO)))) = "DA" Then
         Err.Raise vbObjectError + 1442, SRC, _
                   "Prijemnica " & prijemnicaID & " je stornirana -- ne prevezuje se."
+    End If
+
+    ' SAMO SIROCE (S94-REV-01, odluka operatera 21.11.2026). Oporavak prevezuje
+    ' prijemnicu koja je ostala bez aktivne zbirne -- isto pravilo kao lista
+    ' Oporavka (GetOsirocenePrijemnice): bez veze, zbirna ne postoji ili je
+    ' stornirana. Prijemnica sa AKTIVNOM zbirnom se ovde ne premesta; promena
+    ' zbirne vezane prijemnice je svoj potez sa svojim pravilima (R2, #477).
+    roditeljPre = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
+                                             COL_DETE_ZBIRNA_ROD)))
+    If Len(roditeljPre) > 0 Then
+        If FindRows(TBL_ZBIRNA, COL_ZBR_ID, roditeljPre).count > 0 Then
+            If Not ZbirnaJeStornirana(roditeljPre) Then
+                Err.Raise vbObjectError + 1443, SRC, _
+                          "Prijemnica " & prijemnicaID & " ima aktivnu zbirnu " & roditeljPre & _
+                          " -- prevezuje se samo prijemnica bez aktivne zbirne (siroce)."
+            End If
+        End If
     End If
 
     ' CILJ: kapija pisca prijemnice. Broj koji ona poredi je broj samog cilja, pa

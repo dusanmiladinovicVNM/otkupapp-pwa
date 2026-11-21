@@ -150,10 +150,16 @@ End Function
 ' to bio isti kvar zbog koga su dva PR-a vadila sekunde iz uvida o stornu.
 Public Function Scr_Brojac() As Long
     Dim c As Collection
-    On Error Resume Next
+    On Error GoTo EH
     Set c = NedovrsenoIzvor()
     If c Is Nothing Then Exit Function
     Scr_Brojac = c.count
+    Exit Function
+EH:
+    ' Pad izvora nije "nema posla" (S94-REV-05): -1 je "ne znam" i meni ga crta
+    ' kao "!" (modOtkupUI.BrojacTekst), kao sto zona pokazuje "?". Do S9-4 je
+    ' Resume Next ovde od pada pravio praznu znacku.
+    Scr_Brojac = -1
 End Function
 
 ' Izvor brojke NEDOVRSENO -- JEDAN za meni (Scr_Brojac) i zonu (OsveziBrojkeZone),
@@ -263,7 +269,11 @@ EH:
     mBrNedovrseno = -1
     mBrOsirocene = -1
     mBrUndo = -1
-    mZonaIma = False
+    ' I neuspeh se pamti za ovu generaciju (S94-REV-04): bez toga bi svaki znak
+    ' pretrage ponovo citao isti izvor i pisao isto upozorenje. Nov pokusaj ide
+    ' posle promene podataka ili Scr_ResetCache.
+    mZonaGen = modUiData.DataGeneracija()
+    mZonaIma = True
     LogWarn MOD_TRAG, "Brojke zone Oporavka nisu procitane: " & errDesc
 End Sub
 
@@ -1027,7 +1037,8 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     End If
 
     ' Dupli PK ovde ne stize: strogi citaci stavki (argument kgPoDok) ga obaraju
-    ' pre liste. Recnik ostaje osigurac -- isti ID ne pravi drugi cilj.
+    ' pre liste. Recnik ostaje osigurac -- isti ID dvaput je greska, ne sabrana
+    ' kilaza (S94-REV-03).
     '
     ' Filter se primenjuje PRE nego sto se dokument upamti: da se prvo pamti,
     ' dokument koji ne pogadja pretragu prvim redom ne bi mogao da je pogodi
@@ -1061,10 +1072,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Dim kgReda As Double
         kgReda = KgDokumenta(src, r, kgPoDok, iDokID)
         If seen.Exists(kljuc) Then
-            ' isti ID dvaput (v. gore) - ne pravi drugi cilj
-            outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + kgReda
-            sumKg = sumKg + kgReda
-            GoTo Sledeci
+            Err.Raise vbObjectError + 1964, "modScrOporavak.RowsAktivni", _
+                      "ID " & kljuc & " se u " & tbl & " nalazi vise puta -- dva reda istog " & _
+                      "ID-a nisu jedan dokument (integritet)."
         End If
         n = n + 1
         seen(kljuc) = n

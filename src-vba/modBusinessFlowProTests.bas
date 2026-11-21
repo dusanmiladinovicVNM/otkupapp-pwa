@@ -19814,10 +19814,14 @@ Private Sub Test_S6K8_PrijemnicaRobaKaoZbirna()
                  "S6K8 roba: kontrola -- ista roba uz drugu podelu na klase prolazi"
 
     ' Prevezivanje (Oporavak "Prevezi prijemnicu"): cilj druge vrste se odbija bez
-    ' ijedne izmene, cilj iste robe prolazi.
-    Dim ok As Boolean
+    ' ijedne izmene, cilj iste robe prolazi. Pisac prevezuje samo siroce
+    ' (S94-REV-01), pa prijemnica prvo ostaje bez roditelja (stari oblik).
+    Dim ok As Boolean, prjRed As Collection
+    Set prjRed = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, r)
+    RequireUpdateCell TBL_PRIJEMNICA, CLng(prjRed(1)), COL_DETE_ZBIRNA_ROD, "", _
+                      "modBusinessFlowProTests.Test_S6K8_PrijemnicaRobaKaoZbirna"
     ok = ReassignPrijemnicaToZbirna_TX(r, zC)
-    AssertEquals "False|" & brA & "|" & zA, _
+    AssertEquals "False|" & brA & "|", _
                  CStr(ok) & "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_PRJ_BROJ_ZBIRNE) & _
                  "|" & HldPolje(TBL_PRIJEMNICA, COL_PRJ_ID, r, COL_DETE_ZBIRNA_ROD), _
                  "S6K8 roba: prevezivanje na zbirnu druge vrste se odbija bez izmene (PRJ-ZBR-02)"

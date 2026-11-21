@@ -7719,6 +7719,9 @@ Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
     ' i vraca (sinteticki; vlasnik ZBI-TEST-2 je vlasnik PRJ-TEST-Z1).
     pIzd = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS))
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    ' Pisac prevezuje samo siroce (S94-REV-01): Z1 postaje prijemnica starog oblika
+    ' (labela bez ZbirnaRoditeljID, C002 ih ima 6) -- oblik koji Oporavak nudi.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", COL_DETE_ZBIRNA_ROD, ""
     ok = ReassignPrijemnicaToZbirna_TX("PRJ-TEST-Z1", "ZBI-TEST-2", razlog)
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TEST-2", COL_TRACE_IZDATO_STATUS, pIzd
     AssertEq ok, True, "prevezivanje po identitetu je proslo"
@@ -7757,7 +7760,8 @@ Private Sub T_ZadatIdentitetKogaNema_Staje()
     AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), preZbirna, _
              "posle odbijanja nijedan dokument nije pomeren"
 
-    ok = ReassignPrijemnicaToZbirna_TX("PRJ-TEST-Z1", "ZBI-ZBIRNE-NEMA", razlog)
+    ' Izvor je siroce (PRJ-STL-T, stari oblik): samo cilj moze da bude razlog.
+    ok = ReassignPrijemnicaToZbirna_TX("PRJ-STL-T", "ZBI-ZBIRNE-NEMA", razlog)
     AssertEq CStr(ok) & "|" & CStr(InStr(1, razlog, "ZBI-ZBIRNE-NEMA", vbTextCompare) > 0), "False|True", _
              "zadat ZbirnaID CILJA koga nema zaustavlja upis"
 
@@ -22909,6 +22913,8 @@ Private Sub T_Prijemnica_PomeraSamoAktivan()
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_ZBIRNA
     PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, "ZBI-SLED-D1", COL_TRACE_IZDATO_STATUS, IZDATO_IZDATO
+    ' Pisac prevezuje samo siroce (S94-REV-01): I2 je prijemnica starog oblika.
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I2", COL_DETE_ZBIRNA_ROD, ""
     okSt = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-TEST-I1", "ZBI-SLED-D1", razSt)
     prvaI1 = ZbirnaNaPrijemnici("PRJ-TEST-I1")
     ok = modDokumenta.ReassignPrijemnicaToZbirna_TX("PRJ-TEST-I2", "ZBI-SLED-D1", raz)

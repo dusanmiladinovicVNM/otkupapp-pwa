@@ -6555,11 +6555,15 @@ End Function
 ' preScr. Na istom ekranu: pun RefreshFromData. Kad je radnja PREDALA posao drugom
 ' ekranu (storno -> ispravka -> unos zamenskog dokumenta), RefreshFromData se
 ' namerno preskace: ponovo bi napunio combo-e i obrisao izbor koji je prefill
-' upravo postavio (v. komentar u UiClick).
+' upravo postavio (v. komentar u UiClick). Brojaci menija se i tada osvezavaju
+' (KI-085, S9-4): bez toga je posle ispravke iz Storna meni pokazivao staro
+' stanje ("Oporavak 30"), a zona Oporavka novo (NEDOVRSENO 32).
 Private Sub PosleRadnjeEkrana(ByVal preScr As String)
     If mScreen = preScr Then
         mSelRow = 0
         RefreshFromData
+    Else
+        OsveziNavBrojace
     End If
 End Sub
 
