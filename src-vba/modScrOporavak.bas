@@ -85,6 +85,10 @@ Private mBrOsirocene As Long
 Private mBrUndo As Long
 Private mZonaGen As Long
 Private mZonaIma As Boolean
+' TEST SEAM izvora brojke NEDOVRSENO (KI-085): pad i broj citanja. Kuka radi samo u
+' test rezimu; gasi je modTest.ResetSeamova.
+Private mIzvorPadaTest As Boolean
+Private mIzvorCitanjaTest As Long
 ' INTEGRITET: snimak nalaza + generacija podataka pod kojom je punjen.
 ' Jedina lista ovog ekrana koja se NE cita sveza pri svakom osvezavanju -
 ' RunAllChecks je 19 prolaza kroz tabele, a Scr_Rows se zove i na svaki znak
@@ -147,9 +151,19 @@ End Function
 Public Function Scr_Brojac() As Long
     Dim c As Collection
     On Error Resume Next
-    Set c = GetNedovrseno()
+    Set c = NedovrsenoIzvor()
     If c Is Nothing Then Exit Function
     Scr_Brojac = c.count
+End Function
+
+' Izvor brojke NEDOVRSENO -- JEDAN za meni (Scr_Brojac) i zonu (OsveziBrojkeZone),
+' pa dve brojke istog zaostatka ne mogu da se raziidju po izvoru.
+Private Function NedovrsenoIzvor() As Collection
+    If IsTestMode() Then
+        mIzvorCitanjaTest = mIzvorCitanjaTest + 1
+        If mIzvorPadaTest Then Err.Raise 9, "modScrOporavak.NedovrsenoIzvor", "test: izvor pada"
+    End If
+    Set NedovrsenoIzvor = GetNedovrseno()
 End Function
 
 Public Function Scr_Radnje() As String
@@ -234,7 +248,7 @@ Private Sub OsveziBrojkeZone()
     Dim c As Collection, errDesc As String
     If mZonaIma And mZonaGen = modUiData.DataGeneracija() Then Exit Sub
     On Error GoTo EH
-    Set c = GetNedovrseno()
+    Set c = NedovrsenoIzvor()
     mBrNedovrseno = 0
     If Not c Is Nothing Then mBrNedovrseno = c.count
     mBrOsirocene = ZbirOsirocenih()
@@ -1193,6 +1207,20 @@ Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
     mCiljZbirnaID = ciljZbirnaID
     mCiljPrijemnicaID = ciljPrijemnicaID
 End Sub
+
+' TEST SEAM (KI-085): izvor brojke NEDOVRSENO pada (True) ili radi (False); brojac
+' citanja izvora se pri svakom postavljanju vraca na 0. Samo kvari i posmatra.
+Public Sub Scr_OpoIzvorPadaTest(ByVal pada As Boolean)
+    mIzvorPadaTest = False
+    mIzvorCitanjaTest = 0
+    If Not IsTestMode() Then Exit Sub
+    mIzvorPadaTest = pada
+End Sub
+
+Public Function Scr_OpoIzvorCitanjaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_OpoIzvorCitanjaTest = mIzvorCitanjaTest
+End Function
 
 ' TEST SEAM (KI-085): brojke zone kakve bi ekran pokazao,
 ' "nedovrseno|osiroceno|undo". Samo posmatra; tvrdo gejtovano.

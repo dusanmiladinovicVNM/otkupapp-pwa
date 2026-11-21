@@ -4816,12 +4816,7 @@ Private Sub UiClickCore(ByVal tag As String)
     If Left$(tag, 3) = "scr" Then
         Dim preScr As String
         preScr = mScreen
-        If ScrAct(tag) Then
-            If mScreen = preScr Then
-                mSelRow = 0
-                RefreshFromData
-            End If
-        End If
+        If ScrAct(tag) Then PosleRadnjeEkrana preScr
         Exit Sub
     End If
     ' klik na strelicu "combo"-a -> nas panel (toggle)
@@ -6554,6 +6549,33 @@ Private Function BrojacTekst(ByVal n As Long) As String
     End If
     If n <= 0 Then Exit Function
     If n > 999 Then BrojacTekst = "999+" Else BrojacTekst = CStr(n)
+End Function
+
+' POSLE RADNJE EKRANA koja je promenila podatke (Scr_Event = True), sa ekrana
+' preScr. Na istom ekranu: pun RefreshFromData. Kad je radnja PREDALA posao drugom
+' ekranu (storno -> ispravka -> unos zamenskog dokumenta), RefreshFromData se
+' namerno preskace: ponovo bi napunio combo-e i obrisao izbor koji je prefill
+' upravo postavio (v. komentar u UiClick).
+Private Sub PosleRadnjeEkrana(ByVal preScr As String)
+    If mScreen = preScr Then
+        mSelRow = 0
+        RefreshFromData
+    End If
+End Sub
+
+' TEST SEAM: isti put kao radnja ekrana preScr koja je vratila True. Tvrdo gejtovan.
+Public Sub PosleRadnjeEkranaTest(ByVal preScr As String)
+    If Not IsTestMode() Then Exit Sub
+    PosleRadnjeEkrana preScr
+End Sub
+
+' TEST SEAM: brojac menija za ekran kljuc kakav je poslednji put izracunat;
+' -999 kad ga nema. Samo posmatra; tvrdo gejtovan.
+Public Function NavBrojacTest(ByVal kljuc As String) As Long
+    NavBrojacTest = -999
+    If Not IsTestMode() Then Exit Function
+    If mNavBroj Is Nothing Then Exit Function
+    If mNavBroj.Exists(kljuc) Then NavBrojacTest = CLng(mNavBroj(kljuc))
 End Function
 
 Public Sub RefreshFromData()

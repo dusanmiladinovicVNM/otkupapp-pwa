@@ -800,6 +800,10 @@ Public Sub RunAllTests()
     RunOne 416
     RunOne 417
     RunOne 418
+    RunOne 419
+    RunOne 420
+    RunOne 421
+    RunOne 422
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -981,6 +985,7 @@ End Sub
 ' Novi seam koji samo suzava ide OVDE, ne u pojedinacni test.
 Private Sub ResetSeamova()
     On Error Resume Next
+    modScrOporavak.Scr_OpoIzvorPadaTest False
     ' Podmetnut pad ispravke reversa (221): zaostao seam bi oborio svaku
     ' sledecu ispravku.
     modAmbalaza.IspravkaReversaPadniTest False
@@ -1468,6 +1473,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 416: TestName = "T_S94_PrevezivanjeRazlogDoOperatera"
         Case 417: TestName = "T_S94_PrefillPoOldDocID"
         Case 418: TestName = "T_S94_ZonaOporavkaSveza"
+        Case 419: TestName = "T_S94_PrevezivanjeSamoSiroce"
+        Case 420: TestName = "T_S94_BrojaciPriPaduIzvora"
+        Case 421: TestName = "T_S94_PredajaEkranaOsvezavaMeni"
+        Case 422: TestName = "T_S94_PrefillDupliPK"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1894,6 +1903,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 416: T_S94_PrevezivanjeRazlogDoOperatera
         Case 417: T_S94_PrefillPoOldDocID
         Case 418: T_S94_ZonaOporavkaSveza
+        Case 419: T_S94_PrevezivanjeSamoSiroce
+        Case 420: T_S94_BrojaciPriPaduIzvora
+        Case 421: T_S94_PredajaEkranaOsvezavaMeni
+        Case 422: T_S94_PrefillDupliPK
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -37691,4 +37704,167 @@ CleanUp:
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
     SledKraj tx, redoviPre, errNum, errDesc, "T_S94_ZonaOporavkaSveza", _
              "418: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 419 -- S9-4 review (S94-REV-01, odluka operatera 21.11.2026): pisac "Prevezi
+' prijemnicu" prevezuje SAMO siroce -- prijemnicu bez veze, sa nepostojecom ili
+' storniranom zbirnom (isto pravilo kao lista Oporavka, GetOsirocenePrijemnice).
+' Prijemnica koja ima AKTIVNU zbirnu se odbija razlogom koji tu zbirnu imenuje, i
+' E4 ostaje. Do odluke je pisac prevezivao i vezanu prijemnicu (nijedan ekran to
+' nije nudio, ali pisac to nije branio).
+' SABOTAZA: s94-prevezi-vezana-prolazi.
+Private Sub T_S94_PrevezivanjeSamoSiroce()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, ok As Boolean, razlog As String, prj As String
+    Dim bA As String, otpA As String, zbrA As String
+    Dim bB As String, otpB As String, zbrB As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    SledLanacDoZbirne "S94VA", "ZB-S94VA-" & t, FX_VOZAC, FX_KUPAC, 40, bA, otpA, zbrA
+    prj = SledPrijemnica("PR-S94VA-" & t, "ZB-S94VA-" & t, FX_VOZAC, FX_KUPAC, 35, 0)
+    SledLanacDoZbirne "S94VB", "ZB-S94VB-" & t, FX_VOZAC, FX_KUPAC, 40, bB, otpB, zbrB
+    AssertEq S93Roditelj(prj), UCase$(zbrA), "419 preduslov: prijemnica je dete aktivne zbirne A"
+
+    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(prj, zbrB, razlog)
+
+    AssertEq CStr(ok) & "|" & CStr(InStr(1, razlog, zbrA, vbTextCompare) > 0) & "|" & S93Roditelj(prj), _
+             "False|True|" & UCase$(zbrA), _
+             "419 prijemnica sa aktivnom zbirnom se ne prevezuje; razlog imenuje njenu zbirnu"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S94_PrevezivanjeSamoSiroce", _
+             "419: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 420 -- S9-4 review (S94-REV-04, S94-REV-05): pad izvora brojke NEDOVRSENO.
+' Meni i zona ga pokazuju kao "ne znam" (-1: meni "!", zona "?"), ne kao 0 -- do
+' tada je meni pri padu crtao praznu znacku ("nema sta da ceka"). I neuspeh se
+' pamti za tekucu generaciju podataka: drugi znak pretrage ne cita isti izvor
+' ponovo. Posle promene podataka (Scr_ResetCache) zona se racuna iznova.
+' SABOTAZE: s94-meni-pad-je-nula, s94-zona-pad-ponavlja.
+Private Sub T_S94_BrojaciPriPaduIzvora()
+    Dim meni As Long, zona As String, citanja As Long, zonaPosle As String, ocek As String
+    Dim d As Variant, errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modScrOporavak.Scr_OpoIzvorPadaTest True
+    meni = modScrOporavak.Scr_Brojac()
+
+    modScrOporavak.Scr_ResetCache
+    modUiData.ResetCache
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    modScrOporavak.Scr_OpoIzvorPadaTest True          ' i brojac citanja na 0
+    d = modScrOporavak.Scr_Rows("sve", "")
+    d = modScrOporavak.Scr_Rows("sve", "S")           ' znak pretrage, ista generacija
+    citanja = modScrOporavak.Scr_OpoIzvorCitanjaTest()
+    zona = modScrOporavak.Scr_OpoZonaTest()
+
+    modScrOporavak.Scr_OpoIzvorPadaTest False
+    modScrOporavak.Scr_ResetCache                      ' promena podataka
+    d = modScrOporavak.Scr_Rows("sve", "")
+    zonaPosle = modScrOporavak.Scr_OpoZonaTest()
+    ocek = S94ZonaIzIzvora()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+
+    AssertEq meni, -1, "420 meni pri padu izvora pokazuje 'ne znam' (-1), ne nulu"
+    AssertEq zona, "-1|-1|-1", "420 zona pri padu izvora pokazuje 'ne znam' (-1) za sve tri brojke"
+    AssertEq citanja, 1, "420 pad izvora se ne cita ponovo na svaki znak pretrage (ista generacija)"
+    AssertEq zonaPosle, ocek, "420 posle promene podataka zona se racuna iznova iz izvora"
+    Exit Sub
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modScrOporavak.Scr_OpoIzvorPadaTest False
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    Err.Raise errNum, "T_S94_BrojaciPriPaduIzvora", errDesc
+End Sub
+
+' 421 -- S9-4 (KI-085, rucna provera 21.11.2026): kad radnja ekrana PREDA posao
+' drugom ekranu (storno -> ispravka -> F4), ljuska namerno preskace RefreshFromData
+' (prefill bi se obrisao) -- ali brojac menija mora da se osvezi. Operater je posle
+' ispravke video "Oporavak 30" u meniju i NEDOVRSENO 32 u zoni. Promena podataka je
+' nova ispravka na cekanju (correction context), kao posle ispravke iz Storna.
+' SABOTAZA: s94-predaja-meni-stoji.
+Private Sub T_S94_PredajaEkranaOsvezavaMeni()
+    Dim f As frmOtkupUI, tx As clsTransaction, cid As String
+    Dim pre As Long, posle As Long, ocek As Long, genPre As Long, genPosle As Long
+    Dim c As Collection, errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    Set f = NewOtkupUIForm()
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    pre = modOtkupUI.NavBrojacTest("OPORAVAK")
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, "PRJ-TEST-S", FX_PRIJ_STORNO, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , FX_ZBIRNA, _
+              "test 421: ispravka na cekanju")
+    modOtkupUI.GridTestLoad "DOKUMENTI"                 ' radnja je predala posao F4
+    genPre = modUiData.DataGeneracija()
+    modOtkupUI.PosleRadnjeEkranaTest "STORNO"
+    genPosle = modUiData.DataGeneracija()
+    posle = modOtkupUI.NavBrojacTest("OPORAVAK")
+    Set c = modStornoRecovery.GetNedovrseno()
+    If Not c Is Nothing Then ocek = c.count
+
+    tx.RollbackTx
+    Set tx = Nothing
+    modOtkupUI.GridTestLoad ""
+    ReleaseOtkupUIForm f
+    Set f = Nothing
+
+    AssertEq (Len(cid) > 0), True, "421 preduslov: ispravka na cekanju je napravljena"
+    AssertEq CStr(pre <> ocek), "True", "421 preduslov: brojac pre predaje ne zna za novu ispravku"
+    AssertEq posle, ocek, "421 posle predaje ekrana brojac Oporavka u meniju je svez"
+    AssertEq genPosle, genPre, "421 predaja ekrana ne radi RefreshFromData (prefill ostaje netaknut)"
+    Exit Sub
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    modOtkupUI.GridTestLoad ""
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    On Error GoTo 0
+    Err.Raise errNum, "T_S94_PredajaEkranaOsvezavaMeni", errDesc
+End Sub
+
+' PrefillRedPoID nad nizom; "red=N" ili "greska:<opis>" -- omotac sa On Error GoTo,
+' da opis greske ne procita zaostali Err.
+Private Function S94PrefillRed(ByVal d As Variant, ByVal id As String) As String
+    On Error GoTo EH
+    S94PrefillRed = "red=" & CStr(modDokumenta.PrefillRedPoID(d, 1, id))
+    Exit Function
+EH:
+    S94PrefillRed = "greska:" & Err.description
+End Function
+
+' 422 -- S9-4 review (S94-REV-02): OldDocID koji se u tabeli nalazi dvaput nije
+' dokument -- PrefillRedPoID dize gresku koja ga imenuje, umesto da tiho uzme prvi
+' red. Danas to zaustavi i strogi citac stavki (zaglavlje tacno jednom), ali
+' izbor reda ne sme da zavisi od toga sta se cita posle njega.
+' SABOTAZA: s94-prefill-dupli-prvi-red.
+Private Sub T_S94_PrefillDupliPK()
+    Dim d(1 To 3, 1 To 1) As Variant, rDupli As String, rJedan As String
+    d(1, 1) = "OTK-S94-A"
+    d(2, 1) = "OTK-S94-B"
+    d(3, 1) = "OTK-S94-A"
+    rDupli = S94PrefillRed(d, "OTK-S94-A")
+    rJedan = S94PrefillRed(d, "OTK-S94-B")
+    AssertEq CStr(Left$(rDupli, 7) = "greska:") & "|" & CStr(InStr(1, rDupli, "OTK-S94-A", vbTextCompare) > 0), _
+             "True|True", "422 dupli OldDocID je greska koja ga imenuje, ne prvi red"
+    AssertEq rJedan, "red=2", "422 jedinstven OldDocID daje svoj red"
 End Sub
