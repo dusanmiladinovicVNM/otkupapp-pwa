@@ -253,48 +253,29 @@ Private Sub T_NemaPrijemaOznaka()
     IzvChkEqD CDbl(m(2)), 0#, S & "osnovica 0 -> procenat 0, bez greske"
 End Sub
 
-' --- (c2) AUD-052 posledica: BrojZbirne NIJE identitet ---
+' --- (c2) prijem zbirne: veza poznata / kvar E4 / bez prijemnice ---
+' Od S9-5 (S95-ODL-03, KI-097) zbirna reda je poznata po ZbirnaID-u (clanstvo E3,
+' ivica E4), pa "nejasan vlasnik" po broju vise ne postoji. Jedina neizvesnost je
+' kvar E4 (skup prijemnica zbirne se ne zna) -- fail-closed, bez brojke.
 Private Sub T_PrijemVlasnikRazresenje()
-    Const S As String = "Prijem/vlasnik: "
+    Const S As String = "Prijem zbirne: "
 
-    ' Broj ima JEDNOG vlasnika -> join po broju je siguran (stara, brza putanja).
     Dim r As Variant
-    r = PrijemZaZbirnu(1, True, 0, 2, 900#)
-    IzvChk CBool(r(0)) = True, S & "jedan vlasnik -> prijem vazi"
-    IzvChkEqD CDbl(r(1)), 900#, S & "jedan vlasnik -> kg po broju"
-    IzvChkEqText CStr(r(2)), "", S & "jedan vlasnik -> bez oznake"
+    r = PrijemZaZbirnu(True, 2, 900#)
+    IzvChk CBool(r(0)) = True, S & "poznata veza i prijemnica -> prijem vazi"
+    IzvChkEqD CDbl(r(1)), 900#, S & "poznata veza -> kg prijema"
+    IzvChkEqText CStr(r(2)), "", S & "poznata veza -> bez oznake"
 
-    ' Nema nijedne zbirne / nema prijemnice -> nema prijema (ne 100% manjka).
-    r = PrijemZaZbirnu(1, True, 0, 0, 0#)
+    ' Nema prijemnice -> nema prijema (ne 100% manjka).
+    r = PrijemZaZbirnu(True, 0, 0#)
     IzvChk CBool(r(0)) = False, S & "bez prijemnice -> nema prijema"
     IzvChkEqText CStr(r(2)), IZV_NEMA_PRIJEMA, S & "oznaka 'nema prijema'"
 
-    ' Broj dele DVA vlasnika, ali je vlasnik reda razresen i sve prijemnice
-    ' nose kompletnog vlasnika -> racuna se owner-scoped prijem.
-    r = PrijemZaZbirnu(2, True, 0, 1, 1500#)
-    IzvChk CBool(r(0)) = True, S & "dva vlasnika + razresen -> prijem vazi"
-    IzvChkEqD CDbl(r(1)), 1500#, S & "koristi se owner-scoped kg, ne zbir broja"
-
-    ' Fail-closed 1: vlasnik reda se ne moze razresiti.
-    r = PrijemZaZbirnu(2, False, 0, 1, 1500#)
-    IzvChk CBool(r(0)) = False, S & "dva vlasnika + nerazresen -> bez brojke"
-    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "oznaka 'nejasan vlasnik'"
-
-    ' Fail-closed 2: postoji prijemnica koja se ne moze pripisati nijednoj zbirnoj.
-    r = PrijemZaZbirnu(2, True, 1, 1, 1500#)
-    IzvChk CBool(r(0)) = False, S & "nepripisiva prijemnica -> bez brojke"
-    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "nepripisiva -> 'nejasan vlasnik'"
-
-    ' Nepripisiva prijemnica NE blokira kad broj ima jednog vlasnika
-    ' (tada je pripadnost dokazana samim brojem -- starije instalacije).
-    r = PrijemZaZbirnu(1, True, 3, 3, 900#)
-    IzvChk CBool(r(0)) = True, S & "jedan vlasnik: prazan vlasnik na prijemnici ne smeta"
-
-    ' Vlasnik kljuc: ista definicija kao modStorno.VlasniciPoBroju.
-    IzvChkEqText ZbirnaVlasnikKljuc("1/010126", "VZ-1", "KP-1"), "1/010126|VZ-1|KP-1", _
-                 S & "vlasnik kljuc = broj|vozac|kupac"
-    IzvChkEqText ZbirnaVlasnikKljuc(" 1/010126 ", " VZ-1", "KP-1 "), "1/010126|VZ-1|KP-1", _
-                 S & "vlasnik kljuc trimuje delove"
+    ' Fail-closed: kvar E4 -- ni kg koji je stigao ne vazi kao prijem.
+    r = PrijemZaZbirnu(False, 1, 1500#)
+    IzvChk CBool(r(0)) = False, S & "kvar E4 -> bez brojke"
+    IzvChkEqD CDbl(r(1)), 0#, S & "kvar E4 -> kg se ne prijavljuje"
+    IzvChkEqText CStr(r(2)), IZV_PRIJEM_NEPOZNAT, S & "kvar E4 -> oznaka 'prijem nepoznat'"
 End Sub
 
 ' --- (d) FM-0028 #6: uplata po fakturi se deli SRAZMERNO stavkama ---
@@ -533,34 +514,28 @@ Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
     Dim kup As String: kup = "IZVT-KP-K"
 
     ' Klasa I: zbirna/otpremnica 1000 kg, prijem 900. Klasa II: 200 kg, prijem 150.
+    '
+    ' S9-5 (S95-ODL-03, KI-097): JEDAN dokument zbirne sa dve STAVKE (kanon S4) i
+    ' JEDNA prijemnica sa dve stavke (kanon S6), E4 na tu zbirnu. Do S9-5 je seed
+    ' pravio dva zaglavlja istog broja i vlasnika (stari model red-po-klasi), a
+    ' izvestaj ih je sabirao po vlasniku -- a dve zbirne istog broja i vlasnika od
+    ' S9-5 su dva dokumenta, ne jedan.
     IzvSeed TBL_ZBIRNA, _
-        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
-              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
-        Array("IZVT-ZBR-K1", brDok, IZVT_DATUM, voz, kup, 1000#, 100, KLASA_I)
-    IzvSeedZbirnaStavka "IZVT-ZBR-K1", KLASA_I, 1000#, 100
-    IzvSeed TBL_ZBIRNA, _
-        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
-              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
-        Array("IZVT-ZBR-K2", brDok, IZVT_DATUM, voz, kup, 200#, 20, KLASA_II)
-    IzvSeedZbirnaStavka "IZVT-ZBR-K2", KLASA_II, 200#, 20
+        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
+        Array("IZVT-ZBR-K", brDok, IZVT_DATUM, voz, kup)
+    IzvSeedZbirnaStavka "IZVT-ZBR-K", KLASA_I, 1000#, 100
+    IzvSeedZbirnaStavka "IZVT-ZBR-K", KLASA_II, 200#, 20, 2
 
-    ' Klasa I i II dele BROJ prijemnice (kao u produkciji), ali su zasebni redovi.
-    ' S9-3: roditelj je ivica E4 (ZbirnaRoditeljID) -- zbirna svoje klase.
     IzvSeed TBL_PRIJEMNICA, _
         Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
               COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
-        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, "IZVT-ZBR-K1")
-    IzvSeedPrijemnicaStavka "IZVT-PRJ-K1", KLASA_I, 900#, 0#
-    IzvSeed TBL_PRIJEMNICA, _
-        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
-              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_DETE_ZBIRNA_ROD), _
-        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, "IZVT-ZBR-K2")
-    IzvSeedPrijemnicaStavka "IZVT-PRJ-K2", KLASA_II, 150#, 0#
+        Array("IZVT-PRJ-K", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, "IZVT-ZBR-K")
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-K", KLASA_I, 900#, 0#
+    IzvSeedPrijemnicaStavka "IZVT-PRJ-K", KLASA_II, 150#, 0#, 2
 
-    ' Zaglavlje zbirne je ovde po klasi (dva reda istog broja), a otpremnica sme
-    ' biti clan samo JEDNE aktivne zbirne (strog citac dize 1260): clanstvo ide
-    ' na K1. Prijem po klasi i dalje spaja broj (BuildManjakDict, S9-3).
-    IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, "IZVT-ZBR-K1"
+    ' Otpremnica je clan te jedne zbirne (E3); prijem svake klase je prijem
+    ' STAVKE zbirne te klase (BuildManjakDict, kljuc ZbirnaID|klasa).
+    IzvSeedOtpremnica "IZVT-OTP-K", IZVT_STANICA2, voz, "IZVT-ZBR-K"
     IzvSeedOtpStavka "IZVT-OTP-K", 1, KLASA_I, 1000#
     IzvSeedOtpStavka "IZVT-OTP-K", 2, KLASA_II, 200#
 
@@ -608,11 +583,12 @@ End Sub
 ' citalac sadrzaja zaglavlje bez stavki odbija po imenu -- seed sa golim
 ' zaglavljem bi merio dokument koji pisac ne moze da napravi.
 Private Sub IzvSeedZbirnaStavka(ByVal zbrID As String, ByVal klasa As String, _
-                                ByVal kg As Double, ByVal amb As Long)
+                                ByVal kg As Double, ByVal amb As Long, _
+                                Optional ByVal rb As Long = 1)
     IzvSeed TBL_ZBIRNA_STAVKE, _
         Array(COL_ZBS_ID, COL_ZBS_ZBIRNA_ID, COL_ZBS_RB, COL_ZBS_KLASA, _
               COL_ZBS_KOLICINA, COL_ZBS_KOL_AMB), _
-        Array(zbrID & "-S1", zbrID, 1, klasa, kg, amb)
+        Array(zbrID & "-S" & CStr(rb), zbrID, rb, klasa, kg, amb)
 End Sub
 
 ' Stavka uz zaglavlje prijemnice (S6 korak 3) -- isti razlog kao kod zbirne:
@@ -620,11 +596,12 @@ End Sub
 ' zaglavlje bez stavke odbija po imenu. Linijska polja zaglavlja seed i dalje
 ' popunjava (iste brojke) -- odlaze u koraku 8.
 Private Sub IzvSeedPrijemnicaStavka(ByVal prjID As String, ByVal klasa As String, _
-                                    ByVal kg As Double, ByVal cena As Double)
+                                    ByVal kg As Double, ByVal cena As Double, _
+                                    Optional ByVal rb As Long = 1)
     IzvSeed TBL_PRIJEMNICA_STAVKE, _
         Array(COL_PRS_ID, COL_PRS_PRIJEMNICA_ID, COL_PRS_RB, COL_PRS_KLASA, _
               COL_PRS_KOLICINA, COL_PRS_CENA, COL_PRS_KOL_AMB), _
-        Array("PRS-" & prjID, prjID, 1, klasa, kg, cena, 0)
+        Array("PRS-" & prjID & IIf(rb > 1, "-" & CStr(rb), ""), prjID, rb, klasa, kg, cena, 0)
 End Sub
 
 ' Dve aktivne zbirne sa ISTIM BrojZbirne, razliciti vozac+kupac, svaka sa

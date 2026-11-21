@@ -407,7 +407,7 @@ Public Function IzCipoviZaListu(ByVal kljuc As String) As String
 End Function
 
 ' PRAVILO CIPA MANJKA: "bez prijema" propusta redove koji nose OZNAKU umesto
-' brojke manjka (IZV_NEMA_PRIJEMA / IZV_VLASNIK_NEJASAN) -- ono sto se ne
+' brojke manjka (IZV_NEMA_PRIJEMA / IZV_PRIJEM_NEPOZNAT) -- ono sto se ne
 ' moze naplatiti. Nepoznat i prazan kljuc PUSTAJU sve.
 Public Function IzCipManjak(ByVal filter As String, ByVal oznaka As String) As Boolean
     Select Case filter
@@ -2410,9 +2410,10 @@ Private Function ClanstvoOtpremniceZaDetalj(ByVal otpID As String, ByRef outBlok
     outBlokova = modDokumenta.IzvoriOtpremnice(Trim$(otpID)).count
     zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(Trim$(otpID))
     If Len(zbrID) > 0 Then
-        ' S92-REV-01: citac E3 postojanje zbirne ne proverava -- clanstvo na
-        ' zbirnu koje nema je razlog, ne prazan red zbirne. Postojanje se meri
-        ' po ID-u, ne po broju (nacrt zbirne sme da nema broj).
+        ' S92-REV-01: od S9-5 (S95-ODL-02) citac E3 sam odbija clanstvo na
+        ' zbirnu koja ne postoji tacno jednom. Provera ostaje za ID koji se od
+        ' zaglavlja razlikuje samo u velikim slovima -- razlog, ne prazan red
+        ' zbirne. Postojanje se meri po ID-u, ne po broju (nacrt sme bez broja).
         If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then
             outBlokova = 0
             ClanstvoOtpremniceZaDetalj = "Clanstvo otpremnice " & Trim$(otpID) & _

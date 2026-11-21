@@ -12625,6 +12625,269 @@ jedinstvenost PK-a u dva čitača i obradu neuspešnih brojača; zatim ručni Co
   prevezuje) kroz ekran je nedostižna — lista nudi samo siročad — pa je meri test 419.
 - **NIJE izvršeno:** pun pojedinačni dokaz celom suite-om — pred release.
 
+### 14.69) S9-5 — integritet novog modela (21.11.2026)
+
+> Grana `claude/s9-5-integritet`, od `main` = `0b1d5a9f` (posle `#502`, S9-4). Obim je red S9-5 iz §14.64 (tabela
+> rezova, N2(b), N4, N11, N12, N13, N14, N16, N19, N20, F-087..F-089) i `KI-097` (`S93-REV-03`). Stanje:
+> `docs/STANJE_REFAKTORA.md`, stavka 336. Linije u ovom odeljku važe za `0b1d5a9f`.
+
+#### Merenje pre koda (čitanje svake provere, `popis_citalaca --json` nad `0b1d5a9f`)
+
+`RunAllChecks` (`modIntegritet:100`) ima 24 poziva i piše 27 blokova (B1, B4 i C1/C4 po dva). Po tome šta čitaju:
+
+| Provera | Čita | Posle S9-5 |
+|---|---|---|
+| **A1** `:575` | `ValidateZbirna` (`modDokumenta:8045`) → `GetOtpremniceByZbirna:134` po `Otpremnica.BrojZbirne` (kolona bez pisca) i `Zbirna.UkupnoKolicina` (zaglavlje, prazno od PR3) | **briše se** sa oba pomoćnika (jedini pozivaoci). Jednakost drži pisac (`ZbrRequireJednakost` pri izdavanju) |
+| **A2** `:611` | manjak po **broju**: `ZbirStavkiPoBroju:1505` ključa prijemnicu labelom `Prijemnica.BrojZbirne` | **po `ZbirnaID`** kroz isti agregat kao izveštaji (`S95-ODL-03`) |
+| **B1a/B1b** `:663` | `GetVerwaisteDokumente:9480` po broju (`Otpremnica.BrojZbirne`, `Prijemnica.BrojZbirne`) | **briše se** sa `GetVerwaiste*`; B1b zamenjuje E4 |
+| **B4a/B4b** `:692` | broj zbirne na detetu koji nema u `tblZbirna` | **briše se**; B4b zamenjuje E4 |
+| **B5** `:716` | prijemnica sa praznom **labelom** — N14: prijemnica sa labelom a bez E4 je tiha | **briše se**; zamenjuje E4 |
+| **B5b** `:733` | otpremnica sa praznim `BrojZbirne` (bez pisca) — uvek glasna (C002: 921 = sve aktivne) | **briše se** (`SLED-INV-02`) |
+| **B6** `:1006` | velika/mala slova broja na otkupu, otpremnici, prijemnici | **briše se** (labela nije veza) |
+| **B7, B9, B11** | stavke zbirne po ID-u; identitet zbirne; `PredajaID` | ostaju |
+| **B8** `:806` | broj zbirne sa više aktivnih dokumenata — sopstvena labela zbirne (ima pisca), presuda `ZbirnaIdentResolve` | **ostaje** (`S95-ODL-05`) |
+| **C1/C4** `:1039` | C1 po ID-u (PAL-INV-01); prikazne kolone C4 po broju: `PrijemnicaZbirnaMap:1803` (labela), `ZbirStavkiPoBroju`, `OtkupnoMestoByZbirna:1829` (`Otpremnica.BrojZbirne`), `ProizvodjacByZbirna:1885` (`Otkup.BrojZbirne`, `Otkup.OtpremnicaID`) | C1 ostaje; **kontekst C4 po ivicama** E4 → E3 → E2 (`S95-ODL-06`) |
+| C3, C5, A3, A4, D1, D2, A5, DOP1, GOT1, AMB1, KUL1 | ID-evi i stavke | ostaju |
+| **KUL2** `:155` | `KulVerzijeTabele:370`: rezervna grana po broju-obliku traga kad nema `IspravkaOdID` (`:385-404`, N16) — kanon kolonu ima od PR `#471`, pa je grana nedostižna | grana se **briše**, `IspravkaOdID` se čita strogo |
+| health 7 `Check_OtkupOtpremnicaCrossZbirnaLinks:841` | `Otkup.BrojZbirne`, `Otkup.OtpremnicaID`, `Otpremnica.BrojZbirne` — sve bez pisca, uvek OK | **briše se**, sa BFP `Test_NoCrossZbirnaLinksAudit:1344` (kopija iste provere nad fixture-om) |
+| health 13 deo 1 `Check_DocumentSoftDeleteReferences:1008` | `Otkup.OtpremnicaID` (bez pisca), uvek 0 | deo 1 se **briše**; deo 2 (linija fakture nad storniranom prijemnicom) ostaje |
+| `IntegritetUkupno:96` | broj iz poslednjeg prolaza bilo kog pozivaoca; bez pozivaoca | **briše se**; broj ide sa redovima istog prolaza (`KI-099`) |
+
+**Pokrivenost `SLED-INV-01` po ivici danas:** E6 health 3/4 (`UgovorLinijaFaktureNalazi`, FAK-LIN), E7 C1/C4, E8 D1/D2,
+E9/E10 health GP (`FakturaIznosNalazi`, `GpFakturaRazlog`). E1 i E5 strogim čitačima: kvar daje GREŠKU bloka (A2,
+A3), ne red (`KI-081`). **E2, E3 i E4 revizija ne vidi uopšte** (N12) — i to je ono što ovaj rez dodaje.
+
+**Čitači članstva (izmereno čitanjem):** E2 `AktivnoOtpClanstvoPoKanonu` (`modDokumenta:7728`) drži ceo
+`SLED-INV-01`: prazan ID, roditelj i dete tačno jednom, dupli par, dva aktivna članstva. **E3 `AktivnoClanstvoPoKanonu`
+(`:1562`) drži samo dva aktivna članstva**: prazan ID preskače tiho, postojanje zbirne i otpremnice ne proverava (pa
+članstvo na zbirnu koje nema računa kao aktivno; `S92-REV-01`), dupli par ne vidi. Oba dižu na **prvom** kvaru (N19).
+
+**E4:** pravilo siročeta već postoji na jednom mestu — `GetOsirocenePrijemnice` (`modDokumenta:10053`, lista Oporavka,
+`S94-ODL-09`): E4 prazan, zbirna ne postoji ili je stornirana.
+
+**Fixture (izmereno iz `make_fixture` SEED-a, ne iz sveske):** `tblZbirnaIzvori` 0 redova; `tblOtpremnicaIzvori` 18,
+nijedan kvar E2; aktivnih prijemnica 24, siroče E4 tačno jedno (`PRJ-STL-T`, namerni stari oblik, E4 prazan).
+Sveska na disku je od 19.11. (pre S9-3), pa je pred run treba regenerisati.
+
+#### Nalazi
+
+| # | Nalaz | Posledica za operatera | Gde |
+|---|---|---|---|
+| N1 | **Naslov liste INTEGRITET broji redove snimka, ne nalaze** (`KI-099`). `IntegritetNalaza` = `UBound` redova, a snimak nosi naslov bloka, zaglavlje kolona i prazan red između blokova. Pad provere (GREŠKA) se broji kao jedan „neusklađen zapis" | dva bloka sa po jednim nalazom → „7 neusklađenih zapisa"; jedna pala provera → „1 neusklađen zapis", a podaci možda čisti. Nijedan test ne meri naslov | `modScrOporavak.IntegritetNalaza:1196`, `Scr_NaslovDopuna:127` |
+| N2 | **Isti manjak se računa dvaput:** izveštaj manjka i ROBA (OM) kroz `BuildManjakDict` (po vlasniku, `KI-097`), A2 kroz sopstveni `ZbirStavkiPoBroju` (po broju) | dve zbirne istog broja i vlasnika (PWA, `KR-001` — dva uređaja) izveštaj sabere u jedan red; A2 sabere sve zbirne broja | `modHelpers.BuildManjakDict:286`; `modIzvestaj` `:3214`, `:4138`; `modIntegritet:611` |
+| N3 | **E3 čitač je slabiji od E2** (gore) | članstvo na zbirnu koje nema daje F1/F2 „Veza nepoznata" samo tom redu; prazan `OtpremnicaID` u članstvu je nevidljiv svima | `AktivnoClanstvoPoKanonu:1562` |
+| N4 | **C4 kontekst ide po broju**: broj zbirne sa (stornirane) prijemnice, OM i proizvođač preko kolona bez pisca | kolone OM i proizvođač su za kanonske dokumente prazne; kg i gajbe su zbir SVIH aktivnih zbirnih tog broja | `modIntegritet:1046-1052` |
+
+#### Odluke (operater, 21.11.2026 — sve po preporuci)
+
+- **`S95-ODL-01` — N19: isto pravilo, dva izlaza.** Strogi čitač članstva E2 i E3 dobija režim sakupljanja (obrazac
+  `modAmbalaza.KnjigaKvar` / `AmbKnjigaNalazi`): bez kolekcije diže kao danas (ponašanje ekrana se ne menja), sa
+  kolekcijom svaki pokvaren red ide u nalaz, red se preskače, prolaz ide dalje. Javni ulazi `ClanstvoOtpremnicaNalazi()`
+  i `ClanstvoZbirneNalazi()` (`modDokumenta`). E4 u integritetu je `GetOsirocenePrijemnice` — isto pravilo kao lista
+  Oporavka. E1/E5 ostaju GREŠKA bloka (`KI-081`, imenovano u `INTEGRITET_PROVERE.md`); hardening po dokumentu nije deo
+  reza. Nove provere: **E2**, **E3**, **E4** (kod = ivica iz `SLEDLJIVOST.md`).
+- **`S95-ODL-02` — E3 čitač na nivo E2** (`SLED-INV-01` doslovno): prazan ID, zbirna i otpremnica tačno jednom, dupli
+  par — kvar i u čitanju, ne samo u integritetu. **Posledica nad pokvarenim podacima** (isto kao E2 i kao 1260 danas):
+  čitač odbija celu tabelu, pa F1/F2 daju „Veza nepoznata" **svakom** redu, ne samo pokvarenom (`KI-081`, globalni
+  čitač). **Premisa testa 363 (deo REV-01) se menja:** članstvo na zbirnu koje nema je odbijena tabela (`3|3|3|-1`),
+  ne kvar jednog reda (`3|3|1|-1`).
+- **`S95-ODL-03` — manjak po `ZbirnaID`** (`KI-097`). `BuildManjakDict` ključa stavku sa `UCase(ZbirnaID)|klasa` →
+  `(ZbirnaKg, PrijemnicaKg, CntPrijem)`, a `#N|ZbirnaID` nosi kvar E4. Ključevi razrešavanja vlasnika po broju (`#V`,
+  `#1`, `#O`, `#K`, `#C`) se brišu, sa `ZbirnaStavkaKljuc`. Izveštaj manjka: jedan red po dokumentu. ROBA (OM): zbirna
+  otpremnice je već poznata po E3, pa ide pravo na ključ. A2 čita **isti** agregat; `ZbirStavkiPoBroju` se briše.
+- **`S95-ODL-04` — jedan PR**, commit po sloju: testovi prvi, manjak po ID-u, integritet i health, dokumenti.
+- **`S95-ODL-05` — B8 ostaje** (bez pitanja; po planu „po odluci o labeli"): čita sopstvenu labelu zbirne, koja ima
+  pisca, a F4 i dalje razrešava broj (`KI-098`), pa je dvosmislen broj stvarna prepreka unosu. Posle `KI-098` B8
+  postaje savet.
+- **`S95-ODL-06` — kontekst C4 po ivicama** (bez pitanja, prevod izvora): prijemnica → `ZbirnaRoditeljID` (i sa
+  stornirane) → broj, kg i gajbe zbirne po `ZbirnaID` → otpremnice zbirne (`ZbrClanovi`) → OM; → izvori otpremnica →
+  kooperanti. Meko, samo za redove nalaza (obrazac KUL1): kvar čitača je tekst u koloni, ne pad bloka.
+
+#### ACCEPTANCE CONTRACT — S9-5
+
+- **Važi:** nijedna provera integriteta ni health ne čita kolonu bez pisca ni labelu kao vezu (`SLED-INV-02`);
+  pokvaren red E2/E3/E4 je **red** u listi INTEGRITET sa razlogom koji ga imenuje (`SLED-INV-01`), a čitači E2/E3 ga i
+  dalje odbijaju; kanonski lanac ne daje nijedan nalaz; manjak se računa jednom, po dokumentu; naslov liste broji
+  nalaze, a palu proveru kaže posebno.
+- **Testovi (od 423), crveni nad zatečenim kodom po imenu, pa zeleni** (obrazac S9-3: kanonski pisci posle početka
+  spoljne transakcije, tvrdnja o rollback-u):
+  - **423 `T_S95_ClanstvoZbirneNalazi`** — E3: članstvo na zbirnu koje nema i prazan `OtpremnicaID` su **dva** nalaza
+    E3, svaki imenuje svoj red; čitač diže sa razlogom postojanja; ispravan lanac nije imenovan (kontra);
+  - **424 `T_S95_ClanstvoOtpremniceNalazi`** — E2: dva pokvarena reda su dva nalaza (čitač vidi samo prvi); čitač i
+    dalje diže (kontra: ponašanje ekrana isto);
+  - **425 `T_S95_PrijemnicaBezAktivneZbirne`** — E4: stari oblik (labela bez E4, N14), E4 na zbirnu koje nema i E4 na
+    storniranu su nalazi E4 sa razlogom liste Oporavka; kanonska prijemnica sa praznom **labelom** nije nalaz;
+  - **426 `T_S95_KanonskiLanacBezNalaza`** — `SLED-INV-02`: kanonski lanac otkup → otpremnica → zbirna → prijemnica
+    (manjak 5%) ne pojavljuje se ni u jednom redu liste;
+  - **427 `T_S95_NaslovBrojiNalaze`** (od ručne provere `T_S95_UkupnoBrojiNalaze`, red UKUPNO) — `KI-099`: broj u
+    naslovu = zbir nalaza po blokovima istog prolaza, ne broj redova snimka; pala provera se ne broji kao nalaz i
+    naslov je kaže;
+  - **428 `T_S95_ManjakPoZbirnaID`** — `KI-097`: dve aktivne zbirne istog broja, vozača, kupca i klase, prijemnica
+    samo pod prvom: izveštaj manjka ima dva reda, svaki sa svojim kg i prijemom; A2 imenuje drugu kao „ništa primljeno",
+    prvu ne;
+  - **429 `T_S95_C4KontekstPoIvicama`** — paletna stavka nad storniranom prijemnicom: C4 nosi broj zbirne iz
+    `tblZbirna` po E4, kg zbirne po `ZbirnaID`, OM i kooperanta lanca, ne labelu.
+- **Premisa se menja:** 363 (REV-01, `S95-ODL-02`); A2 tvrdnje u BFP (`S6K3NalazA2`, „S6 ugovor") ostaju — prva
+  kolona A2 je i dalje broj zbirne, `ZbirnaID` ide na kraj reda. BFP `Test_NoCrossZbirnaLinksAudit` se briše sa
+  health 7.
+- **Sabotaže `s95-*`:** po jedna za svaku tvrdnju koja meri prevedeno mesto (`dokaz.py --grupe --izbor --radnika 4
+  s95-`); sabotaže čije sidro rez briše se povlače.
+- **Popis:** `otk_veza_otp` 2 → 1, `otk_brojzbirne` 2 → 0, `otp_brojzbirne` 8 → 0, `zbr_linija` 3 → 1, `x_trace`
+  12 → 11; spisak `PRJ_BROJZBIRNE_S95` se briše (njegova mesta nestaju).
+- **Vreme (N13):** nova provera čita `tblOtpremnicaIzvori`, `tblZbirnaIzvori` i `tblPrijemnica` jednim prolazom po
+  tabeli (isti čitači kao ekran; E3 sada broji i zaglavlja zbirne i otpremnice, kao E2). **Nije mereno u rezu** —
+  C002 ne prima S9 (`PAL-ODL-12`), a fixture je mali; meri ga ručna provera (Admin → Integritet, sekunde). E10
+  ostaje u health-u (N20).
+- **Ne dira:** kolone i šemu (S9-6), pisce, jezgro grafa (`modSledljivost`), `KI-081` (hardening po dokumentu),
+  ugovor GAS/PWA, B7/B9/B11/C*/D*/A3-A5/AMB/KUL1.
+- **Kapije:** `vba_check` (i `--self-test`), `sabotaza.py --self-test`, `who_writes --check` i `--check-ownership`,
+  `gen_schema_module --check`, `popis_citalaca --check`, `vba_gate --popis`; posle reviewer GO: fixture, FULL (12
+  suita, marker), `dokaz.py s95-`. Ručni Compile je kapija operatera.
+- **Ručna provera (operater):** Oporavak → INTEGRITET: broj u naslovu = broj nalaza (ne redova); nema B5b/B4/B6/A1
+  redova za kanonske dokumente; siroče prijemnice je red E4. Izveštaj manjka nad zatečenim podacima: jedan red po
+  zbirnoj. Nov ključ poruke traži zatvaranje i otvaranje fajla.
+
+#### Izvršeno (21.11.2026, lokalno, grana `claude/s9-5-integritet`)
+
+Četiri commit-a po sloju (`S95-ODL-04`): `ed8de34f` pre-flight · `6ebda5db` testovi 423–429 i premisa 363 (skela:
+`GetIntegritetRows(outUkupno, outPalih)`, ključ `OTKUI_OPO_INT_PALO`) · `f9dcae79` manjak po `ZbirnaID` · `a8deb5e2`
+integritet i health. Dokumenti u petom commit-u.
+
+- **Manjak (`KI-097`):** `BuildManjakDict` ključa `ZbirnaID|klasa` (ROBA OM), `#Z|ZbirnaID` (dokument: izveštaj manjka,
+  A2) i `#N|ZbirnaID` (kvar E4). Obrisano: `#V/#1/#O/#K/#C`, `ZbirnaVlasnikKljuc` (modHelpers), `ZbirnaStavkaKljuc`,
+  `BrojAktivneZbirneOtp`. `PrijemZaZbirnu(vezaPoznata, cnt, kg)`; `IZV_VLASNIK_NEJASAN` → `IZV_PRIJEM_NEPOZNAT`
+  („prijem nepoznat" — jedina neizvesnost je kvar E4; do S9-5 kvar E4 zbirne sa jednim vlasnikom nije menjao brojku).
+  `modIzvestajTests.T_PrijemVlasnikRazresenje` prepisan na novu semantiku (14 → 8 provera).
+  **Premisa promenjena (nađeno samopregledom posle koda, propust merenja pre koda):**
+  `modIzvestajTests.T_E2E_KlasaIiIINeMesajuPrijem` je sejao dvoklasnu zbirnu kao dva zaglavlja istog broja i
+  vlasnika (stari model red-po-klasi) i tvrdio jedan red izveštaja manjka — baš stanje koje `S95-ODL-03` više ne
+  sabira. Seed je sada kanonski (jedno zaglavlje sa dve stavke, jedna prijemnica sa dve stavke; `12a3149e`),
+  tvrdnje iste. Fixture SEED nema zbirne istog broja i vlasnika (izmereno).
+- **Čitači članstva (`S95-ODL-01/02`):** `ClanstvoKvar` — jedan kvar, dva izlaza; `ClanstvoOtpremnicaNalazi`,
+  `ClanstvoZbirneNalazi`. E3 greške 1263–1267 (1260 isti tekst). Grane u `modScrDokumenti` i `modScrIzvestaji` koje
+  su hvatale članstvo na zbirnu koje nema **ostaju**: posle pojačanja su dostižne samo za ID koji se od zaglavlja
+  razlikuje u velikim slovima (čitač poredi bez obzira na velika slova, `BuildLookupDict` ne) — nisu strogo
+  nedostižne, pa se ne brišu (pravilo „neuhranjen nije nedostižan"); komentari ažurirani.
+- **Integritet:** E2, E3, E4 (ispred A2); obrisani A1, B1, B4, B5, B5b, B6 sa pomoćnicima (`ValidateZbirna`,
+  `GetOtpremniceByZbirna`, `GetVerwaiste*`, `CollectBrojZbirne`, `ZbirStavkiPoBroju`, `AllBrojeviInZbirna`,
+  `BuildZbirnaCaseMaps`, `CollectCaseMismatch`, `DanglingDocs`, `DocsBezZbirne`, `KolicinaZaAudit`,
+  `ZbirOtpremnicaMeko`, `PrijemnicaZbirnaMap`, `OtkupnoMestoByZbirna`, `ProizvodjacByZbirna`) i `IntegritetUkupno`.
+  C4 kontekst kroz `C4TokZbirne` (meko). KUL2 čita `IspravkaOdID` strogo. `WriteErr` broji pale provere.
+- **Health:** provera 7 i deo 1 provere 13 obrisani, sa njima mrtvi `CountActiveReferencesToStornirano` i
+  `GetValueByKeySafe`; BFP `Test_NoCrossZbirnaLinksAudit` obrisan (`RunBusinessFlowProAuditOnly` ostaje, sada samo
+  `Test_CoreTablesAndColumnsExist`).
+- **Sabotaže:** +12 `s95-*` (`e3-postojanje-zbirne`, `revizija-samo-prvi`, `revizija-dize-umesto-sakuplja`,
+  `e4-ne-proverava`, `naslov-broji-redove`, `naslov-bez-palih`, `pala-provera-se-ne-broji`, `manjak-red-po-broju`,
+  `a2-po-broju`, `c4-broj-iz-labele`, `c4-om-iz-otpremnica`, `c4-proizvodjac-iz-izvora`); presidrene `s6k3-manjak-dict-
+  prijem-nula`, `s6k3-manjak-izv-zbirna-nula`, `s6k3-a2-prijem-gajbe`, `s92-roba-om-cita-otp-brojzbirne`,
+  `s93-roba-om-vlasnik-prijemnice` (iste tvrdnje); povučene `s92-zbirna-koje-nema-je-poslato` i
+  `s92-detalj-zbirna-koje-nema-cuti` (premisa „kvar jednog reda" ne važi: čitač odbija tabelu, meri 363). Katalog 1548.
+- **Popis:** `otk_veza_otp` 1, `otk_brojzbirne` 0, `otp_brojzbirne` 0, `zbr_linija` 1, `x_trace` 11; `PRJ_BROJZBIRNE_S95`
+  obrisan; `prj_brojzbirne` 21 → 15 (merenje, bez praga).
+- **Jeftine kapije (zelene):** `vba_check` (i `--self-test`), `sabotaza.py --self-test`, `who_writes --check` i
+  `--check-ownership`, `gen_schema_module --check` (F22278A1), `popis_citalaca --check`, `vba_gate --popis`.
+- **NIJE pušteno — čeka reviewer GO:** `make_fixture` (sveska na disku je od 19.11, pre S9-3), crveno nad `6ebda5db`
+  (`run_vba --src`), FULL (12 suita), `dokaz.py --grupe --izbor --radnika 4 s95-` + presidrene, ručni Compile.
+  **Očekivano:** `RunAllTests` 422 → 429; BFP 3488 minus tvrdnje obrisanog `Test_NoCrossZbirnaLinksAudit` (broj se
+  čita posle prolaza); `RunIzvestajTests` −6; izvori rizika: BFP S6 „zaglavlje bez stavki" (A2 GREŠKA sada samo za
+  prijemnicu pod aktivnom zbirnom), KUL1 nad lancima testova 423–429, izveštajni testovi koji su sabirali dve zbirne
+  istog vlasnika u jedan red.
+
+#### Nezavisni pregled `#503` (21.11.2026) — dva nalaza, oba zatvorena u ovom PR-u
+
+| ID | Nalaz (potvrđen čitanjem) | Ispravka | Test | Sabotaža |
+|---|---|---|---|---|
+| `S95-REV-01` (P1) | E4 je pozivao listu Oporavka: (A) aktivna prijemnica **bez broja** sa pokvarenom vezom nije bila nalaz (`Len(brp) > 0`); (B) `ZbirnaID` iz **dva zaglavlja** — rečnik „poslednji pobeđuje", pa je ishod zavisio od redosleda. Pisac prevezivanja je isti slučaj merio **prvim** redom, pa su lista i pisac mogli da se ne slože | **`S95-ODL-07` (odluka operatera): jedno pravilo za tri pozivaoca** — `modDokumenta.PrijemnicaE4Razlog` + `ZbirneZaE4` (roditelj tačno jednom, nije storniran; četvrti razlog „zbirna nije jednoznačna (N zaglavlja)"). Zovu ga lista siročadi, integritet E4 (`GetOsirocenePrijemnice(True)`: i bez broja) i pisac prevezivanja. Proširuje `S94-ODL-09`: prijemnica sa dvosmislenim roditeljem je siroče | 430 `T_S95_E4JednoPraviloTriPozivaoca` | `s95-e4-audit-trazi-broj`, `s95-e4-dupli-roditelj-prolazi`, `s95-pisac-svoje-pravilo-siroceta` |
+| `S95-REV-02` (P2) | pad **cele** revizije (van handlera provera) vraćao je `Empty` uz nule — naslov bi rekao „0 neusklađenih zapisa", kao čist integritet | `GetIntegritetRows` u handleru vraća red `INTEGRITET \| GRESKA: revizija nije izvršena — …` i `outPalih = 1`; seam `IntegritetPadTestSet` (tvrdo gejtovan, u `ResetSeamova`) | 431 `T_S95_PadRevizijeNijeCisto` | `s95-pad-revizije-je-prazno` |
+| pitanje za acceptance (§6 pregleda) | istorijsko članstvo storniranog dokumenta naspram dva aktivna | bez izmene koda: istorija nije kvar, dva aktivna jesu (E2 i E3) | 432 `T_S95_ClanstvoIstorijaNijeKvar` | `s95-e3-istorija-je-aktivna` (E2 već meri `clanstvo-drzi-storniranu-otpremnicu`) |
+
+- Tri zatečene sabotaže presidrene u `PrijemnicaE4Razlog` i pisca (`s93-oporavak-stornirana-zbirna`,
+  `s93-oporavak-bez-veze`, `s94-prevezi-vezana-prolazi`; iste tvrdnje). Katalog 1553.
+- Dok dupli `ZbirnaID` stoji, strog čitač stavki zbirne odbija tabelu (ugovor „zaglavlje tačno jednom"), pa se
+  prevezivanje u tom stanju ne završava; test 430 meri samo kapiju koju drži pravilo E4.
+- Crveno nad `c2c19b5c` očekivano: 430 i 431 po imenu; 432 je tamo zelen (E2/E3 su već u S9-5), crven nad `main`-om.
+- Izvršne kapije i dalje NISU puštene; očekivano `RunAllTests` 432.
+
+#### Izvršne kapije (21.11.2026, posle pregleda `#503`)
+
+- **Fixture regenerisan** iz zatečene sveske kao donora (sveska je bila pre S9-3; preimenovana kolona
+  `ZbirnaGeneracijaID` → `ZbirnaRoditeljID`), potpis `1c510b9316787b16`.
+- **Crveno nad zatečenim kodom, po imenu:** nad `6ebda5db` svih 8 (423–429 i 363) na očekivanim tvrdnjama; nad
+  `c2c19b5c` 430 i 431. Test 432 je tamo pao na **preduslovu** (kvar E2 podmetnut pre zasejavanja lanca Y — greška
+  testa, `8bbaaf0e`).
+- **FULL #1 (`8bbaaf0e`): 11/12, BFP 384/2451.** Svi padovi kroz `CreateZbirna`: „članstvo pokazuje na zbirnu koja ne
+  postoji tačno jednom: `SVT-Z3-ID-I`". Uzrok je **postojeće curenje harness-a**: `RunStornoTestSuite` radi u
+  spoljnoj transakciji koja se vraća, ali nije snimala `tblZbirnaIzvori` ni `tblOtpremnicaIzvori`, a njen seed tamo
+  piše — red članstva na zbirnu koju rollback obriše preživeo je suite i pao u BFP-u (koji ide posle). Slab E3 čitač
+  ga je do S9-5 tiho trpeo. Ispravka: snimak obe tabele (`26fcee9c`); kod reza nije menjan.
+- **FULL #2 (`26fcee9c`): BFP 3486/3487** — `PR3 dupli par` je tvrdio tekst 1260 („dva aktivna zapisa"); E3 sad dupli
+  par hvata svojim pravilom 1267 („par … postoji više puta", kao 1333 za otpremnicu). Premisa posle `S95-ODL-02`
+  (`65dce9ee`).
+- **Dokaz #1** (`--grupe --izbor --radnika 4 --od origin/main`): **298/299** — `s95-e3-istorija-je-aktivna` je obarala
+  preduslov 432 (pisac nove zbirne bira slobodnu otpremnicu kroz isti čitač) → 432 pravi legalno stanje sirovim
+  prepisom posle zasejavanja; `s93-tekuca-predaja-cuti` ne obara ništa — od `S95-ODL-02` čitač E3 sam imenuje
+  članstvo na zbirnu koje nema (406 i dalje dobija grešku sa imenom), pa je povučena kao i dve `s92-*` (`0e324a25`).
+- **FULL završni nad `0e324a25`: 12/12 zeleno, marker upisan** (izvor `691282af34d7`, ugovor `15a210ff5afb`) —
+  `RunAllTests` **432/0**, BFP **3487/0** (−1 = obrisan `Test_NoCrossZbirnaLinksAudit`), Banka 241/0, Storno 111/0,
+  Agrohemija 25/25; Palete, Faktura, Golden, Izveštaji, JSON, StornoCentar, License OK. `vba_gate --require-green`
+  prolazi.
+- **Dokaz završni: 302/302 crveno po imenu, „DOKAZANO (grupno, izbor)"**, snimak izvora `2cb19f404a75279c` isti pre
+  i posle, radno stablo nedirnuto; izborom 302/302, grupno 284/302. Katalog sabotaža **1552**.
+- **NIJE izvršeno:** ručni Compile i ručna provera (operater); pun pojedinačni dokaz celom suite-om — pred release.
+  Vreme nove provere (N13) nije mereno nad zapreminom.
+
+#### Ručna provera (operater, 21.11.2026)
+
+- **Ručni Compile: prošao** nad `tests/fixtures/rucna_provera_s95_kod.xlsm` (kod `a7614b02`).
+- **Potvrđeno na ekranu (Oporavak → Integritet, četiri snimka):**
+  - E4 je jedan red, `PRJ-STL-T` (`12/TEST`), „nema veze sa zbirnom", isto kao lista „Osiroćene prijem.";
+  - nema blokova A1, B1, B4, B5, B5b ni B6; E2 i E3 su prazni;
+  - A2 ide po dokumentu (`ZB-TEST-SLDD`, `-KASK`, `-DUPL` po dva reda, svaki sa svojim `ZbirnaID`);
+  - nalaza je 40 (A5 16, C3 2, C4 5, A3 1, A2 12, B8 3, E4 1); mreža ima 60 redova (+7 naslova, 7 zaglavlja,
+    6 praznih); OSIROČENO 6 = 1 osiroćena prijemnica + 5 prijemnica sa paletama.
+  - C4 bez otkupnog mesta i proizvođača je tačno za fixture: `make_fixture` ne izvodi `tblZbirnaIzvori`, pa zbirne
+    nemaju članstvo, a `VOZ-TEST-1` nije stanica (fallback). Vrednosti na kanonskom lancu meri 429.
+- **Nađene dve stvari na listi INTEGRITET, obe od MIG-002 (`e0e2c31b`), ne od S9-5:**
+  - **R1 — broj se ne vidi.** Naslov mreže je labela fiksne širine (`grdTitle`, 180pt), „Neusklađeni zapisi (revizija
+    tabela)" je već puni, pa se dopuna „40 neusklađenih zapisa" odsecala **cela**. `KI-099` je bio tačan u kodu, a
+    nevidljiv na ekranu; test 427 je merio tekst dopune, ne vidljivost. Isti razlog je ranije izbacio dopunu iz
+    `modScrBankaUvoz`.
+  - **R2 — lista složena po Detalju (`KI-100`).** `modScrOporavak` nije imao `Scr_Sort`, pa je važilo pravilo ljuske
+    „druga kolona opadajuće" (za datum dokumenta): naslovi blokova su pali na poslednju stranu, zaglavlja među nalaze,
+    a red nalaza nema kod provere — nalaz se nije mogao pripisati proveri.
+- **Odluka operatera:** ispravka u `#503`.
+- **Testovi prvi (`411c2dad`):** 427 preimenovan u `T_S95_UkupnoBrojiNalaze` i, uz 431, čita prvi red liste kroz
+  `Scr_Rows`; **433 `T_S95_UkupnoIznadPretrage`** (red UKUPNO prvi i uz pretragu, naslov bez dopune); **434
+  `T_S95_IntegritetRedosledRevizije`** kroz pravu ljusku (bez sorta, mreža = redosled ekrana, klik na zaglavlje ne
+  preuređuje i kaže razlog ove liste, ostale liste Oporavka na pravilu ljuske).
+- **Ispravka (`e05645eb`):** red UKUPNO je prvi red liste i ne prolazi kroz pretragu (`Rows2D` `nFiksnih`); naslov
+  INTEGRITET bez dopune; `modScrOporavak.Scr_Sort` = `SCR_SORT_POSLOVNI` samo za INTEGRITET; nov **opcioni član
+  ugovora ekrana `Scr_SortRazlog`** (`modUiScreens.ScrSortRazlog`, `vba_check` `SCR_UGOVOR`) — bez njega bi klik
+  rekao razlog kartice („saldo kartice važi samo tim redom"). Sabotaže +5, `s95-ukupno-bez-palih` presidrena; katalog
+  **1557**.
+- **Usput:** CI kapija `who_writes --check` crvena od `26fcee9c` (snimak tabela članstva u Storno suite nije osvežio
+  generisan `WHO_WRITES.md`) — regenerisan (`5862805c`). Pred taj push nije pušten ceo skup CI kapija; od sada jeste.
+- **Kapije za ispravku:** ceo skup iz `static.yml` zelen lokalno (JS harness se lokalno ne pokreće — nedostaje modul,
+  isto i na glavi pre izmene).
+  - **Crveno nad `411c2dad`** (novi testovi, stari kod; `run_vba --src`): 4/4 po imenu — 427 i 433 „prvi red liste
+    INTEGRITET je red UKUPNO" (dobijeno `E4`), 431 „red UKUPNO liste kaže da revizija nije izvršena", 434 „ljuska ne
+    sortira listu INTEGRITET" (dobijena kolona 2).
+  - **Ciljano nad `c69eb36e`:** 427, 431, 433, 434, `T_KartHron_MrezaNePreuredjuje` (ista grana klika) i
+    `T_Oporavak_CiljneListe` (deli `Rows2D`) — 6/0.
+  - **FULL nad `c69eb36e`: 12/12 zeleno, marker upisan** (izvor `0b8aa9d74dc2`, ugovor `978d1f2e376c`) —
+    `RunAllTests` **434/0**, BFP 3487/0, Banka 241/0, Storno 111/0, Agrohemija 25/25, ostale OK.
+  - **Dokaz** (`--od a7614b02 --izbor --grupe --radnika 4`): **25/25 crveno po imenu, „DOKAZANO (grupno, izbor)"** —
+    5 novih, 3 preimenovane/presidrene `s95-*`, `s95-pad-revizije-je-prazno` i 16 susednih (kartica, KI-014/016,
+    DOC-SORT, AMB-BIL, zona Oporavka); izvor isti pre i posle. Katalog 1557.
+  - **Ponovna ručna provera (operater, 21.11.2026)** nad `tests/fixtures/rucna_provera_s95_r2_kod.xlsm`: **ručni
+    Compile čist**, zapisan u marker (`vba_gate --mark-compile`, izvor `0b8aa9d74dc2`; `--require-green
+    --require-compile` prolazi). Na ekranu (tri snimka): prvi red je `UKUPNO | 40 neusklađenih zapisa` (nov ključ
+    učitan, dijakritika ispravna); lista ide redom revizije — E4, A2, B8, C4, C3, A3, A5, svaki blok naslov,
+    zaglavlje, nalazi; zaglavlje kolone bez strelice sorta; 61 red = 60 + UKUPNO.
+  - **Ručno nije potvrđeno** (nije na snimcima): poruka na klik po zaglavlju, pretraga uz red UKUPNO i datum na
+    ostalim listama Oporavka — meri ih 433 i 434 kroz pravu ljusku; izveštaj manjka (meri 428) i Admin → Integritet
+    provere (sheet i `MsgBox`, ispravka ih ne dira).
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

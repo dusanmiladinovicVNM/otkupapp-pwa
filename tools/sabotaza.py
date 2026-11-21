@@ -10049,8 +10049,8 @@ SABOTAZE = {
     # Manjak (BuildManjakDict): prijem po klasi iz stavke prijemnice.
     "s6k3-manjak-dict-prijem-nula": (
         "modHelpers.bas",
-        "            pKg = CDbl(ps(4))\n",
-        "            pKg = 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "                pKg = CDbl(ps(4))\n",
+        "                pKg = 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: izvestaj manjka -- prijem zbirne raste za stavku njene klase",
     ),
@@ -10081,16 +10081,16 @@ SABOTAZE = {
     # Izvestaj manjka: kg zbirne iz njenih stavki.
     "s6k3-manjak-izv-zbirna-nula": (
         "modIzvestaj.bas",
-        "            zv(0) = zv(0) + CDbl(zs(4))\n",
-        "            zv(0) = zv(0) + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "            zbrKg = CDbl(zv(0))\n",
+        "            zbrKg = 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
         "Test_S6_ManjakObeStraneIzStavki",
         "S6 manjak: izvestaj manjka cita stavke zbirne i prijemnice",
     ),
     # Integritet A2: prijem po broju zbirne je kg stavki (idx 0), ne gajbe.
     "s6k3-a2-prijem-gajbe": (
         "modIntegritet.bas",
-        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)\n",
-        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 2, False)   ' SABOTAZA: gajbe umesto kg\n",
+        "                    prijKg = CDbl(z(1))\n",
+        "                    prijKg = CDbl(z(2))   ' SABOTAZA: broj stavki umesto kg\n",
         "Test_S6_ManjakObeStraneIzStavki",
         "S6 manjak: integritet A2 vidi zbirnu i prijemnicu iz stavki",
     ),
@@ -13856,20 +13856,6 @@ SABOTAZE = {
     ),
     # S92-REV-01: clanstvo na zbirnu koje nema u zaglavljima (citac E3 postojanje
     # ne proverava) mora dati "veza nepoznata" bas tom redu, ne "Poslato".
-    "s92-zbirna-koje-nema-je-poslato": (
-        "modScrDokumenti.bas",
-        "                        nepoznato = True: If Not isStorno Then nNepoznatih = nNepoznatih + 1\n",
-        "                        ' SABOTAZA: clanstvo na zbirnu koje nema ostaje Poslato\n",
-        "T_S92_StatusVezaNepoznata",
-        "363 REV-01: clanstvo na zbirnu koje nema daje vezu nepoznatu tom redu, ostali ostaju tacni",
-    ),
-    "s92-detalj-zbirna-koje-nema-cuti": (
-        "modScrIzvestaji.bas",
-        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
-        "        If False Then   ' SABOTAZA: detalj cuti o zbirnoj koje nema\n",
-        "T_S92_StatusVezaNepoznata",
-        "363 REV-01: detalj otpremnice imenuje zbirnu koje nema, ne cuti",
-    ),
     "s92-otk-red-cita-otkup-vozacid": (
         "modStanicaLock.bas",
         "            Case \"VozacID\": v = predVoz\n",
@@ -13880,12 +13866,10 @@ SABOTAZE = {
     ),
     "s92-roba-om-cita-otp-brojzbirne": (
         "modIzvestaj.bas",
-        "        thisBrZbirne = BrojAktivneZbirneOtp(thisOtpID, zbrPoOtp, brojPoZbr)\n",
-        "        thisBrZbirne = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, thisOtpID, "
-        "COL_OTP_BROJ_ZBIRNE)))   ' SABOTAZA: ROBA OM cita Otpremnica.BrojZbirne\n",
+        "        thisZbrID = ZbirnaOtpremnicePoClanstvu(thisOtpID, zbrPoOtp)\n",
+        "        thisZbrID = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, thisOtpID, COL_OTP_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: ROBA OM cita Otpremnica.BrojZbirne\n",
         "T_S92_IzvestajiPoClanstvu",
-        "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, "
-        "ne po Otpremnica.BrojZbirne",
+        "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, ne po Otpremnica.BrojZbirne",
     ),
     "s92-vrsta-kes-prazan": (
         "modDokumenta.bas",
@@ -14832,9 +14816,8 @@ SABOTAZE = {
     ),
     "s93-roba-om-vlasnik-prijemnice": (
         "modHelpers.bas",
-        "        pVk = CStr(vkPoZbr(pRod))\n",
-        "        pVk = ZbirnaVlasnikKljuc(pZbr, Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)))), "
-        "Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)))))   ' SABOTAZA: vlasnik po atributima prijemnice\n",
+        "        If rodPrj.Exists(pid) Then pRod = UCase$(Trim$(CStr(rodPrj(pid))))\n",
+        "        pRod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: prijemnica po labeli broja zbirne, ne po E4\n",
         "T_G2_BrojNijeIdentitet",
         "403 ROBA (OM): prijem otpremnice je prijem prijemnice njene zbirne po ID-u, ne po vozacu i kupcu prijemnice",
     ),
@@ -14906,24 +14889,17 @@ SABOTAZE = {
     ),
     "s93-oporavak-stornirana-zbirna": (
         "modDokumenta.bas",
-        "            ElseIf CStr(stZbr(rodR)) = \"DA\" Then\n",
-        "            ElseIf False Then   ' SABOTAZA: stornirana zbirna nije siroce\n",
+        "        ElseIf CBool(z(1)) Then\n",
+        "        ElseIf False Then   ' SABOTAZA: stornirana zbirna nije siroce\n",
         "T_S93_F4IOporavakPoID",
         "405 Oporavak: prijemnica stornirane zbirne je siroce i kad broj nosi druga aktivna zbirna",
     ),
     "s93-oporavak-bez-veze": (
         "modDokumenta.bas",
-        "            If Len(rodR) = 0 Then\n",
-        "            If False Then   ' SABOTAZA: prijemnica bez veze nije siroce\n",
+        "    If Len(k) = 0 Then\n        PrijemnicaE4Razlog = \"nema veze sa zbirnom\"\n",
+        "    If False Then   ' SABOTAZA: prijemnica bez veze nije siroce\n        PrijemnicaE4Razlog = \"nema veze sa zbirnom\"\n",
         "T_S93_F4IOporavakPoID",
         "405 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja",
-    ),
-    "s93-tekuca-predaja-cuti": (
-        "modStammdatenSync.bas",
-        "        If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then\n",
-        "        If False Then   ' SABOTAZA: clanstvo na zbirnu koje nema se precutkuje\n",
-        "T_S93_TekucaPredajaBezZbirne",
-        "406 tekuca predaja: clanstvo na zbirnu koje nema je greska koja je imenuje, ne prazan broj zbirne",
     ),
     # S93-REV-01 (review #501): indeks izvoza OtkupiAll guta kvar citaca E4 i
     # vraca recnik -- zbirne bez indeksa izvoze se kao Primljeno "Ne".
@@ -15161,8 +15137,8 @@ SABOTAZE = {
     # S94-REV-01: pisac prevezuje i prijemnicu koja ima AKTIVNU zbirnu.
     "s94-prevezi-vezana-prolazi": (
         "modDokumenta.bas",
-        "            If Not ZbirnaJeStornirana(roditeljPre) Then\n",
-        "            If False Then   ' SABOTAZA: i vezana prijemnica se prevezuje\n",
+        "        If Len(PrijemnicaE4Razlog(roditeljPre, ZbirneZaE4(SRC))) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: i vezana prijemnica se prevezuje\n",
         "T_S94_PrevezivanjeSamoSiroce",
         "419 prijemnica sa aktivnom zbirnom se ne prevezuje; razlog imenuje njenu zbirnu",
     ),
@@ -15193,6 +15169,161 @@ SABOTAZE = {
         "        ' SABOTAZA: predaja ekrana ne osvezava meni\n",
         "T_S94_PredajaEkranaOsvezavaMeni",
         "421 posle predaje ekrana brojac Oporavka u meniju je svez",
+    ),
+    "s95-e3-postojanje-zbirne": (
+        "modDokumenta.bas",
+        "        If ClanstvoBrojPoID(brojZbr, zbrID) <> 1 Then\n",
+        "        If False Then   ' SABOTAZA: clanstvo na zbirnu koje nema racuna se kao aktivno\n",
+        "T_S95_ClanstvoZbirneNalazi",
+        "423 E3 citac: clanstvo na zbirnu koje nema je kvar koji je imenuje (S95-ODL-02)",
+    ),
+    "s95-revizija-samo-prvi": (
+        "modDokumenta.bas",
+        "    nalazi.Add Array(CStr(red), roditelj, dete, razlog)\n",
+        "    If nalazi.count = 0 Then nalazi.Add Array(CStr(red), roditelj, dete, razlog)   ' SABOTAZA: revizija vidi samo prvi kvar\n",
+        "T_S95_ClanstvoZbirneNalazi",
+        "423 integritet E3 imenuje clanstvo na zbirnu koje nema",
+    ),
+    "s95-revizija-dize-umesto-sakuplja": (
+        "modDokumenta.bas",
+        "    If nalazi Is Nothing Then Err.Raise errNum, src, razlog\n",
+        "    Err.Raise errNum, src, razlog   ' SABOTAZA: revizija dize na prvom kvaru umesto da sakuplja\n",
+        "T_S95_ClanstvoOtpremniceNalazi",
+        "424 integritet E2 imenuje clanstvo na otkup koga nema",
+    ),
+    "s95-e4-ne-proverava": (
+        "modIntegritet.bas",
+        "    Chk_E4_PrijemnicaBezAktivneZbirne\n",
+        "    ' SABOTAZA: E4 se ne proverava\n",
+        "T_S95_PrijemnicaBezAktivneZbirne",
+        "425 E4: prijemnica sa labelom a bez veze (stari oblik, N14) je nalaz sa razlogom",
+    ),
+    "s95-ukupno-broji-redove": (
+        "modScrOporavak.bas",
+        "    IntegritetNalaza = mIntBroj\n",
+        "    If IsArray(src) Then IntegritetNalaza = UBound(src, 1)   ' SABOTAZA: naslov broji redove snimka\n",
+        "T_S95_UkupnoBrojiNalaze",
+        "427 red UKUPNO nosi broj NALAZA, ne broj redova snimka (KI-099)",
+    ),
+    "s95-ukupno-bez-palih": (
+        "modScrOporavak.bas",
+        "    If mIntPalih > 0 Then IntegritetUkupnoTekst = IntegritetUkupnoTekst & \", \" & _\n",
+        "    ' SABOTAZA: red UKUPNO cuti o palim proverama\n    If False Then IntegritetUkupnoTekst = IntegritetUkupnoTekst & \", \" & _\n",
+        "T_S95_UkupnoBrojiNalaze",
+        "427 red UKUPNO kaze koliko provera nije izvrseno",
+    ),
+    "s95-pala-provera-se-ne-broji": (
+        "modIntegritet.bas",
+        "    m_palih = m_palih + 1\n",
+        "    ' SABOTAZA: pala provera se ne broji\n",
+        "T_S95_UkupnoBrojiNalaze",
+        "427 broj palih provera istog prolaza je broj redova GRESKA",
+    ),
+    "s95-manjak-red-po-broju": (
+        "modIzvestaj.bas",
+        "        zid = UCase$(Trim$(NzToText(filtered(i, colZbrID))))\n",
+        "        zid = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, Trim$(CStr(filtered(i, colBroj))), COL_ZBR_ID))))   ' SABOTAZA: red manjka po broju zbirne\n",
+        "T_S95_ManjakPoZbirnaID",
+        "428 izvestaj manjka: svaka zbirna nosi SVOJ prijem",
+    ),
+    "s95-a2-po-broju": (
+        "modIntegritet.bas",
+        "            zid = UCase$(Trim$(NzToText(data(i, cId))))\n            broj = Trim$(NzToText(data(i, cBroj)))\n",
+        "            broj = Trim$(NzToText(data(i, cBroj)))\n            zid = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_ID))))   ' SABOTAZA: A2 po broju zbirne\n",
+        "T_S95_ManjakPoZbirnaID",
+        "428 A2 po dokumentu: zbirna bez prijema je nalaz, zbirna sa prijemom 95% nije",
+    ),
+    "s95-c4-broj-iz-labele": (
+        "modIntegritet.bas",
+        "                        If zbrBroj.Exists(zid) Then bz = CStr(zbrBroj(zid))\n",
+        "                        bz = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, p, COL_PRJ_BROJ_ZBIRNE)))   ' SABOTAZA: broj zbirne iz labele prijemnice\n",
+        "T_S95_C4KontekstPoIvicama",
+        "429 C4: broj zbirne je zbirna po E4, ne labela prijemnice",
+    ),
+    "s95-c4-om-iz-otpremnica": (
+        "modIntegritet.bas",
+        "        sid = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, CStr(otp(a)), COL_OTP_STANICA)))\n",
+        "        sid = \"\"   ' SABOTAZA: OM se ne cita iz otpremnica zbirne\n",
+        "T_S95_C4KontekstPoIvicama",
+        "429 C4: otkupno mesto je stanica otpremnica zbirne (E3)",
+    ),
+    "s95-c4-proizvodjac-iz-izvora": (
+        "modIntegritet.bas",
+        "            kid = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izv(b)), COL_OTK_KOOPERANT)))\n",
+        "            kid = \"\"   ' SABOTAZA: proizvodjac se ne cita iz izvora lanca\n",
+        "T_S95_C4KontekstPoIvicama",
+        "429 C4: proizvodjac je kooperant izvora lanca (E3 -> E2)",
+    ),
+    "s95-e4-audit-trazi-broj": (
+        "modDokumenta.bas",
+        "            If Len(st) > 0 And (iBezBroja Or Len(brp) > 0) Then\n",
+        "            If Len(st) > 0 And Len(brp) > 0 Then   ' SABOTAZA: revizija preskace prijemnicu bez broja\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 E4: aktivna prijemnica bez broja sa pokvarenom vezom je nalaz (revizija ne zavisi od labele)",
+    ),
+    "s95-e4-dupli-roditelj-prolazi": (
+        "modDokumenta.bas",
+        "        If CLng(z(0)) > 1 Then\n",
+        "        If False Then   ' SABOTAZA: roditelj iz dva zaglavlja prolazi\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 E4: roditelj koji stoji u dva zaglavlja je nalaz -- tacno jednom (SLED-INV-01)",
+    ),
+    "s95-pisac-svoje-pravilo-siroceta": (
+        "modDokumenta.bas",
+        "    If Len(roditeljPre) > 0 Then\n        If Len(PrijemnicaE4Razlog(roditeljPre, ZbirneZaE4(SRC))) = 0 Then\n",
+        "    If Len(roditeljPre) > 0 Then\n        If FindRows(TBL_ZBIRNA, COL_ZBR_ID, roditeljPre).count > 0 And Not ZbirnaJeStornirana(roditeljPre) Then   ' SABOTAZA: pisac ima svoju kopiju pravila (prvi red)\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 pisac prevezivanja ne odbija roditelja iz dva zaglavlja kao aktivnu zbirnu (isto pravilo)",
+    ),
+    "s95-pad-revizije-je-prazno": (
+        "modIntegritet.bas",
+        "    GetIntegritetRows = pad\n",
+        "    GetIntegritetRows = Empty: outPalih = 0   ' SABOTAZA: pad revizije izgleda kao cist integritet\n",
+        "T_S95_PadRevizijeNijeCisto",
+        "431 pad cele revizije je red GRESKA sa razlogom, ne prazan snimak",
+    ),
+    "s95-e3-istorija-je-aktivna": (
+        "modDokumenta.bas",
+        "        If Not stornirane.Exists(UCase$(zbrID)) Then\n",
+        "        If True Then   ' SABOTAZA: stornirana zbirna i dalje drzi otpremnicu\n",
+        "T_S95_ClanstvoIstorijaNijeKvar",
+        "432 E3: clanstvo u storniranoj zbirnoj je istorija, ne kvar",
+    ),
+    # S9-5 rucna provera (21.11.2026): red UKUPNO i redosled liste INTEGRITET.
+    "s95-ukupno-filtrira": (
+        "modScrOporavak.bas",
+        "        If Len(q) > 0 And r > nFiksnih Then\n",
+        "        If Len(q) > 0 Then   ' SABOTAZA: red UKUPNO prolazi kroz pretragu\n",
+        "T_S95_UkupnoIznadPretrage",
+        "433 red UKUPNO ostaje prvi i kad pretraga suzi listu (broj ne zavisi od pretrage)",
+    ),
+    "s95-naslov-dopuna-vracena": (
+        "modScrOporavak.bas",
+        "        ' (IntegritetSaUkupnim); isti razlog kao modScrBankaUvoz.\n",
+        "        ' (IntegritetSaUkupnim); isti razlog kao modScrBankaUvoz.\n        Case \"INTEGRITET\": Scr_NaslovDopuna = IntegritetUkupnoTekst()   ' SABOTAZA: broj se vraca u naslov\n",
+        "T_S95_UkupnoIznadPretrage",
+        "433 naslov liste INTEGRITET nema dopunu (labela fiksne sirine je odsece)",
+    ),
+    "s95-integritet-sort-ljuske": (
+        "modScrOporavak.bas",
+        "    If Scr_Lista() = \"INTEGRITET\" Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "    ' SABOTAZA: lista integriteta na pravilu ljuske\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 ljuska ne sortira listu INTEGRITET (redosled revizije)",
+    ),
+    "s95-oporavak-sve-liste-poslovne": (
+        "modScrOporavak.bas",
+        "    If Scr_Lista() = \"INTEGRITET\" Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI\n",
+        "    Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI   ' SABOTAZA: sve liste Oporavka poslovne\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 ostale liste Oporavka ostaju na pravilu ljuske",
+    ),
+    "s95-razlog-sorta-kartice": (
+        "modOtkupUI.bas",
+        "            razlogSorta = modUiScreens.ScrSortRazlog(mScreen)\n",
+        "            razlogSorta = \"\"   ' SABOTAZA: ljuska ne pita ekran za razlog\n",
+        "T_S95_IntegritetRedosledRevizije",
+        "434 klik na zaglavlje kaze razlog liste integriteta, ne kartice",
     ),
     # S94-REV-02: dupli OldDocID tiho daje red umesto greske.
     "s94-prefill-dupli-prvi-red": (

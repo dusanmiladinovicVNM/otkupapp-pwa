@@ -682,6 +682,21 @@ Public Function ScrSort(ByVal kljuc As String) As String
     Err.Clear
 End Function
 
+' Zasto lista sa POSLOVNIM redosledom ne prima sort po koloni -- tekst poruke
+' koju ljuska pokaze na klik po zaglavlju. Opciono: prazno = ljuska kaze svoj
+' razlog (kartica, KART-HRON-01). Uvedeno uz listu INTEGRITET (S9-5, rucna
+' provera): razlog kartice ("saldo kartice vazi samo tim redom") tamo nije istina.
+Public Function ScrSortRazlog(ByVal kljuc As String) As String
+    Dim m As String, v As Variant
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    v = Application.Run(m & ".Scr_SortRazlog")
+    If ScrRunIshod(v, m & ".Scr_SortRazlog") = SCR_RUN_VRATIO Then ScrSortRazlog = CStr(v)
+    Err.Clear
+End Function
+
 ' Radnje nad izabranim redom za trenutno aktivnu listu ekrana.
 ' Koliko stavki na ovom ekranu CEKA operatera. Opciono: ekran koji nema sta da
 ' broji je ne implementira i dobija nulu.

@@ -315,6 +315,9 @@ SCR_UGOVOR = {
     "scr_dozvoljen", "scr_sort", "scr_deaktiviraj", "scr_imanesacuvano",
     # v6-ui-212: ulazak na scenu (Banka uvozi izvode pri ulasku).
     "scr_aktiviraj",
+    # S9-5 rucna provera: razlog poslovnog redosleda za poruku na klik po
+    # zaglavlju (modUiScreens.ScrSortRazlog).
+    "scr_sortrazlog",
 }
 
 

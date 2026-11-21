@@ -611,7 +611,7 @@ Private Function KolonaImaPodatak(ByRef arr As Variant, ByVal col As Long, ByVal
 End Function
 
 ' Vezne (dokumentni lanac) kolone: nova takva kolona prazna = red stize razvezan
-' (GetVerwaisteDokumente ga posle prijavi). NE ukljucuje audit (te se pune unapred).
+' (integritet E2/E3/E4 ga posle prijavi). NE ukljucuje audit (te se pune unapred).
 Private Function JeKriticnaKolona(ByVal tabela As String, ByVal kolona As String) As Boolean
     Dim s As String: s = LCase$(Trim$(kolona))
     ' identifikacione/vezne kolone: zavrsavaju se na "id"

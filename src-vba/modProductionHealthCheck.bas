@@ -40,7 +40,6 @@ Public Sub RunProductionHealthCheck()
     Check_OtkupPaymentConsistency
     Check_KooperantOtkupReconciliation
     Check_FakturaIznosReconciliation
-    Check_OtkupOtpremnicaCrossZbirnaLinks
     Check_SEFOutboundConsistency
     Check_DocumentSoftDeleteReferences
     Check_GoogleSyncHealth
@@ -834,79 +833,6 @@ Public Function FakturaIznosNalazi() As Collection
     Next i
 End Function
 
-' ============================================================
-' CHECK 7: OTKUP -> OTPREMNICA BROJZBIRNE LINK
-' ============================================================
-
-Private Sub Check_OtkupOtpremnicaCrossZbirnaLinks()
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-
-    If IsEmpty(data) Then
-        HealthWarn "Otkup/Otpremnica cross-zbirna links", "tblOtkup is empty."
-        Exit Sub
-    End If
-
-    Dim colOtkID As Long
-    Dim colOtkBrojZbirne As Long
-    Dim colOtpremnicaID As Long
-    Dim colStorno As Long
-
-    colOtkID = RequireColumnIndex(TBL_OTKUP, "OtkupID", "Check_OtkupOtpremnicaCrossZbirnaLinks")
-    colOtkBrojZbirne = RequireColumnIndex(TBL_OTKUP, "BrojZbirne", "Check_OtkupOtpremnicaCrossZbirnaLinks")
-    colOtpremnicaID = RequireColumnIndex(TBL_OTKUP, "OtpremnicaID", "Check_OtkupOtpremnicaCrossZbirnaLinks")
-    colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "Check_OtkupOtpremnicaCrossZbirnaLinks")
-
-    Dim i As Long
-    Dim badCount As Long
-    Dim otkupID As String
-    Dim otkZbr As String
-    Dim otpID As String
-    Dim otpZbr As String
-
-    For i = 1 To UBound(data, 1)
-
-        If IsStorniranoValue(data(i, colStorno)) Then GoTo NextRow
-
-        otkupID = Trim$(CStr(data(i, colOtkID)))
-        otkZbr = Trim$(CStr(data(i, colOtkBrojZbirne)))
-        otpID = Trim$(CStr(data(i, colOtpremnicaID)))
-
-        If Len(otpID) > 0 Then
-            If Not ActiveRowExists(TBL_OTPREMNICA, "OtpremnicaID", otpID) Then
-                badCount = badCount + 1
-                HealthFail "Otkup points to missing/stornirana otpremnica", _
-                           "OtkupID=" & otkupID & " OtpremnicaID=" & otpID
-            Else
-                otpZbr = Trim$(CStr(GetValueByKeySafe(TBL_OTPREMNICA, "OtpremnicaID", otpID, "BrojZbirne")))
-
-                If Len(otkZbr) > 0 And Len(otpZbr) > 0 Then
-                    If StrComp(otkZbr, otpZbr, vbTextCompare) <> 0 Then
-                        badCount = badCount + 1
-                        HealthFail "Cross-zbirna otkup/otpremnica link", _
-                                   "OtkupID=" & otkupID & _
-                                   " Otkup.BrojZbirne=" & otkZbr & _
-                                   " OtpremnicaID=" & otpID & _
-                                   " Otpremnica.BrojZbirne=" & otpZbr
-                    End If
-                End If
-            End If
-        End If
-
-NextRow:
-    Next i
-
-    If badCount = 0 Then
-        HealthOk "Otkup/Otpremnica BrojZbirne links are valid", ""
-    End If
-
-    Exit Sub
-
-EH:
-    HealthFail "Otkup/Otpremnica link check failed", FormatHealthErr()
-End Sub
 
 ' ============================================================
 ' CHECK 8: SEF OUTBOUND CONSISTENCY
@@ -1010,10 +936,9 @@ Private Sub Check_DocumentSoftDeleteReferences()
 
     Dim badCount As Long
 
-    badCount = badCount + CountActiveReferencesToStornirano( _
-        TBL_OTKUP, "OtkupID", "OtpremnicaID", _
-        TBL_OTPREMNICA, "OtpremnicaID", _
-        "Active otkup references stornirana otpremnica")
+    ' Otkup -> otpremnica vise nije kolona na otkupu (S4.1e): kolona
+    ' Otkup.OtpremnicaID nema pisca, pa je ova grana uvek brojala nulu
+    ' (SLED-INV-02). Clanstvo otkupa u otpremnici meri integritet E2 (S9-5).
 
     ' Prijemnica -> faktura vise nije veza na zaglavlju (S6 korak 5): kes
     ' FakturaID se ne cita, a fakturisanost je izvedena iz aktivnih linija --
@@ -1240,58 +1165,6 @@ Private Function CountAktivneLinijeNadStorniranomPrijemnicom(ByVal checkName As 
                 End If
             End If
         End If
-    Next i
-
-    Exit Function
-
-EH:
-    HealthFail checkName & " failed", FormatHealthErr()
-End Function
-
-Private Function CountActiveReferencesToStornirano(ByVal sourceTable As String, _
-                                                   ByVal sourceIDColumn As String, _
-                                                   ByVal sourceRefColumn As String, _
-                                                   ByVal targetTable As String, _
-                                                   ByVal targetIDColumn As String, _
-                                                   ByVal checkName As String) As Long
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(sourceTable)
-
-    If IsEmpty(data) Then Exit Function
-
-    Dim colSourceID As Long
-    Dim colRef As Long
-    Dim colSourceStorno As Long
-
-    colSourceID = RequireColumnIndex(sourceTable, sourceIDColumn, "CountActiveReferencesToStornirano")
-    colRef = RequireColumnIndex(sourceTable, sourceRefColumn, "CountActiveReferencesToStornirano")
-    colSourceStorno = GetColumnIndex(sourceTable, "Stornirano")
-
-    Dim i As Long
-    Dim sourceID As String
-    Dim refID As String
-
-    For i = 1 To UBound(data, 1)
-
-        If colSourceStorno > 0 Then
-            If IsStorniranoValue(data(i, colSourceStorno)) Then GoTo NextRow
-        End If
-
-        sourceID = Trim$(CStr(data(i, colSourceID)))
-        refID = Trim$(CStr(data(i, colRef)))
-
-        If Len(refID) > 0 Then
-            If IsStorniranoRow(targetTable, targetIDColumn, refID) Then
-                CountActiveReferencesToStornirano = CountActiveReferencesToStornirano + 1
-                HealthFail checkName, _
-                           sourceTable & "." & sourceIDColumn & "=" & sourceID & _
-                           " -> " & targetTable & "." & targetIDColumn & "=" & refID
-            End If
-        End If
-
-NextRow:
     Next i
 
     Exit Function
@@ -1572,41 +1445,6 @@ Private Function IsStorniranoRow(ByVal tableName As String, _
             Exit Function
         End If
     Next i
-End Function
-
-Private Function GetValueByKeySafe(ByVal tableName As String, _
-                                   ByVal keyColumn As String, _
-                                   ByVal keyValue As String, _
-                                   ByVal returnColumn As String) As Variant
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(tableName)
-
-    If IsEmpty(data) Then
-        GetValueByKeySafe = Empty
-        Exit Function
-    End If
-
-    Dim colKey As Long
-    Dim colReturn As Long
-
-    colKey = RequireColumnIndex(tableName, keyColumn, "GetValueByKeySafe")
-    colReturn = RequireColumnIndex(tableName, returnColumn, "GetValueByKeySafe")
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colKey))) = Trim$(keyValue) Then
-            GetValueByKeySafe = data(i, colReturn)
-            Exit Function
-        End If
-    Next i
-
-    GetValueByKeySafe = Empty
-    Exit Function
-
-EH:
-    GetValueByKeySafe = Empty
 End Function
 
 Private Function FormatHealthErr() As String

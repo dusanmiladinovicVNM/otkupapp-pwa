@@ -1032,6 +1032,10 @@ Public Sub TekucaPredajaOtkupa(ByVal otkupID As String, _
 
     Dim zbrID As String
     zbrID = modDokumenta.AktivnaZbirnaZaOtpremnicu(outOtpremnicaID)
+    ' Od S9-5 (S95-ODL-02) citac clanstva sam odbija clanstvo na zbirnu koja ne
+    ' postoji tacno jednom. Provera ispod ostaje za ID koji se od zaglavlja razlikuje
+    ' samo u velikim slovima (citac poredi bez obzira na velika slova, LookupValue
+    ' ne) -- greska koja imenuje zbirnu, ne prazan broj.
     If Len(zbrID) > 0 Then
         If Len(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_ID)))) = 0 Then
             Err.Raise vbObjectError + 8144, "modStammdatenSync.TekucaPredajaOtkupa", _

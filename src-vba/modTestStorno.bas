@@ -64,6 +64,12 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_OTPREMNICA_STAVKE
     tx.AddTableSnapshot TBL_ZBIRNA
     tx.AddTableSnapshot TBL_ZBIRNA_STAVKE
+    ' Clanstvo (S9-5): SeedClanstvoZbirne pise tblZbirnaIzvori, a ispravka zbirne
+    ' i otpremnice pise oba zapisa clanstva. Bez snimka je red clanstva na zbirnu
+    ' koju rollback obrise PREZIVEO suite; slab E3 citac ga je do S9-5 tiho trpeo,
+    ' a od S95-ODL-02 ga odbija -- i obara sledecu suite (BFP, 384 pada).
+    tx.AddTableSnapshot TBL_ZBIRNA_IZVORI
+    tx.AddTableSnapshot TBL_OTPREMNICA_IZVORI
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_OTKUP_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA

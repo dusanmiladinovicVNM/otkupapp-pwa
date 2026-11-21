@@ -95,6 +95,8 @@ Private mIzvorCitanjaTest As Long
 ' pretrage. Isti obrazac kao snimak ekrana Izvestaji (par. 23.9/S2).
 Private mIntSnimak As Variant
 Private mIntGen As Long
+Private mIntBroj As Long      ' nalaza u snimku -- iz ISTOG prolaza (KI-099)
+Private mIntPalih As Long     ' provera koje nisu izvrsene u tom prolazu
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -124,18 +126,30 @@ Public Function Scr_NaslovDopuna() As String
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_NaslovDopuna = mCiljZbirna
         Case "PALETE":     Scr_NaslovDopuna = mCiljPrijemnica
-        Case "INTEGRITET"
-            ' UKUPAN broj nalaza, ne broj vidljivih redova: pretraga suzava
-            ' mrezu, a "koliko ih ima" ne sme da zavisi od toga sta je operater
-            ' ukucao. Isti natpis koji je nosio legacy panel frmOtkupAPP
-            ' ("INTEGRITET -- N neuskladjenih zapisa").
-            '
-            ' Snimak se trazi OVDE, a ne samo u Scr_Rows: ljuska naslov crta PRE
-            ' mreze (RefreshGridTitle pa ReloadGrid), pa bi broj prvi put bio
-            ' prazan i pojavio se tek na sledecem osvezavanju. Poziv je
-            ' besplatan -- mreza odmah ispod dobija isti snimak iz kesa.
-            Scr_NaslovDopuna = CStr(IntegritetNalaza()) & " " & Poruka("OTKUI_OPO_INT_NALAZA")
+        ' INTEGRITET namerno NEMA dopunu (S9-5, rucna provera 21.11.2026): naslov
+        ' je labela fiksne sirine (grdTitle, 180pt), "Neuskladjeni zapisi
+        ' (revizija tabela)" je vec puni, pa se broj nalaza odsecao CEO -- bio je
+        ' tacan (KI-099), a operater ga nije video. Broj je prvi red liste
+        ' (IntegritetSaUkupnim); isti razlog kao modScrBankaUvoz.
     End Select
+End Function
+
+' Lista INTEGRITET je IZVESTAJ, ne spisak: snimak ide redom provera, a kod
+' provere stoji samo na naslovu bloka -- zaglavlje kolona i nalazi su ispod
+' njega. Bez ovoga je vazilo pravilo ljuske ("druga kolona opadajuce", napisano
+' za datum dokumenta): redovi su se slagali po tekstu Detalja, naslovi blokova
+' su padali na poslednju stranu, zaglavlja medju nalaze, i nalaz se vise nije
+' mogao pripisati proveri (rucna provera S9-5, 21.11.2026). Ostale liste ekrana
+' ostaju na pravilu ljuske (datum).
+Public Function Scr_Sort() As String
+    If Scr_Lista() = "INTEGRITET" Then Scr_Sort = modUiScreens.SCR_SORT_POSLOVNI
+End Function
+
+' Zasto klik na zaglavlje ne sortira -- ljuska to kaze u traci poruka. Bez
+' ovoga bi lista integriteta dobila razlog kartice ("saldo kartice vazi samo
+' tim redom"), koji ovde nije istina.
+Public Function Scr_SortRazlog() As String
+    If Scr_Lista() = "INTEGRITET" Then Scr_SortRazlog = Poruka("OTKUI_MSG_OPO_INT_REDOSLED")
 End Function
 
 ' Koliko stavki ceka na ovom ekranu. Ljuska ovo crta uz stavku menija, pa se broj
@@ -836,8 +850,10 @@ End Function
 
 ' Zajednicko telo za liste koje dolaze kao 2D niz. Brojku "osiroceno" u zoni od
 ' S9-4 racuna OsveziBrojkeZone (KI-085), ne ova rutina.
+' nFiksnih: prvih toliko redova src-a ne prolazi kroz pretragu (red UKUPNO liste
+' INTEGRITET -- broj ne sme da zavisi od toga sta je operater ukucao).
 Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol As Long, _
-                        ByVal q As String) As Variant
+                        ByVal q As String, Optional ByVal nFiksnih As Long = 0) As Variant
     Dim r As Long, c As Long, n As Long, outA() As Variant, hay As String
     On Error GoTo EH
     mStep = "2D lista"
@@ -852,7 +868,7 @@ Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol 
         For c = 1 To nCol
             hay = hay & "|" & NzToText(src(r, c))
         Next c
-        If Len(q) > 0 Then
+        If Len(q) > 0 And r > nFiksnih Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
@@ -1181,7 +1197,7 @@ Private Function IntegritetSnimak() As Variant
         IntegritetSnimak = mIntSnimak
         Exit Function
     End If
-    mIntSnimak = GetIntegritetRows()
+    mIntSnimak = GetIntegritetRows(mIntBroj, mIntPalih)
     mIntGen = modUiData.DataGeneracija()
     ' Generacija ume da bude 0 na startu; snimak bi se tada gradio iznova pri
     ' svakom pozivu. Jedinica znaci "snimak postoji", a Scr_ResetCache ga i
@@ -1190,17 +1206,51 @@ Private Function IntegritetSnimak() As Variant
     IntegritetSnimak = mIntSnimak
 End Function
 
-' UKUPAN broj nalaza iz SNIMKA. Namerno se ne cita modIntegritet.IntegritetUkupno:
-' on drzi brojku POSLEDNJEG prolaza bilo kog pozivaoca (Admin dugme pokrece svoj),
-' a broj u naslovu mora da opisuje bas listu koju operater gleda.
+' UKUPAN broj NALAZA iz snimka -- broj koji je dao ISTI prolaz kroz provere
+' (GetIntegritetRows, outUkupno). Ne UBound snimka: snimak nosi i naslov bloka,
+' zaglavlje kolona i prazan red izmedju blokova, pa je do S9-5 naslov za dva
+' nalaza u dva bloka kazao "7" (KI-099). Brojka se ne cita posle prolaza iz
+' modula provera: tamo bi bila stanje poslednjeg pozivaoca (Admin dugme pokrece
+' svoj), a red UKUPNO (do rucne provere S9-5: naslov) mora da opisuje bas listu
+' koju operater gleda.
 Private Function IntegritetNalaza() As Long
     Dim src As Variant
     src = IntegritetSnimak()
-    If IsArray(src) Then IntegritetNalaza = UBound(src, 1)
+    IntegritetNalaza = mIntBroj
 End Function
 
+' Red UKUPNO je PRVI red liste (S9-5, rucna provera 21.11.2026): broj nalaza i
+' neizvrsenih provera istog prolaza (KI-099). Do tada je stajao u dopuni naslova,
+' koju labela fiksne sirine odseca (v. Scr_NaslovDopuna). Red ne prolazi kroz
+' pretragu (nFiksnih = 1), a lista se ne sortira (Scr_Sort), pa ostaje na vrhu.
 Private Function RowsIntegritet(ByVal q As String) As Variant
-    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q)
+    RowsIntegritet = Rows2D(IntegritetSaUkupnim(), IntGridCols(), 2, q, 1)
+End Function
+
+' Snimak sa redom UKUPNO na vrhu. Snimak bez ijednog bloka daje samo taj red --
+' "0 neuskladjenih zapisa" je odgovor, prazna mreza nije.
+Private Function IntegritetSaUkupnim() As Variant
+    Dim src As Variant, outA() As Variant, n As Long, r As Long, c As Long
+    src = IntegritetSnimak()
+    If IsArray(src) Then n = UBound(src, 1)
+    ReDim outA(1 To n + 1, 1 To 2)
+    outA(1, 1) = Poruka("OTKUI_OPO_INT_UKUPNO")
+    outA(1, 2) = IntegritetUkupnoTekst()
+    For r = 1 To n
+        For c = 1 To 2
+            outA(r + 1, c) = src(r, c)
+        Next c
+    Next r
+    IntegritetSaUkupnim = outA
+End Function
+
+' Tekst reda UKUPNO: broj NALAZA istog prolaza (ne redova snimka, KI-099) i, kad
+' ih ima, broj provera koje nisu izvrsene -- pala provera nije nalaz, ali "0
+' neuskladjenih" uz nju nije cist integritet.
+Private Function IntegritetUkupnoTekst() As String
+    IntegritetUkupnoTekst = CStr(IntegritetNalaza()) & " " & Poruka("OTKUI_OPO_INT_NALAZA")
+    If mIntPalih > 0 Then IntegritetUkupnoTekst = IntegritetUkupnoTekst & ", " & _
+        Poruka("OTKUI_OPO_INT_PALO") & " " & CStr(mIntPalih)
 End Function
 
 '------------------------------------------------------------ TEST SEAM

@@ -6,18 +6,17 @@ Option Explicit
 '
 ' Read-only. NE menja poslovne podatke. Rezultat je sheet
 ' INTEGRITET_PROVERE sa punim listama neuskladjenih zapisa (filter/
-' sort/print direktno u Excelu) + zbirni MsgBox.
+' sort/print direktno u Excelu) + zbirni MsgBox; isti prolaz bez sheet-a
+' daje redove liste INTEGRITET u Oporavku (GetIntegritetRows).
 '
-' Ulaz: RunIntegritetProvere (Alt+F8; Admin dugme se dodaje kasnije).
+' Ulaz: RunIntegritetProvere (Admin dugme "Integritet provere (tabele)").
 '
-' Etapa 1 (ova): A1 (otpremnica vs zbirna kg), A2 (manjak/visak
-' zbirna->prijemnica), B1 (verwaist otpremnice/prijemnice),
-' B2 (otkupi bez otpremnice). Reuse postojecih funkcija:
-'   - ValidateZbirna            (modDokumenta)
-'   - GetVerwaisteDokumente     (modDokumenta)
-'   - GetUnlinkedOtkupi         (modSledljivost)
+' S9-5 (plan 14.69, docs/DOMEN/SLEDLJIVOST.md SLED-INV-01/02): revizija meri
+' MODEL -- ivice E2, E3 i E4 istim sudom koji drze strogi citaci -- a ne
+' kolone bez pisca ni labelu broja zbirne. Provere starog modela (A1, B1, B4,
+' B5, B5b, B6) su obrisane, ne prevedene (plan 14.8 t. 11). Katalog provera:
+' docs/INTEGRITET_PROVERE.md.
 ' ============================================================
-
 Private Const INTEGRITET_SHEET As String = "INTEGRITET_PROVERE"
 Private Const PRAG_MANJAK_PCT As Double = 10#   ' manjak% iznad ovoga = "za proveru"
 Private Const PRAG_VISAK_PCT As Double = 5#     ' visak do ovoga se NE prijavljuje
@@ -33,8 +32,10 @@ Private m_ws As Worksheet
 Private m_row As Long
 Private m_summary As String
 Private m_totalIssues As Long
+Private m_palih As Long          ' provere koje nisu izvrsene (WriteErr); nisu nalazi
 Private m_rows As Collection      ' ravan spisak nalaza: Array(code, detalj) -- za ListBox
 Private m_toSheet As Boolean      ' True = pisi i u INTEGRITET sheet; False = samo memorija
+Private m_padTest As Boolean      ' TEST SEAM (431): pad cele revizije pre prve provere
 
 ' ============================================================
 ' PUBLIC ENTRY POINT
@@ -50,6 +51,7 @@ Public Sub RunIntegritetProvere(Optional ByVal showSummary As Boolean = True)
     Set m_rows = New Collection
     m_summary = ""
     m_totalIssues = 0
+    m_palih = 0
 
     RunAllChecks
 
@@ -62,8 +64,9 @@ Public Sub RunIntegritetProvere(Optional ByVal showSummary As Boolean = True)
         MsgBox "Integritet provere zavrsene." & vbCrLf & vbCrLf & _
                m_summary & vbCrLf & _
                "UKUPNO: " & CStr(m_totalIssues) & " neuskladjenih zapisa." & vbCrLf & vbCrLf & _
+               IIf(m_palih > 0, "NIJE IZVRSENO provera: " & CStr(m_palih) & vbCrLf & vbCrLf, "") & _
                "Detalji: sheet '" & INTEGRITET_SHEET & "'.", _
-               IIf(m_totalIssues > 0, vbExclamation, vbInformation), APP_NAME
+               IIf(m_totalIssues + m_palih > 0, vbExclamation, vbInformation), APP_NAME
     End If
     Exit Sub
 
@@ -74,37 +77,59 @@ End Sub
 
 ' Ravan spisak nalaza (samo problemi) kao 2D(1..n,1..2): Provera | Detalj.
 ' Ne dira sheet. Za in-app ListBox prikaz (frmOtkupAPP overlay).
-Public Function GetIntegritetRows() As Variant
+' outUkupno / outPalih: broj nalaza i palih provera ISTOG prolaza (KI-099).
+Public Function GetIntegritetRows(Optional ByRef outUkupno As Long, _
+                                  Optional ByRef outPalih As Long) As Variant
     On Error GoTo EH
+    outUkupno = 0
+    outPalih = 0
 
     m_toSheet = False
     Set m_rows = New Collection
     m_summary = ""
     m_totalIssues = 0
+    m_palih = 0
 
     RunAllChecks
 
+    outUkupno = m_totalIssues
+    outPalih = m_palih
     GetIntegritetRows = CollToArray(m_rows, 2)
     Exit Function
 
 EH:
+    ' Pad CELE revizije (van handlera pojedinacnih provera) NIJE "nema nalaza"
+    ' (S95-REV-02): Empty uz nule bi u naslovu liste bio "0 neuskladjenih
+    ' zapisa", isto kao cist integritet. Zato snimak nosi red GRESKA sa razlogom,
+    ' a pad se broji kao neizvrsena provera.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "modIntegritet.GetIntegritetRows"
-    GetIntegritetRows = Empty
+    Dim pad(1 To 1, 1 To 2) As Variant
+    pad(1, 1) = "INTEGRITET"
+    pad(1, 2) = "GRESKA: revizija nije izvrsena -- " & errDesc
+    outUkupno = 0
+    outPalih = 1
+    GetIntegritetRows = pad
 End Function
 
-' Broj problema iz poslednjeg prolaza.
-Public Function IntegritetUkupno() As Long
-    IntegritetUkupno = m_totalIssues
-End Function
+' TEST SEAM (S95-REV-02, test 431): podmece pad CELE revizije, van handlera
+' pojedinacnih provera. Tvrdo gejtovan: postavljac odbija rad van test rezima, a
+' RunAllChecks ponovo pita IsTestMode. Gasi ga i modTest.ResetSeamova.
+Public Sub IntegritetPadTestSet(ByVal ukljuci As Boolean)
+    If ukljuci And Not IsTestMode() Then Exit Sub
+    m_padTest = ukljuci
+End Sub
 
 Private Sub RunAllChecks()
-    Chk_A1_OtpremnicaVsZbirna
+    If m_padTest Then
+        If IsTestMode() Then Err.Raise vbObjectError + 9711, "modIntegritet.RunAllChecks", _
+                                       "TEST: revizija pada pre ijedne provere"
+    End If
+    Chk_E2_ClanstvoOtpremnice
+    Chk_E3_ClanstvoZbirne
+    Chk_E4_PrijemnicaBezAktivneZbirne
     Chk_A2_ManjakAnomalije
-    Chk_B1_Verwaiste
-    Chk_B4_DanglingBrojZbirne
-    Chk_B5_PrijemnicaBezZbirne
-    Chk_B5b_OtpremnicaBezZbirne
-    Chk_B6_ZbirnaCaseMismatch
     Chk_B7_ZbirnaNulaKg
     Chk_B8_DvosmislenBrojZbirne
     Chk_B9_ZbirnaBezIdentiteta
@@ -375,43 +400,28 @@ Private Sub KulVerzijeTabele(ByVal outC As Collection, ByVal tbl As String, ByVa
     d = GetTableData(tbl)
     If Not IsArray(d) Then Exit Sub
 
-    Dim cId As Long, cBr As Long, cVr As Long, cSo As Long, cSto As Long, cOdID As Long, cOd As Long
+    Dim cId As Long, cBr As Long, cVr As Long, cSo As Long, cSto As Long, cOdID As Long
     cId = RequireColumnIndex(tbl, colId, SRC)
     cBr = RequireColumnIndex(tbl, colBr, SRC)
     cVr = RequireColumnIndex(tbl, colVr, SRC)
     cSo = RequireColumnIndex(tbl, colSo, SRC)
     cSto = RequireColumnIndex(tbl, COL_STORNIRANO, SRC)
-    cOdID = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD_ID)
-    cOd = GetColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD)
-    If cOdID = 0 And cOd = 0 Then Exit Sub
+    ' ID-trag verzije (IspravkaOdID) kanon nosi za otpremnicu i zbirnu (PR #471),
+    ' pa se cita STROGO. Rezervna grana po broju-obliku traga (IspravkaOd, "zbirna
+    ' pre PR #471") je obrisana u S9-5 (N16): bila je nedostizna, a po broju je
+    ' birala prethodnu verziju pogadjanjem.
+    cOdID = RequireColumnIndex(tbl, COL_TRACE_ISPRAVKA_OD_ID, SRC)
 
     Dim poID As Object
     Set poID = KulRedPoID(d, tbl, colId)
 
-    Dim i As Long, j As Long, k As Long, prevID As String, prevBr As String, pogodaka As Long
+    Dim i As Long, j As Long, prevID As String
     Dim tekst As String, prevTekst As String
     For i = 1 To UBound(d, 1)
         j = 0
-        prevID = ""
-        If cOdID > 0 Then prevID = Trim$(NzToText(d(i, cOdID)))
+        prevID = Trim$(NzToText(d(i, cOdID)))
         If Len(prevID) > 0 Then
             If poID.Exists(prevID) Then j = CLng(poID(prevID))
-        ElseIf cOdID = 0 Then
-            ' zbirna pre PR #471: prethodna samo po broju, tacno jedan storniran pogodak
-            prevBr = Trim$(NzToText(d(i, cOd)))
-            If Len(prevBr) > 0 Then
-                pogodaka = 0
-                For k = 1 To UBound(d, 1)
-                    If k <> i Then
-                        If StrComp(Trim$(NzToText(d(k, cBr))), prevBr, vbTextCompare) = 0 And _
-                           StrComp(Trim$(NzToText(d(k, cSto))), "Da", vbTextCompare) = 0 Then
-                            pogodaka = pogodaka + 1
-                            j = k
-                        End If
-                    End If
-                Next k
-                If pogodaka <> 1 Then j = 0
-            End If
         End If
         If j > 0 Then
             tekst = Trim$(NzToText(d(i, cVr))) & " / " & Trim$(NzToText(d(i, cSo)))
@@ -567,43 +577,72 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK A1: OTPREMNICA vs ZBIRNA (Sigma kg po BrojZbirne)
+' CHECK E2 / E3 / E4: IVICE MODELA (S9-5, SLED-INV-01)
 ' ============================================================
-' Reuse ValidateZbirna po svakom BrojZbirne (agregira Klasa I+II).
-' Flag gde ValidKg = False (|SumaOtpremnica - ZbirnaUkupno| >= 0.01).
+' Svaka ivica razresava tacno jednom: roditelj i dete postoje tacno jednom, a
+' aktivno dete ima aktivnog roditelja. Pravilo se OVDE NE implementira ponovo:
+' isti sud drze strogi citaci koje zovu ekrani, izvestaji i jezgro grafa
+' (modSledljivost), samo ga revizija sakuplja red po red umesto da stane na
+' prvom kvaru (S95-ODL-01, obrazac modAmbalaza.AmbKnjigaNalazi).
+'
+' Do S9-5 revizija nijednu od ovih ivica nije gledala (plan 14.64, N12), a
+' stare provere po broju zbirne (A1, B1, B4, B5, B5b, B6) merile su kolone bez
+' pisca ili labelu: B5b je prijavljivao SVAKU aktivnu otpremnicu, a B5 nije video
+' prijemnicu sa labelom bez veze (SLED-INV-02, N14).
+'
+' Pokrivenost ostalih ivica: E1 i E5 drze strogi citaci stavki -- njihov kvar je
+' GRESKA bloka koji ih cita (A2, A3), ne red po red (KI-081). E6 meri health 3/4,
+' E7 C1/C4, E8 D1/D2, E9/E10 health (GP pravilo).
 
-Private Sub Chk_A1_OtpremnicaVsZbirna()
+Private Sub Chk_E2_ClanstvoOtpremnice()
     On Error GoTo EH
+    WriteBlock "E2", "Clanstvo otpremnice (otkup <-> otpremnica) ne razresava tacno jednom", _
+               Array("Red", "OtpremnicaID", "OtkupID", "Razlog"), _
+               CollToArray(modDokumenta.ClanstvoOtpremnicaNalazi(), 4)
+    Exit Sub
+EH:
+    WriteErr "E2", Err.description
+End Sub
 
-    Dim brojevi As Object: Set brojevi = CreateObject("Scripting.Dictionary")
-    CollectBrojZbirne brojevi, TBL_ZBIRNA, COL_ZBR_BROJ
-    CollectBrojZbirne brojevi, TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE
+Private Sub Chk_E3_ClanstvoZbirne()
+    On Error GoTo EH
+    WriteBlock "E3", "Clanstvo zbirne (otpremnica <-> zbirna) ne razresava tacno jednom", _
+               Array("Red", "ZbirnaID", "OtpremnicaID", "Razlog"), _
+               CollToArray(modDokumenta.ClanstvoZbirneNalazi(), 4)
+    Exit Sub
+EH:
+    WriteErr "E3", Err.description
+End Sub
 
-    Dim bad As Collection: Set bad = New Collection
-    Dim kk As Variant, v As Variant
-    For Each kk In brojevi.keys
-        v = ValidateZbirna(CStr(kk))
-        If IsArray(v) Then
-            If v(3) = False Then
-                bad.Add Array(CStr(kk), v(0), v(1), v(2), v(6))
-            End If
-        End If
-    Next kk
-
-    WriteBlock "A1", "Otpremnica vs Zbirna (Sigma kg po BrojZbirne; ocekivano 0)", _
-               Array("BrojZbirne", "SumaOtpremnicaKg", "ZbirnaUkupnoKg", "RazlikaKg", "RazlikaAmb"), _
+' E4: aktivna prijemnica bez aktivne zbirne -- ISTO pravilo kao lista sirocadi
+' u Oporavku i pisac prevezivanja (modDokumenta.PrijemnicaE4Razlog, S95-ODL-07):
+' E4 prazan, zbirna ne postoji, nije jednoznacna (ZbirnaID u dva zaglavlja) ili je
+' stornirana. Revizija vidi i prijemnicu bez broja (S95-REV-01): pokvarena veza ne
+' sme da nestane zato sto fali labela. Popravka je "Prevezi prijemnicu" u
+' Oporavku; ovde se samo vidi.
+Private Sub Chk_E4_PrijemnicaBezAktivneZbirne()
+    On Error GoTo EH
+    Dim os As Variant, bad As Collection, i As Long
+    Set bad = New Collection
+    os = modDokumenta.GetOsirocenePrijemnice(True)
+    If IsArray(os) Then
+        For i = 1 To UBound(os, 1)
+            bad.Add Array(CStr(os(i, 8)), CStr(os(i, 1)), CStr(os(i, 6)), CStr(os(i, 5)), CStr(os(i, 7)))
+        Next i
+    End If
+    WriteBlock "E4", "Aktivna prijemnica bez aktivne zbirne (ivica E4)", _
+               Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne (labela)", "Kolicina", "Razlog"), _
                CollToArray(bad, 5)
     Exit Sub
-
 EH:
-    WriteErr "A1", Err.description
+    WriteErr "E4", Err.description
 End Sub
 
 ' ============================================================
 ' CHECK A2: MANJAK / VISAK zbirna -> prijemnica
 ' ============================================================
-' Semantika kao ReportManjak: manjak = Sigma zbirna.UkupnoKolicina
-' - Sigma prijemnica.Kolicina po BrojZbirne. Anomalije:
+' Semantika kao ReportManjak: manjak = Sigma stavki zbirne - Sigma stavki
+' aktivnih prijemnica te zbirne (E4), po ZbirnaID-u. Anomalije:
 '   - VISAK   (prijemnica > zbirna; manjak < 0),
 '   - NISTA PRIMLJENO (zbirna > 0, prijemnica = 0),
 '   - MANJAK > prag% (moguca greska unosa / veliki kalo).
@@ -611,69 +650,67 @@ End Sub
 Private Sub Chk_A2_ManjakAnomalije()
     On Error GoTo EH
 
-    ' S6 KORAK 3 (stavka 178, odluka 7): kg OBA dokumenta se cita iz STAVKI.
-    ' Zaglavlje zbirne od PR3 i zaglavlje prijemnice od S6 koraka 2 ne nose
-    ' kolicinu, pa je provera za kanonske dokumente poredila 0 sa 0 i cutala.
-    ' Citanje je STROGO unutar provere (obrazac B7): kvar stavki daje red GRESKA
-    ' za A2, a ne izmisljenu nulu koja bi lagala "nista primljeno".
-    Dim zbrDict As Object: Set zbrDict = ZbirStavkiPoBroju(TBL_ZBIRNA, 0, False)
-    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)
+    ' S9-5 (S95-ODL-03, KI-097): A2 cita ISTI agregat kao izvestaj manjka i ROBA
+    ' (OM) -- modHelpers.BuildManjakDict, po DOKUMENTU (ZbirnaID). Do S9-5 je A2
+    ' imao svoj racun po BROJU zbirne (labela prijemnice), pa je sabirao sve
+    ' zbirne istog broja. Kg oba dokumenta je sa STAVKI (S6 korak 3). Citanje je
+    ' STROGO (obrazac B7): kvar stavki daje red GRESKA za A2, a ne izmisljenu
+    ' nulu koja bi lagala "nista primljeno". Kvar E4 zbirne je svoj razlog --
+    ' prijem se ne zna, pa ni manjak.
+    Dim md As Object: Set md = BuildManjakDict()
 
     Dim bad As Collection: Set bad = New Collection
-    Dim kk As Variant
-    Dim zbrKg As Double, prijKg As Double, manjak As Double, pct As Double
-    Dim razlog As String
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsArray(data) Then data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If IsArray(data) Then
+        Dim cId As Long, cBroj As Long, i As Long, zid As String, broj As String
+        cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIntegritet.Chk_A2")
+        cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.Chk_A2")
 
-    For Each kk In zbrDict.keys
-        zbrKg = zbrDict(kk)
-        prijKg = 0
-        If prijDict.Exists(kk) Then prijKg = prijDict(kk)
-        manjak = zbrKg - prijKg
-        If zbrKg <> 0 Then pct = manjak / zbrKg * 100 Else pct = 0
+        Dim z As Variant, zbrKg As Double, prijKg As Double, manjak As Double, pct As Double
+        Dim razlog As String
+        For i = 1 To UBound(data, 1)
+            zid = UCase$(Trim$(NzToText(data(i, cId))))
+            broj = Trim$(NzToText(data(i, cBroj)))
+            ' Zbirna bez broja (nacrt) nije bila deo A2 ni pre S9-5.
+            If Len(broj) > 0 Then
+                zbrKg = 0: prijKg = 0
+                If md.Exists("#Z|" & zid) Then
+                    z = md("#Z|" & zid)
+                    zbrKg = CDbl(z(0))
+                    prijKg = CDbl(z(1))
+                End If
+                manjak = zbrKg - prijKg
+                If zbrKg <> 0 Then pct = manjak / zbrKg * 100 Else pct = 0
 
-        razlog = ""
-        If manjak < 0 And Abs(manjak) > zbrKg * (PRAG_VISAK_PCT / 100#) Then
-            razlog = "VISAK > " & CStr(PRAG_VISAK_PCT) & "% (prijemnica > zbirna)"
-        ElseIf prijKg <= 0.01 And zbrKg > 0.01 Then
-            razlog = "NISTA PRIMLJENO"
-        ElseIf pct > PRAG_MANJAK_PCT Then
-            razlog = "MANJAK > " & CStr(PRAG_MANJAK_PCT) & "%"
-        End If
+                razlog = ""
+                If md.Exists("#N|" & zid) Then
+                    razlog = "PRIJEM NEPOZNAT (kvar veze E4)"
+                ElseIf manjak < 0 And Abs(manjak) > zbrKg * (PRAG_VISAK_PCT / 100#) Then
+                    razlog = "VISAK > " & CStr(PRAG_VISAK_PCT) & "% (prijemnica > zbirna)"
+                ElseIf prijKg <= 0.01 And zbrKg > 0.01 Then
+                    razlog = "NISTA PRIMLJENO"
+                ElseIf pct > PRAG_MANJAK_PCT Then
+                    razlog = "MANJAK > " & CStr(PRAG_MANJAK_PCT) & "%"
+                End If
 
-        If Len(razlog) > 0 Then
-            bad.Add Array(CStr(kk), zbrKg, prijKg, manjak, Format$(pct, "0.0") & "%", razlog)
-        End If
-    Next kk
+                ' ZbirnaID ide na KRAJ reda: dve zbirne istog broja su dva reda,
+                ' a citaoci nalaza (broj prvi) ostaju isti.
+                If Len(razlog) > 0 Then
+                    bad.Add Array(broj, zbrKg, prijKg, manjak, Format$(pct, "0.0") & "%", razlog, _
+                                  Trim$(NzToText(data(i, cId))))
+                End If
+            End If
+        Next i
+    End If
 
-    WriteBlock "A2", "Manjak/visak zbirna->prijemnica (anomalije; prag " & CStr(PRAG_MANJAK_PCT) & "%)", _
-               Array("BrojZbirne", "ZbirnaKg", "PrijemnicaKg", "ManjakKg", "Manjak%", "Razlog"), _
-               CollToArray(bad, 6)
+    WriteBlock "A2", "Manjak/visak zbirna->prijemnica po dokumentu (anomalije; prag " & CStr(PRAG_MANJAK_PCT) & "%)", _
+               Array("BrojZbirne", "ZbirnaKg", "PrijemnicaKg", "ManjakKg", "Manjak%", "Razlog", "ZbirnaID"), _
+               CollToArray(bad, 7)
     Exit Sub
 
 EH:
     WriteErr "A2", Err.description
-End Sub
-
-' ============================================================
-' CHECK B1: VERWAIST otpremnice / prijemnice
-' ============================================================
-' Reuse GetVerwaisteDokumente: ziv dokument ciji je BrojZbirne
-' potpuno storniran (svi redovi te zbirne stornirani).
-
-Private Sub Chk_B1_Verwaiste()
-    On Error GoTo EH
-
-    WriteBlock "B1a", "Verwaist OTPREMNICE (ziva otpremnica, zbirna potpuno stornirana)", _
-               Array("OtpremnicaID", "BrojOtpremnice", "BrojZbirne", "VrstaVoca", "Kolicina"), _
-               GetVerwaisteDokumente("Otpremnica")
-
-    WriteBlock "B1b", "Verwaist PRIJEMNICE (ziva prijemnica, zbirna potpuno stornirana)", _
-               Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne", "Kupac", "Kolicina"), _
-               GetVerwaisteDokumente("Prijemnica")
-    Exit Sub
-
-EH:
-    WriteErr "B1", Err.description
 End Sub
 
 ' Reuse GetUnlinkedOtkupi: aktivan otkup bez OtpremnicaID
@@ -681,66 +718,6 @@ End Sub
 
 ' Aktivan otkup ciji OtpremnicaID pokazuje na storniranu/nepostojecu
 ' otpremnicu (reuse GetLostOtkupBlokovi; frmOtkupAPP baner ovo prikazuje).
-
-' ============================================================
-' CHECK B4: DANGLING BrojZbirne (zbirna uopste ne postoji)
-' ============================================================
-' Ziv dokument (otpremnica/prijemnica) sa BrojZbirne koji NE postoji ni u
-' jednom redu tblZbirna - ni aktivnom ni storniranom. Razlicito od verwaist
-' (B1), gde zbirna postoji ali je potpuno stornirana.
-
-Private Sub Chk_B4_DanglingBrojZbirne()
-    On Error GoTo EH
-
-    Dim zbrSet As Object: Set zbrSet = AllBrojeviInZbirna()
-
-    WriteBlock "B4a", "Otpremnice sa BrojZbirne koji ne postoji u tblZbirna", _
-               Array("OtpremnicaID", "BrojOtpremnice", "BrojZbirne", "Kolicina"), _
-               DanglingDocs(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, "", zbrSet, _
-                            ZbirOtpremnicaMeko())
-
-    WriteBlock "B4b", "Prijemnice sa BrojZbirne koji ne postoji u tblZbirna", _
-               Array("PrijemnicaID", "BrojPrijemnice", "BrojZbirne", "Kolicina"), _
-               DanglingDocs(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, "", zbrSet, _
-                            modDokumenta.ZbirStavkiPoPrijemniciMeko())
-    Exit Sub
-
-EH:
-    WriteErr "B4", Err.description
-End Sub
-
-' ============================================================
-' CHECK B5: PRIJEMNICA bez BrojZbirne (obavezna veza)
-' ============================================================
-
-Private Sub Chk_B5_PrijemnicaBezZbirne()
-    On Error GoTo EH
-    WriteBlock "B5", "Prijemnice bez BrojZbirne (obavezna veza)", _
-               Array("PrijemnicaID", "BrojPrijemnice", "Kolicina"), _
-               DocsBezZbirne(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, "", _
-                             modDokumenta.ZbirStavkiPoPrijemniciMeko())
-    Exit Sub
-
-EH:
-    WriteErr "B5", Err.description
-End Sub
-
-' ============================================================
-' CHECK B5b: OTPREMNICA bez BrojZbirne
-' ============================================================
-' (frmOtkupAPP startup baner ovo prikazuje -- audit je sada nadskup.)
-
-Private Sub Chk_B5b_OtpremnicaBezZbirne()
-    On Error GoTo EH
-    WriteBlock "B5b", "Otpremnice bez BrojZbirne (nije vezana za zbirnu)", _
-               Array("OtpremnicaID", "BrojOtpremnice", "Kolicina"), _
-               DocsBezZbirne(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, "", _
-                             ZbirOtpremnicaMeko())
-    Exit Sub
-
-EH:
-    WriteErr "B5b", Err.description
-End Sub
 
 ' ============================================================
 ' CHECK B7: ZBIRNA sa 0 (ili prazan) UkupnoKolicina
@@ -995,34 +972,6 @@ EH:
 End Sub
 
 ' ============================================================
-' CHECK B6: BrojZbirne case-mismatch (za normalizaciju)
-' ============================================================
-' Zapisi ciji se BrojZbirne poklapa sa zbirnom SAMO ignorisuci veliko/malo
-' slovo (npr. dok "s5/..." vs zbirna "S5/..."). Nije "ne postoji" (to je B4/
-' C2), ali je latentan problem: case-senzitivni delovi app-a (ReportManjak,
-' GetVerwaisteDokumente) ih tretiraju kao razlicite -> tiha greska. Advisory:
-' listaj sve za normalizaciju na tacan zapis iz tblZbirna.
-
-Private Sub Chk_B6_ZbirnaCaseMismatch()
-    On Error GoTo EH
-
-    Dim exactSet As Object, ciMap As Object
-    BuildZbirnaCaseMaps exactSet, ciMap
-
-    Dim bad As Collection: Set bad = New Collection
-    CollectCaseMismatch bad, "Otpremnica", TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ_ZBIRNE, exactSet, ciMap
-    CollectCaseMismatch bad, "Prijemnica", TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ_ZBIRNE, exactSet, ciMap
-    CollectCaseMismatch bad, "Otkup", TBL_OTKUP, COL_OTK_ID, COL_OTK_BROJ_ZBIRNE, exactSet, ciMap
-
-    WriteBlock "B6", "BrojZbirne se poklapa samo do velikog/malog slova (za normalizaciju)", _
-               Array("Tabela", "DokumentID", "BrojZbirne (napisano)", "Zbirna (kanon)"), CollToArray(bad, 4)
-    Exit Sub
-
-EH:
-    WriteErr "B6", Err.description
-End Sub
-
-' ============================================================
 ' CHECK C1 + C4: PALETA-STAVKA -> PRIJEMNICA
 ' ============================================================
 ' C1 = aktivna stavka bez zive prijemnice (prazan ili nepostojeci PrijemnicaID)
@@ -1030,11 +979,10 @@ End Sub
 '      druge klase -- isto pravilo koje pisac drzi tvrdo).
 ' C4 = aktivna stavka ka prijemnici koja postoji ali je STORNIRANA
 '      (kaskadni storno prijemnice ne dira tblPaletaStavka).
-'      + dokumentni tok te prijemnice: BrojZbirne (i sa stornirane prijemnice),
-'      Sigma kg/amb aktivne zbirne, naziv otkupnog mesta (preko otpremnica
-'      zbirne; fallback mirror-stanica zbirna preko tblZbirna.VozacID) i
-'      proizvodjac(i) = kooperanti otkupa te zbirne. Vise OM / proizvodjaca
-'      po zbirnoj se odvaja sa "; ".
+'      + dokumentni tok te prijemnice PO IVICAMA (S9-5): zbirna po E4 (broj,
+'      Sigma kg/amb), otkupna mesta otpremnica zbirne (fallback mirror-stanica
+'      po tblZbirna.VozacID) i proizvodjac(i) = kooperanti njihovih izvora.
+'      Vise OM / proizvodjaca po zbirnoj se odvaja sa "; ".
 
 Private Sub Chk_C1_C4_StavkaPrijemnica()
     On Error GoTo EH
@@ -1042,14 +990,18 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
     Dim allPrij As Object: Set allPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, False)
     Dim actPrij As Object: Set actPrij = IdSet(TBL_PRIJEMNICA, COL_PRJ_ID, True)
 
-    ' C4 dokumentni tok: prijemnica -> zbirna (Sigma kg/amb) -> OM + proizvodjaci.
-    Dim prijZbr As Object: Set prijZbr = PrijemnicaZbirnaMap()
+    ' C4 dokumentni tok PO IVICAMA (S9-5, S95-ODL-06): prijemnica ->
+    ' ZbirnaRoditeljID (i sa stornirane) -> zbirna po ID-u (broj, kg, gajbe) ->
+    ' otpremnice zbirne (OM) -> njihovi izvori (proizvodjaci). Do S9-5 je tok isao
+    ' po labeli broja zbirne i kolonama bez pisca, pa su OM i proizvodjac za
+    ' kanonske dokumente bili prazni, a kg zbir SVIH zbirnih tog broja.
+    Dim prijRod As Object: Set prijRod = BuildIdNameDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_DETE_ZBIRNA_ROD)
+    Dim zbrBroj As Object: Set zbrBroj = BuildIdNameDict(TBL_ZBIRNA, COL_ZBR_ID, COL_ZBR_BROJ)
     ' Kg i gajbe zbirne su na STAVKAMA (PR3; S6 korak 3). Ovde su samo prikaz uz
     ' nalaz, pa se citaju MEKO: kvar stavki zbirne ne sme da sakrije C1/C4.
-    Dim zbrKg As Object: Set zbrKg = ZbirStavkiPoBroju(TBL_ZBIRNA, 0, True)
-    Dim zbrAmb As Object: Set zbrAmb = ZbirStavkiPoBroju(TBL_ZBIRNA, 2, True)
-    Dim omByZbr As Object: Set omByZbr = OtkupnoMestoByZbirna()
-    Dim przByZbr As Object: Set przByZbr = ProizvodjacByZbirna()
+    Dim zbrStav As Object: Set zbrStav = ZbirStavkiZbirneMeko()
+    Dim stName As Object: Set stName = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
+    Dim koopName As Object: Set koopName = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
 
     Dim c1 As Collection: Set c1 = New Collection
     Dim c4 As Collection: Set c4 = New Collection
@@ -1070,7 +1022,7 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
             cKl = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA, "modIntegritet.C1C4")
 
             Dim i As Long, p As String, kljuc As String, razlog As String
-            Dim bz As String, kgV As Variant, ambV As Variant, om As String, prz As String
+            Dim zid As String, bz As String, kgV As Variant, ambV As Variant, om As String, prz As String
             For i = 1 To UBound(data, 1)
                 p = Trim$(CStr(data(i, cPrij)))
                 kljuc = Trim$(NzToText(data(i, cKey)))
@@ -1091,13 +1043,17 @@ Private Sub Chk_C1_C4_StavkaPrijemnica()
                     c1.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), razlog)
                 End If
                 If Len(p) > 0 And allPrij.Exists(p) And Not actPrij.Exists(p) Then
-                    bz = "": If prijZbr.Exists(p) Then bz = CStr(prijZbr(p))
-                    kgV = "": ambV = "": om = "": prz = ""
-                    If Len(bz) > 0 Then
-                        If zbrKg.Exists(bz) Then kgV = zbrKg(bz)
-                        If zbrAmb.Exists(bz) Then ambV = zbrAmb(bz)
-                        If omByZbr.Exists(bz) Then om = CStr(omByZbr(bz))
-                        If przByZbr.Exists(bz) Then prz = CStr(przByZbr(bz))
+                    zid = "": bz = "": kgV = "": ambV = "": om = "": prz = ""
+                    If prijRod.Exists(p) Then zid = CStr(prijRod(p))
+                    If Len(zid) > 0 Then
+                        If zbrBroj.Exists(zid) Then bz = CStr(zbrBroj(zid))
+                        If Not zbrStav Is Nothing Then
+                            If zbrStav.Exists(zid) Then
+                                kgV = zbrStav(zid)(0)
+                                ambV = zbrStav(zid)(2)
+                            End If
+                        End If
+                        C4TokZbirne zid, stName, koopName, om, prz
                     End If
                     c4.Add Array(CStr(data(i, cS)), CStr(data(i, cPal)), p, CStr(brPrij(p)), _
                                  bz, kgV, ambV, om, prz)
@@ -1475,75 +1431,6 @@ End Sub
 ' SHARED HELPERS
 ' ============================================================
 
-' Skupi jedinstvene ne-prazne BrojZbirne (bez storniranih) iz tabele.
-Private Sub CollectBrojZbirne(ByRef dict As Object, ByVal tbl As String, ByVal col As String)
-    Dim data As Variant: data = GetTableData(tbl)
-    If Not IsArray(data) Then Exit Sub
-    data = ExcludeStornirano(data, tbl)
-    If IsEmpty(data) Then Exit Sub
-
-    Dim ci As Long: ci = RequireColumnIndex(tbl, col, "modIntegritet.CollectBrojZbirne")
-
-    Dim i As Long, b As String
-    For i = 1 To UBound(data, 1)
-        b = Trim$(CStr(data(i, ci)))
-        If Len(b) > 0 Then
-            If Not dict.Exists(b) Then dict.Add b, True
-        End If
-    Next i
-End Sub
-
-' Zbir STAVKI aktivnih dokumenata po broju zbirne (S6 korak 3): kljuc je
-' BrojZbirne (za zbirnu njen broj, za prijemnicu broj zbirne na koju je
-' vezana), vrednost je pozicija idx iz zbira stavki dokumenta -- 0 = kg,
-' 2 = gajbe (oblik ZbirStavkiPoZbirni / ZbirStavkiPoPrijemnici). Kljuc postoji
-' i kad je zbir 0, isto kao AggByBroj, jer provere iteriraju kljuceve.
-'
-' meko = False: strog citalac, kvar stavki ide u handler provere (red GRESKA).
-' meko = True: samo za PRIKAZ uz nalaz -- kvar daje prazan recnik, pa kolona
-' ostaje prazna umesto da sakrije nalaz.
-Private Function ZbirStavkiPoBroju(ByVal tbl As String, ByVal idx As Long, _
-                                   ByVal meko As Boolean) As Object
-    Const SRC As String = "modIntegritet.ZbirStavkiPoBroju"
-    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-    d.CompareMode = vbTextCompare
-    Set ZbirStavkiPoBroju = d
-
-    If meko Then On Error GoTo MekoPad
-
-    Dim colID As String, colBroj As String, zbir As Object
-    If tbl = TBL_ZBIRNA Then
-        colID = COL_ZBR_ID: colBroj = COL_ZBR_BROJ
-        Set zbir = modDokumenta.ZbirStavkiPoZbirni()
-    Else
-        colID = COL_PRJ_ID: colBroj = COL_PRJ_BROJ_ZBIRNE
-        Set zbir = modDokumenta.ZbirStavkiPoPrijemnici()
-    End If
-
-    Dim data As Variant: data = GetTableData(tbl)
-    If IsArray(data) Then data = ExcludeStornirano(data, tbl)
-    If Not IsArray(data) Then Exit Function
-
-    Dim cId As Long, cB As Long, i As Long, k As String, z As Variant
-    cId = RequireColumnIndex(tbl, colID, SRC)
-    cB = RequireColumnIndex(tbl, colBroj, SRC)
-    For i = 1 To UBound(data, 1)
-        k = Trim$(NzToText(data(i, cB)))
-        If Len(k) > 0 Then
-            If tbl = TBL_ZBIRNA Then
-                z = modDokumenta.ZbirStavkiZaZbirnu(zbir, CStr(data(i, cId)), SRC)
-            Else
-                z = modDokumenta.ZbirStavkiZaPrijemnicu(zbir, CStr(data(i, cId)), SRC)
-            End If
-            d(k) = CDbl(d(k)) + CDbl(z(idx))
-        End If
-    Next i
-    Exit Function
-
-MekoPad:
-    Set ZbirStavkiPoBroju = CreateObject("Scripting.Dictionary")
-End Function
-
 ' Agregat kg po BrojZbirne (bez storniranih). Vraca Dictionary(broj -> Double).
 Private Function AggByBroj(ByVal tbl As String, ByVal brojCol As String, ByVal kgCol As String) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
@@ -1585,170 +1472,6 @@ Private Function CollToArray(ByVal c As Collection, ByVal cols As Long) As Varia
     Next i
 
     CollToArray = r
-End Function
-
-' Skup SVIH BrojZbirne u tblZbirna (i stornirani se racunaju kao "postoji").
-Private Function AllBrojeviInZbirna() As Object
-    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-    d.CompareMode = vbTextCompare   ' BrojZbirne match case-insensitive (s5 == S5)
-
-    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
-    If Not IsArray(data) Then Set AllBrojeviInZbirna = d: Exit Function
-
-    Dim cb As Long: cb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.AllBrojeviInZbirna")
-
-    Dim i As Long, b As String
-    For i = 1 To UBound(data, 1)
-        b = Trim$(CStr(data(i, cb)))
-        If Len(b) > 0 Then
-            If Not d.Exists(b) Then d.Add b, True
-        End If
-    Next i
-
-    Set AllBrojeviInZbirna = d
-End Function
-
-' Gradi dve mape iz tblZbirna: exactSet (case-SENZITIVAN skup tacnih brojeva)
-' i ciMap (UCASE(broj) -> tacan zapis, prvi vidjeni). Za B6.
-Private Sub BuildZbirnaCaseMaps(ByRef exactSet As Object, ByRef ciMap As Object)
-    Set exactSet = CreateObject("Scripting.Dictionary")   ' default = case-senzitivan
-    Set ciMap = CreateObject("Scripting.Dictionary")
-
-    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
-    If Not IsArray(data) Then Exit Sub
-
-    Dim cb As Long: cb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.BuildZbirnaCaseMaps")
-
-    Dim i As Long, b As String, u As String
-    For i = 1 To UBound(data, 1)
-        b = Trim$(CStr(data(i, cb)))
-        If Len(b) > 0 Then
-            If Not exactSet.Exists(b) Then exactSet.Add b, True
-            u = UCase$(b)
-            If Not ciMap.Exists(u) Then ciMap.Add u, b
-        End If
-    Next i
-End Sub
-
-' Za jednu tabelu: dodaj u 'bad' zive redove ciji BrojZbirne NIJE tacan case-match
-' ali postoji ignorisuci case. Array(Tabela, ID, napisano, kanon).
-Private Sub CollectCaseMismatch(ByRef bad As Collection, ByVal labela As String, _
-                                ByVal tbl As String, ByVal idCol As String, ByVal zbrCol As String, _
-                                ByVal exactSet As Object, ByVal ciMap As Object)
-    Dim data As Variant: data = GetTableData(tbl)
-    If Not IsArray(data) Then Exit Sub
-    data = ExcludeStornirano(data, tbl)
-    If IsEmpty(data) Then Exit Sub
-
-    Dim cId As Long, cZbr As Long
-    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.CollectCaseMismatch")
-    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.CollectCaseMismatch")
-
-    Dim i As Long, b As String, u As String
-    For i = 1 To UBound(data, 1)
-        b = Trim$(CStr(data(i, cZbr)))
-        If Len(b) > 0 Then
-            If Not exactSet.Exists(b) Then
-                u = UCase$(b)
-                If ciMap.Exists(u) Then
-                    bad.Add Array(labela, CStr(data(i, cId)), b, ciMap(u))
-                End If
-            End If
-        End If
-    Next i
-End Sub
-
-' Zivi dokumenti sa BrojZbirne koji nije u zbrSet. Vraca 2D(1..n,1..4) ili Empty.
-' kolCol = "" znaci da kolicina NIJE na zaglavlju nego na stavkama (otpremnica
-' od S3b) -- tada je daje zbirStavki, po ID-u dokumenta.
-Private Function DanglingDocs(ByVal tbl As String, ByVal idCol As String, _
-                              ByVal brojCol As String, ByVal zbrCol As String, _
-                              ByVal kolCol As String, ByVal zbrSet As Object, _
-                              Optional ByVal zbirStavki As Object) As Variant
-    Dim data As Variant: data = GetTableData(tbl)
-    If Not IsArray(data) Then DanglingDocs = Empty: Exit Function
-    data = ExcludeStornirano(data, tbl)
-    If IsEmpty(data) Then DanglingDocs = Empty: Exit Function
-
-    Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
-    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DanglingDocs")
-    cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DanglingDocs")
-    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DanglingDocs")
-    If Len(kolCol) > 0 Then cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DanglingDocs")
-
-    Dim bad As Collection: Set bad = New Collection
-    Dim i As Long, b As String
-    For i = 1 To UBound(data, 1)
-        b = Trim$(CStr(data(i, cZbr)))
-        If Len(b) > 0 Then
-            If Not zbrSet.Exists(b) Then
-                bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), b, _
-                              KolicinaZaAudit(data, i, cKol, zbirStavki, CStr(data(i, cId))))
-            End If
-        End If
-    Next i
-
-    DanglingDocs = CollToArray(bad, 4)
-End Function
-
-' Zivi redovi tabele sa praznim BrojZbirne. Vraca 2D(1..n,1..3): ID, Broj, Kolicina.
-Private Function DocsBezZbirne(ByVal tbl As String, ByVal idCol As String, _
-                               ByVal brojCol As String, ByVal zbrCol As String, _
-                               ByVal kolCol As String, _
-                               Optional ByVal zbirStavki As Object) As Variant
-    Dim data As Variant: data = GetTableData(tbl)
-    If Not IsArray(data) Then DocsBezZbirne = Empty: Exit Function
-    data = ExcludeStornirano(data, tbl)
-    If IsEmpty(data) Then DocsBezZbirne = Empty: Exit Function
-
-    Dim cId As Long, cBroj As Long, cZbr As Long, cKol As Long
-    cId = RequireColumnIndex(tbl, idCol, "modIntegritet.DocsBezZbirne")
-    cBroj = RequireColumnIndex(tbl, brojCol, "modIntegritet.DocsBezZbirne")
-    cZbr = RequireColumnIndex(tbl, zbrCol, "modIntegritet.DocsBezZbirne")
-    If Len(kolCol) > 0 Then cKol = RequireColumnIndex(tbl, kolCol, "modIntegritet.DocsBezZbirne")
-
-    Dim bad As Collection: Set bad = New Collection
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Len(Trim$(CStr(data(i, cZbr)))) = 0 Then
-            bad.Add Array(CStr(data(i, cId)), CStr(data(i, cBroj)), _
-                          KolicinaZaAudit(data, i, cKol, zbirStavki, CStr(data(i, cId))))
-        End If
-    Next i
-
-    DocsBezZbirne = CollToArray(bad, 3)
-End Function
-
-' Kolicina za prikaz u auditu: sa zaglavlja kad je tamo, inace iz zbira stavki.
-' Nedostajuci kljuc ostaje PRAZAN, ne nula -- audit postoji da nabroji pokvarene
-' redove, pa dokument bez stavki mora ostati u listi, a njegova kolicina je
-' nepoznata, ne nula.
-Private Function KolicinaZaAudit(ByRef data As Variant, ByVal i As Long, _
-                                 ByVal cKol As Long, ByVal zbirStavki As Object, _
-                                 ByVal dokID As String) As Variant
-    If cKol > 0 Then
-        KolicinaZaAudit = data(i, cKol)
-        Exit Function
-    End If
-
-    KolicinaZaAudit = ""
-    If zbirStavki Is Nothing Then Exit Function
-
-    Dim k As String: k = Trim$(dokID)
-    If Len(k) = 0 Then Exit Function
-    If Not zbirStavki.Exists(k) Then Exit Function
-
-    Dim rec As Variant: rec = zbirStavki(k)
-    KolicinaZaAudit = CDbl(rec(0))
-End Function
-
-' Zbir stavki otpremnica po dokumentu -- MEKO. Audit ne sme da padne na kvaru
-' koji treba da prijavi, pa kanonska greska ovde znaci "nema podatka" i kolona
-' kolicine ostaje prazna. Tvrda kapija zivi u citaocima ekrana i izvestaja.
-Private Function ZbirOtpremnicaMeko() As Object
-    On Error Resume Next
-    Set ZbirOtpremnicaMeko = modDokumenta.ZbirStavkiPoOtpremnici()
-    On Error GoTo 0
 End Function
 
 ' Skup ID-jeva iz tabele (opciono samo aktivni). Vraca Dictionary(id -> True).
@@ -1798,145 +1521,58 @@ Private Function PaletaInfoMap() As Object
     Set PaletaInfoMap = d
 End Function
 
-' PrijemnicaID -> BrojZbirne. Iz SVIH redova tblPrijemnica (i storniranih --
-' C4 cilja bas prijemnice koje su stornirane).
-Private Function PrijemnicaZbirnaMap() As Object
-    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-
-    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
-    If Not IsArray(data) Then Set PrijemnicaZbirnaMap = d: Exit Function
-
-    Dim cId As Long, cZbr As Long
-    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, "modIntegritet.PrijemnicaZbirnaMap")
-    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIntegritet.PrijemnicaZbirnaMap")
-
-    Dim i As Long, pid As String
-    For i = 1 To UBound(data, 1)
-        pid = Trim$(CStr(data(i, cId)))
-        If Len(pid) > 0 Then
-            If Not d.Exists(pid) Then d.Add pid, Trim$(CStr(data(i, cZbr)))
-        End If
-    Next i
-
-    Set PrijemnicaZbirnaMap = d
+' ZbirnaID -> zbir stavki zbirne (oblik ZbirStavkiPoZbirni: 0 = kg, 2 = gajbe) --
+' MEKO, samo za prikaz uz nalaz C4: kvar stavki daje Nothing, kolona ostaje prazna.
+Private Function ZbirStavkiZbirneMeko() As Object
+    On Error Resume Next
+    Set ZbirStavkiZbirneMeko = modDokumenta.ZbirStavkiPoZbirni()
+    On Error GoTo 0
 End Function
 
-' BrojZbirne -> naziv otkupnog mesta (distinct; "; " join ako ih je vise).
-' Primarno preko AKTIVNIH otpremnica te zbirne (StanicaID -> tblStanice.Naziv;
-' reuse BuildIdNameDict iz modDokumenta). Fallback za mirror-stanica zbirne
-' (malina mod, VozacID == StanicaID, "S" prefiks): tblZbirna.VozacID direktno --
-' pokriva i zbirne bez otpremnica / potpuno stornirane lance.
-Private Function OtkupnoMestoByZbirna() As Object
-    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-    d.CompareMode = vbTextCompare   ' BrojZbirne match case-insensitive (s5 == S5)
+' Otkupna mesta i proizvodjaci zbirne PO IVICAMA, samo za red nalaza C4 (obrazac
+' KUL1): otpremnice zbirne (zapisi clanstva, i stornirane zbirne -- trag porekla)
+' -> StanicaID -> naziv; izvori tih otpremnica (E2) -> KooperantID -> ime.
+' Fallback za mirror-stanica zbirnu bez otpremnica (malina mod, VozacID ==
+' StanicaID): stanica po VozacID-u zbirne. MEKO: kvar citaca je tekst u koloni
+' ("? razlog"), ne pad bloka -- jedna losa veza ne sme da sakrije nalaz.
+Private Sub C4TokZbirne(ByVal zbirnaID As String, ByVal stName As Object, _
+                        ByVal koopName As Object, ByRef outOM As String, _
+                        ByRef outPrz As String)
+    Dim omD As Object, przD As Object, otp As Collection, izv As Collection
+    Dim a As Long, b As Long, sid As String, kid As String
+    outOM = ""
+    outPrz = ""
+    If Len(Trim$(zbirnaID)) = 0 Then Exit Sub
+    On Error GoTo EH
 
-    Dim stName As Object: Set stName = BuildIdNameDict(TBL_STANICE, "StanicaID", "Naziv")
-
-    Dim data As Variant
-    Dim i As Long, b As String, sid As String, nm As String
-
-    ' 1) aktivne otpremnice zbirne: BrojZbirne -> distinct nazivi stanica
-    data = GetTableData(TBL_OTPREMNICA)
-    If IsArray(data) Then
-        data = ExcludeStornirano(data, TBL_OTPREMNICA)
-        If Not IsEmpty(data) Then
-            Dim cZbr As Long, cSt As Long
-            cZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIntegritet.OtkupnoMestoByZbirna")
-            cSt = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA, "modIntegritet.OtkupnoMestoByZbirna")
-
-            For i = 1 To UBound(data, 1)
-                b = Trim$(CStr(data(i, cZbr)))
-                sid = Trim$(CStr(data(i, cSt)))
-                If Len(b) > 0 And Len(sid) > 0 Then
-                    nm = sid
-                    If stName.Exists(sid) Then nm = CStr(stName(sid))
-                    AddDistinctJoin d, b, nm
-                End If
-            Next i
+    Set omD = CreateObject("Scripting.Dictionary")
+    Set przD = CreateObject("Scripting.Dictionary")
+    Set otp = modDokumenta.ZbrClanovi(zbirnaID)
+    For a = 1 To otp.count
+        sid = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, CStr(otp(a)), COL_OTP_STANICA)))
+        If Len(sid) > 0 Then
+            If stName.Exists(sid) Then AddDistinctJoin omD, "om", CStr(stName(sid)) Else AddDistinctJoin omD, "om", sid
         End If
-    End If
-
-    ' 2) fallback: zbirne bez pogotka gore, mirror-stanica (VozacID u tblStanice)
-    data = GetTableData(TBL_ZBIRNA)
-    If IsArray(data) Then
-        Dim cBr As Long, cVoz As Long
-        cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.OtkupnoMestoByZbirna")
-        cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIntegritet.OtkupnoMestoByZbirna")
-
-        For i = 1 To UBound(data, 1)
-            b = Trim$(CStr(data(i, cBr)))
-            If Len(b) > 0 Then
-                If Not d.Exists(b) Then
-                    sid = Trim$(CStr(data(i, cVoz)))
-                    If stName.Exists(sid) Then d.Add b, CStr(stName(sid))
-                End If
-            End If
-        Next i
-    End If
-
-    Set OtkupnoMestoByZbirna = d
-End Function
-
-' BrojZbirne -> proizvodjac(i) te zbirne (kooperanti; distinct, "; " join).
-' Preko AKTIVNIH otkupa: primarno otkup.BrojZbirne (GetColumnIndex -- kolona
-' je opciona, schema drift), fallback otkup.OtpremnicaID -> otpremnica.BrojZbirne
-' (SVI redovi otpremnice, i stornirani -- trag porekla). Imena preko
-' BuildIdNameDict (Ime+Prezime); nepoznat KooperantID ostaje kao ID.
-Private Function ProizvodjacByZbirna() As Object
-    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
-    d.CompareMode = vbTextCompare   ' BrojZbirne match case-insensitive (s5 == S5)
-
-    Dim koopName As Object
-    Set koopName = BuildIdNameDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-
-    Dim data As Variant
-    Dim i As Long, b As String, oid As String, kid As String, nm As String
-
-    ' OtpremnicaID -> BrojZbirne (svi redovi) za fallback put
-    Dim otpZbr As Object: Set otpZbr = CreateObject("Scripting.Dictionary")
-    data = GetTableData(TBL_OTPREMNICA)
-    If IsArray(data) Then
-        Dim cOtpId As Long, cOtpZbr As Long
-        cOtpId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, "modIntegritet.ProizvodjacByZbirna")
-        cOtpZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, "modIntegritet.ProizvodjacByZbirna")
-        For i = 1 To UBound(data, 1)
-            oid = Trim$(CStr(data(i, cOtpId)))
-            If Len(oid) > 0 Then
-                If Not otpZbr.Exists(oid) Then otpZbr.Add oid, Trim$(CStr(data(i, cOtpZbr)))
-            End If
-        Next i
-    End If
-
-    data = GetTableData(TBL_OTKUP)
-    If Not IsArray(data) Then Set ProizvodjacByZbirna = d: Exit Function
-    data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then Set ProizvodjacByZbirna = d: Exit Function
-
-    Dim cKoop As Long, cZbr As Long, cOtp As Long
-    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, "modIntegritet.ProizvodjacByZbirna")
-    cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
-    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-
-    For i = 1 To UBound(data, 1)
-        b = ""
-        If cZbr > 0 Then b = Trim$(CStr(data(i, cZbr)))
-        If Len(b) = 0 And cOtp > 0 Then
-            oid = Trim$(CStr(data(i, cOtp)))
-            If otpZbr.Exists(oid) Then b = CStr(otpZbr(oid))
-        End If
-        If Len(b) > 0 Then
-            kid = Trim$(CStr(data(i, cKoop)))
+        Set izv = modDokumenta.IzvoriOtpremnice(CStr(otp(a)))
+        For b = 1 To izv.count
+            kid = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, CStr(izv(b)), COL_OTK_KOOPERANT)))
             If Len(kid) > 0 Then
-                nm = kid
-                If koopName.Exists(kid) Then nm = CStr(koopName(kid))
-                AddDistinctJoin d, b, nm
+                If koopName.Exists(kid) Then AddDistinctJoin przD, "p", CStr(koopName(kid)) Else AddDistinctJoin przD, "p", kid
             End If
-        End If
-    Next i
+        Next b
+    Next a
+    If omD.Exists("om") Then outOM = CStr(omD("om"))
+    If przD.Exists("p") Then outPrz = CStr(przD("p"))
 
-    Set ProizvodjacByZbirna = d
-End Function
-
+    If Len(outOM) = 0 Then
+        sid = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, COL_ZBR_VOZAC)))
+        If stName.Exists(sid) Then outOM = CStr(stName(sid))
+    End If
+    Exit Sub
+EH:
+    If Len(outOM) = 0 Then outOM = "? " & Err.description
+    If Len(outPrz) = 0 Then outPrz = "? " & Err.description
+End Sub
 ' U d(key) upisi/dopisi nm kao "; "-odvojenu distinct listu (case-insensitive).
 Private Sub AddDistinctJoin(ByRef d As Object, ByVal key As String, ByVal nm As String)
     If Len(nm) = 0 Then Exit Sub
@@ -2064,8 +1700,11 @@ Private Sub WriteBlock(ByVal code As String, ByVal title As String, _
     m_row = m_row + 1   ' prazan separator
 End Sub
 
+' Pala provera NIJE nalaz o podacima (ne ulazi u m_totalIssues), ali se broji
+' posebno: "0 nalaza" uz palu proveru nije cist integritet (KI-099).
 Private Sub WriteErr(ByVal code As String, ByVal desc As String)
     m_rows.Add Array(code, "GRESKA: " & desc)
+    m_palih = m_palih + 1
     m_summary = m_summary & "  " & code & ": GRESKA" & vbCrLf
     If Not m_toSheet Then Exit Sub
     WriteLine "[" & code & "] GRESKA: " & desc, True

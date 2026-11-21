@@ -13,13 +13,12 @@ Option Explicit
 '        Otkup -> Otpremnica -> Zbirna -> Prijemnica -> Faktura
 '   3) Runs rollback/invalid-save checks.
 '   4) Runs traceability auto-link regression tests.
-'   5) Runs global data quality audit for cross-zbirna wrong links.
+'   5) (Cross-zbirna audit nad Otkup.BrojZbirne / OtpremnicaID je obrisan u S9-5:
+'      te kolone nemaju pisca; clanstvo meri integritet E2/E3.)
 '
 ' Important:
 '   - Tests create TST-* rows and do not physically delete data.
 '   - Cleanup is optional and soft-storno based where possible.
-'   - The cross-zbirna regression is expected to FAIL until
-'     AutoLinkOtkupOtpremnica uses BrojZbirne as part of the preferred key.
 '
 ' Recommended run order:
 '   RunBusinessFlowProSuite
@@ -320,7 +319,6 @@ Private Sub BfpDeo1()
     If BfpIzabran("Test_PorukeKatalogPokrivaDokumenta") Then Test_PorukeKatalogPokrivaDokumenta
 
 
-    If BfpIzabran("Test_NoCrossZbirnaLinksAudit") Then Test_NoCrossZbirnaLinksAudit
 
     ' PR3 -- Zbirna: header + stavke.  Nov pisac jos nema nijednog pozivaoca;
     ' cutover citalaca, invarijante i storna je Zbirna cutover.
@@ -801,7 +799,6 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
 
     Test_CoreTablesAndColumnsExist
     SeedBusinessFlowProMasterData
-    Test_NoCrossZbirnaLinksAudit
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
@@ -818,7 +815,6 @@ Public Sub RunBusinessFlowProAuditOnly()
     BeginRun "BUSINESS FLOW PRO AUDIT ONLY"
 
     Test_CoreTablesAndColumnsExist
-    Test_NoCrossZbirnaLinksAudit
 
     On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
@@ -1340,65 +1336,6 @@ End Sub
 ' ============================================================
 ' TRACEABILITY / AUTOLINK REGRESSION TESTS
 ' ============================================================
-
-Private Sub Test_NoCrossZbirnaLinksAudit()
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTKUP)
-
-    If IsEmpty(data) Then
-        LogSkip "Cross-zbirna link audit", "tblOtkup empty"
-        Exit Sub
-    End If
-
-    Dim colOtkID As Long
-    Dim colOtkZbr As Long
-    Dim colOtkOtp As Long
-
-    colOtkID = RequireCol(TBL_OTKUP, "OtkupID")
-    colOtkZbr = RequireCol(TBL_OTKUP, "BrojZbirne")
-    colOtkOtp = RequireCol(TBL_OTKUP, "OtpremnicaID")
-
-    Dim badCount As Long
-    Dim details As String
-
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        Dim otkID As String
-        Dim otkZbr As String
-        Dim otpID As String
-        Dim otpZbr As String
-
-        otkID = Trim$(CStr(data(i, colOtkID)))
-        otkZbr = Trim$(CStr(data(i, colOtkZbr)))
-        otpID = Trim$(CStr(data(i, colOtkOtp)))
-
-        If Len(otpID) > 0 Then
-            otpZbr = Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, "OtpremnicaID", otpID, "BrojZbirne")))
-
-            If Len(otkZbr) > 0 And Len(otpZbr) > 0 Then
-                If otkZbr <> otpZbr Then
-                    badCount = badCount + 1
-                    details = details & otkID & " -> " & otpID & _
-                              " | Otkup.BrojZbirne=" & otkZbr & _
-                              " | Otp.BrojZbirne=" & otpZbr & vbCrLf
-                End If
-            End If
-        End If
-    Next i
-
-    If badCount = 0 Then
-        LogPass "Cross-zbirna link audit found no mismatches"
-    Else
-        LogFail "Cross-zbirna link audit found " & badCount & " mismatch(es)", details
-    End If
-
-    Exit Sub
-
-EH:
-    LogFail "Cross-zbirna link audit", Err.description
-End Sub
 
 ' ============================================================
 ' OPTIONAL CLEANUP
@@ -4183,7 +4120,10 @@ Private Sub Test_PR3_DupliIstiZapisClanstvaJeGreska()
                  "PR3 dupli par: kanon vracen u konzistentno stanje"
 
     AssertEquals "", rez, "PR3 dupli par: upis odbijen"
-    AssertTrue InStr(1, razlog, "dva aktivna zapisa", vbTextCompare) > 0, _
+    ' S9-5 (S95-ODL-02): citac clanstva zbirne drzi pravila E2, pa dupli par ima
+    ' SVOJE pravilo i svoju poruku (1267, kao 1333 za otpremnicu) -- pre nego sto
+    ' bi isti par pao kao "dva aktivna zapisa" (1260).
+    AssertTrue InStr(1, razlog, "postoji vise puta", vbTextCompare) > 0, _
                "PR3 dupli par: kapija imenuje dupli zapis (bilo: " & razlog & ")"
 
     Exit Sub
