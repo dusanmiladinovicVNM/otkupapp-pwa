@@ -35,6 +35,7 @@ Private m_totalIssues As Long
 Private m_palih As Long          ' provere koje nisu izvrsene (WriteErr); nisu nalazi
 Private m_rows As Collection      ' ravan spisak nalaza: Array(code, detalj) -- za ListBox
 Private m_toSheet As Boolean      ' True = pisi i u INTEGRITET sheet; False = samo memorija
+Private m_padTest As Boolean      ' TEST SEAM (431): pad cele revizije pre prve provere
 
 ' ============================================================
 ' PUBLIC ENTRY POINT
@@ -101,7 +102,19 @@ EH:
     GetIntegritetRows = Empty
 End Function
 
+' TEST SEAM (S95-REV-02, test 431): podmece pad CELE revizije, van handlera
+' pojedinacnih provera. Tvrdo gejtovan: postavljac odbija rad van test rezima, a
+' RunAllChecks ponovo pita IsTestMode. Gasi ga i modTest.ResetSeamova.
+Public Sub IntegritetPadTestSet(ByVal ukljuci As Boolean)
+    If ukljuci And Not IsTestMode() Then Exit Sub
+    m_padTest = ukljuci
+End Sub
+
 Private Sub RunAllChecks()
+    If m_padTest Then
+        If IsTestMode() Then Err.Raise vbObjectError + 9711, "modIntegritet.RunAllChecks", _
+                                       "TEST: revizija pada pre ijedne provere"
+    End If
     Chk_E2_ClanstvoOtpremnice
     Chk_E3_ClanstvoZbirne
     Chk_E4_PrijemnicaBezAktivneZbirne

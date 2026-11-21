@@ -812,6 +812,9 @@ Public Sub RunAllTests()
     RunOne 427
     RunOne 428
     RunOne 429
+    RunOne 430
+    RunOne 431
+    RunOne 432
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1028,6 +1031,9 @@ Private Sub ResetSeamova()
     ' Podmetnut pad generatora ID-a: zaostao seam bi svakom sledecem upisu dao
     ' prazan ID.
     modDataAccess.NewEntityIDPadniTest False
+    ' Podmetnut pad cele revizije integriteta (431): zaostao seam bi svaki sledeci
+    ' prolaz kroz integritet oborio pre prve provere.
+    modIntegritet.IntegritetPadTestSet False
     ' Podmetnut pad/curenje stampe reversa (227, 228): zaostao seam bi svakom
     ' sledecem upisu reversa oborio ili zaprljao papir.
     modPrint.StampaTestSet ""
@@ -1492,6 +1498,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 427: TestName = "T_S95_NaslovBrojiNalaze"
         Case 428: TestName = "T_S95_ManjakPoZbirnaID"
         Case 429: TestName = "T_S95_C4KontekstPoIvicama"
+        Case 430: TestName = "T_S95_E4JednoPraviloTriPozivaoca"
+        Case 431: TestName = "T_S95_PadRevizijeNijeCisto"
+        Case 432: TestName = "T_S95_ClanstvoIstorijaNijeKvar"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1929,6 +1938,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 427: T_S95_NaslovBrojiNalaze
         Case 428: T_S95_ManjakPoZbirnaID
         Case 429: T_S95_C4KontekstPoIvicama
+        Case 430: T_S95_E4JednoPraviloTriPozivaoca
+        Case 431: T_S95_PadRevizijeNijeCisto
+        Case 432: T_S95_ClanstvoIstorijaNijeKvar
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -38389,4 +38401,174 @@ CleanUp:
         Err.Raise errNum, "modTest.T_S95_C4KontekstPoIvicama", errDesc
     End If
     AssertEq redoviPosle, redoviPre, "429: rollback je vratio redove"
+End Sub
+
+' Razlog sa liste sirocadi Oporavka za datu prijemnicu; "" kad je na listi nema.
+Private Function S95SiroceRazlog(ByVal prjID As String) As String
+    Dim os As Variant, i As Long
+    os = modDokumenta.GetOsirocenePrijemnice()
+    If Not IsArray(os) Then Exit Function
+    For i = 1 To UBound(os, 1)
+        If StrComp(CStr(os(i, 8)), prjID, vbTextCompare) = 0 Then
+            S95SiroceRazlog = CStr(os(i, 7))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' 430 -- S9-5 review (S95-REV-01, S95-ODL-07): veza prijemnica -> zbirna (E4) je
+' JEDNO pravilo za tri pozivaoca -- integritet E4, listu sirocadi Oporavka i pisca
+' "Prevezi prijemnicu": roditelj postoji TACNO jednom i nije storniran. Do ispravke
+' je E4 preskakao aktivnu prijemnicu bez broja (filter liste), a ZbirnaID koji
+' stoji u dva zaglavlja zavisio je od redosleda redova: lista je gledala POSLEDNJI
+' red, pisac PRVI. Ovde je prvi red aktivna zbirna A, poslednji stornirana B
+' (prepisan ID), pa je stari kod odgovarao tri razlicita odgovora.
+' SABOTAZE: s95-e4-audit-trazi-broj, s95-e4-dupli-roditelj-prolazi,
+' s95-pisac-svoje-pravilo-siroceta.
+Private Sub T_S95_E4JednoPraviloTriPozivaoca()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, rows As Variant, b As String, o As String, razlog As String
+    Dim pidA As String, pidD As String, zbrA As String, zbrB As String, zbrC As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+    S93UgasiIspravkePrijemnice
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    ' (a) Aktivna prijemnica BEZ BROJA i bez veze.
+    pidA = S93PrijemnicaStarogOblika("95R", t, "ZB-S95R-" & t)
+    PostaviPoljePoPK TBL_PRIJEMNICA, COL_PRJ_ID, pidA, COL_PRJ_BROJ, ""
+    ' (b) Roditelj u dva zaglavlja: A je aktivna i PRVA u tabeli, B stornirana i
+    '     posle nje, pa joj se ID prepisuje u ID od A.
+    SledLanacDoZbirne "S95RA", "ZB-S95RA-" & t, FX_VOZAC, FX_KUPAC, 40, b, o, zbrA
+    pidD = SledPrijemnica("PR-S95RA-" & t, "ZB-S95RA-" & t, FX_VOZAC, FX_KUPAC, 38, 0)
+    SledLanacDoZbirne "S95RB", "ZB-S95RB-" & t, FX_VOZAC, FX_KUPAC, 40, b, o, zbrB
+    AssertEq modStorno.StornoZbirna_TX(zbrB), True, "430 preduslov: zbirna B je stornirana"
+    ' Cilj prevezivanja: ispravna izdata zbirna istog vlasnika.
+    SledLanacDoZbirne "S95RC", "ZB-S95RC-" & t, FX_VOZAC, FX_KUPAC, 40, b, o, zbrC
+    PostaviPoljePoPK TBL_ZBIRNA, COL_ZBR_ID, zbrB, COL_ZBR_ID, zbrA
+
+    rows = modIntegritet.GetIntegritetRows()
+    AssertEq CStr(InStr(1, S95RedNalaza(rows, "E4", pidA), "nema veze sa zbirnom", vbTextCompare) > 0), "True", _
+             "430 E4: aktivna prijemnica bez broja sa pokvarenom vezom je nalaz (revizija ne zavisi od labele)"
+    AssertEq CStr(InStr(1, S95RedNalaza(rows, "E4", pidD), "nije jednoznacna", vbTextCompare) > 0), "True", _
+             "430 E4: roditelj koji stoji u dva zaglavlja je nalaz -- tacno jednom (SLED-INV-01)"
+    AssertEq CStr(InStr(1, S95SiroceRazlog(pidD), "nije jednoznacna", vbTextCompare) > 0), "True", _
+             "430 lista sirocadi daje ISTI odgovor kao E4 za roditelja u dva zaglavlja"
+    ' Dok dupli ZbirnaID stoji, strog citac stavki zbirne odbija tabelu, pa potez ne
+    ' mora da prodje do kraja -- meri se samo kapija koju pravilo E4 drzi.
+    modDokumenta.ReassignPrijemnicaToZbirna_TX pidD, zbrC, razlog
+    AssertEq (InStr(1, razlog, "ima aktivnu zbirnu", vbTextCompare) = 0), True, _
+             "430 pisac prevezivanja ne odbija roditelja iz dva zaglavlja kao aktivnu zbirnu (isto pravilo)"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modUiData.ResetCache
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S95_E4JednoPraviloTriPozivaoca", _
+             "430: rollback je vratio redove svih tabela lanca"
+End Sub
+
+' 431 -- S9-5 review (S95-REV-02): pad CELE revizije (van handlera pojedinacnih
+' provera) nije "nema nalaza". GetIntegritetRows je vracao Empty uz nule, pa bi
+' naslov liste kazao "0 neuskladjenih zapisa" -- isto kao cist integritet. Sada je
+' pad red GRESKA sa razlogom i broji se kao neizvrsena provera.
+' SABOTAZA: s95-pad-revizije-je-prazno.
+Private Sub T_S95_PadRevizijeNijeCisto()
+    Dim rows As Variant, nUk As Long, nPal As Long, naslov As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modIntegritet.IntegritetPadTestSet True
+    rows = modIntegritet.GetIntegritetRows(nUk, nPal)
+    modScrOporavak.Scr_ResetCache
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    naslov = modScrOporavak.Scr_NaslovDopuna()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modIntegritet.IntegritetPadTestSet False
+    modScrOporavak.Scr_ResetCache
+
+    AssertEq NalazSadrzi(rows, "INTEGRITET", "revizija nije izvrsena"), True, _
+             "431 pad cele revizije je red GRESKA sa razlogom, ne prazan snimak"
+    AssertEq CStr(nUk) & "|" & CStr(nPal), "0|1", _
+             "431 pad cele revizije se broji kao neizvrsena provera, ne kao nula nalaza"
+    AssertEq (InStr(1, naslov, Poruka("OTKUI_OPO_INT_PALO") & " 1", vbTextCompare) > 0), True, _
+             "431 naslov liste kaze da revizija nije izvrsena"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modIntegritet.IntegritetPadTestSet False
+    modScrOporavak.Scr_ResetCache
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S95_PadRevizijeNijeCisto", errDesc
+End Sub
+
+' 432 -- S9-5 review (pitanje za acceptance): ISTORIJSKO clanstvo nije kvar, a
+' dva AKTIVNA jesu. Posle storna otpremnice (E2) ili zbirne (E3) isti izvor ulazi u
+' novi dokument kanonskim piscem -- zapis u storniranoj verziji ostaje kao trag
+' (A13), i ni citac ni integritet ga ne smeju prijaviti. Isti izvor u DVA aktivna
+' dokumenta je kvar koji integritet imenuje.
+' SABOTAZA: s95-e3-istorija-je-aktivna (E2: clanstvo-drzi-storniranu-otpremnicu).
+Private Sub T_S95_ClanstvoIstorijaNijeKvar()
+    Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
+    Dim t As String, rows As Variant, c As Collection
+    Dim blk As String, otp1 As String, otp2 As String, blk3 As String, otp3 As String
+    Dim bX As String, otpX As String, zbrX As String, zbrX2 As String
+    Dim bY As String, otpY As String, zbrY As String
+
+    redoviPre = SledBrojRedova()
+    On Error GoTo CleanUp
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    S6K8Snimak tx
+
+    t = Format$(Now, "hhnnss") & "-" & CStr(Int(Rnd() * 9999))
+    ' E2: blok u storniranoj otpremnici, pa u novoj.
+    blk = SledBlok("S95H2-" & t, FX_STANICA, 30, 0)
+    Set c = New Collection: c.Add blk
+    otp1 = SledOtpremnica(c, FX_VOZAC, FX_STANICA)
+    AssertEq modStorno.StornoOtpremnica_TX(otp1), True, "432 preduslov: otpremnica 1 je stornirana"
+    Set c = New Collection: c.Add blk
+    otp2 = SledOtpremnica(c, FX_VOZAC, FX_STANICA)
+    ' E3: otpremnica u storniranoj zbirnoj, pa u novoj.
+    SledLanacDoZbirne "S95H3X", "ZB-S95H3X-" & t, FX_VOZAC, FX_KUPAC, 40, bX, otpX, zbrX
+    AssertEq modStorno.StornoZbirna_TX(zbrX), True, "432 preduslov: zbirna X je stornirana"
+    Set c = New Collection: c.Add otpX
+    zbrX2 = SledZbirna("ZB-S95H3X2-" & t, c, FX_VOZAC, FX_KUPAC, 40, 0)
+
+    rows = modIntegritet.GetIntegritetRows()
+    AssertEq CStr(S95CitacClanstva("E2") = "") & "|" & CStr(NalazSadrzi(rows, "E2", blk)), "True|False", _
+             "432 E2: clanstvo u storniranoj otpremnici je istorija, ne kvar"
+    AssertEq CStr(S95CitacClanstva("E3") = "") & "|" & CStr(NalazSadrzi(rows, "E3", otpX)), "True|False", _
+             "432 E3: clanstvo u storniranoj zbirnoj je istorija, ne kvar"
+
+    ' KVAR: isti izvor u DVA aktivna dokumenta.
+    blk3 = SledBlok("S95H2B-" & t, FX_STANICA, 20, 0)
+    Set c = New Collection: c.Add blk3
+    otp3 = SledOtpremnica(c, FX_VOZAC, FX_STANICA)
+    PostaviPoljePoPK TBL_OTPREMNICA_IZVORI, COL_OPI_OTPREMNICA_ID, otp3, COL_OPI_OTKUP_ID, blk
+    SledLanacDoZbirne "S95H3Y", "ZB-S95H3Y-" & t, FX_VOZAC, FX_KUPAC, 30, bY, otpY, zbrY
+    PostaviPoljePoPK TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, zbrY, COL_ZBI_OTPREMNICA_ID, otpX
+    rows = modIntegritet.GetIntegritetRows()
+    AssertEq CStr(InStr(1, S95RedNalaza(rows, "E2", UCase$(blk)), "dva aktivna", vbTextCompare) > 0), "True", _
+             "432 E2: isti otkup u dve AKTIVNE otpremnice je nalaz"
+    AssertEq CStr(InStr(1, S95RedNalaza(rows, "E3", UCase$(otpX)), "dva aktivna", vbTextCompare) > 0), "True", _
+             "432 E3: ista otpremnica u dve AKTIVNE zbirne je nalaz"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    modUiData.ResetCache
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S95_ClanstvoIstorijaNijeKvar", _
+             "432: rollback je vratio redove svih tabela lanca"
 End Sub
