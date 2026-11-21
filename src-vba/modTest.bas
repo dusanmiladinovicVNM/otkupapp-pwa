@@ -22204,7 +22204,7 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     ' Bez ove kapije "TabelaNosiStorno = False" opet znaci dve stvari: eksplicitno
     ' BEZ_STORNA i "niko je nije klasifikovao". Staticka provera to ne zatvara,
     ' jer namerno preskace pozive sa promenljivim imenom tabele -- a takvih ima
-    ' (modIntegritet.CollectBrojZbirne).
+    ' (modIntegritet.AggByBroj).
     BeginTableCache
     dataDok = GetTableData(TBL_OTKUP)
     On Error Resume Next
@@ -38036,7 +38036,7 @@ End Function
 ' preskakao tiho. Sada drzi ceo SLED-INV-01 (roditelj i dete tacno jednom, prazan
 ' ID, dupli par), a integritet isti sud nabraja RED PO RED: dva pokvarena reda su
 ' dva nalaza E3, ispravno clanstvo nije nalaz.
-' SABOTAZE: s95-e3-postojanje-zbirne, s95-e3-prazan-id-tiho, s95-e3-samo-prvi.
+' SABOTAZE: s95-e3-postojanje-zbirne, s95-revizija-samo-prvi.
 Private Sub T_S95_ClanstvoZbirneNalazi()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, rows As Variant, citac As String
@@ -38087,7 +38087,7 @@ End Sub
 ' ali staje na PRVOM kvaru, pa integritet do S9-5 E2 nije gledao uopste. Sada isti
 ' sud sakuplja: dva pokvarena reda su dva nalaza E2. Citac i dalje odbija tabelu --
 ' ponasanje ekrana se ne menja.
-' SABOTAZE: s95-e2-dize-umesto-sakuplja, s95-e2-samo-prvi.
+' SABOTAZA: s95-revizija-dize-umesto-sakuplja.
 Private Sub T_S95_ClanstvoOtpremniceNalazi()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, rows As Variant, citac As String
@@ -38135,7 +38135,7 @@ End Sub
 ' Pravilo je ISTO kao lista sirocadi u Oporavku (GetOsirocenePrijemnice): E4 prazan,
 ' zbirna ne postoji ili je stornirana. B5 je merio LABELU, pa je prijemnica sa
 ' labelom a bez E4 (C002: 6 od 905) bila tiha, a kanonska prijemnica bez labele glasna.
-' SABOTAZE: s95-e4-meri-labelu, s95-e4-bez-razloga.
+' SABOTAZA: s95-e4-ne-proverava.
 Private Sub T_S95_PrijemnicaBezAktivneZbirne()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, rows As Variant, b As String, o As String
@@ -38187,7 +38187,7 @@ End Sub
 ' citale kolone bez pisca bile su ili uvek tihe (A1) ili uvek glasne: B5b je
 ' prijavljivao SVAKU aktivnu otpremnicu (C002: 921 od 921). Lanac otkup ->
 ' otpremnica -> zbirna -> prijemnica sa manjkom 5% nije nalaz nijedne provere.
-' SABOTAZA: s95-vracen-b5b.
+' Dokaz: crveno nad zatecenim kodom (B5b imenuje otpremnicu lanca).
 Private Sub T_S95_KanonskiLanacBezNalaza()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, rows As Variant, br As String
@@ -38224,7 +38224,7 @@ End Sub
 ' prolaza, ne broj redova snimka. Snimak nosi naslov bloka, zaglavlje kolona i
 ' prazan red izmedju blokova, pa je naslov do S9-5 za dva nalaza u dva bloka kazao
 ' "7". Pala provera nije nalaz o podacima: ne broji se, a naslov je kaze posebno.
-' SABOTAZE: s95-naslov-broji-redove, s95-naslov-bez-palih.
+' SABOTAZE: s95-naslov-broji-redove, s95-naslov-bez-palih, s95-pala-provera-se-ne-broji.
 Private Sub T_S95_NaslovBrojiNalaze()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, rows As Variant, naslov As String, nUk As Long, nPal As Long
@@ -38276,7 +38276,7 @@ End Sub
 ' uredjaja) bile su jedan red izvestaja manjka sa zbirom obe, ROBA (OM) je prijem
 ' prve delila i na otpremnicu druge, a A2 je sabirao sve zbirne broja. Isti broj
 ' nastaje prepisom LABELE posle zasejavanja (obrazac 356).
-' SABOTAZE: s95-manjak-po-vlasniku, s95-a2-po-broju.
+' SABOTAZE: s95-manjak-red-po-broju, s95-a2-po-broju (ROBA: s92-roba-om-cita-otp-brojzbirne).
 Private Sub T_S95_ManjakPoZbirnaID()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
     Dim t As String, br As String, m As Variant, r As Variant, rows As Variant
@@ -38329,7 +38329,7 @@ End Sub
 ' ne labela prijemnice; otkupno mesto je stanica otpremnica zbirne (E3), a
 ' proizvodjac kooperant njihovih izvora (E2). Do S9-5 su OM i proizvodjac isli
 ' po kolonama bez pisca (prazno), a broj po labeli.
-' SABOTAZE: s95-c4-broj-iz-labele, s95-c4-om-po-broju, s95-c4-proizvodjac-po-broju.
+' SABOTAZE: s95-c4-broj-iz-labele, s95-c4-om-iz-otpremnica, s95-c4-proizvodjac-iz-izvora.
 Private Sub T_S95_C4KontekstPoIvicama()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, prevPal As String
     Dim redoviPre As String, redoviPosle As String

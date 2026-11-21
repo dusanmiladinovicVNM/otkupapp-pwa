@@ -165,22 +165,15 @@ PRJ_BROJZBIRNE_LABELA = frozenset([
     ("modDokumenta", "LncPrijemnicaCekaIspravku"),
     ("modDokumenta", "LncPrijemniceZbirne"),
 ])
-# Integritet: spoj po broju koji brise S9-5 (sa svojim unosom ovde).
-PRJ_BROJZBIRNE_S95 = frozenset([
-    ("modIntegritet", "Chk_B4_DanglingBrojZbirne"),
-    ("modIntegritet", "Chk_B5_PrijemnicaBezZbirne"),
-    ("modIntegritet", "Chk_B6_ZbirnaCaseMismatch"),
-    ("modIntegritet", "ZbirStavkiPoBroju"),
-    ("modIntegritet", "PrijemnicaZbirnaMap"),
-    ("modDokumenta", "GetVerwaistePrijemnice"),            # -> B1b
-])
-PRJ_BROJZBIRNE_SPISKOVI = (("PRJ_BROJZBIRNE_LABELA", PRJ_BROJZBIRNE_LABELA),
-                           ("PRJ_BROJZBIRNE_S95", PRJ_BROJZBIRNE_S95))
+# S9-5 (plan 14.69): spisak PRJ_BROJZBIRNE_S95 (integritet po broju zbirne --
+# B4, B5, B6, A2, kontekst C4, GetVerwaistePrijemnice) je obrisan sa svojim
+# mestima; integritet meri E4 po ID-u.
+PRJ_BROJZBIRNE_SPISKOVI = (("PRJ_BROJZBIRNE_LABELA", PRJ_BROJZBIRNE_LABELA),)
 
 
 def prj_broj_spoj(spisak):
     """Izvedena grupa: zivo PROD mesto prj_brojzbirne van imenovanih procedura."""
-    poznato = PRJ_BROJZBIRNE_LABELA | PRJ_BROJZBIRNE_S95
+    poznato = PRJ_BROJZBIRNE_LABELA
     out = []
     for r in spisak:
         if r["grupa"] != "prj_brojzbirne" or r["tip"] != "PROD":
@@ -335,7 +328,9 @@ PRAGOVI = collections.OrderedDict([
     # SetOtkupBrojOtpremnice, OtkupBlockDeadParentByID). Ostaju
     # modIntegritet.ProizvodjacByZbirna (S9-5) i modSetup.EnsureSledljivostSchema
     # (S9-6); oba odlaze sa svojim rezom, pa prag tada ide na 0.
-    ("otk_veza_otp", 2),
+    # S9-5 (plan 14.69): 2 -> 1. Kontekst C4 ide ivicama E3 -> E2; ostaje
+    # EnsureSledljivostSchema (S9-6).
+    ("otk_veza_otp", 1),
     # S9-2: nove grupe sa pragom -- do S9-2 su bile bez praga jer su im citaoci
     # bili zivi u UI-ju. Sada brane rast do S9-5 / S9-6.
     #   otk_brojzbirne 2: Chk_B6 i ProizvodjacByZbirna (oba S9-5).
@@ -343,8 +338,11 @@ PRAGOVI = collections.OrderedDict([
     #                     GetVerwaisteOtpremnice (-> B1a) i sest u modIntegritet
     #                     (sve S9-5). F1/F2 status, ROBA OM, detalj, prefill i
     #                     kes vrste zbirne su presli na kanon u S9-2.
-    ("otk_brojzbirne", 2),
-    ("otp_brojzbirne", 8),
+    # S9-5 (plan 14.69): obe na 0. A1, B1a, B4a, B5b, B6 i kontekst C4 su obrisani
+    # ili presli na ivice (E2, E3, E4); jedino preostalo mesto otp_brojzbirne je
+    # SAMO_TEST (modDokumentInvariant), koje se ne broji.
+    ("otk_brojzbirne", 0),
+    ("otp_brojzbirne", 0),
     # S3-ostatak: pet linijskih kolona zaglavlja otpremnice je obrisano iz
     # kanona, a self-heal ih brise iz zatecene sveske. Poslednja tri ziva
     # mesta su bila u modSetup (format i EnsureColumnOnTable) -- ona su ta
@@ -363,7 +361,9 @@ PRAGOVI = collections.OrderedDict([
     # S6 korak 4 (stavka 183): 4 -> 3. Lista za storno (GetActiveDocumentsForStorno)
     # uzima kg zbirne i prijemnice iz stavki. Ostaju ValidateZbirna (2) i
     # EnsureDoradeSchema.
-    ("zbr_linija", 3),
+    # S9-5 (plan 14.69): 3 -> 1. ValidateZbirna je obrisan sa A1; ostaje
+    # EnsureDoradeSchema (S9-6).
+    ("zbr_linija", 1),
     ("zbr_stari_pisac", 0),
     # S6 korak 3 (stavka 178, odluka 6): pisac prijemnice od koraka 2 vraca
     # JEDAN ID, pa "PRJ-I + PRJ-II" vise ne postoji. Pet zivih Split(... " + ")
@@ -407,7 +407,9 @@ PRAGOVI = collections.OrderedDict([
     # ne citaju papir otpremnice ni uvid zbirne (17 -> 12). Ostaju prijemnica
     # (pisac StampIspravkaTrace postoji, SLED-ODL-08), KulVerzijeTabele (S9-5) i
     # EnsureSledljivostSchema (S9-6). Prag brani rast; deo grupe ide na 0 u S9-6.
-    ("x_trace", 12),
+    # S9-5 (plan 14.69): 12 -> 11. KulVerzijeTabele vise nema rezervnu granu po
+    # broju-obliku traga (N16).
+    ("x_trace", 11),
 ])
 
 # Linijska polja zaglavlja -- prag dual READ.

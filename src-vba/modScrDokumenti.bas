@@ -3651,9 +3651,11 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
                 zbrID = ZbirnaReda(mk, CellS(src, r, iStavID), clOtp, clZbr)
                 bezZbirne = (Len(zbrID) = 0)
                 If Not bezZbirne Then
-                    ' S92-REV-01: citac E3 postojanje zbirne ne proverava. Clanstvo
-                    ' na zbirnu koje nema u zaglavljima je kvar BAS tog reda --
-                    ' veza nepoznata, ne "Poslato" bez labele.
+                    ' S92-REV-01: od S9-5 (S95-ODL-02) citac E3 sam odbija clanstvo na
+                    ' zbirnu koja ne postoji tacno jednom (clRazlog gore). Grana ostaje
+                    ' za ID koji se od zaglavlja razlikuje samo u velikim slovima: citac
+                    ' poredi bez obzira na velika slova, mapa broja ne -- veza nepoznata,
+                    ' ne "Poslato" bez labele.
                     If brPoZbr.Exists(zbrID) Then
                         vZbir = CStr(brPoZbr(zbrID))
                     Else

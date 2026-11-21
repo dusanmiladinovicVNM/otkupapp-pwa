@@ -131,38 +131,6 @@ End Type
 ' CreateOtpremnicaDraft_TX / CreateOtpremnicaIzIzvora_TX i ostali *_TX nize.
 ' ============================================================
 
-Public Function GetOtpremniceByZbirna(ByVal brojZbirne As String) As Variant
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTPREMNICA)
-
-    If IsEmpty(data) Then
-        GetOtpremniceByZbirna = Empty
-        Exit Function
-    End If
-    data = ExcludeStornirano(data, TBL_OTPREMNICA)
-
-    If IsEmpty(data) Then
-        GetOtpremniceByZbirna = Empty
-        Exit Function
-    End If
-
-    Dim filters As New Collection
-    Dim fp As clsFilterParam
-
-    Set fp = New clsFilterParam
-    fp.Init RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, _
-            "modDokumenta.GetOtpremniceByZbirna"), "=", brojZbirne
-    filters.Add fp
-
-    GetOtpremniceByZbirna = FilterArray(data, filters)
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.GetOtpremniceByZbirna"
-    GetOtpremniceByZbirna = Empty
-End Function
 
 ' True ako zbirna sa datim brojem postoji u tblZbirna (iskljucujuci stornirane).
 ' Storno-aware namerno: prijemnica ne sme da referencira storniranu zbirnu.
@@ -1550,16 +1518,25 @@ End Function
 ' verziju zbirne kroz koju je prosla. Zauzeta je samo ako je clan zbirne koja
 ' NIJE stornirana; clanstvo u superseded verziji je istorija, ne prepreka.
 '
-' DVA AKTIVNA ZAPISA ZA ISTU OTPREMNICU SU TVRDA GRESKA.
+' STROG LOADER CELOG CLANSTVA ZBIRNE, sa ISTIM ugovorom koji E2 drzi nad
+' clanstvom otpremnice (AktivnoOtpClanstvoPoKanonu; S9-5, S95-ODL-02,
+' SLED-INV-01 -- svaka ivica razresava tacno jednom):
+'   - clanstvo bez ZbirnaID-a ili bez OtpremnicaID-a,
+'   - zbirna koja ne postoji tacno jednom,
+'   - otpremnica koja ne postoji tacno jednom,
+'   - isti par (zbirna, otpremnica) dvaput,
+'   - otpremnica u dve AKTIVNE zbirne
+' su tvrde greske, ne stanja koja se normalizuju. Do S9-5 je ovaj prolaz drzao
+' samo poslednje: prazan ID je preskakao tiho, a clanstvo na zbirnu koje NEMA
+' racunao je kao aktivno (S92-REV-01), pa su ga ekrani morali hvatati sami.
+' Dva aktivna zapisa za istu otpremnicu su greska i kad pokazuju na ISTU zbirnu
+' -- dupli red iste veze bi kasnije obican join sabrao dvaput.
 '
-' Pravilo je prosto: jedna otpremnica ima TACNO 0 ili 1 aktivan zapis clanstva.
-' Drugi zapis je greska bez obzira da li pokazuje na DRUGU ili na ISTU zbirnu --
-' dupli red iste veze bi kasnije obican join sabrao dvaput.
-'
-' Prva verzija je radila prosto mapa(otpID) = zbrID, pa bi drugi red tiho
-' pregazio prvi. Druga je hvatala samo razlicit ZbirnaID. Loader koji nelegalno
-' stanje normalizuje u legalno radi protiv kardinaliteta koji A15 cuva.
-Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
+' DVA IZLAZA ISTOG SUDA (S95-ODL-01, obrazac modAmbalaza.KnjigaKvar): bez
+' kolekcije se DIZE na prvom kvaru (citaoci, nepromenjeno); sa kolekcijom svaki
+' pokvaren red ide u nalaz, red se preskace i prolaz ide dalje (integritet E3).
+Private Function AktivnoClanstvoPoKanonu(ByVal src As String, _
+                                         Optional ByVal nalazi As Collection) As Object
     Dim mapa As Object
     Set mapa = CreateObject("Scripting.Dictionary")
     Set AktivnoClanstvoPoKanonu = mapa
@@ -1571,6 +1548,11 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
     Dim cIzvZbr As Long, cIzvOtp As Long
     cIzvZbr = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_ZBIRNA_ID, src)
     cIzvOtp = RequireColumnIndex(TBL_ZBIRNA_IZVORI, COL_ZBI_OTPREMNICA_ID, src)
+
+    ' Brojevi redova po ID-u: jedan prolaz po tabeli, pa provera po kljucu.
+    Dim brojZbr As Object, brojOtpZbr As Object
+    Set brojZbr = BrojRedovaPoID(TBL_ZBIRNA, COL_ZBR_ID, src)
+    Set brojOtpZbr = BrojRedovaPoID(TBL_OTPREMNICA, COL_OTP_ID, src)
 
     ' Skup storniranih zbirnih -- jedan prolaz, pa provera po kljucu.
     Dim stornirane As Object
@@ -1591,25 +1573,86 @@ Private Function AktivnoClanstvoPoKanonu(ByVal src As String) As Object
         End If
     End If
 
-    Dim i As Long
-    Dim zbrID As String, otpID As String
+    Dim vidjenPar As Object
+    Set vidjenPar = CreateObject("Scripting.Dictionary")
 
+    Dim i As Long, zbrID As String, otpID As String, par As String
     For i = 1 To UBound(izv, 1)
         zbrID = Trim$(NzToText(izv(i, cIzvZbr)))
-        otpID = UCase$(Trim$(NzToText(izv(i, cIzvOtp))))
-        If Len(zbrID) > 0 And Len(otpID) > 0 Then
-            If Not stornirane.Exists(UCase$(zbrID)) Then
-                If mapa.Exists(otpID) Then
-                    Err.Raise vbObjectError + 1260, src, _
-                              "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
-                              otpID & " ima dva aktivna zapisa clanstva (" & _
-                              CStr(mapa(otpID)) & " i " & zbrID & ")."
-                End If
-                mapa.Add otpID, zbrID
-            End If
+        otpID = Trim$(NzToText(izv(i, cIzvOtp)))
+
+        If Len(zbrID) = 0 Then
+            ClanstvoKvar nalazi, vbObjectError + 1263, src, i, zbrID, otpID, _
+                         "Clanstvo bez ZbirnaID-a u " & TBL_ZBIRNA_IZVORI & _
+                         " (red " & i & ", otpremnica " & otpID & ")."
+            GoTo Sledeci
         End If
+        If Len(otpID) = 0 Then
+            ClanstvoKvar nalazi, vbObjectError + 1264, src, i, zbrID, otpID, _
+                         "Clanstvo zbirne bez OtpremnicaID-a, zbirna " & zbrID & "."
+            GoTo Sledeci
+        End If
+
+        ' Roditelj i dete moraju da postoje TACNO jednom: clanstvo na dokument
+        ' koga nema nije "aktivna zbirna" nego kvar.
+        If ClanstvoBrojPoID(brojZbr, zbrID) <> 1 Then
+            ClanstvoKvar nalazi, vbObjectError + 1265, src, i, zbrID, otpID, _
+                         "Clanstvo pokazuje na zbirnu koja ne postoji tacno jednom: " & _
+                         zbrID & " (nadjeno " & ClanstvoBrojPoID(brojZbr, zbrID) & _
+                         ", otpremnica " & otpID & ")."
+            GoTo Sledeci
+        End If
+        If ClanstvoBrojPoID(brojOtpZbr, otpID) <> 1 Then
+            ClanstvoKvar nalazi, vbObjectError + 1266, src, i, zbrID, otpID, _
+                         "Clanstvo zbirne pokazuje na otpremnicu koja ne postoji tacno jednom: " & _
+                         otpID & " (nadjeno " & ClanstvoBrojPoID(brojOtpZbr, otpID) & _
+                         ", zbirna " & zbrID & ")."
+            GoTo Sledeci
+        End If
+
+        par = UCase$(zbrID) & "|" & UCase$(otpID)
+        If vidjenPar.Exists(par) Then
+            ClanstvoKvar nalazi, vbObjectError + 1267, src, i, zbrID, otpID, _
+                         "Kanonsko clanstvo zbirne je nekonzistentno: par (" & zbrID & ", " & _
+                         otpID & ") postoji vise puta."
+            GoTo Sledeci
+        End If
+        vidjenPar.Add par, True
+
+        If Not stornirane.Exists(UCase$(zbrID)) Then
+            If mapa.Exists(UCase$(otpID)) Then
+                ClanstvoKvar nalazi, vbObjectError + 1260, src, i, zbrID, otpID, _
+                             "Kanonsko clanstvo je nekonzistentno: otpremnica " & _
+                             UCase$(otpID) & " ima dva aktivna zapisa clanstva (" & _
+                             CStr(mapa(UCase$(otpID))) & " i " & zbrID & ")."
+                GoTo Sledeci
+            End If
+            mapa.Add UCase$(otpID), zbrID
+        End If
+Sledeci:
     Next i
 End Function
+
+' INTEGRITET CLANSTVA ZBIRNE (S9-5, ivica E3): isti sud kao citac, sakupljen
+' umesto dignut. Collection od Array(red, ZbirnaID, OtpremnicaID, razlog);
+' prazna = clanstvo je cisto. Sistemski pad (sema) se i dalje dize.
+Public Function ClanstvoZbirneNalazi() As Collection
+    Dim c As Collection
+    Set c = New Collection
+    AktivnoClanstvoPoKanonu "ClanstvoZbirneNalazi", c
+    Set ClanstvoZbirneNalazi = c
+End Function
+
+' Jedan kvar clanstva (E2 ili E3), dva izlaza (S95-ODL-01): bez kolekcije se
+' dize -- zatecen ugovor citaca --, sa kolekcijom se sakuplja. Druga kopija
+' pravila za reviziju bila bi druga stvar koja moze da divergira.
+Private Sub ClanstvoKvar(ByVal nalazi As Collection, ByVal errNum As Long, _
+                         ByVal src As String, ByVal red As Long, _
+                         ByVal roditelj As String, ByVal dete As String, _
+                         ByVal razlog As String)
+    If nalazi Is Nothing Then Err.Raise errNum, src, razlog
+    nalazi.Add Array(CStr(red), roditelj, dete, razlog)
+End Sub
 
 ' =====================================================================
 ' NACRT ZBIRNE (S4-2b)
@@ -7715,7 +7758,8 @@ End Function
 '   - dete koje ne postoji tacno jednom,
 '   - isti par (otpremnica, otkup) dvaput,
 '   - otkup u dve AKTIVNE otpremnice
-' su tvrde greske, ne stanja koja se normalizuju.
+' su tvrde greske, ne stanja koja se normalizuju. Dva izlaza istog suda
+' (S9-5, S95-ODL-01): sa kolekcijom `nalazi` se kvar sakuplja (ClanstvoKvar).
 '
 ' Do S3b-2b je ovaj prolaz bio SLABIJI od citaca jednog dokumenta: prazne ID-eve
 ' je preskakao, a postojanje dokumenata nije proveravao. Korupcija je tako
@@ -7725,7 +7769,8 @@ End Function
 ' na nepostojecu otpremnicu proglasila zauzetim i sklonila ga. Citalac koji
 ' korupciju pretvori u naizgled ispravan odgovor je tacno ono sto ovaj refaktor
 ' uklanja, pa ugovor stoji na JEDNOM mestu -- ovde, a ne u svakom pozivaocu.
-Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
+Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String, _
+                                            Optional ByVal nalazi As Collection) As Object
     Dim mapa As Object
     Set mapa = CreateObject("Scripting.Dictionary")
     Set AktivnoOtpClanstvoPoKanonu = mapa
@@ -7754,48 +7799,65 @@ Private Function AktivnoOtpClanstvoPoKanonu(ByVal src As String) As Object
         otkupID = Trim$(NzToText(izv(i, cOtk)))
 
         If Len(otpID) = 0 Then
-            Err.Raise vbObjectError + 1331, src, _
-                      "Clanstvo bez OtpremnicaID-a u " & TBL_OTPREMNICA_IZVORI & _
-                      " (red " & i & ")."
+            ClanstvoKvar nalazi, vbObjectError + 1331, src, i, otpID, otkupID, _
+                         "Clanstvo bez OtpremnicaID-a u " & TBL_OTPREMNICA_IZVORI & _
+                         " (red " & i & ", otkup " & otkupID & ")."
+            GoTo Sledeci
         End If
         If Len(otkupID) = 0 Then
-            Err.Raise vbObjectError + 1332, src, _
-                      "Clanstvo bez OtkupID-a, otpremnica " & otpID & "."
+            ClanstvoKvar nalazi, vbObjectError + 1332, src, i, otpID, otkupID, _
+                         "Clanstvo bez OtkupID-a, otpremnica " & otpID & "."
+            GoTo Sledeci
         End If
 
         ' Roditelj i dete moraju da postoje TACNO jednom: clanstvo na dokument
         ' koga nema nije "manji zbir" nego kvar.
         If ClanstvoBrojPoID(brojOtp, otpID) <> 1 Then
-            Err.Raise vbObjectError + 1334, src, _
-                      "Clanstvo pokazuje na otpremnicu koja ne postoji tacno jednom: " & _
-                      otpID & " (nadjeno " & ClanstvoBrojPoID(brojOtp, otpID) & _
-                      ", otkup " & otkupID & ")."
+            ClanstvoKvar nalazi, vbObjectError + 1334, src, i, otpID, otkupID, _
+                         "Clanstvo pokazuje na otpremnicu koja ne postoji tacno jednom: " & _
+                         otpID & " (nadjeno " & ClanstvoBrojPoID(brojOtp, otpID) & _
+                         ", otkup " & otkupID & ")."
+            GoTo Sledeci
         End If
         If ClanstvoBrojPoID(brojOtk, otkupID) <> 1 Then
-            Err.Raise vbObjectError + 1335, src, _
-                      "Clanstvo pokazuje na otkup koji ne postoji tacno jednom: " & _
-                      otkupID & " (nadjeno " & ClanstvoBrojPoID(brojOtk, otkupID) & _
-                      ", otpremnica " & otpID & ")."
+            ClanstvoKvar nalazi, vbObjectError + 1335, src, i, otpID, otkupID, _
+                         "Clanstvo pokazuje na otkup koji ne postoji tacno jednom: " & _
+                         otkupID & " (nadjeno " & ClanstvoBrojPoID(brojOtk, otkupID) & _
+                         ", otpremnica " & otpID & ")."
+            GoTo Sledeci
         End If
 
         par = UCase$(otpID) & "|" & UCase$(otkupID)
         If vidjenPar.Exists(par) Then
-            Err.Raise vbObjectError + 1333, src, _
-                      "Kanonsko clanstvo je nekonzistentno: par (" & otpID & ", " & _
-                      otkupID & ") postoji vise puta."
+            ClanstvoKvar nalazi, vbObjectError + 1333, src, i, otpID, otkupID, _
+                         "Kanonsko clanstvo je nekonzistentno: par (" & otpID & ", " & _
+                         otkupID & ") postoji vise puta."
+            GoTo Sledeci
         End If
         vidjenPar.Add par, True
 
         If Not stornirane.Exists(UCase$(otpID)) Then
             If mapa.Exists(UCase$(otkupID)) Then
-                Err.Raise vbObjectError + 1305, src, _
-                          "Kanonsko clanstvo je nekonzistentno: otkup " & _
-                          otkupID & " ima dva aktivna zapisa clanstva (" & _
-                          CStr(mapa(UCase$(otkupID))) & " i " & otpID & ")."
+                ClanstvoKvar nalazi, vbObjectError + 1305, src, i, otpID, otkupID, _
+                             "Kanonsko clanstvo je nekonzistentno: otkup " & _
+                             otkupID & " ima dva aktivna zapisa clanstva (" & _
+                             CStr(mapa(UCase$(otkupID))) & " i " & otpID & ")."
+                GoTo Sledeci
             End If
             mapa.Add UCase$(otkupID), otpID
         End If
+Sledeci:
     Next i
+End Function
+
+' INTEGRITET CLANSTVA OTPREMNICE (S9-5, ivica E2): isti sud kao citac, sakupljen
+' umesto dignut. Collection od Array(red, OtpremnicaID, OtkupID, razlog);
+' prazna = clanstvo je cisto. Sistemski pad (sema) se i dalje dize.
+Public Function ClanstvoOtpremnicaNalazi() As Collection
+    Dim c As Collection
+    Set c = New Collection
+    AktivnoOtpClanstvoPoKanonu "ClanstvoOtpremnicaNalazi", c
+    Set ClanstvoOtpremnicaNalazi = c
 End Function
 
 ' UCase(ID) -> broj redova sa tim ID-em, jednim prolazom kroz tabelu.
@@ -8039,80 +8101,6 @@ Private Function OtpHdrBrojOpcion(ByVal h As Object, ByVal kljuc As String, _
     OtpHdrBrojOpcion = CDbl(v)
 End Function
 
-' ============================================================
-' ZBIRNA VALIDIERUNG
-' ============================================================
-Public Function ValidateZbirna(ByVal brojZbirne As String) As Variant
-    ' Prueft Summe Otpremnice vs Zbirna
-    ' Returns: Array(SumaOtpKg, ZbirnaKg, RazlikaKg, ValidKg,
-    '                SumaOtpAmb, ZbirnaAmb, RazlikaAmb)
-    On Error GoTo EH
-
-    Dim otpData As Variant
-    otpData = GetOtpremniceByZbirna(brojZbirne)
-
-    If IsArray(otpData) Then otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
-
-    Dim sumaOtpKg As Double
-    Dim sumaOtpAmb As Long
-
-    ' Kilaza i gajbe otpremnice su na STAVKAMA (S3b) -- sa zaglavlja bi ova
-    ' provera svaku zbirnu poredila sa nulom i proglasavala je neispravnom.
-    If Not IsEmpty(otpData) Then
-        Dim colOtpID As Long
-        colOtpID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
-                                      "modDokumenta.ValidateZbirna")
-
-        Dim zbirStav As Object
-        Set zbirStav = ZbirStavkiPoOtpremnici()
-
-        Dim i As Long, z As Variant
-        For i = 1 To UBound(otpData, 1)
-            z = ZbirStavkiZaOtpremnicu(zbirStav, Trim$(NzToText(otpData(i, colOtpID))), _
-                                       "modDokumenta.ValidateZbirna")
-            sumaOtpKg = sumaOtpKg + CDbl(z(0))
-            sumaOtpAmb = sumaOtpAmb + CLng(z(2))
-        Next i
-    End If
-
-    Dim zbirnaKg As Double
-    Dim zbirnaAmb As Long
-
-    Dim zbrData As Variant
-    zbrData = GetTableData(TBL_ZBIRNA)
-
-    If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
-
-    If Not IsEmpty(zbrData) Then
-        Dim colZbrBroj As Long
-        Dim colZbrKol As Long
-        Dim colZbrAmb As Long
-
-        colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                        "modDokumenta.ValidateZbirna")
-        colZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, _
-                                       "modDokumenta.ValidateZbirna")
-        colZbrAmb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB, _
-                                       "modDokumenta.ValidateZbirna")
-
-        For i = 1 To UBound(zbrData, 1)
-            If CStr(zbrData(i, colZbrBroj)) = brojZbirne Then
-                If IsNumeric(zbrData(i, colZbrKol)) Then zbirnaKg = zbirnaKg + CDbl(zbrData(i, colZbrKol))
-                If IsNumeric(zbrData(i, colZbrAmb)) Then zbirnaAmb = zbirnaAmb + CLng(zbrData(i, colZbrAmb))
-            End If
-        Next i
-    End If
-
-    ValidateZbirna = Array(sumaOtpKg, zbirnaKg, sumaOtpKg - zbirnaKg, _
-                           (Abs(sumaOtpKg - zbirnaKg) < 0.01), _
-                           sumaOtpAmb, zbirnaAmb, sumaOtpAmb - zbirnaAmb)
-
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.ValidateZbirna"
-    ValidateZbirna = Array(0#, 0#, 0#, False, 0&, 0&, 0&)
-End Function
 
 ' ZBR-CHILD-01: ZbirnaID JEDINE aktivne zbirne datog BROJA, ili prazno.
 '
@@ -8836,7 +8824,7 @@ End Function
 ' Linijskih polja ZAGLAVLJA od S6 koraka 8 nema (kanon), pa ih ovde nema sta da
 ' se cita ni proverava.
 '
-' Integritet cita MEKO (obrazac ZbirOtpremnicaMeko u modIntegritet): audit
+' Integritet cita MEKO (kolona uz nalaz, obrazac ZbirStavkiZbirneMeko): audit
 ' postoji da nabroji pokvarene redove, pa kvar ovde znaci prazan podatak u
 ' auditu, ne pad provere.
 Public Function StavkePrijemniceRedovi() As Variant
@@ -9186,8 +9174,8 @@ Public Function StavkeZaPrijemnicu(ByVal poDok As Object, _
     Set StavkeZaPrijemnicu = poDok(pid)
 End Function
 
-' Zbir stavki po dokumentu -- MEKO, za audit i oporavak (obrazac
-' modIntegritet.ZbirOtpremnicaMeko). Ti spiskovi postoje da nabroje pokvarene
+' Zbir stavki po dokumentu -- MEKO, za audit i oporavak (kolona kolicine uz
+' nalaz ili red Oporavka). Ti spiskovi postoje da nabroje pokvarene
 ' redove, pa kvar strogog citaoca ovde znaci "nema podatka" (Nothing), a ne pad
 ' spiska. Tvrda kapija zivi u citaocima papira, ekrana i izvestaja.
 Public Function ZbirStavkiPoPrijemniciMeko() As Object
@@ -9473,257 +9461,6 @@ EH:
     CalculateProsekGajbeByZbirna = 0
 End Function
 
-' ============================================================
-' Storno Verweiste
-' ============================================================
-
-Public Function GetVerwaisteDokumente(ByVal dokumentTip As String) As Variant
-    ' Returns: 2D Array der Dokumente deren BrojZbirne auf eine
-    '          stornierte Zbirna zeigt, die selbst aber NICHT storniert sind.
-    '
-    ' dokumentTip: "Otpremnica" oder "Prijemnica"
-    '
-    ' Otpremnica Returns: (OtpremnicaID, BrojOtp, BrojZbirne, VrstaVoca, Kolicina)
-    ' Prijemnica Returns: (PrijemnicaID, BrojPrij, BrojZbirne, KupacNaziv, Kolicina)
-    ' oder Empty
-    On Error GoTo EH
-
-    Dim zbrData As Variant
-    zbrData = GetTableData(TBL_ZBIRNA)
-
-    If IsEmpty(zbrData) Then
-        GetVerwaisteDokumente = Empty
-        Exit Function
-    End If
-
-    Dim colZbrBroj As Long
-    Dim colZbrStorno As Long
-
-    colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                                    "modDokumenta.GetVerwaisteDokumente")
-    colZbrStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, _
-                                      "modDokumenta.GetVerwaisteDokumente")
-
-    Dim storniraneBrojevi As Object
-    Set storniraneBrojevi = CreateObject("Scripting.Dictionary")
-
-    Dim i As Long
-    Dim brz As String
-
-    For i = 1 To UBound(zbrData, 1)
-        If Trim$(NzToText(zbrData(i, colZbrStorno))) = "Da" Then
-            brz = Trim$(NzToText(zbrData(i, colZbrBroj)))
-
-            If brz <> "" Then
-                If Not storniraneBrojevi.Exists(brz) Then
-                    storniraneBrojevi.Add brz, True
-                End If
-            End If
-        End If
-    Next i
-
-    For i = 1 To UBound(zbrData, 1)
-        If Trim$(NzToText(zbrData(i, colZbrStorno))) <> "Da" Then
-            brz = Trim$(NzToText(zbrData(i, colZbrBroj)))
-
-            If storniraneBrojevi.Exists(brz) Then
-                storniraneBrojevi.Remove brz
-            End If
-        End If
-    Next i
-
-    If storniraneBrojevi.count = 0 Then
-        GetVerwaisteDokumente = Empty
-        Exit Function
-    End If
-
-    Select Case dokumentTip
-        Case "Otpremnica"
-            GetVerwaisteDokumente = GetVerwaisteOtpremnice(storniraneBrojevi)
-
-        Case "Prijemnica"
-            GetVerwaisteDokumente = GetVerwaistePrijemnice(storniraneBrojevi)
-
-        Case Else
-            GetVerwaisteDokumente = Empty
-    End Select
-
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.GetVerwaisteDokumente"
-    GetVerwaisteDokumente = Empty
-End Function
-
-Private Function GetVerwaisteOtpremnice(ByVal storniraneBrojevi As Object) As Variant
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_OTPREMNICA)
-
-    If IsEmpty(data) Then
-        GetVerwaisteOtpremnice = Empty
-        Exit Function
-    End If
-
-    Dim colID As Long
-    Dim colBrOtp As Long
-    Dim colBrZbr As Long
-    Dim colVrsta As Long
-    Dim colStorno As Long
-    Dim zVerw As Variant
-
-    colID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, _
-                               "modDokumenta.GetVerwaisteOtpremnice")
-    colBrOtp = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, _
-                                  "modDokumenta.GetVerwaisteOtpremnice")
-    colBrZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, _
-                                  "modDokumenta.GetVerwaisteOtpremnice")
-    colVrsta = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VRSTA, _
-                                  "modDokumenta.GetVerwaisteOtpremnice")
-    colStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, _
-                                   "modDokumenta.GetVerwaisteOtpremnice")
-
-    ' Kilaza dolazi sa STAVKI (S3b) -- lista siroceta je lista za oporavak, pa
-    ' bi nula pored svakog dokumenta operateru rekla da nema sta da se vrati.
-    Dim zbirStav As Object
-    Set zbirStav = ZbirStavkiPoOtpremnici()
-
-    Dim count As Long
-    Dim i As Long
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colStorno))) = "Da" Then GoTo NextCount
-
-        If storniraneBrojevi.Exists(Trim$(NzToText(data(i, colBrZbr)))) Then
-            count = count + 1
-        End If
-
-NextCount:
-    Next i
-
-    If count = 0 Then
-        GetVerwaisteOtpremnice = Empty
-        Exit Function
-    End If
-
-    Dim result() As Variant
-    ReDim result(1 To count, 1 To 5)
-
-    Dim idx As Long
-    Dim kol As Double
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colStorno))) = "Da" Then GoTo NextRow
-
-        If storniraneBrojevi.Exists(Trim$(NzToText(data(i, colBrZbr)))) Then
-            idx = idx + 1
-
-            zVerw = ZbirStavkiZaOtpremnicu(zbirStav, Trim$(NzToText(data(i, colID))), _
-                                           "modDokumenta.GetVerwaisteOtpremnice")
-            kol = CDbl(zVerw(0))
-
-            result(idx, 1) = NzToText(data(i, colID))
-            result(idx, 2) = NzToText(data(i, colBrOtp))
-            result(idx, 3) = NzToText(data(i, colBrZbr))
-            result(idx, 4) = NzToText(data(i, colVrsta))
-            result(idx, 5) = kol
-        End If
-
-NextRow:
-    Next i
-
-    GetVerwaisteOtpremnice = result
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.GetVerwaisteOtpremnice"
-    GetVerwaisteOtpremnice = Empty
-End Function
-
-Private Function GetVerwaistePrijemnice(ByVal storniraneBrojevi As Object) As Variant
-    On Error GoTo EH
-
-    Dim data As Variant
-    data = GetTableData(TBL_PRIJEMNICA)
-
-    If IsEmpty(data) Then
-        GetVerwaistePrijemnice = Empty
-        Exit Function
-    End If
-
-    Dim colID As Long
-    Dim colBrPrij As Long
-    Dim colBrZbr As Long
-    Dim colKupac As Long
-    Dim colStorno As Long
-
-    colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                               "modDokumenta.GetVerwaistePrijemnice")
-    colBrPrij = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
-                                   "modDokumenta.GetVerwaistePrijemnice")
-    colBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
-                                  "modDokumenta.GetVerwaistePrijemnice")
-    colKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, _
-                                  "modDokumenta.GetVerwaistePrijemnice")
-    colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, _
-                                   "modDokumenta.GetVerwaistePrijemnice")
-
-    ' Kolicina dokumenta je zbir STAVKI (S6 korak 3), citan MEKO: ovo je spisak
-    ' za audit (Chk_B1), pa kvar stavki daje praznu kolicinu, ne pad provere.
-    Dim zbir As Object
-    Set zbir = ZbirStavkiPoPrijemniciMeko()
-
-    Dim count As Long
-    Dim i As Long
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colStorno))) = "Da" Then GoTo NextCount
-
-        If storniraneBrojevi.Exists(Trim$(NzToText(data(i, colBrZbr)))) Then
-            count = count + 1
-        End If
-
-NextCount:
-    Next i
-
-    If count = 0 Then
-        GetVerwaistePrijemnice = Empty
-        Exit Function
-    End If
-
-    Dim result() As Variant
-    ReDim result(1 To count, 1 To 5)
-
-    Dim idx As Long
-    Dim kupacNaziv As String
-
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colStorno))) = "Da" Then GoTo NextRow
-
-        If storniraneBrojevi.Exists(Trim$(NzToText(data(i, colBrZbr)))) Then
-            idx = idx + 1
-
-            kupacNaziv = CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, _
-                                          NzToText(data(i, colKupac)), COL_KUP_NAZIV))
-
-            result(idx, 1) = NzToText(data(i, colID))
-            result(idx, 2) = NzToText(data(i, colBrPrij))
-            result(idx, 3) = NzToText(data(i, colBrZbr))
-            result(idx, 4) = kupacNaziv
-            result(idx, 5) = KgPrijemniceMeko(zbir, NzToText(data(i, colID)))
-        End If
-
-NextRow:
-    Next i
-
-    GetVerwaistePrijemnice = result
-    Exit Function
-
-EH:
-    LogErr "modDokumenta.GetVerwaistePrijemnice"
-    GetVerwaistePrijemnice = Empty
-End Function
 
 ' ============================================================
 ' HELPER - Vozac-Report (ersetzt alten modTransport)
@@ -9945,7 +9682,7 @@ Public Function StorniraniHeaders() As Variant
 End Function
 
 ' id -> "Naziv" (ili "Ime Prezime") recnik; prazan recnik ako tabela/kolone fale.
-' Public: reuse i iz modIntegritet (OtkupnoMestoByZbirna).
+' Public: reuse i iz modIntegritet (kontekst C4: OM, proizvodjac, broj zbirne).
 Public Function BuildIdNameDict(ByVal tbl As String, ByVal idCol As String, _
                                 ByVal nameCol1 As String, _
                                 Optional ByVal nameCol2 As String = "") As Object

@@ -95,6 +95,8 @@ Private mIzvorCitanjaTest As Long
 ' pretrage. Isti obrazac kao snimak ekrana Izvestaji (par. 23.9/S2).
 Private mIntSnimak As Variant
 Private mIntGen As Long
+Private mIntBroj As Long      ' nalaza u snimku -- iz ISTOG prolaza (KI-099)
+Private mIntPalih As Long     ' provera koje nisu izvrsene u tom prolazu
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -135,6 +137,10 @@ Public Function Scr_NaslovDopuna() As String
             ' prazan i pojavio se tek na sledecem osvezavanju. Poziv je
             ' besplatan -- mreza odmah ispod dobija isti snimak iz kesa.
             Scr_NaslovDopuna = CStr(IntegritetNalaza()) & " " & Poruka("OTKUI_OPO_INT_NALAZA")
+            ' Pala provera nije nalaz, ali "0 neuskladjenih" uz nju nije cist
+            ' integritet -- naslov je kaze posebno (KI-099).
+            If mIntPalih > 0 Then Scr_NaslovDopuna = Scr_NaslovDopuna & ", " & _
+                Poruka("OTKUI_OPO_INT_PALO") & " " & CStr(mIntPalih)
     End Select
 End Function
 
@@ -1181,7 +1187,7 @@ Private Function IntegritetSnimak() As Variant
         IntegritetSnimak = mIntSnimak
         Exit Function
     End If
-    mIntSnimak = GetIntegritetRows()
+    mIntSnimak = GetIntegritetRows(mIntBroj, mIntPalih)
     mIntGen = modUiData.DataGeneracija()
     ' Generacija ume da bude 0 na startu; snimak bi se tada gradio iznova pri
     ' svakom pozivu. Jedinica znaci "snimak postoji", a Scr_ResetCache ga i
@@ -1190,13 +1196,16 @@ Private Function IntegritetSnimak() As Variant
     IntegritetSnimak = mIntSnimak
 End Function
 
-' UKUPAN broj nalaza iz SNIMKA. Namerno se ne cita modIntegritet.IntegritetUkupno:
-' on drzi brojku POSLEDNJEG prolaza bilo kog pozivaoca (Admin dugme pokrece svoj),
-' a broj u naslovu mora da opisuje bas listu koju operater gleda.
+' UKUPAN broj NALAZA iz snimka -- broj koji je dao ISTI prolaz kroz provere
+' (GetIntegritetRows, outUkupno). Ne UBound snimka: snimak nosi i naslov bloka,
+' zaglavlje kolona i prazan red izmedju blokova, pa je do S9-5 naslov za dva
+' nalaza u dva bloka kazao "7" (KI-099). Brojka se ne cita posle prolaza iz
+' modula provera: tamo bi bila stanje poslednjeg pozivaoca (Admin dugme pokrece
+' svoj), a naslov mora da opisuje bas listu koju operater gleda.
 Private Function IntegritetNalaza() As Long
     Dim src As Variant
     src = IntegritetSnimak()
-    If IsArray(src) Then IntegritetNalaza = UBound(src, 1)
+    IntegritetNalaza = mIntBroj
 End Function
 
 Private Function RowsIntegritet(ByVal q As String) As Variant
