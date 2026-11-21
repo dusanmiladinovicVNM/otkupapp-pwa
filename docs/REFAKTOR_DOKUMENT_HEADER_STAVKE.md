@@ -12757,6 +12757,11 @@ integritet i health. Dokumenti u petom commit-u.
   `BrojAktivneZbirneOtp`. `PrijemZaZbirnu(vezaPoznata, cnt, kg)`; `IZV_VLASNIK_NEJASAN` → `IZV_PRIJEM_NEPOZNAT`
   („prijem nepoznat" — jedina neizvesnost je kvar E4; do S9-5 kvar E4 zbirne sa jednim vlasnikom nije menjao brojku).
   `modIzvestajTests.T_PrijemVlasnikRazresenje` prepisan na novu semantiku (14 → 8 provera).
+  **Premisa promenjena (nađeno samopregledom posle koda, propust merenja pre koda):**
+  `modIzvestajTests.T_E2E_KlasaIiIINeMesajuPrijem` je sejao dvoklasnu zbirnu kao dva zaglavlja istog broja i
+  vlasnika (stari model red-po-klasi) i tvrdio jedan red izveštaja manjka — baš stanje koje `S95-ODL-03` više ne
+  sabira. Seed je sada kanonski (jedno zaglavlje sa dve stavke, jedna prijemnica sa dve stavke; `12a3149e`),
+  tvrdnje iste. Fixture SEED nema zbirne istog broja i vlasnika (izmereno).
 - **Čitači članstva (`S95-ODL-01/02`):** `ClanstvoKvar` — jedan kvar, dva izlaza; `ClanstvoOtpremnicaNalazi`,
   `ClanstvoZbirneNalazi`. E3 greške 1263–1267 (1260 isti tekst). Grane u `modScrDokumenti` i `modScrIzvestaji` koje
   su hvatale članstvo na zbirnu koje nema **ostaju**: posle pojačanja su dostižne samo za ID koji se od zaglavlja
