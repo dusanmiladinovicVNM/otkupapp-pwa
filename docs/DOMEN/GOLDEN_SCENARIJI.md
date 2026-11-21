@@ -252,8 +252,8 @@ Dve greške vrede da se pamte kao pravila:
 
 ### Dokaz da oracle zaista grize
 
-`DOKUMENTI` sada čita sistem: distinct `GeneracijaID`, a gde ga red ne nosi
-(`tblOtkup`) — distinct poslovni broj, sve u opsegu scenarija.
+`DOKUMENTI` sada čita sistem: distinct PK dokumenta (`OtkupID`, `ZbirnaID`, `PrijemnicaID`),
+sve u opsegu scenarija (S9-4; do tada distinct `GeneracijaID`, a bez nje poslovni broj).
 
 Sabotaža: A3 pravi **dve** otpremnice po 500 kg umesto jedne od 1000.
 

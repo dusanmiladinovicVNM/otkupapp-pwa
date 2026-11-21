@@ -193,7 +193,7 @@ zato što se slobodan oblik (`MOJ-OTKUP-17`) ne sudi — ali ručno otkucan
 pomera sekvencu dok broj nije slobodan u **celoj** `tblZbirna`, ne samo kod tog
 vozača. To je pojas dok je `BrojZbirne` još join ključ (v. napomenu ispod), ne
 definicija jedinstvenosti: zatečena kolizija dva vozača nije neispravan podatak
-nego stanje koje se razrešava po `GeneracijaID`.
+nego stanje koje se razrešava po `ZbirnaID` (do S9-4 je ovde stajalo `GeneracijaID`).
 
 > Ostatak A2 — zabrana broja kao FK — je i dalje **pravilo bez provere**.
 > `NEMA_BROJA_KAO_FK` i acceptance test `BrojNijeIdentitet` **ne postoje** u

@@ -1,5 +1,15 @@
 # ZBR-IDENT-01 / ZBR-PARENT-01 — identitet zbirne i vezivanje prijemnice
 
+> **SUPERSEDED (S9-4, 20.11.2026, plan §14.68).** Identitet zbirne je **`ZbirnaID`**
+> (`tblZbirna`, jedno zaglavlje po dokumentu; resolver broji po `COL_ZBR_ID` od S4-3b), a ne
+> `GeneracijaID`. Veza prijemnica → zbirna je samo ivica **E4** (`Prijemnica.ZbirnaRoditeljID`,
+> S9-3); `BrojZbirne` je labela (`SLED-ODL-08`). Od S9-4 nijedno živo mesto ne čita generaciju:
+> picker zbirni, lista cilja i pisac prevezivanja u Oporavku i prefill ispravke biraju po PK-u, a
+> API generacije (`ApplyGeneracijaID`, `GeneracijaIDZaBroj`, `NewGeneracijaID`, `IdoviGeneracije`)
+> je obrisan. Kapija je grupa popisa `nema_generacije` (prag 0). Kolona ostaje do S9-6.
+> Važeći ugovor: `docs/DOMEN/SLEDLJIVOST.md` (`SLED-IDENT-01/02`). Ispod je **istorijski zapis**
+> — §1–§11 opisuju model generacije kakav je bio, i ne važe kao pravilo.
+
 > **KI-007 je zatvoren:** resolver, F3 prevencija (`ZBR-ACTIVE-NUMBER-01`), I1
 > read-model, F4 parent guard (I2), MasterSync detekcija i MIG-005b (picker)
 > **jesu** implementirani.

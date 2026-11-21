@@ -672,8 +672,9 @@ End Function
 ' TRI PRAVILA KOJA SE LAKO IZGUBE, a sva tri su iz legacy:
 '   1) Polazi se od PK-a stornirane (OldDocID iz correction context-a), NE
 '      od broja: broj nije globalno jedinstven (GenerateBrojPrijemnice
-'      broji po kupcu, pa dva kupca istog dana dobiju "1/ddmmyy"). Posao
-'      radi modDokumenta.PickPrefillRows - ista rutina koju zove i legacy.
+'      broji po kupcu, pa dva kupca istog dana dobiju "1/ddmmyy"). Red bira
+'      modDokumenta.PrefillRedPoID, SAMO po PK-u: prazan OldDocID daje prazan
+'      prefill, bez pada na broj, a GeneracijaID se ne cita (S9-4, plan 14.68).
 '   2) DATUM se preuzima iz stornirane. Ispravka sutradan ne sme da dobije
 '      danasnji datum - dokument bi promenio dan.
 '   3) BROJ dokumenta se NE preuzima. Ispravka je NOV dokument sa novim
@@ -685,8 +686,8 @@ End Function
 '=====================================================================
 Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As String, _
                                      ByVal oldDocID As String) As String
-    Dim tbl As String, d As Variant, rI As Long, rII As Long, base As Long
-    Dim cBroj As Long, cKlasa As Long, cId As Long, cGen As Long
+    Dim tbl As String, d As Variant, base As Long
+    Dim cBroj As Long, cId As Long
     Dim cDat As Long, cVr As Long, cSo As Long, cTip As Long, cZbr As Long
     Dim res As String, brutoMode As Boolean
     On Error GoTo EH
@@ -707,17 +708,13 @@ Public Function PrefillIzStorniranog(ByVal tip As String, ByVal brStorn As Strin
 
     cBroj = GetColumnIndex(tbl, ColBrojZaPrefill(tip))
     ' Klasa nije na zaglavlju NIJEDNOG tipa: otkup, otpremnica, zbirna i (od S6
-    ' koraka 8) prijemnica je nose na stavkama (Stavke*ZaPrefill). Bez kolone
-    ' klase PickPrefillRows uzima sam anchor -- dokument je jedan red.
-    cKlasa = 0
+    ' koraka 8) prijemnica je nose na stavkama (Stavke*ZaPrefill), pa je dokument
+    ' jedan red -- red sa PK-om OldDocID (S9-4). brStorn je labela: red ne bira.
     cId = GetColumnIndex(tbl, ColIdZaPrefill(tip))
-    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
     If cBroj = 0 Then Exit Function
 
-    modDokumenta.PickPrefillRows d, cBroj, cKlasa, cId, cGen, brStorn, oldDocID, rI, rII
-    If rI = 0 And rII = 0 Then Exit Function
-    base = rI
-    If base = 0 Then base = rII
+    base = modDokumenta.PrefillRedPoID(d, cId, oldDocID)
+    If base = 0 Then Exit Function
 
     cDat = GetColumnIndex(tbl, ColDatumZaPrefill(tip))
     cVr = GetColumnIndex(tbl, ColVrstaZaPrefill(tip))

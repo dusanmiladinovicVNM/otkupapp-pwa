@@ -1440,12 +1440,11 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_ZBIRNE", ChrW(10007) & " Prvo izaberi ciljnu zbirnu u listi " & ChrW(8222) & "Zbirne (cilj)" & ChrW(8220)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_PRIJ", ChrW(10007) & " Prvo izaberi ciljnu prijemnicu u listi " & ChrW(8222) & "Prijemnice (cilj)" & ChrW(8220)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_ISTA", ChrW(10007) & " Izvor i cilj su ista prijemnica"
-    UpsertRow lo, existing, "OTKUI_ERR_OPO_PRI", ChrW(10007) & " Prevezivanje nije uspelo " & ChrW(8212) & " proveri da li je ciljna zbirna aktivna:"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_PRI", ChrW(10007) & " Prevezivanje nije uspelo:"
+    UpsertRow lo, existing, "OTKUI_ERR_ISPRAVKA_BEZ_STAROG", ChrW(10007) & " Stari dokument nije pro" & ChrW(269) & "itan po ID-u (razlog je u logu) " & ChrW(8212) & " polja nisu popunjena:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_PAL", ChrW(10007) & " Prevezivanje paleta nije uspelo."
     UpsertRow lo, existing, "OTKUI_ERR_OPO_UNDO", ChrW(10007) & " Vra" & ChrW(263) & "anje storna nije uspelo:"
     UpsertRow lo, existing, "OTKUI_HDO_VLASNIK", "VLASNIK"
-    UpsertRow lo, existing, "OTKUI_HDO_GENERACIJA", "GENERACIJA"
-    UpsertRow lo, existing, "OTKUI_HDO_PRJ_ID", "PRIJEMNICA ID"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN", ChrW(10007) & " Ciljni broj nije jednozna" & ChrW(269) & "an " & _
               ChrW(8212) & " isti broj nose dokumenta VI" & ChrW(352) & "E vlasnika:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN2", "Prevezivanje ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _

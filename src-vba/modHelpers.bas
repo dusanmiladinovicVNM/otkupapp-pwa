@@ -264,7 +264,7 @@ Public Function KlasaOrDefault(ByVal v As Variant) As String
 End Function
 
 ' VLASNIK zbirne (ko je nosilac dokumenta) = BrojZbirne + VozacID + KupacID.
-' ISTA definicija koju koristi modStorno.RequireJedanVlasnikPoBroju (AUD-052 /
+' ISTA definicija koju koristi modStorno.VlasniciPoBroju (AUD-052 /
 ' RF-05: broj se generise po vozacu, a dokument pripada kupcu). NE uvoditi drugu.
 Public Function ZbirnaVlasnikKljuc(ByVal brojZbirne As String, _
                                    ByVal vozacID As String, _

@@ -4939,7 +4939,7 @@ Private Sub PrijaviKolizijuBrojaZbirne(ByVal broj As String, ByVal vozacID As St
     id = ZbirnaIdentResolve(broj, vozacID, kupacID)
 
     If id.integrityStatus <> ZBR_INT_OK Then
-        LogWarn SRC, "ZBR-IDENT-01: aktivna zbirna bez GeneracijaID pod brojem " & _
+        LogWarn SRC, "ZBR-IDENT-01: aktivna zbirna bez ZbirnaID pod brojem " & _
                 broj, "CRID=" & crid
         Exit Sub
     End If

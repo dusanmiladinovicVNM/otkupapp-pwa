@@ -130,7 +130,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnicaStavke`: `modBusinessFlowProTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestStorno`
 - `tblPaletaStavka`: `modBusinessFlowProTests`, `modGoldenTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPartnerMap`: `modTest`, `modTestBanka`
-- `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPrijemnica`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTest`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnicaStavke`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoldenTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFConfig`: `modTest`, `modTestStorno`
 - `tblSEFEventLog`: `modSEFTests`
@@ -163,7 +163,7 @@ imenuje.
 
 - `modBusinessFlowProTests`: 4
 - `modDokumentInvariant`: 1
-- `modDokumenta`: 3
+- `modDokumenta`: 2
 - `modFakturaTests`: 1
 - `modGoldenTests`: 1
 - `modMaticniUnos`: 8
@@ -177,7 +177,7 @@ imenuje.
 - `modTest`: 2
 - `modTestPalete`: 1
 
-Ukupno: 31 poziva u 15 modula.
+Ukupno: 30 poziva u 15 modula.
 
 ## Sta ovo NE pokriva
 

@@ -12334,6 +12334,297 @@ koji izgleda pročitano**; operater je odlučio da se zatvore u ovom PR-u. Testo
   i sa prijemnicom, štampa ispravke otpremnice): operater je javio da sve deluje u redu. Redove „Veza nepoznata" nad
   pokvarenim podacima operater ne može da napravi — mere ih 410–412.
 
+### 14.68) S9-4 — generacija nije identitet (20.11.2026)
+
+> Grana `claude/s9-4-generacija-identitet`, od `main` = `832a355a` (posle `#501`, S9-3); worktree
+> `.claude/worktrees/s9-4`. Obim je iz §14.64 (N6, N7, N11, red S9-4 u tabeli rezova, `SLED-IDENT-02`) i iz odluke
+> o redosledu `#477` / stavke 333 („P1 u `ReassignPrijemnicaToZbirna_TX` ide sa S9-4"). Stanje:
+> `docs/STANJE_REFAKTORA.md`, stavka 335. Linije u ovom odeljku važe za `832a355a` (linije iz §14.64 su zastarele).
+
+#### Merenje pre koda (čitanje svakog mesta, `832a355a`)
+
+Sweep `generacij|GeneracijaID|COL_GENERACIJA_ID|GEN-` nad 179 produkcionih fajlova: 284 pogotka. Po ulozi: živo kao
+identitet 10 (+20 komentara uz njih), živo drugo 9, mrtvo 47, setup/šema 24, zastareo komentar 66, istorijski
+komentar 68, drugo značenje 40 (`DataGeneracija` = brojač keša, generacija objave). **Van četiri poznata mesta nema
+novog živog mesta koje bira dokument po generaciji.** Grep ne vidi generaciju prosleđenu kao indeks (`cGen`,
+`genTop`, `genCilja`, `mCiljZbirnaGen`); ta mesta su dodata čitanjem.
+
+| Mesto | Šta radi danas | Posle S9-4 |
+|---|---|---|
+| **picker zbirni** `modOtkupUI.FillZbirneCombo:7318` (`:7380`, dedup `:7392-7407`) | dedup po `GeneracijaID`: drugi red iste generacije ne pravi stavku nego svoj `ZbirnaID` lepi uz prvu sa `\|`; red bez generacije je uvek svoja stavka. Kanonski pisac generaciju ne piše, pa je dedup nad produkcijom no-op; nad fixture-om (24 zbirne, 24 različite `GEN-`) takođe | red = dokument; jedna stavka po redu, kolona 1 = tačno jedan `ZbirnaID` (S94-ODL-05) |
+| **lista cilja u Oporavku** `modScrOporavak.RowsAktivneZbirne:833` (`:843`), `RowsAktivni:897` (ključ `:977-983`) | kolona 7 reda = `GeneracijaID` (zaglavlje `OTKUI_HDO_GENERACIJA`); ključ grupisanja „generacija, inače broj + vlasnik". **`ZbirnaID` uopšte nije u redu mreže** (`COL_ZBR_ID` služi samo za kilažu, `:937`) — tvrdnja §14.64 N7 „ZbirnaID je u istom redu" važi za red tabele, ne mreže. Dve aktivne zbirne istog broja i istog vlasnika padaju u JEDAN red sa sabranim kg | kolona 7 = `ZbirnaID`; ključ = `ZbirnaID`; red bez PK-a se ne nudi (S94-ODL-03) |
+| **izbor cilja** `modScrOporavak:76`, `Scr_Event:256`, `PreveziPrijemnicu:344` | `mCiljZbirnaGen` = kolona 7 → 4. argument pisca; kapija radnje nad brojem (`:336`); `MsgBox` nije iza seam-a, pa ovaj put nijedan test ne vozi | `mCiljZbirnaID`; kapija nad ID-om; jezgro bez `MsgBox`-a `PreveziPrijemnicuCore` (uzor `PreveziPaleteCore`) |
+| **pisac** `modDokumenta.ReassignPrijemnicaToZbirna_TX:10602` | v. ispod | strog po ID-u (S94-ODL-01, -02) |
+| **prefill storna** `modStornoDok.PrefillIzStorniranog:686` (`cGen :714`) → `modDokumenta.PickPrefillRows:8462` → `FindAnchorRow:8513` | sa nepraznom generacijom anchor-a bira **najnoviji red iste generacije** (`:8493-8508`), dakle možda drugi PK od `OldDocID`; bez `OldDocID` pada na „poslednje upisan red istog broja" (`:8535-8552`), i stornirane. Produkcija dolazi samo za otkup (F1 „Ispravi blok", ID iz reda) i prijemnicu (F8 ISPRAVKA, `OldDocID` iz `tblStornoVeze`); `OtvoriIspravku` (`modScrStorno:1355`) ne proverava prazan `OldDocID` | red samo po `OldDocID` (S94-ODL-04) |
+
+**Pisac prevezivanja — upisuje li E4? DA, i to iz pogrešnog izvora** (`modDokumenta:10768-10780` → `PoveziDeteNaZbirnu:8347-8352`;
+labela `:8350`, E4 `:8351` = jedini produkcioni upis `ZbirnaRoditeljID`):
+
+- **generacija zadata** → u E4 ide **sama generacija** (`genCilja = zbirnaGeneracijaID`, `:10769`), iako je pravi
+  `ZbirnaID` (`tId`) poznat od `:10628`. Čitaoci E4 je tumače kao `ZbirnaID`, pa bi prijemnica bila siroče „zbirna ne
+  postoji". Danas nedostižno samo zato što je generacija prazna (C002: 0; nijedan test ne puni 4. argument), ali
+  `modMigracija.KopirajTabelu` kopira kolone po imenu iz starije sveske, pa „nedostižno" ne važi uopšte;
+- **generacija prazna (jedini produkcioni put)** → cilj po broju: kapije broje **vlasnike** pod brojem
+  (`VlasniciPoBroju :10663`, `RequireJedanVlasnikIkadPoBroju :10683`), ne dokumente; E4 = `ZbirnaIDZaBroj(broj)` (`:10770`),
+  koji je za dve aktivne zbirne istog broja **istog vlasnika** `""` — **pisac tada upiše prazan E4 i vrati True**:
+  Oporavak javi „prevezano", a prijemnica ostane siroče. Kapija robe meri prema **poslednjoj** aktivnoj zbirnoj tog broja
+  (`LookupActiveID`, `modStorno:1736-1742`). Tvrdnja §14.64 N7 „ishod nije tuđa zbirna nego odbijeno prevezivanje" je
+  zato tačna samo za dva vlasnika;
+- **P1 (`#477`)**: pisac ne zove `ZbirnaRoditeljPrijemnice` (`:8789`, PRJ-ZBR-01: tačno jedna, nije stornirana, isti
+  kupac i vozač, izdata), koji drži pisac prijemnice. Oporavak zato može da veže prijemnicu kupca A pod zbirnu kupca B
+  ili pod nacrt. Potvrđeno čitanjem; reprodukuje ga test 415;
+- **KI-055**: pisac vraća samo Boolean; razlog ide u log, a ekran kaže „proveri da li je ciljna zbirna aktivna" i kad
+  je razlog roba (1440).
+
+**Mrtvo i samo-test (grep pozivalaca nad `src-vba/` i `tools/`):** `GeneracijaIDZaBroj:8150` (0 pozivalaca),
+`GeneracijaIDZaBrojArr:8159`, `ScopePairsToArray:8231`, `NewGeneracijaID:8256` i `ApplyGeneracijaID:8271` (jedini
+kodni pisac kolone; zove ga samo `modGoldenTests:1313`), `IdoviGeneracije:8434` (jedini pozivalac pisac `:10622`),
+`PripadaIzvoru:8396` (jedini pozivalac pisac), `RedJeGeneracije` `modStornoFlow:2226` (0), konstante
+`ZBR_BF_INTEGRITET/NEMA_GENERACIJE/VISE_GENERACIJA` `modDokumenta:112-114` (0). Posle reza bez pozivaoca ostaju i
+`RequireJedanVlasnikPoBroju`, `RequireJedanVlasnikIkadPoBroju`, `BrojVlasnikaPoBroju` (`modStorno:1979-2017`; jedini
+pozivi su u piscu) i `RowRank`, `RowKlasaII`, `IdRank` (prefill). **`HLI` u `ImpactHeader`: ne postoji** (S9-2 ga je
+obrisao; ostali su komentari `modStornoImpact:159-160, 203, 448`). `scopedPoGeneraciji`
+(`modDokumenta:471`, `modStornoFlow:1782`) je živ, ali nosi „pozivalac je zadao `ZbirnaID`" — ime laže.
+`modMasterSync:4941` loguje „aktivna zbirna bez GeneracijaID", a uslov je prazan `ZbirnaID`.
+
+**Popis danas ne vidi ništa od ovoga:** `prj_generacija` (prag 0) meri samo `TBL_PRIJEMNICA`, pa su sva četiri živa
+mesta i ceo API van svake grupe — prag 0 je placebo za zbirnu.
+
+#### Testovi koji tvrde staro pravilo (merenje pre koda; propust S9-3)
+
+| Test | Šta tvrdi | Posle reza |
+|---|---|---|
+| **171** `T_Zbirne_PickerJednaStavkaPoDokumentu` | dva reda iste generacije = jedna stavka | **premisa se menja**: dva reda = dva dokumenta = dve stavke, svaka sa svojim `ZbirnaID`; sabotaža `picker-ne-spaja-redove-dokumenta` gubi sidro |
+| BFP `Test_PrefillBiraPoslednjuGeneraciju` | klase i poslednji red po generaciji anchor-a, pad na broj | **briše se** sa API-jem koji meri (`PickPrefillRows`) |
+| **20** `T_PrefillIzStorniranog_CitaSvojuTabelu` | prefill sa praznim `OldDocID` (pada na broj) | prosleđuje ID-eve |
+| **25** `T_Oporavak_CiljneListe` | „i bez generacije … ključ je broj + vlasnik" (`:3840-3864`) | blok se briše; pravilo meri 414 |
+| **28**, **115**, Palete `T10_ZbirnaRepointStavke`, BFP `Test_S6K8_PrijemnicaRobaKaoZbirna` | prevezivanje sa ciljem po broju | prosleđuju `ZbirnaID`; seed mora da prođe kapiju vlasnika |
+| **29** `T_ZadataGeneracijaKojeNema_Staje` | zadata generacija koje nema → False | zadat `ZbirnaID` koga nema, sa razlogom |
+| **114** `T_CiljZbirna_NePoPrvomRedu` | cilj po broju (dvosmislen istorijski, bez aktivne, mala slova) | bez ID-a bi ostao zelen iz pogrešnog razloga (placebo) → prevodi se na ID i imenuje razlog; tri sabotaže `cilj-zbirna-*` gube sidro |
+| golden G2 (`modGoldenTests:1313`) | seed kuje generaciju | seed bez generacije; `GldBrojDok`/`GldBrojStorno` broje po PK-u (izlaz G2 isti: 1 aktivna, 1 stornirana) |
+| 36, 39, 168, 169, 173, 356 | pečate ili čitaju kolonu, ishod ne zavisi od nje | ostaju do S9-6 (kolona) |
+
+#### Odluke u rezu
+
+- **`S94-ODL-01` — pisac prevezivanja je strog po ID-u.** `ReassignPrijemnicaToZbirna_TX(prijemnicaID, ciljZbirnaID,
+  Optional ByRef outRazlog)`: broj se ne prima. Obe grane po broju (cilj i izvor) i grana po generaciji se brišu; uzor
+  je `ReassignPaleteToPrijemnica_TX` (S8 rez 1b). Izvor: tačno jedna **aktivna** prijemnica po ID-u. Labela se čita iz
+  `tblZbirna` po ID-u cilja, E4 = `ZbirnaID` cilja kako stoji u tabeli. Prazan E4 posle uspeha nije moguć.
+- **`S94-ODL-02` — P1 ide u ovaj rez** (`#477` `LZP-ODL-13`, stavka 333): cilj prolazi **istu** kapiju kao pisac
+  prijemnice, `ZbirnaRoditeljPrijemnice` (PRJ-ZBR-01), pa robu (PRJ-ZBR-02). Invarijanta je u jezgru, ne u ekranu.
+  **Lista ciljeva se ne filtrira** u ovom rezu: lista ne zna koju prijemnicu operater prevezuje (izvor se bira posle
+  cilja), a pisac nacrt i tuđu zbirnu odbija razlogom koji stiže na ekran (S94-ODL-03). Filtar izdatih u listi je deo
+  R2 iz `#477` (`LZP-ODL-07`).
+- **`S94-ODL-03` — Oporavak nosi `ZbirnaID`.** Kolona 7 cilja = `COL_ZBR_ID`, ključ reda = PK; red bez PK-a se ne nudi
+  (zbirnu bez PK-a prijavljuje integritet B9; prijemnicu bez PK-a strogi čitač stavki obara još pre liste). Grupisanje „broj + vlasnik" se briše (oba pozivaoca `RowsAktivni` šalju PK).
+  `mCiljZbirnaID`; kapija radnje nad ID-om; jezgro `PreveziPrijemnicuCore(brojPrij, prijemnicaID, outRazlog)` bez
+  `MsgBox`-a. Razlog pisca ide u poruku (**`KI-055` se zatvara**). Natpis kolone: nov ključ `OTKUI_HDO_ZBR_ID`
+  („ZBIRNA ID", uzor `OTKUI_HDO_PRJ_ID`); `OTKUI_HDO_GENERACIJA` izlazi iz kataloga. *(Zamenjeno odlukom operatera
+  posle `#502`: kolone identiteta su nevidljive, `OTKUI_HD_IDENT` — v. kraj odeljka.)* Seam `Scr_OpoTestSet`: 4.
+  parametar je `ciljZbirnaID` (isti položaj).
+- **`S94-ODL-04` — prefill po `OldDocID`, bez pada na broj.** Red dokumenta = red sa zadatim PK-om (`PrefillRedPoID`);
+  prazan `OldDocID` daje prazan spec. `PickPrefillRows`, `FindAnchorRow`, `RowRank`, `RowKlasaII`, `IdRank` se brišu
+  (klasa je na stavkama, `cKlasa` je u produkciji uvek 0). `OtvoriIspravku` prazan spec više ne guta tiho.
+- **`S94-ODL-05` — picker: red je dokument.** Bez dedup-a; kolona 1 nosi jedan `ZbirnaID`; spajanje `|` i `Split` u
+  `ZbirnaOpisKolone` se brišu. F4 i dalje šalje broj (labela), a resolver ga razrešava strogo (dvosmislen odbija) —
+  prenos izabranog `ZbirnaID`-a do pisca F4 je van reza (`KI-098`).
+- **`S94-ODL-06` — mrtav API se briše u rezu** (spisak gore, uz kaskadu `RequireJedanVlasnik*`, `BrojVlasnikaPoBroju`,
+  prefill pomoćnika). `VlasniciPoBroju` ostaje bez produkcionog pozivaoca — merilo preduslova
+  u testovima (kolizija broja u fixture-u); čišćenje ide uz S9-6. Kolona, `EnsureSledljivostSchema` i `GEN-` vrednosti
+  fixture-a ostaju do S9-6.
+- **`S94-ODL-07` — imena koja lažu:** `scopedPoGeneraciji` → `scopedPoID` (ponašanje isto); `PoveziDeteNaZbirnu`
+  parametar `gen` → `zbirnaID`; tekst loga MasterSync „bez ZbirnaID". Zastareli komentari se ispravljaju u dirnutim
+  procedurama i uz obrisan kod; ostali (istorijski) idu sa kolonom u S9-6.
+- **`S94-ODL-08` — popis `nema_generacije`, prag 0.** Osnovna grupa `generacija` meri sva pominjanja (bez praga);
+  izvedena `nema_generacije` broji **svako** produkciono mesto (živo, mrtvo, samo-test — API koji rez briše je upravo
+  mrtav i samo-test) van imenovanog spiska setup-a (`modSetup`, do S9-6). Unos spiska bez mesta obara `--check`.
+  `prj_generacija` ostaje radi uporedivosti, komentar ispravljen. Dokaz u oba smera: stari kod → `PAO` po imenu;
+  zastareo unos → `PAO`; grana → `ok`.
+
+#### ACCEPTANCE CONTRACT — S9-4
+
+- **Važi:** nijedno živo mesto ne bira dokument po generaciji, niti po broju tamo gde operater bira red. Oporavak
+  prevezuje prijemnicu na **izabranu** zbirnu po `ZbirnaID`, a pisac piše E4 = taj `ZbirnaID` ili ne piše ništa i kaže
+  zašto. Prefill ispravke čita tačno dokument `OldDocID`. Picker nudi svaki dokument kao svoju stavku.
+- **Scenario testova:** dve **aktivne izdate** zbirne istog broja i **istog vlasnika** (kanonski lanci, isti broj
+  nastaje prepisom labele, obrazac 356) i siroče prijemnica tog vlasnika (roditelj storniran kroz `StornoZbirna_TX`);
+  posle početka spoljne transakcije, uz tvrdnju o rollback-u (obrazac S9-3). Za P1: zbirna drugog kupca i vozača
+  (kanonski lanac) i nacrt (pravi pisac nacrta). Za prefill: dva otkupa sa istom generacijom (sintetički kvar: kolona
+  može stići migracijom).
+- **Testovi (od 414), crveni nad zatečenim kodom po imenu, pa zeleni:**
+  - **414 `T_S94_OporavakPreveziPoID`** — dve zbirne istog broja i vlasnika su **dva** cilja, svaki nosi svoj
+    `ZbirnaID`; prevezivanje na izabranu: E4 = njen `ZbirnaID`, labela = njen broj, prijemnica nestaje iz siročadi,
+    druga zbirna ostaje bez deteta;
+  - **415 `T_S94_PrevezivanjeKapijaVlasnika`** — P1: zbirna drugog kupca i nacrt se odbijaju sa razlogom, E4 se ne menja;
+  - **416 `T_S94_PrevezivanjeRazlogDoOperatera`** — `KI-055`: zbirna druge vrste i nepostojeći ID se odbijaju, a razlog
+    stiže do ekrana;
+  - **417 `T_S94_PrefillPoOldDocID`** — dva otkupa iste generacije: ispravka svakog nosi **svoje** podatke; prazan
+    `OldDocID` daje prazan spec;
+  - **171** (premisa promenjena) — dva reda iste generacije su dve stavke pickera, svaka sa svojim `ZbirnaID`.
+- **Skela u commit-u testova (bez promene ponašanja):** `PreveziPrijemnicuCore` (stari poziv pisca), `outRazlog` kao
+  opcioni parametar koji stari pisac ne puni.
+- **Sabotaže** `s94-*`: po jedna za svaku tvrdnju koja meri prevedeno mesto, svaka obara svoju tvrdnju po imenu
+  (`dokaz.py s94- --izbor`). Sabotaže čije sidro rez briše se povlače, ne presidruju na prazno.
+- **Ne dira:** kolone `GeneracijaID` i šemu (S9-6), integritet i `KI-097` (S9-5), `ZBR-MUT-01` (`VISE_VLASNIKA`),
+  `LncPreveziPrijemnicu` (lanac pravi novu verziju zbirne), ugovor GAS/PWA, pisce prijemnice.
+- **Kapije:** `vba_check` (i `--self-test`), `sabotaza.py --self-test`, `run_vba --self-test`, `who_writes --check` i
+  `--check-ownership` (WHO_WRITES se regeneriše: `ApplyGeneracijaID` je bio dinamički upis), `gen_schema_module
+  --check`, `popis_citalaca --check` (nova grupa), `vba_gate --popis`; FULL (12 suita, marker); `dokaz.py --grupe
+  --izbor --radnika 4 s94-` uz presidrena sidra. Ručni Compile je kapija operatera.
+- **Ručna provera (operater):** Oporavak „Prevezi prijemnicu" između dve zbirne istog broja (izbor reda, poruka sa
+  razlogom na odbijanju; kolona ID se od odluke operatera posle `#502` ne vidi); F8 Ispravi prijemnicu → prefill po starom dokumentu; picker BROJ ZBIRNE
+  u F4 (jedna stavka po dokumentu, opis mesta/kg). Nov ključ poruke traži zatvaranje i otvaranje fajla.
+
+#### Van obima, upisano
+
+- **`KI-098`** — F4 i F8 ispravka prijemnice prenose u pisca **broj** zbirne (picker i prefill nose labelu), a ne
+  `ZbirnaID` koji već znaju; pisac ga razrešava po broju + vozaču + kupcu. Resolver je strog (dvosmislen odbija), pa
+  ishod nije tuđa zbirna nego odbijen upis; to je „display → lookup → ID" iz pre-flight §5.
+- Lista ciljeva Oporavka nudi nacrte i tuđe zbirne (filtar je R2, `#477`).
+- `modStornoFlow.ScanZbirna` upisuje ključ `mutRazlog` koji niko ne čita (jedan `ZbirnaIdentResolve` po pozivu).
+
+#### Izvršeno (20.11.2026, `docs/STANJE_REFAKTORA.md` stavka 335)
+
+- **Commiti:** `fc250bf7` ugovor · `389fca0e` testovi 414–417 i 171 prvi, uz skelu bez promene ponašanja
+  (`PreveziPrijemnicuCore` sa starim pozivom pisca) · `1267e692` kod, popis, sabotaže, dokumenti ·
+  `4c125023` ispravke posle nezavisnog pregleda.
+- **Crveno nad zatečenim kodom, po imenu:**
+  - nad commit-om testova (`389fca0e`): 171, 414, 415, 416 i 417 padaju, 20 i 25 prolaze (očekivano — prosleđuju
+    ID-eve, a pravilo meri 414);
+  - konačne verzije testova (HEAD) nad produkcijom `389fca0e` (`run_vba --src`): **9 / 9 palo** — 414 (dve zbirne istog
+    broja i vlasnika su JEDAN red), 415 (`True`: prijemnica kupca 1 pod zbirnom kupca 2), 416 (razlog prazan), 417
+    (`41|41`: prefill drugog otkupa), 171 (jedna stavka za dva dokumenta), a 28, 29, 114 i 115 zato što stari pisac
+    ne prima ID niti vraća razlog (premisa promenjena, v. „Testovi koji tvrde staro pravilo").
+- **Zeleno ciljano:** `RunAllTests` 17 / 0 (novi, prerađeni i susedni testovi), BFP 44 / 0 (šest testova prefill-a,
+  prevezivanja i kapije `scopedPoID`), Palete i Golden zeleni (izlaz golden-a nepromenjen i uz brojanje po PK-u).
+- **FULL nad `4c125023`: 12 / 12 zeleno, marker upisan** (izvor `7038e42f4c5c`) — `RunAllTests` **417 / 0**,
+  BFP **3488 / 0**, Banka 241 / 0, Storno 111 / 0, Palete, Faktura, Agrohemija, Golden, JSON, Izveštaji,
+  StornoCentar, Licenca. BFP 3499 → 3488 je tačno 11 tvrdnji obrisanog `Test_PrefillBiraPoslednjuGeneraciju`.
+- **Popis:** `nema_generacije` 0 = prag 0 nad granom; nad `832a355a` isti alat daje **45 > prag 0 PAO** sa
+  imenom svake procedure (API generacije, pisac prevezivanja, Oporavak, picker, prefill, `scopedPoGeneraciji`,
+  MasterSync); zastareo unos `GENERACIJA_SETUP` → `ZASTAREO UNOS … PAO`. Ispis pada je proširen sa 12 na 40
+  mesta. Granica: generacija prosleđena kao indeks (`cGen`) vidi se samo na pozivaocu.
+- **Sabotaže:** 11 novih `s94-*`, 6 povučenih sa obrisanim kodom (`cilj-zbirna-*` ×3, `prefill-fallback-po-broju`,
+  `s6k8-prevezi-pri-bez-id`, `generacija-nema-pa-po-broju` → `s94-prevezi-izvor-bez-kapije`), 2 povučene u
+  commit-u testova (`oporavak-cilj-po-broju`, `picker-ne-spaja-redove-dokumenta`), presidrene
+  `prijemnica-izvor-i-stornirani`, `s6k8-prevezi-bez-provere-robe`, `zbr-opis-bez-vozaca`, `prefill-anchor-broj`,
+  `s6k8-oporavak-cilj-prij-generacija`. Katalog **1531**; `vba_check` čist.
+- **Dokaz:** **39 / 39 crveno po imenu** (`dokaz.py --grupe --izbor --radnika 4`, „DOKAZANO (grupno, izbor)"): 11 `s94-*` i 28
+  sabotaža čiji su ciljani testovi dirnuti (20, 22, 24, 25, 114, 115, 167, 171, 370, BFP S6K8), uključujući 5
+  presidrenih. Snimak izvora `236fb70af368c7a8` isti pre i posle; 31 od 39 grupno, 3 ponovljene same (mešanje u
+  grupi) i crvene pojedinačno.
+- **Jeftine kapije (HEAD):** `vba_check` i `--self-test`, `sabotaza.py --self-test`, `run_vba --self-test`,
+  `who_writes --check` (WHO_WRITES regenerisan: `ApplyGeneracijaID` je bio dinamički upis `modDokumenta`) i
+  `--check-ownership`, `gen_schema_module --check` (`F22278A1`, šema nedirnuta), `popis_citalaca --check`,
+  `vba_gate --popis`.
+- **Probni spoj:** `main` = `832a355a` (nije mrdnuo), `git merge-tree` bez konflikta; rebase nije potreban.
+- **NIJE izvršeno:** ručni Compile i ručna provera (operater); pun pojedinačni dokaz celom suite-om ide pred release.
+
+#### Nezavisni pregled (20.11.2026) — 11 nalaza, posle opovrgavanja 5 stvarnih (svi P3), svi zatvoreni u `4c125023`
+
+| Nalaz | Zatvaranje |
+|---|---|
+| 414 prevezuje na zbirnu koja je **prvi** red svog broja, pa ne bi uhvatio regresiju „cilj po prvom redu" | 414 bira zbirnu A (kasniji red); „E4 nije prazan" je zasebna tvrdnja; nova sabotaža `s94-opo-cilj-prvi-red` |
+| `generacija-nema-pa-po-broju` povučena kao ekvivalentna, a nije (razlog više ne imenuje ID; dupli `PrijemnicaID` bi tiho prevezao prvi red) | vraćena kao `s94-prevezi-izvor-bez-kapije` nad kapijom izvora |
+| `prefill-anchor-broj` posle reza obara drugu tvrdnju (pada na broj više nema) | presidrena na „prefill po PK-u A nije prazan" |
+| `s6k8-oporavak-cilj-prij-generacija` obara drugu tvrdnju (kolona identiteta koje nema je sada greška 1963) | presidrena na „ciljna lista prijemnica vraca ugovor mreze" |
+| Potvrda i poruka „Prevezi prijemnicu" imenuju cilj samo brojem | uz broj ide i `ZbirnaID` (obrazac `KI-056` za izvor); meri ga ručna provera |
+
+Odbijeni posle provere (6): isti nalaz o potvrdi iz drugog ugla; dva o poruci `OTVORI ISPRAVKU` (scenario nedostižan:
+strogi čitač stavki obara ispravku pre prefill-a); red bez PK-a u listi prijemnica (komentar je bio netačan — B9 meri
+samo zbirnu; ispravljen); dupli PK u `RowsAktivni` (mrtva grana: strogi čitači padaju pre liste); 416 meri jezgro, ne
+toast (toast je jedan red koji spaja `Poruka` i razlog).
+
+#### Odluka operatera posle PR `#502` (20.11.2026) — kolone identiteta u Oporavku se ne crtaju
+
+Operater je pitao kome treba kolona ZBIRNA ID (GUID u listi „Zbirne (cilj)"). Odgovor: operateru ne treba — treba
+**radnji**, koja iz izabranog reda šalje piscu baš taj dokument. Kolona je bila vidljiva samo zato što je rez preuzeo
+obrazac `OTKUI_HDO_PRJ_ID` (prioritet 3, S6 korak 8); konvencija projekta za identitet je nevidljiva kolona
+`OTKUI_HD_IDENT||txt|0|4` (`modOtkupUI.ColPrioritet`: 4 = nikad se ne crta; Dokumenti, Palete, Storno, Banka).
+
+- **Urađeno (`452163d0`):** sve četiri kolone identiteta u Oporavku (Zbirne (cilj), Prijemnice (cilj), Osiroćene
+  prijemnice, Osiroćene palete) prelaze na `OTKUI_HD_IDENT||txt|0|4`; podatak ostaje u redu, pa radnje i testovi čitaju
+  isto. Potvrda i poruka „Prevezi prijemnicu" imenuju cilj **samo brojem** — `ZbirnaID` koji je dodala ispravka
+  posle pregleda (tabela gore, poslednji red) je povučen kao šum. Ključevi `OTKUI_HDO_ZBR_ID` i `OTKUI_HDO_PRJ_ID`
+  izlaze iz kataloga. Izvor u potvrdi i dalje nosi `PrijemnicaID` (`KI-056`, nedirnuto).
+- **Izmereno:** ciljano 13 / 13 (svi testovi Oporavka); **FULL nad `452163d0`: 12 / 12, marker upisan** (izvor
+  `24d1e5a6fe57`) — `RunAllTests` 417 / 0, BFP 3488 / 0, Banka 241 / 0, Storno 111 / 0; **`dokaz.py` 25 / 25** (sve
+  sabotaže sa sidrom u `modScrOporavak` i sve `s94-*`, „DOKAZANO (grupno, izbor)", snimak izvora `61ed65b2e3a24a73`
+  isti pre i posle). Ručna provera tačke 3 i 4 se menja: kolone ID u Oporavku se ne vide.
+
+#### Brojke zone u Oporavku (`KI-085`, 21.11.2026) — zatvoreno u ovom rezu
+
+Operater je na snimcima posle `452163d0` pokazao zonu **OSIROČENO 30** uz listu od 1 reda i **ZA VRAĆANJE 0**
+koje postaje 6 tek kad se otvori „Vrati storno". Merenje čitanjem:
+- **OSIROČENO 30 nije pogrešan zbir:** zona namerno sabira osiroćene prijemnice i prijemnice sa osiroćenim paletama
+  (`ZbirOsirocenih`; „koliko posla ukupno čeka").
+- **Kvar je lenjost brojki:** svaka je nastajala kao uzgredni ishod čitanja SVOJE liste (`RowsNedovrseno`, `Rows2D`,
+  `RowsUndo`), pa je zona do otvaranja te liste pokazivala 0 ili staru vrednost — šira klasa od `KI-085`
+  (NEDOVRŠENO zaostaje posle radnje), koji je tražio ispravku „uz sledeći rez koji dira Oporavak".
+
+**Ispravka (`4e312208` test prvi, `f83b7aac` kod):** `OsveziBrojkeZone` računa sve tri brojke zajedno, iz istih izvora
+kao njihove liste (`GetNedovrseno` kao meni, `ZbirOsirocenih`, `GetUndoableStornoOperations`), jednom po generaciji
+podataka (obrazac snimka Integriteta: ne na svaki znak pretrage); `Scr_ResetCache` je obara, a ljuska menja generaciju na
+svaki upis (`RefreshFromData`). Pad izvora daje „?" i zapis u logu, ne nulu — `ZbirOsirocenih` više ne guta grešku
+(`On Error Resume Next` je od pada pravio nepotpun zbir). Liste više ne pišu brojke; `Rows2D` gubi `brojiUZonu`.
+
+- **Test 418 `T_S94_ZonaOporavkaSveza`:** posle otvaranja liste ciljeva zona pokazuje sve tri brojke iz izvora, i
+  osvežava se posle promene podataka. **Crven nad zatečenom zonom po imenu** (`[9|6|0]` prema `[0|0|0]`, i konačna
+  verzija preko `run_vba --src`), zelen ovde. Seam `Scr_OpoZonaTest` samo čita brojke.
+- **Sabotaže:** `s94-zona-ne-racuna`, `s94-zona-zamrznuta` (katalog **1533**).
+- **Izmereno:** ciljano 14/14 (svi testovi Oporavka); **FULL nad `f83b7aac`: 12/12, marker upisan** (izvor
+  `b2edb063ff88`) — `RunAllTests` **418/0**, BFP 3488/0, Banka 241/0, Storno 111/0; **`dokaz.py` 19/19** (sve sabotaže
+  sa sidrom u `modScrOporavak`, „DOKAZANO (grupno, izbor)", snimak izvora `cc2e5d9b7544be5a` isti pre i posle).
+  **`KI-085` zatvoren.**
+
+#### Ručna provera i drugi nezavisni pregled (21.11.2026) — `S94-REV-01..05` i brojač menija
+
+**Ručna provera (operater, 21.11.2026, izvor `f83b7aac`):** ručni Compile prošao. Tačke 1–4 i 6 ✅; tačka 5 (uspešno
+prevezivanje) nije rađena — u svesci nema izdate zbirne istog kupca, vozača i robe kao siroče, pa taj put meri samo
+test 414; tačke 7 (F1 „Ispravi blok") i 8 (picker) ✅ po snimku. **Nalaz tačke 6:** posle ispravke iz Storna meni
+pokazuje „Oporavak 30", a zona NEDOVRŠENO 32. Uzrok je namerna prečica ljuske: kad radnja PREDA posao drugom ekranu
+(storno → ispravka → F4), `UiClick` preskače `RefreshFromData` da ne obriše prefill — a to je jedino mesto koje
+osvežava brojače menija. Ista vrsta neslaganja kao `KI-085`, sa druge strane.
+
+**Drugi nezavisni pregled PR `#502`** (CONDITIONAL GO, 9,1/10): pre merge-a zatvoriti zaštitu izvora kod prevezivanja,
+jedinstvenost PK-a u dva čitača i obradu neuspešnih brojača; zatim ručni Compile i UAT.
+
+- **`S94-ODL-09` — prevezivanje prima samo siroče** (odluka operatera 21.11.2026, uz `S94-REV-01`). Oporavak prevezuje
+  prijemnicu koja je ostala bez aktivne zbirne — isto pravilo kao lista (`GetOsirocenePrijemnice`): E4 prazan, zbirna
+  ne postoji ili je stornirana. Prijemnica sa **aktivnom** zbirnom se odbija razlogom koji tu zbirnu imenuje, i E4
+  ostaje. Promena zbirne vezane prijemnice je svoj potez sa svojim pravilima (R2, `#477`), ne Oporavak. Do odluke
+  pisac to nije branio (nijedan ekran nije nudio vezanu prijemnicu, ali pisac ju je prevezivao).
+
+| ID | Nalaz | Ispravka (`1c51f3ed`, testovi prvi u `70604b7e`) | Test | Sabotaža |
+|---|---|---|---|---|
+| `S94-REV-01` | pisac prevezuje i prijemnicu koja ima aktivnu zbirnu | `S94-ODL-09`: Err 1443 imenuje aktivnu zbirnu, E4 netaknut | 419 `T_S94_PrevezivanjeSamoSiroce` | `s94-prevezi-vezana-prolazi` |
+| `S94-REV-02` | `PrefillRedPoID` uzima prvi od dva reda istog `OldDocID` | tačno jedan red; drugi pogodak je Err 1444 koji imenuje ID; poruka `OTKUI_ERR_ISPRAVKA_BEZ_STAROG` kaže „nije pročitan po ID-u (razlog je u logu)" | 422 `T_S94_PrefillDupliPK` | `s94-prefill-dupli-prvi-red` (`s94-prefill-pk-ignorisan` presidrena) |
+| `S94-REV-03` | `RowsAktivni` dva reda istog ID-a sabira u jedan cilj | Err 1964 koji imenuje ID i tabelu | **bez testa** — nedostižno kroz ekran: strogi čitači stavki (argument `kgPoDok`) odbijaju zaglavlje koje nije tačno jednom pre liste, pa bi test merio seam, ne put; ispravka je osigurač | — |
+| `S94-REV-04` | pad izvora zone se čita ponovo na svaki znak pretrage | neuspeh se pamti za tekuću generaciju podataka; nov pokušaj posle promene podataka ili `Scr_ResetCache` | 420 `T_S94_BrojaciPriPaduIzvora` | `s94-zona-pad-ponavlja` |
+| `S94-REV-05` | meni pri padu izvora crta praznu znacku (`Resume Next` od pada pravi 0) | `Scr_Brojac` vraća −1, meni crta „!" (`BrojacTekst`), kao „?" u zoni | 420 | `s94-meni-pad-je-nula` |
+| ručna t. 6 | predaja ekrana ne osvežava meni | `PosleRadnjeEkrana`: na istom ekranu `RefreshFromData`, posle predaje samo `OsveziNavBrojace` (prefill ostaje) | 421 `T_S94_PredajaEkranaOsvezavaMeni` | `s94-predaja-meni-stoji` |
+
+- **Premisa promenjena odlukom, ne izlazom:** testovi 28, 29, 115 i BFP S6K8 roba prevezivali su prijemnicu koja od
+  S9-3 nosi E4 aktivne zbirne. Sada je izvor siroče starog oblika (E4 prazan, labela stoji; C002 ih ima 6): 28 i 115
+  brišu E4 izvora u svojoj transakciji, 29 drugi poziv radi nad `PRJ-STL-T`, BFP S6K8 briše E4 pa tvrdi
+  `False|<broj A>|` (prazan E4 ostaje prazan).
+- **Crveno pre ispravke, po imenu** (nad `70604b7e`): 419 `True` (vezana prijemnica prevezena), 420 meni `0`, 421 `−999`
+  (meni posle predaje nije računat; konačna verzija 421 dokazana sabotažom, v. ispod), 422 `red=1`.
+- **Izmereno:** ciljano 20/20 (`RunAllTests`) i BFP S6K8 8/0; **FULL 12/12 nad `f7a8c873`, marker upisan (izvor `75700029e3a4`) — `RunAllTests` 422/0, BFP 3488/0, Banka 241/0, Storno 111/0**; **`dokaz.py` 56/56 crveno po imenu (`--grupe --izbor --radnika 4 --od 56a12c06`: sve sabotaže koje dira rez od `56a12c06`, „DOKAZANO (grupno, izbor)", snimak izvora `31f39418edf46acb` isti pre i posle)**; katalog sabotaža **1538**;
+  jeftine kapije zelene (`vba_check`, `gen_schema_module --check`, `who_writes --check` i `--check-ownership`, popis
+  `nema_generacije` 0).
+- **FULL nad `1c51f3ed` je pao na preduslovu testa 421** (`RunAllTests` 421/422; ostalih 11 suite-ova zeleno, BFP
+  3488/0). Preduslov je u ciljanom prolazu bio **lažno zelen**: meni tamo nije bio računat (−999), pa je „pre ≠ posle"
+  prolazio sam od sebe. Prvo objašnjenje (brojka ranijeg testa, `dc7d537c`) je bilo pogrešno — test pušten sam, sa
+  svežom polaznom brojkom, pada isto: context nad `PRJ-TEST-S` ne pomera NEDOVRŠENO, jer `GetNedovrseno` context-om
+  zameni red dokumenta koji je već na listi siročadi (dedup po ID-u). Ispravka testa (`f7a8c873`, kod nedirnut):
+  sintetički stari dokument (`PRJ-S94-421`), polazna brojka iz testa (`OsveziNavBrojace`), oba preduslova mere izvor
+  (meni pre = izvor; nova ispravka = tačno jedan nov red). `s94-predaja-meni-stoji` obara 421 po imenu.
+- **Ručna provera nad `f7a8c873` (operater, 21.11.2026):** ručni Compile prošao; tačka 3a ✅ — posle ispravke iz
+  Storna broj pored „Oporavak" u meniju je odmah isti kao NEDOVRŠENO u zoni. Tačka 4a (vezana prijemnica se ne
+  prevezuje) kroz ekran je nedostižna — lista nudi samo siročad — pa je meri test 419.
+- **NIJE izvršeno:** pun pojedinačni dokaz celom suite-om — pred release.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -102,6 +102,18 @@ Kolonu ipak čitaju četiri živa produkciona mesta (plan §14.64, N6), a jedno 
 „Prevezi prijemnicu" prenosi generaciju umesto `ZbirnaID`, pa pisac razrešava ciljnu zbirnu po
 broju (N7). **Vlasnik posle S9:** rez S9-4 i kapija `NEMA_GENERACIJE`.
 
+**Zatvoreno u S9-4 (plan §14.68):** sva četiri mesta biraju po PK-u (picker: red je dokument;
+Oporavak: kolona 7 je `ZbirnaID`; prefill: `OldDocID`; pisac prevezivanja: `ZbirnaID`, uz kapiju
+pisca prijemnice PRJ-ZBR-01), a API generacije je obrisan. Kapija je izvedena grupa popisa
+`nema_generacije`, prag 0: broji **svako** produkciono mesto kolone i API-ja generacije, i mrtvo,
+van imenovanog setup-a šeme (`GENERACIJA_SETUP`, do S9-6).
+
+**`S94-ODL-09` — prevezivanje prima samo siroče** (odluka operatera 21.11.2026). „Prevezi
+prijemnicu" u Oporavku menja E4 samo prijemnici bez aktivne zbirne — isto pravilo kao lista
+(`GetOsirocenePrijemnice`): E4 prazan, zbirna ne postoji ili je stornirana. Prijemnica sa aktivnom
+zbirnom se odbija razlogom koji je imenuje; promena zbirne vezane prijemnice je potez lanca (R2,
+`#477`). Vlasnik: `modDokumenta.ReassignPrijemnicaToZbirna_TX` (test 419).
+
 ## 4) Invarijante
 
 **`SLED-INV-01` — svaka ivica razrešava tačno jednom.** Za svaki red nosioca ivice (E2–E10)

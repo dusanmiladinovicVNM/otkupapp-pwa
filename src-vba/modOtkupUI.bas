@@ -1876,44 +1876,28 @@ EH:
 End Sub
 
 ' Kolone jedne stavke izbora zbirne: Array(vozac, "1.240 kg", "310", mesta), ili
-' Empty kad o zbirnoj nema nista. zids su ZbirnaID-jevi stavke ("|" kad je
-' dokument na dva reda) -- kg i gajbe se sabiraju, mesta spajaju bez ponavljanja,
-' vozac je sa prvog zaglavlja (dva reda istog dokumenta dele vozaca). Jedinice
-' su postojeci kljucevi (OTKUI_UNIT_KG, OTKUI_OTP_AMB kao traka otpremnice), kg
-' kroz FmtKg (decimale kad ih ima).
-Private Function ZbirnaOpisKolone(ByVal zids As String, st As Object, mesta As Object, _
+' Empty kad o zbirnoj nema nista. zid je ZbirnaID stavke -- jedan, jer je stavka
+' jedan red tblZbirna (S9-4; do tada "a|b" kad je dokument bio na dva reda).
+' Jedinice su postojeci kljucevi (OTKUI_UNIT_KG, OTKUI_OTP_AMB kao traka
+' otpremnice), kg kroz FmtKg (decimale kad ih ima).
+Private Function ZbirnaOpisKolone(ByVal zid As String, st As Object, mesta As Object, _
                                   zbrVoz As Object, vozIme As Object) As Variant
-    Dim p As Variant, i As Long, z As String, rec As Variant
-    Dim kg As Double, amb As Double, ima As Boolean, ms As String, m As String
+    Dim rec As Variant, kg As Double, amb As Double, ima As Boolean, ms As String
     Dim voz As String, vid As String
-    If Len(zids) = 0 Then Exit Function
-    p = Split(zids, "|")
-    For i = 0 To UBound(p)
-        z = Trim$(CStr(p(i)))
-        If Len(z) > 0 Then
-            If st.Exists(z) Then
-                rec = st(z)
-                kg = kg + CDbl(rec(0))
-                amb = amb + CDbl(rec(2))
-                ima = True
-            End If
-            If mesta.Exists(z) Then
-                m = CStr(mesta(z))
-                If Len(ms) = 0 Then
-                    ms = m
-                ElseIf InStr(1, ", " & ms & ", ", ", " & m & ", ", vbTextCompare) = 0 Then
-                    ms = ms & ", " & m
-                End If
-            End If
-            If Len(voz) = 0 Then
-                If zbrVoz.Exists(z) Then
-                    vid = CStr(zbrVoz(z))
-                    voz = vid
-                    If vozIme.Exists(vid) Then voz = CStr(vozIme(vid))
-                End If
-            End If
-        End If
-    Next i
+    zid = Trim$(zid)
+    If Len(zid) = 0 Then Exit Function
+    If st.Exists(zid) Then
+        rec = st(zid)
+        kg = CDbl(rec(0))
+        amb = CDbl(rec(2))
+        ima = True
+    End If
+    If mesta.Exists(zid) Then ms = CStr(mesta(zid))
+    If zbrVoz.Exists(zid) Then
+        vid = CStr(zbrVoz(zid))
+        voz = vid
+        If vozIme.Exists(vid) Then voz = CStr(vozIme(vid))
+    End If
     If Not ima And Len(ms) = 0 Then Exit Function
     ZbirnaOpisKolone = Array(voz, FmtKg(kg) & " " & Poruka("OTKUI_UNIT_KG"), FmtBroj(amb, 0), ms)
 End Function
@@ -4832,12 +4816,7 @@ Private Sub UiClickCore(ByVal tag As String)
     If Left$(tag, 3) = "scr" Then
         Dim preScr As String
         preScr = mScreen
-        If ScrAct(tag) Then
-            If mScreen = preScr Then
-                mSelRow = 0
-                RefreshFromData
-            End If
-        End If
+        If ScrAct(tag) Then PosleRadnjeEkrana preScr
         Exit Sub
     End If
     ' klik na strelicu "combo"-a -> nas panel (toggle)
@@ -6572,6 +6551,37 @@ Private Function BrojacTekst(ByVal n As Long) As String
     If n > 999 Then BrojacTekst = "999+" Else BrojacTekst = CStr(n)
 End Function
 
+' POSLE RADNJE EKRANA koja je promenila podatke (Scr_Event = True), sa ekrana
+' preScr. Na istom ekranu: pun RefreshFromData. Kad je radnja PREDALA posao drugom
+' ekranu (storno -> ispravka -> unos zamenskog dokumenta), RefreshFromData se
+' namerno preskace: ponovo bi napunio combo-e i obrisao izbor koji je prefill
+' upravo postavio (v. komentar u UiClick). Brojaci menija se i tada osvezavaju
+' (KI-085, S9-4): bez toga je posle ispravke iz Storna meni pokazivao staro
+' stanje ("Oporavak 30"), a zona Oporavka novo (NEDOVRSENO 32).
+Private Sub PosleRadnjeEkrana(ByVal preScr As String)
+    If mScreen = preScr Then
+        mSelRow = 0
+        RefreshFromData
+    Else
+        OsveziNavBrojace
+    End If
+End Sub
+
+' TEST SEAM: isti put kao radnja ekrana preScr koja je vratila True. Tvrdo gejtovan.
+Public Sub PosleRadnjeEkranaTest(ByVal preScr As String)
+    If Not IsTestMode() Then Exit Sub
+    PosleRadnjeEkrana preScr
+End Sub
+
+' TEST SEAM: brojac menija za ekran kljuc kakav je poslednji put izracunat;
+' -999 kad ga nema. Samo posmatra; tvrdo gejtovan.
+Public Function NavBrojacTest(ByVal kljuc As String) As Long
+    NavBrojacTest = -999
+    If Not IsTestMode() Then Exit Function
+    If mNavBroj Is Nothing Then Exit Function
+    If mNavBroj.Exists(kljuc) Then NavBrojacTest = CLng(mNavBroj(kljuc))
+End Function
+
 Public Sub RefreshFromData()
     Dim bioCist As Boolean
     On Error Resume Next
@@ -7309,8 +7319,8 @@ End Sub
 ' datum u sebi - zato je sam broj dovoljan za prepoznavanje.
 '
 ' TRI KOLONE, po obrascu FillFormPartner: 0 = broj (prikaz i .text -- to cita
-' p("brojZbirne")), 1 = skriven ZbirnaID (vise ID-jeva sa "|" kad je dokument
-' na dva reda), 2 = opis za panel (mesta, kg, amb). Opis se NE racuna ovde:
+' p("brojZbirne")), 1 = skriven ZbirnaID (jedan: stavka je jedan red tblZbirna),
+' 2 = opis za panel (mesta, kg, amb). Opis se NE racuna ovde:
 ' ova rutina ide na svaki RefreshFromData (svaki upis i radnja koja menja
 ' podatke, sync, promena prava, povratak iz panela -- NE promena rezima ni
 ' ekrana), a opis se vidi samo u prijemnici -- racuna ga ZbirneOpisUpisi pri
@@ -7318,8 +7328,7 @@ End Sub
 Public Sub FillZbirneCombo(frm As Object)
     Dim CB As MSForms.ComboBox, src As Variant, iBroj As Long, iDat As Long
     Dim r As Long, n As Long, arr() As Variant, key() As Double, i As Long, j As Long
-    Dim cur As String, iGen As Long, gen As String, uzmi As Boolean
-    Dim vidjene As Object, iId As Long, zid() As String, gi As Long, tz As String
+    Dim cur As String, iId As Long, zid() As String, tz As String
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
     ' Punjenje liste NE sme da pojede upisani broj. ComboBox.Clear brise stavke
@@ -7350,67 +7359,32 @@ Public Sub FillZbirneCombo(frm As Object)
     ' a ovo se zove na svaki RefreshFromData (upis, radnja nad podacima, sync,
     ' povratak iz panela -- ne pri promeni rezima ni ekrana).
     '
-    ' MIG-005b: JEDNA STAVKA PO DOKUMENTU, ne po redu.
+    ' JEDNA STAVKA PO DOKUMENTU, a dokument je RED tblZbirna (S9-4, plan 14.68,
+    ' S94-ODL-05). Kanonski pisac pravi jedno zaglavlje po dokumentu; klase su
+    ' stavke tog zaglavlja. Do S9-4 je picker spajao redove iste GeneracijaID u
+    ' jednu stavku (MIG-005b, stari model na dva zaglavlja) -- generaciju niko ne
+    ' pise, pa je spajanje bilo no-op, a nad sveskom koja kolonu nosi (migracija
+    ' kopira kolone po imenu) sakrivalo bi DRUGI dokument istog broja.
     '
-    ' Isti broj na vise redova ima DVA razlicita uzroka, i samo jedan je kvar:
-    '   jedan dokument, dva reda -- Klasa I + II starog modela (dva zaglavlja;
-    '       nekadasnji SaveZbirnaMulti_TX je pisao isti broj, vozaca i kupca
-    '       dvaput), pa oba reda nose ISTU generaciju. Tu treba JEDNA stavka --
-    '       to je MIG-005b. Kanonski pisac pravi jedno zaglavlje sa stavkama.
-    '   dva dokumenta, isti broj -- anomalija (rucni unos sa ugasenim
-    '       auto-brojem, uvoz, ispravka u tabeli). RAZLICITE generacije.
-    '
-    ' Zato se de-duplikuje po GeneracijaID, ne po broju. Spajanje po broju bi
-    ' i anomaliju prikazalo kao jedan dokument koji ne postoji.
-    '
-    ' Anomalija se i dalje vidi DVAPUT, i to je tacno: pod tim brojem stvarno
-    ' stoje dva dokumenta. Operater ih iz liste ne moze razlikovati, ali to nije
-    ' stvar pickera -- F4 od ZBR-IDENT-01 takav broj odbija (CURRENT_AMBIGUOUS),
-    ' a modIntegritet ga prijavljuje kao B8.
-    '
-    ' Red BEZ generacije se NE spaja ni sa cim: prazna generacija je integritetska
-    ' greska (B9), a spajanje po njoj bi stopilo dva razlicita dokumenta u jedan.
-    ' Kad kolone nema (starija sveska pre EnsureSledljivostSchema), de-duplikacije
-    ' nema -- lista koja pokaze vise nego sto treba je manje stetna od one koja
-    ' sakrije dokument.
+    ' Dva dokumenta istog broja (rucni unos sa ugasenim auto-brojem, uvoz) se vide
+    ' DVAPUT, i to je tacno: pod tim brojem stvarno stoje dva dokumenta. F4 takav
+    ' broj odbija (CURRENT_AMBIGUOUS), a modIntegritet ga prijavljuje kao B8.
     src = ExcludeStornirano(src, TBL_ZBIRNA)
     If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
-    iGen = ColIdx(TBL_ZBIRNA, COL_GENERACIJA_ID)
     iId = ColIdx(TBL_ZBIRNA, COL_ZBR_ID)
     If iBroj < 1 Then GoTo XIT
-
-    If iGen > 0 Then
-        Set vidjene = CreateObject("Scripting.Dictionary")
-        vidjene.CompareMode = vbTextCompare
-    End If
 
     n = UBound(src, 1)
     ReDim arr(1 To n): ReDim key(1 To n): ReDim zid(1 To n)
     j = 0
     For r = 1 To n
         If Len(CellS(src, r, iBroj)) > 0 Then
-            uzmi = True
-            gen = ""
-            If iGen > 0 Then gen = Trim$(CellS(src, r, iGen))
-            If Len(gen) > 0 Then
-                If vidjene.Exists(gen) Then
-                    uzmi = False          ' drugi red ISTOG dokumenta
-                    ' ...a njegov ID ide uz stavku prvog reda: opis sabira oba
-                    ' reda (Klasa I + II starog modela), kao Oporavak.
-                    gi = CLng(vidjene(gen))
-                    If iId > 0 Then zid(gi) = zid(gi) & "|" & CellS(src, r, iId)
-                Else
-                    vidjene.Add gen, j + 1
-                End If
-            End If
-            If uzmi Then
-                j = j + 1
-                arr(j) = CellS(src, r, iBroj)
-                key(j) = CellDate(src, r, iDat)
-                If iId > 0 Then zid(j) = CellS(src, r, iId)
-            End If
+            j = j + 1
+            arr(j) = CellS(src, r, iBroj)
+            key(j) = CellDate(src, r, iDat)
+            If iId > 0 Then zid(j) = CellS(src, r, iId)
         End If
     Next r
     If j = 0 Then GoTo XIT

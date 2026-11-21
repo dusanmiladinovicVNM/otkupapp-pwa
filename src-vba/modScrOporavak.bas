@@ -70,16 +70,25 @@ Private mLista As String          ' kljuc aktivne liste
 ' javlja umesto da preveze na nesto nasumicno.
 Private mCiljZbirna As String
 Private mCiljPrijemnica As String
-' Identitet izabranog CILJA: generacija zbirne (ZBR-IDENT-01) i PrijemnicaID
-' prijemnice (S6 korak 8). Drzi se uz broj, ne umesto njega: broj i dalje ide u
-' prikaz i u labele na stavkama, identitet samo bira dokument.
-Private mCiljZbirnaGen As String
+' Identitet izabranog CILJA: ZbirnaID zbirne (S9-4) i PrijemnicaID prijemnice
+' (S6 korak 8). Drzi se uz broj, ne umesto njega: broj ide u prikaz i poruke,
+' identitet bira dokument. Do S9-4 je za zbirnu ovde stajala GeneracijaID --
+' prazna za svaku kanonsku zbirnu, pa je pisac birao cilj po broju.
+Private mCiljZbirnaID As String
 Private mCiljPrijemnicaID As String
 Private mStep As String           ' korak za poruku o gresci
-' Brojke u zoni; racuna ih Scr_Rows u istom prolazu kroz podatke.
+' Brojke u zoni (KI-085, S9-4): sve tri racuna OsveziBrojkeZone iz izvora svojih
+' lista, jednom po generaciji podataka (mZonaGen) -- ne tek kad se otvori bas ta
+' lista. -1 znaci "izvor nije procitan" i zona tada pokazuje "?".
 Private mBrNedovrseno As Long
 Private mBrOsirocene As Long
 Private mBrUndo As Long
+Private mZonaGen As Long
+Private mZonaIma As Boolean
+' TEST SEAM izvora brojke NEDOVRSENO (KI-085): pad i broj citanja. Kuka radi samo u
+' test rezimu; gasi je modTest.ResetSeamova.
+Private mIzvorPadaTest As Boolean
+Private mIzvorCitanjaTest As Long
 ' INTEGRITET: snimak nalaza + generacija podataka pod kojom je punjen.
 ' Jedina lista ovog ekrana koja se NE cita sveza pri svakom osvezavanju -
 ' RunAllChecks je 19 prolaza kroz tabele, a Scr_Rows se zove i na svaki znak
@@ -141,10 +150,26 @@ End Function
 ' to bio isti kvar zbog koga su dva PR-a vadila sekunde iz uvida o stornu.
 Public Function Scr_Brojac() As Long
     Dim c As Collection
-    On Error Resume Next
-    Set c = GetNedovrseno()
+    On Error GoTo EH
+    Set c = NedovrsenoIzvor()
     If c Is Nothing Then Exit Function
     Scr_Brojac = c.count
+    Exit Function
+EH:
+    ' Pad izvora nije "nema posla" (S94-REV-05): -1 je "ne znam" i meni ga crta
+    ' kao "!" (modOtkupUI.BrojacTekst), kao sto zona pokazuje "?". Do S9-4 je
+    ' Resume Next ovde od pada pravio praznu znacku.
+    Scr_Brojac = -1
+End Function
+
+' Izvor brojke NEDOVRSENO -- JEDAN za meni (Scr_Brojac) i zonu (OsveziBrojkeZone),
+' pa dve brojke istog zaostatka ne mogu da se raziidju po izvoru.
+Private Function NedovrsenoIzvor() As Collection
+    If IsTestMode() Then
+        mIzvorCitanjaTest = mIzvorCitanjaTest + 1
+        If mIzvorPadaTest Then Err.Raise 9, "modScrOporavak.NedovrsenoIzvor", "test: izvor pada"
+    End If
+    Set NedovrsenoIzvor = GetNedovrseno()
 End Function
 
 Public Function Scr_Radnje() As String
@@ -212,6 +237,50 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     Scr_Layout = OPO_ZONA_H
 End Function
 
+' BROJKE ZONE (KI-085, S9-4). Sve tri se racunaju ZAJEDNO, iz istih izvora kao
+' njihove liste (meni Scr_Brojac broji isti GetNedovrseno), cim se podaci
+' promene -- ne kao uzgredni ishod citanja SVOJE liste. Do S9-4 je zona pokazivala
+' OSIROCENO 0 i ZA VRACANJE 0 dok operater ne otvori te liste, a NEDOVRSENO je
+' zaostajao posle radnje na drugoj listi (operater, 04.11. i 20.11.2026).
+'
+' Generacija podataka cuva od racunanja na svaki znak pretrage (Scr_Rows se zove
+' i tada) -- isti obrazac kao snimak Integriteta. Ljuska je menja na svaki upis
+' (RefreshFromData -> modUiData.ResetCache), a radnja ovog ekrana jos i preko
+' Scr_ResetCache.
+'
+' Pad izvora NIJE nula: brojke postaju -1 (zona pokazuje "?") i razlog ide u log.
+' Lista se zbog brojke ne obara -- brojka je pregled, lista je posao.
+Private Sub OsveziBrojkeZone()
+    Dim c As Collection, errDesc As String
+    If mZonaIma And mZonaGen = modUiData.DataGeneracija() Then Exit Sub
+    On Error GoTo EH
+    Set c = NedovrsenoIzvor()
+    mBrNedovrseno = 0
+    If Not c Is Nothing Then mBrNedovrseno = c.count
+    mBrOsirocene = ZbirOsirocenih()
+    Set c = GetUndoableStornoOperations()
+    mBrUndo = 0
+    If Not c Is Nothing Then mBrUndo = c.count
+    mZonaGen = modUiData.DataGeneracija()
+    mZonaIma = True
+    Exit Sub
+EH:
+    errDesc = Err.description
+    mBrNedovrseno = -1
+    mBrOsirocene = -1
+    mBrUndo = -1
+    ' I neuspeh se pamti za ovu generaciju (S94-REV-04): bez toga bi svaki znak
+    ' pretrage ponovo citao isti izvor i pisao isto upozorenje. Nov pokusaj ide
+    ' posle promene podataka ili Scr_ResetCache.
+    mZonaGen = modUiData.DataGeneracija()
+    mZonaIma = True
+    LogWarn MOD_TRAG, "Brojke zone Oporavka nisu procitane: " & errDesc
+End Sub
+
+Private Function BrojkaZone(ByVal n As Long) As String
+    If n < 0 Then BrojkaZone = "?" Else BrojkaZone = CStr(n)
+End Function
+
 Private Sub OsveziZonu()
     Dim z As Object
     On Error Resume Next
@@ -222,11 +291,11 @@ Private Sub OsveziZonu()
     z.Controls("opoPrj").caption = Poruka("OTKUI_OPO_CILJ_PRIJ") & " " & _
                                    IIf(Len(mCiljPrijemnica) = 0, ChrW(8212), mCiljPrijemnica)
     z.Controls("opoKL0").caption = UCase$(Poruka("OTKUI_OPO_KPI_NED"))
-    z.Controls("opoKV0").caption = CStr(mBrNedovrseno)
+    z.Controls("opoKV0").caption = BrojkaZone(mBrNedovrseno)
     z.Controls("opoKL1").caption = UCase$(Poruka("OTKUI_OPO_KPI_OSIR"))
-    z.Controls("opoKV1").caption = CStr(mBrOsirocene)
+    z.Controls("opoKV1").caption = BrojkaZone(mBrOsirocene)
     z.Controls("opoKL2").caption = UCase$(Poruka("OTKUI_OPO_KPI_UNDO"))
-    z.Controls("opoKV2").caption = CStr(mBrUndo)
+    z.Controls("opoKV2").caption = BrojkaZone(mBrUndo)
 End Sub
 
 '-------------------------------------------------------------- RADNJE
@@ -248,12 +317,12 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         Select Case Scr_Lista()
             ' Uz broj se pamti i IDENTITET izabranog reda: broj je labela, a
             ' radnja mora da posalje bas ovaj dokument. Kolona je poslednja i
-            ' prioriteta 3 -- na uskom ekranu se sakrije, u podacima ostaje.
+            ' nevidljiva (OTKUI_HD_IDENT, prioritet 4): ne crta se, u podacima ostaje.
             Case "ZBIRNE"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
                 If Len(broj) > 0 Then
                     mCiljZbirna = broj
-                    mCiljZbirnaGen = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
+                    mCiljZbirnaID = IdentitetIzReda(CLng(Mid$(tag, 5)), 7)
                     OsveziZonu
                 End If
             Case "CILJPRIJ"
@@ -277,8 +346,8 @@ EH:
 End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
-' Identitet dokumenta iz reda mreze (generacija zbirne, PrijemnicaID). Kolona je
-' prioriteta 3, pa se na uskom ekranu ne CRTA - ali podatak ostaje u mView, a
+' Identitet dokumenta iz reda mreze (ZbirnaID, PrijemnicaID). Kolona je
+' nevidljiva (OTKUI_HD_IDENT, prioritet 4) i ne CRTA se - ali podatak ostaje u mView, a
 ' GridCell cita njega, ne sirinu.
 Private Function IdentitetIzReda(ByVal red As Long, ByVal kolona As Long) As String
     On Error Resume Next
@@ -327,34 +396,54 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
-' Osirotela prijemnica dobija novu zbirnu. Menja se SAMO BrojZbirne -
-' PrijemnicaID ostaje, pa faktura i palete ostaju ispravne. Ceo posao radi
-' postojeci ReassignPrijemnicaToZbirna_TX, ukljucujuci proveru da je cilj
-' aktivna zbirna.
+' Osirotela prijemnica dobija novu zbirnu: labela BrojZbirne i roditelj (E4,
+' ZbirnaRoditeljID), u istom potezu. PrijemnicaID ostaje, pa faktura i palete
+' ostaju ispravne. Ceo posao i sve kapije (cilj aktivan, izdat, istog kupca i
+' vozaca, iste robe) drzi pisac ReassignPrijemnicaToZbirna_TX; ekran samo
+' potvrdjuje i pokazuje razlog odbijanja (KI-055).
 Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal prijemnicaID As String) As Boolean
     On Error GoTo EH
-    If Len(mCiljZbirna) = 0 Then
+    If Len(mCiljZbirnaID) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
         Exit Function
     End If
+    ' Cilj se imenuje brojem: ZbirnaID operateru ne govori nista, a radnja ga
+    ' svejedno nosi iz izabranog reda (S9-4; dve zbirne istog broja generator i
+    ' rucni unos ne prave).
     If MsgBox(Poruka("OTKUI_ASK_OPO_PRI") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, prijemnicaID, mCiljZbirnaGen) Then
+    Dim razlog As String
+    If PreveziPrijemnicuCore(brojPrij, prijemnicaID, razlog) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
                              " " & ChrW(8594) & " " & mCiljZbirna, False
         PreveziPrijemnicu = True
     Else
-        ' Rutina vraca samo True/False; razlog (cilj ne postoji ili je
-        ' storniran) se ne prosledjuje, pa poruka kaze sta da se proveri.
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_PRI") & " " & mCiljZbirna, True
+        ' Razlog je pisceva poruka (KI-055): roba, vlasnik, nacrt, storno, ID koga
+        ' nema. Do S9-4 je ovde stajala opsta poruka "proveri da li je ciljna
+        ' zbirna aktivna" i kad je zbirna bila aktivna.
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_PRI") & " " & razlog, True
     End If
     Exit Function
 EH:
     LogErr "modScrOporavak.PreveziPrijemnicu"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' JEZGRO "Prevezi prijemnicu" (S9-4): prijemnica izabranog reda izvora
+' (PrijemnicaID, kolona 8) na izabrani cilj (mCiljZbirnaID, kolona 7 liste
+' ZBIRNE), bez MsgBox-a potvrde, da bi se merilo (uzor PreveziPaleteCore). Oba
+' kraja idu po ID-u; broj je samo za trag. outRazlog nosi razlog odbijanja.
+Public Function PreveziPrijemnicuCore(ByVal brojPrij As String, ByVal prijemnicaID As String, _
+                                      ByRef outRazlog As String) As Boolean
+    outRazlog = ""
+    PreveziPrijemnicuCore = ReassignPrijemnicaToZbirna_TX(prijemnicaID, mCiljZbirnaID, outRazlog)
+    If Not PreveziPrijemnicuCore Then
+        LogWarn MOD_TRAG, "Prevezivanje prijemnice " & brojPrij & " (" & prijemnicaID & ") na zbirnu " & _
+                mCiljZbirna & " (" & mCiljZbirnaID & ") odbijeno: " & outRazlog
+    End If
 End Function
 
 ' Osirotele paletne stavke prelaze na aktivnu prijemnicu. force=True je
@@ -381,9 +470,9 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal prijemnicaID As S
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
         Exit Function
     End If
-    ' Kapija nad dvosmislenim CILJEM vise nije ovde: ista provera sada stoji u
-    ' samom writeru (VlasniciPoBroju / RequireJedanVlasnikPoBroju), pa vazi za
-    ' SVAKOG pozivaoca, i za legacy formu. Ekran samo prikaze razlog.
+    ' Kapija nad CILJEM nije ovde: pisac (ReassignPaleteToPrijemnica_TX) je od S8
+    ' reza 1b strog po ID-u na obe strane, pa vazi za SVAKOG pozivaoca. Ekran
+    ' samo prikaze razlog.
     ' Potvrda imenuje dokument i kupca (KI-056, S8R1B-REV-02): broj nose
     ' dokumenti vise kupaca, a radnja ide tacno po izabranom ID-u.
     If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & OpisDokumentaZaPotvrdu(brojPrij, prijemnicaID) & " " & _
@@ -531,6 +620,7 @@ Public Sub Scr_ResetCache()
     ' popravke i dalje prijavljivao stari nalaz.
     mIntSnimak = Empty
     mIntGen = 0
+    mZonaIma = False
 End Sub
 
 '-------------------------------------------------------------- REDOVI
@@ -538,6 +628,8 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' Pad ne sme da izadje kroz Application.Run (KI-016, UI-PAD-01).
     On Error GoTo EH
     modUiScreens.ScrPadAkoTest "modScrOporavak.Scr_Rows"
+    OsveziBrojkeZone
+    OsveziZonu
     Select Case Scr_Lista()
         Case "PRIJEMNICE": Scr_Rows = RowsOsiroceninPrijemnica(q): Exit Function
         Case "ZBIRNE":     Scr_Rows = RowsAktivneZbirne(q): Exit Function
@@ -575,15 +667,16 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "nedovrseno"
     Set src = GetNedovrseno()
-    mBrNedovrseno = 0
-    If Not src Is Nothing Then mBrNedovrseno = src.count
-    If src Is Nothing Or mBrNedovrseno = 0 Then
-        OsveziZonu
+    If src Is Nothing Then
+        RowsNedovrseno = Array(NedGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If src.count = 0 Then
         RowsNedovrseno = Array(NedGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
-    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_OTK)
+    ReDim outA(1 To src.count, 1 To NED_COL_OTK)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("ref")) & "|" & CStr(d("kind")) & "|" & CStr(d("status")) & "|" & CStr(d("opis"))
@@ -601,7 +694,6 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
 Sledeci:
     Next i
 
-    OsveziZonu
     mStep = "OK"
     RowsNedovrseno = Array(NedGridCols(), outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -717,11 +809,11 @@ Private Function OsirPrijGridCols() As Variant
         "OTKUI_HD_KG||txt|72|1", _
         "OTKUI_HD_BROJ_ZBIRNE||txt|110|1", _
         "OTKUI_HD_STATUS||txt|132|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
-    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 8, q, True)
+    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 8, q)
 End Function
 
 '--- OSIROTELE PALETE -------------------------------------------------
@@ -735,23 +827,21 @@ Private Function OsirPalGridCols() As Variant
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HDP_GAJBICA||num|72|1", _
         "OTKUI_HD_STAVKI||num|72|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsOsirocenePalete(ByVal q As String) As Variant
-    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 7, q, True)
+    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 7, q)
 End Function
 
-' Zajednicko telo za dve liste koje dolaze kao 2D niz iz modDokumenta.
-' brojiUZonu: ove dve liste zajedno cine brojku "osirotelo" u zoni.
+' Zajednicko telo za liste koje dolaze kao 2D niz. Brojku "osiroceno" u zoni od
+' S9-4 racuna OsveziBrojkeZone (KI-085), ne ova rutina.
 Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol As Long, _
-                        ByVal q As String, ByVal brojiUZonu As Boolean) As Variant
+                        ByVal q As String) As Variant
     Dim r As Long, c As Long, n As Long, outA() As Variant, hay As String
     On Error GoTo EH
     mStep = "2D lista"
     If Not IsArray(src) Then
-        If brojiUZonu Then mBrOsirocene = ZbirOsirocenih()
-        OsveziZonu
         Rows2D = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
@@ -772,8 +862,6 @@ Private Function Rows2D(ByVal src As Variant, ByVal cols As Variant, ByVal nCol 
 Sledeci:
     Next r
 
-    If brojiUZonu Then mBrOsirocene = ZbirOsirocenih()
-    OsveziZonu
     mStep = "OK"
     Rows2D = Array(cols, outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -784,9 +872,11 @@ End Function
 ' Brojka u zoni je zbir OBE vrste siroticica, bez obzira koja je lista
 ' otvorena - inace bi prelazak izmedju lista menjao brojku koja treba da
 ' kaze koliko posla ukupno ceka.
+'
+' Greska citaca ide pozivaocu: do S9-4 je Resume Next ovde od pada pravio
+' nepotpun zbir koji izgleda procitano.
 Private Function ZbirOsirocenih() As Long
     Dim a As Variant, b As Variant
-    On Error Resume Next
     a = GetOsirocenePrijemnice()
     b = GetPrijemniceSaOsirocenimPaletama()
     If IsArray(a) Then ZbirOsirocenih = ZbirOsirocenih + UBound(a, 1)
@@ -827,20 +917,19 @@ Private Function CiljZbirnaGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_GENERACIJA||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
-    ' Vlasnistvo zbirne je VOZAC + KUPAC. Broj zbirne generator drzi
-    ' jedinstvenim, pa se dva reda istog broja mogu pojaviti samo iz rucnog
-    ' unosa ili uvoza; tada sam kupac ne razlikuje dokumenta.
+    ' Vlasnistvo zbirne je VOZAC + KUPAC i vidi se u koloni 3. Identitet reda je
+    ' ZbirnaID (S9-4): dve zbirne istog broja, i istog vlasnika, su dva reda.
     ' Kilaza dolazi sa STAVKI (S4-1).
     RowsAktivneZbirne = RowsAktivni(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
                                     COL_ZBR_VRSTA, COL_ZBR_SORTA, _
                                     Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
                                     CiljZbirnaGridCols(), q, _
                                     modDokumenta.ZbirStavkiPoZbirni(), COL_ZBR_ID, _
-                                    COL_GENERACIJA_ID)
+                                    COL_ZBR_ID)
 End Function
 
 Private Function CiljPrijGridCols() As Variant
@@ -851,14 +940,13 @@ Private Function CiljPrijGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
-        "OTKUI_HDO_PRJ_ID||txt|110|3")
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 ' Kilaza dolazi sa STAVKI (S6 korak 3): zaglavlje prijemnice od koraka 2 ne nosi
 ' Kolicinu, pa je dokument novog oblika u listi cilja imao 0 kg -- a operater
 ' bira cilj prevezivanja paleta bas po kilazi.
-' Identitet reda je PrijemnicaID (S6 korak 8): dokument je jedan red, pa
-' generacije nema.
+' Identitet reda je PrijemnicaID (S6 korak 8): dokument je jedan red.
 Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
     RowsAktivnePrijemnice = RowsAktivni(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
                                         COL_PRJ_VRSTA, COL_PRJ_SORTA, _
@@ -867,33 +955,30 @@ Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
                                         COL_PRJ_ID)
 End Function
 
-' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU.
+' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU, a
+' dokument je PK (colIdentitet: ZbirnaID, PrijemnicaID -- S9-4, plan 14.68).
 '
-' "Jedan red po dokumentu" NIJE isto sto i "jedan red po broju", i ta razlika
-' je razlog zasto ova rutina izgleda ovako:
+' "Jedan red po dokumentu" NIJE isto sto i "jedan red po broju": broj se racuna
+' po kupcu (prijemnica) i po vozacu (zbirna), pa dva dokumenta lako dele broj.
+' Do S9-4 je kljuc bio "generacija, inace broj + vlasnik" -- dve zbirne istog
+' broja i istog vlasnika su tako bile JEDAN red sa sabranim kg, a operater nije
+' mogao da izabere onu koja mu treba. Kljuc je sada sam PK, a vlasnik se
+' PRIKAZUJE: kolizija mora da bude vidljiva, ne samo tacno obradjena.
 '
-'   klase I i II dele broj I VLASNIKA -> to je jedan dokument, jedan red
-'   dva kupca sa istim brojem         -> to su DVA dokumenta, dva reda
-'
-' Broj se racuna PO KUPCU (GenerateBrojPrijemnice), pa je drugi slucaj
-' svakodnevan, ne teorijski. Dedup samo po broju sveo bi ta dva dokumenta na
-' jedan red - operater bi izabrao "cilj" ne znajuci ciji je, a prevezivanje bi
-' otislo na onaj koji zatekne poslednji.
-'
-' Zato je kljuc grupisanja broj + VLASNIK, a vlasnik se i PRIKAZUJE: kolizija
-' mora da bude vidljiva, ne samo tacno obradjena.
+' Red bez PK-a se NE nudi: radnja ga ne bi mogla poslati piscu. Za zbirnu ga
+' prijavljuje integritet (B9); prijemnicu bez PK-a strogi citac stavki obara jos
+' pre liste (ZbirStavkiPoPrijemnici se racuna kao argument). Kolona identiteta
+' koja ne postoji je kvar poziva, pa dize gresku umesto da tiho isprazni listu.
 ' colVlasnik je NIZ kolona, ne jedna: vlasnistvo zbirne je vozac + kupac, isti
-' kompozit koji koriste StornoZbirna, ApplyGeneracijaID i kapija u
-' ReassignPrijemnicaToZbirna_TX. Sa samim kupcem bi dve zbirne istog broja i
-' istog kupca a razlicitih vozaca -- u jezgru dva dokumenta -- pale u JEDAN red,
-' pa operater ne bi mogao ni da izabere onaj koji mu treba.
+' kompozit koji koriste StornoZbirna i kapija roditelja u
+' ReassignPrijemnicaToZbirna_TX (ZbirnaRoditeljPrijemnice).
 ' kgPoDok + colDokID: kilaza dokumenta ne dolazi iz zaglavlja nego iz recnika
 ' stavki (kljuc = ID dokumenta u redu). Zbirna od PR3 UkupnoKolicina ostavlja
 ' praznu, a prijemnica od S6 koraka 2 Kolicinu, pa bi bez ovoga cela cilj lista
 ' pokazala 0 kg -- a operater bira CILJ ispravke bas po kilazi. Oba tipa salju
 ' recnik (S6 korak 3), pa ova funkcija ostaje JEDNA.
 ' colIdentitet: kolona koja je IDENTITET dokumenta i ide u 7. kolonu reda --
-' GeneracijaID za zbirnu (ZBR-IDENT-01), PrijemnicaID za prijemnicu (S6 korak 8).
+' ZbirnaID za zbirnu (S9-4), PrijemnicaID za prijemnicu (S6 korak 8).
 Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colDatum As String, ByVal colVrsta As String, _
                              ByVal colSorta As String, _
@@ -932,6 +1017,11 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     Next v
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
     iIdent = modUiData.ColIdx(tbl, colIdentitet)
+    If iIdent = 0 Then
+        Err.Raise vbObjectError + 1963, "modScrOporavak.RowsAktivni", _
+                  "Kolona " & colIdentitet & " ne postoji u " & tbl & _
+                  ", a identitet reda cilja je PK dokumenta."
+    End If
     Dim iDokID As Long
     If Not kgPoDok Is Nothing Then
         iDokID = modUiData.ColIdx(tbl, colDokID)
@@ -946,10 +1036,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Exit Function
     End If
 
-    ' Klase I i II su JEDAN dokument: dele broj i vlasnika. Prvi red pravi
-    ' izlazni red, svaki sledeci samo DODAJE svoje kilograme - ranije se
-    ' preskakao, pa je dvoklasni dokument prikazivao samo Klasu I, a i zbir
-    ' u podnozju je bio manji od stvarnog.
+    ' Dupli PK ovde ne stize: strogi citaci stavki (argument kgPoDok) ga obaraju
+    ' pre liste. Recnik ostaje osigurac -- isti ID dvaput je greska, ne sabrana
+    ' kilaza (S94-REV-03).
     '
     ' Filter se primenjuje PRE nego sto se dokument upamti: da se prvo pamti,
     ' dokument koji ne pogadja pretragu prvim redom ne bi mogao da je pogodi
@@ -971,16 +1060,10 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
             End If
         Next v
 
-        ' Kljuc grupisanja: IDENTITET kad postoji, inace broj + pun vlasnik.
-        ' Redovi istog dokumenta dele identitet, pa se i dalje sabiraju u jedan
-        ' red; dva razlicita dokumenta ga ne dele, pa se ne spajaju.
-        ident = ""
-        If iIdent > 0 Then ident = modUiData.CellS(src, r, iIdent)
-        If Len(ident) > 0 Then
-            kljuc = "g" & Chr$(1) & ident
-        Else
-            kljuc = broj & Chr$(1) & vlasnik
-        End If
+        ' Kljuc reda je PK dokumenta; red bez njega se ne nudi (v. gore).
+        ident = modUiData.CellS(src, r, iIdent)
+        If Len(ident) = 0 Then GoTo Sledeci
+        kljuc = ident
         hay = broj & "|" & vlasnik & "|" & modUiData.CellS(src, r, iVr) & _
               "|" & modUiData.CellS(src, r, iSo)
         If Len(q) > 0 Then
@@ -989,10 +1072,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Dim kgReda As Double
         kgReda = KgDokumenta(src, r, kgPoDok, iDokID)
         If seen.Exists(kljuc) Then
-            ' druga klasa istog dokumenta - samo dopuni kolicinu
-            outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + kgReda
-            sumKg = sumKg + kgReda
-            GoTo Sledeci
+            Err.Raise vbObjectError + 1964, "modScrOporavak.RowsAktivni", _
+                      "ID " & kljuc & " se u " & tbl & " nalazi vise puta -- dva reda istog " & _
+                      "ID-a nisu jedan dokument (integritet)."
         End If
         n = n + 1
         seen(kljuc) = n
@@ -1036,15 +1118,16 @@ Private Function RowsUndo(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "undo"
     Set src = GetUndoableStornoOperations()
-    mBrUndo = 0
-    If Not src Is Nothing Then mBrUndo = src.count
-    If src Is Nothing Or mBrUndo = 0 Then
-        OsveziZonu
+    If src Is Nothing Then
+        RowsUndo = Array(UndoGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If src.count = 0 Then
         RowsUndo = Array(UndoGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
-    ReDim outA(1 To mBrUndo, 1 To 6)
+    ReDim outA(1 To src.count, 1 To 6)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("opID")) & "|" & CStr(d("docType")) & "|" & CStr(d("broj")) & _
@@ -1062,7 +1145,6 @@ Private Function RowsUndo(ByVal q As String) As Variant
 Sledeci:
     Next i
 
-    OsveziZonu
     mStep = "OK"
     RowsUndo = Array(UndoGridCols(), outA, n, 0#, 0#, Array(0, 0, 0))
     Exit Function
@@ -1118,7 +1200,7 @@ Private Function IntegritetNalaza() As Long
 End Function
 
 Private Function RowsIntegritet(ByVal q As String) As Variant
-    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q, False)
+    RowsIntegritet = Rows2D(IntegritetSnimak(), IntGridCols(), 2, q)
 End Function
 
 '------------------------------------------------------------ TEST SEAM
@@ -1126,12 +1208,33 @@ End Function
 ' isto kao Scr_OtpTestSet - van test-rezima ne radi nista.
 Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
                           ByVal ciljPrijemnica As String, _
-                          Optional ByVal ciljZbirnaGen As String = "", _
+                          Optional ByVal ciljZbirnaID As String = "", _
                           Optional ByVal ciljPrijemnicaID As String = "")
     If Not IsTestMode() Then Exit Sub
     mLista = lista
     mCiljZbirna = ciljZbirna
     mCiljPrijemnica = ciljPrijemnica
-    mCiljZbirnaGen = ciljZbirnaGen
+    mCiljZbirnaID = ciljZbirnaID
     mCiljPrijemnicaID = ciljPrijemnicaID
 End Sub
+
+' TEST SEAM (KI-085): izvor brojke NEDOVRSENO pada (True) ili radi (False); brojac
+' citanja izvora se pri svakom postavljanju vraca na 0. Samo kvari i posmatra.
+Public Sub Scr_OpoIzvorPadaTest(ByVal pada As Boolean)
+    mIzvorPadaTest = False
+    mIzvorCitanjaTest = 0
+    If Not IsTestMode() Then Exit Sub
+    mIzvorPadaTest = pada
+End Sub
+
+Public Function Scr_OpoIzvorCitanjaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_OpoIzvorCitanjaTest = mIzvorCitanjaTest
+End Function
+
+' TEST SEAM (KI-085): brojke zone kakve bi ekran pokazao,
+' "nedovrseno|osiroceno|undo". Samo posmatra; tvrdo gejtovano.
+Public Function Scr_OpoZonaTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_OpoZonaTest = CStr(mBrNedovrseno) & "|" & CStr(mBrOsirocene) & "|" & CStr(mBrUndo)
+End Function
