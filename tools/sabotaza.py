@@ -15198,25 +15198,25 @@ SABOTAZE = {
         "T_S95_PrijemnicaBezAktivneZbirne",
         "425 E4: prijemnica sa labelom a bez veze (stari oblik, N14) je nalaz sa razlogom",
     ),
-    "s95-naslov-broji-redove": (
+    "s95-ukupno-broji-redove": (
         "modScrOporavak.bas",
         "    IntegritetNalaza = mIntBroj\n",
         "    If IsArray(src) Then IntegritetNalaza = UBound(src, 1)   ' SABOTAZA: naslov broji redove snimka\n",
-        "T_S95_NaslovBrojiNalaze",
-        "427 naslov liste nosi broj NALAZA, ne broj redova snimka (KI-099)",
+        "T_S95_UkupnoBrojiNalaze",
+        "427 red UKUPNO nosi broj NALAZA, ne broj redova snimka (KI-099)",
     ),
-    "s95-naslov-bez-palih": (
+    "s95-ukupno-bez-palih": (
         "modScrOporavak.bas",
         "            If mIntPalih > 0 Then Scr_NaslovDopuna = Scr_NaslovDopuna & \", \" & _\n",
         "            ' SABOTAZA: naslov cuti o palim proverama\n            If False Then Scr_NaslovDopuna = Scr_NaslovDopuna & \", \" & _\n",
-        "T_S95_NaslovBrojiNalaze",
-        "427 naslov kaze koliko provera nije izvrseno",
+        "T_S95_UkupnoBrojiNalaze",
+        "427 red UKUPNO kaze koliko provera nije izvrseno",
     ),
     "s95-pala-provera-se-ne-broji": (
         "modIntegritet.bas",
         "    m_palih = m_palih + 1\n",
         "    ' SABOTAZA: pala provera se ne broji\n",
-        "T_S95_NaslovBrojiNalaze",
+        "T_S95_UkupnoBrojiNalaze",
         "427 broj palih provera istog prolaza je broj redova GRESKA",
     ),
     "s95-manjak-red-po-broju": (

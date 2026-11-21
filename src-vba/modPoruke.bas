@@ -1409,6 +1409,8 @@ Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_INTEGRITET", "Neuskla" & ChrW(273) & "eni zapisi (revizija tabela)"
     UpsertRow lo, existing, "OTKUI_OPO_INT_NALAZA", "neuskla" & ChrW(273) & "enih zapisa"
     UpsertRow lo, existing, "OTKUI_OPO_INT_PALO", "neizvr" & ChrW(353) & "ene provere:"
+    UpsertRow lo, existing, "OTKUI_OPO_INT_UKUPNO", "UKUPNO"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_INT_REDOSLED", "Lista integriteta ostaje u redosledu revizije " & ChrW(8212) & " svaki nalaz stoji ispod naslova svoje provere"
     UpsertRow lo, existing, "OTKUI_HDO_REF", "DOKUMENT"
     UpsertRow lo, existing, "OTKUI_HDO_VRSTA_PROB", "VRSTA PROBLEMA"
     UpsertRow lo, existing, "OTKUI_HDO_OPIS", "OPIS"

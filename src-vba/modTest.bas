@@ -815,6 +815,8 @@ Public Sub RunAllTests()
     RunOne 430
     RunOne 431
     RunOne 432
+    RunOne 433
+    RunOne 434
 
     ' Nepotpun rollback: radi nad svojim privremenim listom, pa moze svuda.
     RunOne 200
@@ -1495,12 +1497,14 @@ Private Function TestName(ByVal idx As Long) As String
         Case 424: TestName = "T_S95_ClanstvoOtpremniceNalazi"
         Case 425: TestName = "T_S95_PrijemnicaBezAktivneZbirne"
         Case 426: TestName = "T_S95_KanonskiLanacBezNalaza"
-        Case 427: TestName = "T_S95_NaslovBrojiNalaze"
+        Case 427: TestName = "T_S95_UkupnoBrojiNalaze"
         Case 428: TestName = "T_S95_ManjakPoZbirnaID"
         Case 429: TestName = "T_S95_C4KontekstPoIvicama"
         Case 430: TestName = "T_S95_E4JednoPraviloTriPozivaoca"
         Case 431: TestName = "T_S95_PadRevizijeNijeCisto"
         Case 432: TestName = "T_S95_ClanstvoIstorijaNijeKvar"
+        Case 433: TestName = "T_S95_UkupnoIznadPretrage"
+        Case 434: TestName = "T_S95_IntegritetRedosledRevizije"
         Case 208: TestName = "T_AmbStorno_GasiSvojeIKarticaGaPrikazuje"
         Case 207: TestName = "T_AmbPregled_DvaDokumentaDvaReda"
         Case 206: TestName = "T_AmbKarticaKooperanta_PokazujeRevers"
@@ -1935,12 +1939,14 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 424: T_S95_ClanstvoOtpremniceNalazi
         Case 425: T_S95_PrijemnicaBezAktivneZbirne
         Case 426: T_S95_KanonskiLanacBezNalaza
-        Case 427: T_S95_NaslovBrojiNalaze
+        Case 427: T_S95_UkupnoBrojiNalaze
         Case 428: T_S95_ManjakPoZbirnaID
         Case 429: T_S95_C4KontekstPoIvicama
         Case 430: T_S95_E4JednoPraviloTriPozivaoca
         Case 431: T_S95_PadRevizijeNijeCisto
         Case 432: T_S95_ClanstvoIstorijaNijeKvar
+        Case 433: T_S95_UkupnoIznadPretrage
+        Case 434: T_S95_IntegritetRedosledRevizije
         Case 208: T_AmbStorno_GasiSvojeIKarticaGaPrikazuje
         Case 207: T_AmbPregled_DvaDokumentaDvaReda
         Case 206: T_AmbKarticaKooperanta_PokazujeRevers
@@ -37961,6 +37967,33 @@ Private Function S95RedNalaza(ByVal rows As Variant, ByVal sifra As String, _
     Next i
 End Function
 
+' Prvi red liste INTEGRITET kroz produkcioni put (modScrOporavak.Scr_Rows, isti koji
+' ljuska crta): kod u koloni Problem i tekst u koloni Detalj. Vraca broj redova
+' liste za pretragu q. Lista se posle citanja vraca na podrazumevanu.
+Private Function S95UkupnoIntegriteta(ByVal q As String, ByRef outProblem As String, _
+                                      ByRef outDetalj As String) As Long
+    Dim d As Variant
+    outProblem = ""
+    outDetalj = ""
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    d = modScrOporavak.Scr_Rows("", q)
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    If Not IsArray(d) Then Exit Function
+    S95UkupnoIntegriteta = CLng(d(2))
+    If CLng(d(2)) < 1 Then Exit Function
+    outProblem = NzToText(d(1)(1, 1))
+    outDetalj = NzToText(d(1)(1, 2))
+End Function
+
+' Redosled mreze ljuske (prve dve kolone), red po red: "problem~detalj#".
+Private Function S95MrezaTok() As String
+    Dim i As Long, s As String
+    For i = 1 To modOtkupUI.GridBrojRedova()
+        s = s & NzToText(modOtkupUI.GridCell(i, 1)) & "~" & NzToText(modOtkupUI.GridCell(i, 2)) & "#"
+    Next i
+    S95MrezaTok = s
+End Function
+
 ' Zbir nalaza po blokovima snimka: naslov bloka nosi "(N zapisa)".
 Private Function S95ZbirBlokova(ByVal rows As Variant) As Long
     Dim i As Long, d As String, p As Long, q As Long
@@ -38232,14 +38265,17 @@ CleanUp:
              "426: rollback je vratio redove svih tabela lanca"
 End Sub
 
-' 427 -- S9-5 (KI-099): broj u naslovu liste INTEGRITET je broj NALAZA istog
+' 427 -- S9-5 (KI-099): broj u redu UKUPNO liste INTEGRITET je broj NALAZA istog
 ' prolaza, ne broj redova snimka. Snimak nosi naslov bloka, zaglavlje kolona i
 ' prazan red izmedju blokova, pa je naslov do S9-5 za dva nalaza u dva bloka kazao
-' "7". Pala provera nije nalaz o podacima: ne broji se, a naslov je kaze posebno.
-' SABOTAZE: s95-naslov-broji-redove, s95-naslov-bez-palih, s95-pala-provera-se-ne-broji.
-Private Sub T_S95_NaslovBrojiNalaze()
+' "7". Pala provera nije nalaz o podacima: ne broji se, a red UKUPNO je kaze
+' posebno. Broj je do rucne provere S9-5 stajao u dopuni naslova, koju labela
+' fiksne sirine odseca (433); tvrdnja zato cita prvi red liste kroz Scr_Rows.
+' SABOTAZE: s95-ukupno-broji-redove, s95-ukupno-bez-palih, s95-pala-provera-se-ne-broji.
+Private Sub T_S95_UkupnoBrojiNalaze()
     Dim tx As clsTransaction, errNum As Long, errDesc As String, redoviPre As String
-    Dim t As String, rows As Variant, naslov As String, nUk As Long, nPal As Long
+    Dim t As String, rows As Variant, nUk As Long, nPal As Long
+    Dim ukP As String, ukD As String
     Dim b As String, o As String, z As String, prjG As String, stv As String
 
     redoviPre = SledBrojRedova()
@@ -38260,18 +38296,17 @@ Private Sub T_S95_NaslovBrojiNalaze()
 
     rows = modIntegritet.GetIntegritetRows(nUk, nPal)
     modScrOporavak.Scr_ResetCache
-    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
-    naslov = modScrOporavak.Scr_NaslovDopuna()
-    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    S95UkupnoIntegriteta "", ukP, ukD
 
     AssertEq (S95ZbirBlokova(rows) > 0), True, "427 preduslov: snimak ima bar jedan nalaz"
     AssertEq (S95PalihURedovima(rows) > 0), True, "427 preduslov: bar jedna provera je pala"
     AssertEq nUk, S95ZbirBlokova(rows), "427 broj nalaza istog prolaza je zbir nalaza po blokovima"
     AssertEq nPal, S95PalihURedovima(rows), "427 broj palih provera istog prolaza je broj redova GRESKA"
-    AssertEq Left$(naslov, Len(CStr(nUk)) + 1), CStr(nUk) & " ", _
-             "427 naslov liste nosi broj NALAZA, ne broj redova snimka (KI-099)"
-    AssertEq (InStr(1, naslov, Poruka("OTKUI_OPO_INT_PALO") & " " & CStr(nPal), vbTextCompare) > 0), True, _
-             "427 naslov kaze koliko provera nije izvrseno"
+    AssertEq ukP, Poruka("OTKUI_OPO_INT_UKUPNO"), "427 prvi red liste INTEGRITET je red UKUPNO"
+    AssertEq Left$(ukD, Len(CStr(nUk)) + 1), CStr(nUk) & " ", _
+             "427 red UKUPNO nosi broj NALAZA, ne broj redova snimka (KI-099)"
+    AssertEq (InStr(1, ukD, Poruka("OTKUI_OPO_INT_PALO") & " " & CStr(nPal), vbTextCompare) > 0), True, _
+             "427 red UKUPNO kaze koliko provera nije izvrseno"
 
     Err.Clear
 CleanUp:
@@ -38279,7 +38314,7 @@ CleanUp:
     errDesc = Err.description
     modUiData.ResetCache
     modScrOporavak.Scr_ResetCache
-    SledKraj tx, redoviPre, errNum, errDesc, "T_S95_NaslovBrojiNalaze", _
+    SledKraj tx, redoviPre, errNum, errDesc, "T_S95_UkupnoBrojiNalaze", _
              "427: rollback je vratio redove svih tabela lanca"
 End Sub
 
@@ -38477,19 +38512,18 @@ End Sub
 ' 431 -- S9-5 review (S95-REV-02): pad CELE revizije (van handlera pojedinacnih
 ' provera) nije "nema nalaza". GetIntegritetRows je vracao Empty uz nule, pa bi
 ' naslov liste kazao "0 neuskladjenih zapisa" -- isto kao cist integritet. Sada je
-' pad red GRESKA sa razlogom i broji se kao neizvrsena provera.
+' pad red GRESKA sa razlogom i broji se kao neizvrsena provera (red UKUPNO liste,
+' 427/433 -- do rucne provere S9-5 je to bio naslov, koji se odseca).
 ' SABOTAZA: s95-pad-revizije-je-prazno.
 Private Sub T_S95_PadRevizijeNijeCisto()
-    Dim rows As Variant, nUk As Long, nPal As Long, naslov As String
+    Dim rows As Variant, nUk As Long, nPal As Long, ukP As String, ukD As String
     Dim errNum As Long, errDesc As String
 
     On Error GoTo CleanUp
     modIntegritet.IntegritetPadTestSet True
     rows = modIntegritet.GetIntegritetRows(nUk, nPal)
     modScrOporavak.Scr_ResetCache
-    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
-    naslov = modScrOporavak.Scr_NaslovDopuna()
-    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    S95UkupnoIntegriteta "", ukP, ukD
     modIntegritet.IntegritetPadTestSet False
     modScrOporavak.Scr_ResetCache
 
@@ -38497,8 +38531,8 @@ Private Sub T_S95_PadRevizijeNijeCisto()
              "431 pad cele revizije je red GRESKA sa razlogom, ne prazan snimak"
     AssertEq CStr(nUk) & "|" & CStr(nPal), "0|1", _
              "431 pad cele revizije se broji kao neizvrsena provera, ne kao nula nalaza"
-    AssertEq (InStr(1, naslov, Poruka("OTKUI_OPO_INT_PALO") & " 1", vbTextCompare) > 0), True, _
-             "431 naslov liste kaze da revizija nije izvrsena"
+    AssertEq (InStr(1, ukD, Poruka("OTKUI_OPO_INT_PALO") & " 1", vbTextCompare) > 0), True, _
+             "431 red UKUPNO liste kaze da revizija nije izvrsena"
 
     Err.Clear
 CleanUp:
@@ -38576,4 +38610,100 @@ CleanUp:
     modUiData.ResetCache
     SledKraj tx, redoviPre, errNum, errDesc, "T_S95_ClanstvoIstorijaNijeKvar", _
              "432: rollback je vratio redove svih tabela lanca"
+End Sub
+' 433 -- S9-5, rucna provera (21.11.2026): broj nalaza je bio tacan (KI-099), ali ga
+' operater nije video. Stajao je u dopuni naslova, a naslov je labela fiksne
+' sirine (grdTitle, 180pt) koju "Neuskladjeni zapisi (revizija tabela)" vec puni,
+' pa se dopuna odsecala cela. Broj je zato PRVI red liste (UKUPNO) i ne prolazi
+' kroz pretragu -- "koliko ih ima" ne sme da zavisi od toga sta je operater
+' ukucao. Naslov dopunu vise nema (isti razlog kao modScrBankaUvoz).
+' SABOTAZE: s95-ukupno-filtrira, s95-naslov-dopuna-vracena.
+Private Sub T_S95_UkupnoIznadPretrage()
+    Dim p0 As String, d0 As String, pQ As String, dQ As String
+    Dim nSve As Long, nQ As Long, naslov As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modScrOporavak.Scr_ResetCache
+    nSve = S95UkupnoIntegriteta("", p0, d0)
+    nQ = S95UkupnoIntegriteta("NE-POSTOJI-NIGDE", pQ, dQ)
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    naslov = modScrOporavak.Scr_NaslovDopuna()
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+
+    AssertEq (nSve > 1), True, "433 preduslov: lista integriteta ima nalaze"
+    AssertEq p0, Poruka("OTKUI_OPO_INT_UKUPNO"), "433 prvi red liste INTEGRITET je red UKUPNO"
+    AssertEq pQ & "|" & dQ & "|" & CStr(nQ), p0 & "|" & d0 & "|1", _
+             "433 red UKUPNO ostaje prvi i kad pretraga suzi listu (broj ne zavisi od pretrage)"
+    AssertEq naslov, "", _
+             "433 naslov liste INTEGRITET nema dopunu (labela fiksne sirine je odsece)"
+
+    Err.Clear
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modScrOporavak.Scr_ResetCache
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S95_UkupnoIznadPretrage", errDesc
+End Sub
+
+' 434 -- S9-5, rucna provera (21.11.2026): lista INTEGRITET je IZVESTAJ, ne spisak.
+' Kod provere stoji samo na naslovu bloka, a zaglavlje kolona i nalazi su ispod
+' njega. Oporavak nije imao Scr_Sort, pa je vazilo pravilo ljuske ("druga kolona
+' opadajuce", napisano za datum): redovi su se slagali po tekstu Detalja, naslovi
+' blokova su pali na poslednju stranu, zaglavlja medju nalaze, i nalaz se vise
+' nije mogao pripisati proveri. Klik na zaglavlje kaze razlog BAS ove liste --
+' razlog kartice ("saldo kartice vazi samo tim redom") ovde nije istina.
+' Ide kroz pravu ljusku (IdiNaEkran, UiEvent), obrazac T_KartHron_MrezaNePreuredjuje.
+' SABOTAZE: s95-integritet-sort-ljuske, s95-razlog-sorta-kartice,
+' s95-oporavak-sve-liste-poslovne.
+Private Sub T_S95_IntegritetRedosledRevizije()
+    Dim f As Object, d As Variant, i As Long, n As Long, ekran As String
+    Dim ocek As String, mreza As String, mKlik As String, toastKlik As String
+    Dim sortCol As Long, sortAsc As Boolean, sortOstale As String
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo CleanUp
+    modScrOporavak.Scr_ResetCache
+    modScrOporavak.Scr_OpoTestSet "INTEGRITET", "", ""
+    ' Ocekivano: redosled koji daje EKRAN (snimak revizije), bez ljuske.
+    d = modScrOporavak.Scr_Rows("", "")
+    If IsArray(d) Then n = CLng(d(2))
+    For i = 1 To n
+        ocek = ocek & NzToText(d(1)(i, 1)) & "~" & NzToText(d(1)(i, 2)) & "#"
+    Next i
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.IdiNaEkran "OPORAVAK"
+    ekran = modOtkupUI.AktivanEkran()
+    modOtkupUI.GridSortTest sortCol, sortAsc
+    mreza = S95MrezaTok()
+    OcistiToast f
+    modOtkupUI.UiEvent "hd1", "Click", Empty
+    mKlik = S95MrezaTok()
+    toastKlik = ToastTekst(f)
+    ' Ostale liste ekrana ostaju na pravilu ljuske (datum dokumenta).
+    modScrOporavak.Scr_OpoTestSet "PRIJEMNICE", "", ""
+    sortOstale = modUiScreens.ScrSort("OPORAVAK")
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error Resume Next
+    If Not f Is Nothing Then ReleaseOtkupUIForm f
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    modScrOporavak.Scr_ResetCache
+    On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "modTest.T_S95_IntegritetRedosledRevizije", errDesc
+
+    AssertEq (n > 3 And ekran = "OPORAVAK"), True, _
+             "434 preduslov: lista integriteta ima vise redova i ljuska je na Oporavku"
+    AssertEq sortCol, 0, "434 ljuska ne sortira listu INTEGRITET (redosled revizije)"
+    AssertEq mreza, ocek, "434 mreza nosi redosled revizije: naslov bloka, zaglavlje, pa nalazi"
+    AssertEq mKlik, ocek, "434 klik na zaglavlje ne preuredjuje listu integriteta"
+    AssertEq toastKlik, Poruka("OTKUI_MSG_OPO_INT_REDOSLED"), _
+             "434 klik na zaglavlje kaze razlog liste integriteta, ne kartice"
+    AssertEq sortOstale, "", "434 ostale liste Oporavka ostaju na pravilu ljuske"
 End Sub
