@@ -23388,7 +23388,7 @@ Private Sub T_Izv_IdentitetURedu_NeCrtaSe()
         ' Oznaka se poredi sa JAVNIM konstantama core-a (IsNumeric nad
         ' "x,xx%" je locale-zavisno i ne razdvaja pouzdano).
         If CStr(redovi(i, 11)) = IZV_NEMA_PRIJEMA Or _
-           CStr(redovi(i, 11)) = IZV_VLASNIK_NEJASAN Then
+           CStr(redovi(i, 11)) = IZV_PRIJEM_NEPOZNAT Then
             imaBezPrij = True
             AssertEq CStr(redovi(i, 9)), "", _
                      "red bez prijema ima PRAZNU celiju prijema, ne nulu"

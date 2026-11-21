@@ -10049,8 +10049,8 @@ SABOTAZE = {
     # Manjak (BuildManjakDict): prijem po klasi iz stavke prijemnice.
     "s6k3-manjak-dict-prijem-nula": (
         "modHelpers.bas",
-        "            pKg = CDbl(ps(4))\n",
-        "            pKg = 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
+        "                pKg = CDbl(ps(4))\n",
+        "                pKg = 0   ' SABOTAZA: kg sa praznog zaglavlja\n",
         "T_S6_CitaociStavkiPrijemnice",
         "S6 citaoci: izvestaj manjka -- prijem zbirne raste za stavku njene klase",
     ),
@@ -10081,16 +10081,16 @@ SABOTAZE = {
     # Izvestaj manjka: kg zbirne iz njenih stavki.
     "s6k3-manjak-izv-zbirna-nula": (
         "modIzvestaj.bas",
-        "            zv(0) = zv(0) + CDbl(zs(4))\n",
-        "            zv(0) = zv(0) + 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
+        "            zbrKg = CDbl(zv(0))\n",
+        "            zbrKg = 0   ' SABOTAZA: kg zbirne sa praznog zaglavlja\n",
         "Test_S6_ManjakObeStraneIzStavki",
         "S6 manjak: izvestaj manjka cita stavke zbirne i prijemnice",
     ),
     # Integritet A2: prijem po broju zbirne je kg stavki (idx 0), ne gajbe.
     "s6k3-a2-prijem-gajbe": (
         "modIntegritet.bas",
-        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)\n",
-        "    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 2, False)   ' SABOTAZA: gajbe umesto kg\n",
+        "                    prijKg = CDbl(z(1))\n",
+        "                    prijKg = CDbl(z(2))   ' SABOTAZA: broj stavki umesto kg\n",
         "Test_S6_ManjakObeStraneIzStavki",
         "S6 manjak: integritet A2 vidi zbirnu i prijemnicu iz stavki",
     ),
@@ -13880,12 +13880,10 @@ SABOTAZE = {
     ),
     "s92-roba-om-cita-otp-brojzbirne": (
         "modIzvestaj.bas",
-        "        thisBrZbirne = BrojAktivneZbirneOtp(thisOtpID, zbrPoOtp, brojPoZbr)\n",
-        "        thisBrZbirne = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, thisOtpID, "
-        "COL_OTP_BROJ_ZBIRNE)))   ' SABOTAZA: ROBA OM cita Otpremnica.BrojZbirne\n",
+        "        thisZbrID = ZbirnaOtpremnicePoClanstvu(thisOtpID, zbrPoOtp)\n",
+        "        thisZbrID = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, thisOtpID, COL_OTP_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: ROBA OM cita Otpremnica.BrojZbirne\n",
         "T_S92_IzvestajiPoClanstvu",
-        "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, "
-        "ne po Otpremnica.BrojZbirne",
+        "365 ROBA (OM): prijem otpremnice je prijem njene zbirne po clanstvu, ne po Otpremnica.BrojZbirne",
     ),
     "s92-vrsta-kes-prazan": (
         "modDokumenta.bas",
@@ -14832,9 +14830,8 @@ SABOTAZE = {
     ),
     "s93-roba-om-vlasnik-prijemnice": (
         "modHelpers.bas",
-        "        pVk = CStr(vkPoZbr(pRod))\n",
-        "        pVk = ZbirnaVlasnikKljuc(pZbr, Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)))), "
-        "Trim$(NzToText(prijData(p, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)))))   ' SABOTAZA: vlasnik po atributima prijemnice\n",
+        "        If rodPrj.Exists(pid) Then pRod = UCase$(Trim$(CStr(rodPrj(pid))))\n",
+        "        pRod = UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, pid, COL_PRJ_BROJ_ZBIRNE)), COL_ZBR_ID))))   ' SABOTAZA: prijemnica po labeli broja zbirne, ne po E4\n",
         "T_G2_BrojNijeIdentitet",
         "403 ROBA (OM): prijem otpremnice je prijem prijemnice njene zbirne po ID-u, ne po vozacu i kupcu prijemnice",
     ),

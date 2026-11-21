@@ -253,48 +253,29 @@ Private Sub T_NemaPrijemaOznaka()
     IzvChkEqD CDbl(m(2)), 0#, S & "osnovica 0 -> procenat 0, bez greske"
 End Sub
 
-' --- (c2) AUD-052 posledica: BrojZbirne NIJE identitet ---
+' --- (c2) prijem zbirne: veza poznata / kvar E4 / bez prijemnice ---
+' Od S9-5 (S95-ODL-03, KI-097) zbirna reda je poznata po ZbirnaID-u (clanstvo E3,
+' ivica E4), pa "nejasan vlasnik" po broju vise ne postoji. Jedina neizvesnost je
+' kvar E4 (skup prijemnica zbirne se ne zna) -- fail-closed, bez brojke.
 Private Sub T_PrijemVlasnikRazresenje()
-    Const S As String = "Prijem/vlasnik: "
+    Const S As String = "Prijem zbirne: "
 
-    ' Broj ima JEDNOG vlasnika -> join po broju je siguran (stara, brza putanja).
     Dim r As Variant
-    r = PrijemZaZbirnu(1, True, 0, 2, 900#)
-    IzvChk CBool(r(0)) = True, S & "jedan vlasnik -> prijem vazi"
-    IzvChkEqD CDbl(r(1)), 900#, S & "jedan vlasnik -> kg po broju"
-    IzvChkEqText CStr(r(2)), "", S & "jedan vlasnik -> bez oznake"
+    r = PrijemZaZbirnu(True, 2, 900#)
+    IzvChk CBool(r(0)) = True, S & "poznata veza i prijemnica -> prijem vazi"
+    IzvChkEqD CDbl(r(1)), 900#, S & "poznata veza -> kg prijema"
+    IzvChkEqText CStr(r(2)), "", S & "poznata veza -> bez oznake"
 
-    ' Nema nijedne zbirne / nema prijemnice -> nema prijema (ne 100% manjka).
-    r = PrijemZaZbirnu(1, True, 0, 0, 0#)
+    ' Nema prijemnice -> nema prijema (ne 100% manjka).
+    r = PrijemZaZbirnu(True, 0, 0#)
     IzvChk CBool(r(0)) = False, S & "bez prijemnice -> nema prijema"
     IzvChkEqText CStr(r(2)), IZV_NEMA_PRIJEMA, S & "oznaka 'nema prijema'"
 
-    ' Broj dele DVA vlasnika, ali je vlasnik reda razresen i sve prijemnice
-    ' nose kompletnog vlasnika -> racuna se owner-scoped prijem.
-    r = PrijemZaZbirnu(2, True, 0, 1, 1500#)
-    IzvChk CBool(r(0)) = True, S & "dva vlasnika + razresen -> prijem vazi"
-    IzvChkEqD CDbl(r(1)), 1500#, S & "koristi se owner-scoped kg, ne zbir broja"
-
-    ' Fail-closed 1: vlasnik reda se ne moze razresiti.
-    r = PrijemZaZbirnu(2, False, 0, 1, 1500#)
-    IzvChk CBool(r(0)) = False, S & "dva vlasnika + nerazresen -> bez brojke"
-    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "oznaka 'nejasan vlasnik'"
-
-    ' Fail-closed 2: postoji prijemnica koja se ne moze pripisati nijednoj zbirnoj.
-    r = PrijemZaZbirnu(2, True, 1, 1, 1500#)
-    IzvChk CBool(r(0)) = False, S & "nepripisiva prijemnica -> bez brojke"
-    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "nepripisiva -> 'nejasan vlasnik'"
-
-    ' Nepripisiva prijemnica NE blokira kad broj ima jednog vlasnika
-    ' (tada je pripadnost dokazana samim brojem -- starije instalacije).
-    r = PrijemZaZbirnu(1, True, 3, 3, 900#)
-    IzvChk CBool(r(0)) = True, S & "jedan vlasnik: prazan vlasnik na prijemnici ne smeta"
-
-    ' Vlasnik kljuc: ista definicija kao modStorno.VlasniciPoBroju.
-    IzvChkEqText ZbirnaVlasnikKljuc("1/010126", "VZ-1", "KP-1"), "1/010126|VZ-1|KP-1", _
-                 S & "vlasnik kljuc = broj|vozac|kupac"
-    IzvChkEqText ZbirnaVlasnikKljuc(" 1/010126 ", " VZ-1", "KP-1 "), "1/010126|VZ-1|KP-1", _
-                 S & "vlasnik kljuc trimuje delove"
+    ' Fail-closed: kvar E4 -- ni kg koji je stigao ne vazi kao prijem.
+    r = PrijemZaZbirnu(False, 1, 1500#)
+    IzvChk CBool(r(0)) = False, S & "kvar E4 -> bez brojke"
+    IzvChkEqD CDbl(r(1)), 0#, S & "kvar E4 -> kg se ne prijavljuje"
+    IzvChkEqText CStr(r(2)), IZV_PRIJEM_NEPOZNAT, S & "kvar E4 -> oznaka 'prijem nepoznat'"
 End Sub
 
 ' --- (d) FM-0028 #6: uplata po fakturi se deli SRAZMERNO stavkama ---

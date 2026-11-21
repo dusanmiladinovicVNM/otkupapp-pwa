@@ -606,8 +606,8 @@ End Sub
 ' ============================================================
 ' CHECK A2: MANJAK / VISAK zbirna -> prijemnica
 ' ============================================================
-' Semantika kao ReportManjak: manjak = Sigma zbirna.UkupnoKolicina
-' - Sigma prijemnica.Kolicina po BrojZbirne. Anomalije:
+' Semantika kao ReportManjak: manjak = Sigma stavki zbirne - Sigma stavki
+' aktivnih prijemnica te zbirne (E4), po ZbirnaID-u. Anomalije:
 '   - VISAK   (prijemnica > zbirna; manjak < 0),
 '   - NISTA PRIMLJENO (zbirna > 0, prijemnica = 0),
 '   - MANJAK > prag% (moguca greska unosa / veliki kalo).
@@ -615,43 +615,63 @@ End Sub
 Private Sub Chk_A2_ManjakAnomalije()
     On Error GoTo EH
 
-    ' S6 KORAK 3 (stavka 178, odluka 7): kg OBA dokumenta se cita iz STAVKI.
-    ' Zaglavlje zbirne od PR3 i zaglavlje prijemnice od S6 koraka 2 ne nose
-    ' kolicinu, pa je provera za kanonske dokumente poredila 0 sa 0 i cutala.
-    ' Citanje je STROGO unutar provere (obrazac B7): kvar stavki daje red GRESKA
-    ' za A2, a ne izmisljenu nulu koja bi lagala "nista primljeno".
-    Dim zbrDict As Object: Set zbrDict = ZbirStavkiPoBroju(TBL_ZBIRNA, 0, False)
-    Dim prijDict As Object: Set prijDict = ZbirStavkiPoBroju(TBL_PRIJEMNICA, 0, False)
+    ' S9-5 (S95-ODL-03, KI-097): A2 cita ISTI agregat kao izvestaj manjka i ROBA
+    ' (OM) -- modHelpers.BuildManjakDict, po DOKUMENTU (ZbirnaID). Do S9-5 je A2
+    ' imao svoj racun po BROJU zbirne (labela prijemnice), pa je sabirao sve
+    ' zbirne istog broja. Kg oba dokumenta je sa STAVKI (S6 korak 3). Citanje je
+    ' STROGO (obrazac B7): kvar stavki daje red GRESKA za A2, a ne izmisljenu
+    ' nulu koja bi lagala "nista primljeno". Kvar E4 zbirne je svoj razlog --
+    ' prijem se ne zna, pa ni manjak.
+    Dim md As Object: Set md = BuildManjakDict()
 
     Dim bad As Collection: Set bad = New Collection
-    Dim kk As Variant
-    Dim zbrKg As Double, prijKg As Double, manjak As Double, pct As Double
-    Dim razlog As String
+    Dim data As Variant: data = GetTableData(TBL_ZBIRNA)
+    If IsArray(data) Then data = ExcludeStornirano(data, TBL_ZBIRNA)
+    If IsArray(data) Then
+        Dim cId As Long, cBroj As Long, i As Long, zid As String, broj As String
+        cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modIntegritet.Chk_A2")
+        cBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIntegritet.Chk_A2")
 
-    For Each kk In zbrDict.keys
-        zbrKg = zbrDict(kk)
-        prijKg = 0
-        If prijDict.Exists(kk) Then prijKg = prijDict(kk)
-        manjak = zbrKg - prijKg
-        If zbrKg <> 0 Then pct = manjak / zbrKg * 100 Else pct = 0
+        Dim z As Variant, zbrKg As Double, prijKg As Double, manjak As Double, pct As Double
+        Dim razlog As String
+        For i = 1 To UBound(data, 1)
+            zid = UCase$(Trim$(NzToText(data(i, cId))))
+            broj = Trim$(NzToText(data(i, cBroj)))
+            ' Zbirna bez broja (nacrt) nije bila deo A2 ni pre S9-5.
+            If Len(broj) > 0 Then
+                zbrKg = 0: prijKg = 0
+                If md.Exists("#Z|" & zid) Then
+                    z = md("#Z|" & zid)
+                    zbrKg = CDbl(z(0))
+                    prijKg = CDbl(z(1))
+                End If
+                manjak = zbrKg - prijKg
+                If zbrKg <> 0 Then pct = manjak / zbrKg * 100 Else pct = 0
 
-        razlog = ""
-        If manjak < 0 And Abs(manjak) > zbrKg * (PRAG_VISAK_PCT / 100#) Then
-            razlog = "VISAK > " & CStr(PRAG_VISAK_PCT) & "% (prijemnica > zbirna)"
-        ElseIf prijKg <= 0.01 And zbrKg > 0.01 Then
-            razlog = "NISTA PRIMLJENO"
-        ElseIf pct > PRAG_MANJAK_PCT Then
-            razlog = "MANJAK > " & CStr(PRAG_MANJAK_PCT) & "%"
-        End If
+                razlog = ""
+                If md.Exists("#N|" & zid) Then
+                    razlog = "PRIJEM NEPOZNAT (kvar veze E4)"
+                ElseIf manjak < 0 And Abs(manjak) > zbrKg * (PRAG_VISAK_PCT / 100#) Then
+                    razlog = "VISAK > " & CStr(PRAG_VISAK_PCT) & "% (prijemnica > zbirna)"
+                ElseIf prijKg <= 0.01 And zbrKg > 0.01 Then
+                    razlog = "NISTA PRIMLJENO"
+                ElseIf pct > PRAG_MANJAK_PCT Then
+                    razlog = "MANJAK > " & CStr(PRAG_MANJAK_PCT) & "%"
+                End If
 
-        If Len(razlog) > 0 Then
-            bad.Add Array(CStr(kk), zbrKg, prijKg, manjak, Format$(pct, "0.0") & "%", razlog)
-        End If
-    Next kk
+                ' ZbirnaID ide na KRAJ reda: dve zbirne istog broja su dva reda,
+                ' a citaoci nalaza (broj prvi) ostaju isti.
+                If Len(razlog) > 0 Then
+                    bad.Add Array(broj, zbrKg, prijKg, manjak, Format$(pct, "0.0") & "%", razlog, _
+                                  Trim$(NzToText(data(i, cId))))
+                End If
+            End If
+        Next i
+    End If
 
-    WriteBlock "A2", "Manjak/visak zbirna->prijemnica (anomalije; prag " & CStr(PRAG_MANJAK_PCT) & "%)", _
-               Array("BrojZbirne", "ZbirnaKg", "PrijemnicaKg", "ManjakKg", "Manjak%", "Razlog"), _
-               CollToArray(bad, 6)
+    WriteBlock "A2", "Manjak/visak zbirna->prijemnica po dokumentu (anomalije; prag " & CStr(PRAG_MANJAK_PCT) & "%)", _
+               Array("BrojZbirne", "ZbirnaKg", "PrijemnicaKg", "ManjakKg", "Manjak%", "Razlog", "ZbirnaID"), _
+               CollToArray(bad, 7)
     Exit Sub
 
 EH:

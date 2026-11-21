@@ -407,7 +407,7 @@ Public Function IzCipoviZaListu(ByVal kljuc As String) As String
 End Function
 
 ' PRAVILO CIPA MANJKA: "bez prijema" propusta redove koji nose OZNAKU umesto
-' brojke manjka (IZV_NEMA_PRIJEMA / IZV_VLASNIK_NEJASAN) -- ono sto se ne
+' brojke manjka (IZV_NEMA_PRIJEMA / IZV_PRIJEM_NEPOZNAT) -- ono sto se ne
 ' moze naplatiti. Nepoznat i prazan kljuc PUSTAJU sve.
 Public Function IzCipManjak(ByVal filter As String, ByVal oznaka As String) As Boolean
     Select Case filter
