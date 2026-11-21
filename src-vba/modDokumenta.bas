@@ -9787,25 +9787,22 @@ End Function
 ' veze (stari oblik) se uopste nije videla. Razlozi: "zbirna stornirana", "zbirna
 ' ne postoji" (ID koga nema) i "nema veze sa zbirnom" (prazan ZbirnaRoditeljID).
 ' Broj zbirne u 6. koloni je labela sa prijemnice, za prikaz.
-Public Function GetOsirocenePrijemnice() As Variant
+'
+' S9-5 review (S95-REV-01, S95-ODL-07): razlog daje JEDNO pravilo,
+' PrijemnicaE4Razlog -- isto za listu Oporavka, integritet E4 i pisca
+' prevezivanja. Roditelj mora da postoji TACNO jednom ("zbirna nije
+' jednoznacna" je cetvrti razlog); do ispravke je ZbirnaID iz dva zaglavlja
+' zavisio od redosleda redova (lista je gledala poslednji, pisac prvi).
+' iBezBroja = True (integritet): i prijemnica bez BrojPrijemnice je red --
+' revizija ne sme da izgubi pokvarenu vezu zato sto fali labela. Lista
+' Oporavka (podrazumevano) nudi samo redove sa brojem, kao i do sada.
+Public Function GetOsirocenePrijemnice(Optional ByVal iBezBroja As Boolean = False) As Variant
     On Error GoTo EH
 
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
 
-    ' ZbirnaID -> Stornirano ("DA" / ""), za svaku zbirnu koja postoji.
-    Dim stZbr As Object: Set stZbr = CreateObject("Scripting.Dictionary")
-    stZbr.CompareMode = vbTextCompare
-    Dim zd As Variant: zd = GetTableData(TBL_ZBIRNA)
-    If Not IsEmpty(zd) Then
-        Dim zId As Long, zSt As Long, zr As Long, zk As String
-        zId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, "modDokumenta.GetOsirocenePrijemnice")
-        zSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, "modDokumenta.GetOsirocenePrijemnice")
-        For zr = 1 To UBound(zd, 1)
-            zk = Trim$(NzToText(zd(zr, zId)))
-            If Len(zk) > 0 Then stZbr(zk) = UCase$(Trim$(NzToText(zd(zr, zSt))))
-        Next zr
-    End If
+    Dim zbirne As Object: Set zbirne = ZbirneZaE4("modDokumenta.GetOsirocenePrijemnice")
 
     Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long
     Dim cId As Long, cZbr As Long, cSt As Long, cRod As Long
@@ -9832,15 +9829,8 @@ Public Function GetOsirocenePrijemnice() As Variant
             If cZbr > 0 Then bz = Trim$(NzToText(prj(i, cZbr)))
             Dim rodR As String: rodR = Trim$(NzToText(prj(i, cRod)))
             Dim brp As String: brp = Trim$(NzToText(prj(i, cBr)))
-            Dim st As String: st = ""
-            If Len(rodR) = 0 Then
-                st = "nema veze sa zbirnom"
-            ElseIf Not stZbr.Exists(rodR) Then
-                st = "zbirna ne postoji"
-            ElseIf CStr(stZbr(rodR)) = "DA" Then
-                st = "zbirna stornirana"
-            End If
-            If Len(st) > 0 And Len(brp) > 0 Then
+            Dim st As String: st = PrijemnicaE4Razlog(rodR, zbirne)
+            If Len(st) > 0 And (iBezBroja Or Len(brp) > 0) Then
                 ' Jedan red po PrijemnicaID-u, ne po broju: dva kupca istog
                 ' dana dele "1/ddmmyy", pa bi dedup po broju spojio DVA
                 ' dokumenta u jedan red - i recovery bi posle prevezao onaj
@@ -9866,6 +9856,60 @@ EH:
     errNum = Err.Number: errDesc = Err.description
     LogErr "modDokumenta.GetOsirocenePrijemnice"
     Err.Raise errNum, "modDokumenta.GetOsirocenePrijemnice", errDesc
+End Function
+
+' PRAVILO E4 JEDNE PRIJEMNICE (SLED-INV-01; S9-5 review S95-REV-01, S95-ODL-07):
+' "" = veza razresava -- roditelj postoji TACNO jednom i nije storniran; inace
+' razlog. JEDNA implementacija, tri pozivaoca: lista sirocadi Oporavka i
+' integritet E4 (GetOsirocenePrijemnice) i pisac prevezivanja
+' (ReassignPrijemnicaToZbirna_TX, S94-ODL-09: prevezuje se samo siroce). Do
+' ispravke je svako mesto imalo svoju kopiju, pa su za ZbirnaID iz dva zaglavlja
+' davali razlicit odgovor zavisno od redosleda redova.
+' zbirne = ZbirneZaE4: UCase(ZbirnaID) -> Array(broj zaglavlja, stornirano).
+Public Function PrijemnicaE4Razlog(ByVal roditeljID As String, ByVal zbirne As Object) As String
+    Dim k As String, z As Variant
+    k = UCase$(Trim$(roditeljID))
+    If Len(k) = 0 Then
+        PrijemnicaE4Razlog = "nema veze sa zbirnom"
+    ElseIf Not zbirne.Exists(k) Then
+        PrijemnicaE4Razlog = "zbirna ne postoji"
+    Else
+        z = zbirne(k)
+        If CLng(z(0)) > 1 Then
+            PrijemnicaE4Razlog = "zbirna nije jednoznacna (" & CStr(z(0)) & " zaglavlja)"
+        ElseIf CBool(z(1)) Then
+            PrijemnicaE4Razlog = "zbirna stornirana"
+        End If
+    End If
+End Function
+
+' UCase(ZbirnaID) -> Array(broj zaglavlja sa tim ID-em, stornirano) za
+' PrijemnicaE4Razlog -- jedan prolaz kroz tblZbirna. Kljucne kolone su STROGE:
+' kolona koje nema je greska citanja, ne "nema siroca".
+Public Function ZbirneZaE4(ByVal src As String) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set ZbirneZaE4 = d
+
+    Dim zd As Variant
+    zd = GetTableData(TBL_ZBIRNA)
+    If Not IsArray(zd) Then Exit Function
+
+    Dim cId As Long, cSt As Long, r As Long, k As String, z As Variant
+    cId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, src)
+    cSt = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, src)
+    For r = 1 To UBound(zd, 1)
+        k = UCase$(Trim$(NzToText(zd(r, cId))))
+        If Len(k) > 0 Then
+            If d.Exists(k) Then
+                z = d(k)
+                z(0) = CLng(z(0)) + 1
+                d(k) = z
+            Else
+                d.Add k, Array(1&, (UCase$(Trim$(NzToText(zd(r, cSt)))) = "DA"))
+            End If
+        End If
+    Next r
 End Function
 
 ' Stornirane prijemnice koje imaju AKTIVNE (osirocene) paleta-stavke. Za P1 pallet
@@ -10009,19 +10053,18 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal prijemnicaID As String, _
     End If
 
     ' SAMO SIROCE (S94-REV-01, odluka operatera 21.11.2026). Oporavak prevezuje
-    ' prijemnicu koja je ostala bez aktivne zbirne -- isto pravilo kao lista
-    ' Oporavka (GetOsirocenePrijemnice): bez veze, zbirna ne postoji ili je
-    ' stornirana. Prijemnica sa AKTIVNOM zbirnom se ovde ne premesta; promena
-    ' zbirne vezane prijemnice je svoj potez sa svojim pravilima (R2, #477).
+    ' prijemnicu koja je ostala bez aktivne zbirne -- ISTO pravilo kao lista
+    ' Oporavka i integritet E4 (PrijemnicaE4Razlog, S95-ODL-07): bez veze, zbirna
+    ' ne postoji, nije jednoznacna ili je stornirana. Prijemnica sa AKTIVNOM
+    ' zbirnom se ovde ne premesta; promena zbirne vezane prijemnice je svoj potez
+    ' sa svojim pravilima (R2, #477).
     roditeljPre = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, _
                                              COL_DETE_ZBIRNA_ROD)))
     If Len(roditeljPre) > 0 Then
-        If FindRows(TBL_ZBIRNA, COL_ZBR_ID, roditeljPre).count > 0 Then
-            If Not ZbirnaJeStornirana(roditeljPre) Then
-                Err.Raise vbObjectError + 1443, SRC, _
-                          "Prijemnica " & prijemnicaID & " ima aktivnu zbirnu " & roditeljPre & _
-                          " -- prevezuje se samo prijemnica bez aktivne zbirne (siroce)."
-            End If
+        If Len(PrijemnicaE4Razlog(roditeljPre, ZbirneZaE4(SRC))) = 0 Then
+            Err.Raise vbObjectError + 1443, SRC, _
+                      "Prijemnica " & prijemnicaID & " ima aktivnu zbirnu " & roditeljPre & _
+                      " -- prevezuje se samo prijemnica bez aktivne zbirne (siroce)."
         End If
     End If
 

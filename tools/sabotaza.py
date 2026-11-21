@@ -14889,15 +14889,15 @@ SABOTAZE = {
     ),
     "s93-oporavak-stornirana-zbirna": (
         "modDokumenta.bas",
-        "            ElseIf CStr(stZbr(rodR)) = \"DA\" Then\n",
-        "            ElseIf False Then   ' SABOTAZA: stornirana zbirna nije siroce\n",
+        "        ElseIf CBool(z(1)) Then\n",
+        "        ElseIf False Then   ' SABOTAZA: stornirana zbirna nije siroce\n",
         "T_S93_F4IOporavakPoID",
         "405 Oporavak: prijemnica stornirane zbirne je siroce i kad broj nosi druga aktivna zbirna",
     ),
     "s93-oporavak-bez-veze": (
         "modDokumenta.bas",
-        "            If Len(rodR) = 0 Then\n",
-        "            If False Then   ' SABOTAZA: prijemnica bez veze nije siroce\n",
+        "    If Len(k) = 0 Then\n        PrijemnicaE4Razlog = \"nema veze sa zbirnom\"\n",
+        "    If False Then   ' SABOTAZA: prijemnica bez veze nije siroce\n        PrijemnicaE4Razlog = \"nema veze sa zbirnom\"\n",
         "T_S93_F4IOporavakPoID",
         "405 Oporavak: prijemnica bez ZbirnaRoditeljID je siroce, ne dete zbirne istog broja",
     ),
@@ -15144,8 +15144,8 @@ SABOTAZE = {
     # S94-REV-01: pisac prevezuje i prijemnicu koja ima AKTIVNU zbirnu.
     "s94-prevezi-vezana-prolazi": (
         "modDokumenta.bas",
-        "            If Not ZbirnaJeStornirana(roditeljPre) Then\n",
-        "            If False Then   ' SABOTAZA: i vezana prijemnica se prevezuje\n",
+        "        If Len(PrijemnicaE4Razlog(roditeljPre, ZbirneZaE4(SRC))) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: i vezana prijemnica se prevezuje\n",
         "T_S94_PrevezivanjeSamoSiroce",
         "419 prijemnica sa aktivnom zbirnom se ne prevezuje; razlog imenuje njenu zbirnu",
     ),
@@ -15260,6 +15260,41 @@ SABOTAZE = {
         "            kid = \"\"   ' SABOTAZA: proizvodjac se ne cita iz izvora lanca\n",
         "T_S95_C4KontekstPoIvicama",
         "429 C4: proizvodjac je kooperant izvora lanca (E3 -> E2)",
+    ),
+    "s95-e4-audit-trazi-broj": (
+        "modDokumenta.bas",
+        "            If Len(st) > 0 And (iBezBroja Or Len(brp) > 0) Then\n",
+        "            If Len(st) > 0 And Len(brp) > 0 Then   ' SABOTAZA: revizija preskace prijemnicu bez broja\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 E4: aktivna prijemnica bez broja sa pokvarenom vezom je nalaz (revizija ne zavisi od labele)",
+    ),
+    "s95-e4-dupli-roditelj-prolazi": (
+        "modDokumenta.bas",
+        "        If CLng(z(0)) > 1 Then\n",
+        "        If False Then   ' SABOTAZA: roditelj iz dva zaglavlja prolazi\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 E4: roditelj koji stoji u dva zaglavlja je nalaz -- tacno jednom (SLED-INV-01)",
+    ),
+    "s95-pisac-svoje-pravilo-siroceta": (
+        "modDokumenta.bas",
+        "    If Len(roditeljPre) > 0 Then\n        If Len(PrijemnicaE4Razlog(roditeljPre, ZbirneZaE4(SRC))) = 0 Then\n",
+        "    If Len(roditeljPre) > 0 Then\n        If FindRows(TBL_ZBIRNA, COL_ZBR_ID, roditeljPre).count > 0 And Not ZbirnaJeStornirana(roditeljPre) Then   ' SABOTAZA: pisac ima svoju kopiju pravila (prvi red)\n",
+        "T_S95_E4JednoPraviloTriPozivaoca",
+        "430 pisac prevezivanja ne odbija roditelja iz dva zaglavlja kao aktivnu zbirnu (isto pravilo)",
+    ),
+    "s95-pad-revizije-je-prazno": (
+        "modIntegritet.bas",
+        "    GetIntegritetRows = pad\n",
+        "    GetIntegritetRows = Empty: outPalih = 0   ' SABOTAZA: pad revizije izgleda kao cist integritet\n",
+        "T_S95_PadRevizijeNijeCisto",
+        "431 pad cele revizije je red GRESKA sa razlogom, ne prazan snimak",
+    ),
+    "s95-e3-istorija-je-aktivna": (
+        "modDokumenta.bas",
+        "        If Not stornirane.Exists(UCase$(zbrID)) Then\n",
+        "        If True Then   ' SABOTAZA: stornirana zbirna i dalje drzi otpremnicu\n",
+        "T_S95_ClanstvoIstorijaNijeKvar",
+        "432 E3: clanstvo u storniranoj zbirnoj je istorija, ne kvar",
     ),
     # S94-REV-02: dupli OldDocID tiho daje red umesto greske.
     "s94-prefill-dupli-prvi-red": (

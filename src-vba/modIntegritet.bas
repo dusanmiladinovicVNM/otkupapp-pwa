@@ -98,8 +98,19 @@ Public Function GetIntegritetRows(Optional ByRef outUkupno As Long, _
     Exit Function
 
 EH:
+    ' Pad CELE revizije (van handlera pojedinacnih provera) NIJE "nema nalaza"
+    ' (S95-REV-02): Empty uz nule bi u naslovu liste bio "0 neuskladjenih
+    ' zapisa", isto kao cist integritet. Zato snimak nosi red GRESKA sa razlogom,
+    ' a pad se broji kao neizvrsena provera.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "modIntegritet.GetIntegritetRows"
-    GetIntegritetRows = Empty
+    Dim pad(1 To 1, 1 To 2) As Variant
+    pad(1, 1) = "INTEGRITET"
+    pad(1, 2) = "GRESKA: revizija nije izvrsena -- " & errDesc
+    outUkupno = 0
+    outPalih = 1
+    GetIntegritetRows = pad
 End Function
 
 ' TEST SEAM (S95-REV-02, test 431): podmece pad CELE revizije, van handlera
@@ -604,14 +615,16 @@ EH:
 End Sub
 
 ' E4: aktivna prijemnica bez aktivne zbirne -- ISTO pravilo kao lista sirocadi
-' u Oporavku (modDokumenta.GetOsirocenePrijemnice, S94-ODL-09): E4 prazan,
-' zbirna ne postoji ili je stornirana. Popravka je "Prevezi prijemnicu" u
+' u Oporavku i pisac prevezivanja (modDokumenta.PrijemnicaE4Razlog, S95-ODL-07):
+' E4 prazan, zbirna ne postoji, nije jednoznacna (ZbirnaID u dva zaglavlja) ili je
+' stornirana. Revizija vidi i prijemnicu bez broja (S95-REV-01): pokvarena veza ne
+' sme da nestane zato sto fali labela. Popravka je "Prevezi prijemnicu" u
 ' Oporavku; ovde se samo vidi.
 Private Sub Chk_E4_PrijemnicaBezAktivneZbirne()
     On Error GoTo EH
     Dim os As Variant, bad As Collection, i As Long
     Set bad = New Collection
-    os = modDokumenta.GetOsirocenePrijemnice()
+    os = modDokumenta.GetOsirocenePrijemnice(True)
     If IsArray(os) Then
         For i = 1 To UBound(os, 1)
             bad.Add Array(CStr(os(i, 8)), CStr(os(i, 1)), CStr(os(i, 6)), CStr(os(i, 5)), CStr(os(i, 7)))
