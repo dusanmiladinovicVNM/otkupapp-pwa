@@ -120,6 +120,13 @@ prijemnicu" u Oporavku menja E4 samo prijemnici bez aktivne zbirne — isto prav
 zbirnom se odbija razlogom koji je imenuje; promena zbirne vezane prijemnice je potez lanca (R2,
 `#477`). Vlasnik: `modDokumenta.ReassignPrijemnicaToZbirna_TX` (test 419).
 
+**`S95-ODL-07` — jedno pravilo E4** (odluka operatera 21.11.2026, pregled `#503`). „Veza razrešava" za
+prijemnicu znači: roditelj postoji **tačno jednom** i nije storniran — `modDokumenta.PrijemnicaE4Razlog`
+(+ `ZbirneZaE4`), jedina implementacija za listu siročadi u Oporavku, integritet E4 i pisca prevezivanja.
+Proširuje `S94-ODL-09`: `ZbirnaID` koji stoji u dva zaglavlja je siroče sa razlogom „zbirna nije
+jednoznačna". Integritet vidi i prijemnicu bez broja (lista Oporavka i dalje nudi samo redove sa brojem).
+Testovi 425, 430.
+
 ## 4) Invarijante
 
 **`SLED-INV-01` — svaka ivica razrešava tačno jednom.** Za svaki red nosioca ivice (E2–E10)

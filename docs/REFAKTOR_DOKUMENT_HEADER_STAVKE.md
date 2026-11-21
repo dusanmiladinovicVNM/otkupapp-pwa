@@ -12792,6 +12792,21 @@ integritet i health. Dokumenti u petom commit-u.
   prijemnicu pod aktivnom zbirnom), KUL1 nad lancima testova 423–429, izveštajni testovi koji su sabirali dve zbirne
   istog vlasnika u jedan red.
 
+#### Nezavisni pregled `#503` (21.11.2026) — dva nalaza, oba zatvorena u ovom PR-u
+
+| ID | Nalaz (potvrđen čitanjem) | Ispravka | Test | Sabotaža |
+|---|---|---|---|---|
+| `S95-REV-01` (P1) | E4 je pozivao listu Oporavka: (A) aktivna prijemnica **bez broja** sa pokvarenom vezom nije bila nalaz (`Len(brp) > 0`); (B) `ZbirnaID` iz **dva zaglavlja** — rečnik „poslednji pobeđuje", pa je ishod zavisio od redosleda. Pisac prevezivanja je isti slučaj merio **prvim** redom, pa su lista i pisac mogli da se ne slože | **`S95-ODL-07` (odluka operatera): jedno pravilo za tri pozivaoca** — `modDokumenta.PrijemnicaE4Razlog` + `ZbirneZaE4` (roditelj tačno jednom, nije storniran; četvrti razlog „zbirna nije jednoznačna (N zaglavlja)"). Zovu ga lista siročadi, integritet E4 (`GetOsirocenePrijemnice(True)`: i bez broja) i pisac prevezivanja. Proširuje `S94-ODL-09`: prijemnica sa dvosmislenim roditeljem je siroče | 430 `T_S95_E4JednoPraviloTriPozivaoca` | `s95-e4-audit-trazi-broj`, `s95-e4-dupli-roditelj-prolazi`, `s95-pisac-svoje-pravilo-siroceta` |
+| `S95-REV-02` (P2) | pad **cele** revizije (van handlera provera) vraćao je `Empty` uz nule — naslov bi rekao „0 neusklađenih zapisa", kao čist integritet | `GetIntegritetRows` u handleru vraća red `INTEGRITET \| GRESKA: revizija nije izvršena — …` i `outPalih = 1`; seam `IntegritetPadTestSet` (tvrdo gejtovan, u `ResetSeamova`) | 431 `T_S95_PadRevizijeNijeCisto` | `s95-pad-revizije-je-prazno` |
+| pitanje za acceptance (§6 pregleda) | istorijsko članstvo storniranog dokumenta naspram dva aktivna | bez izmene koda: istorija nije kvar, dva aktivna jesu (E2 i E3) | 432 `T_S95_ClanstvoIstorijaNijeKvar` | `s95-e3-istorija-je-aktivna` (E2 već meri `clanstvo-drzi-storniranu-otpremnicu`) |
+
+- Tri zatečene sabotaže presidrene u `PrijemnicaE4Razlog` i pisca (`s93-oporavak-stornirana-zbirna`,
+  `s93-oporavak-bez-veze`, `s94-prevezi-vezana-prolazi`; iste tvrdnje). Katalog 1553.
+- Dok dupli `ZbirnaID` stoji, strog čitač stavki zbirne odbija tabelu (ugovor „zaglavlje tačno jednom"), pa se
+  prevezivanje u tom stanju ne završava; test 430 meri samo kapiju koju drži pravilo E4.
+- Crveno nad `c2c19b5c` očekivano: 430 i 431 po imenu; 432 je tamo zelen (E2/E3 su već u S9-5), crven nad `main`-om.
+- Izvršne kapije i dalje NISU puštene; očekivano `RunAllTests` 432.
+
 ## 15) Backlog — namerno van opsega
 
 | Stavka | Zašto ne sada |

@@ -31,7 +31,9 @@ izlaz `outUkupno`), ne broj redova snimka — snimak nosi i naslov bloka, zaglav
 kolona i prazan red između blokova (`KI-099`, do S9-5 je naslov za dva nalaza u
 dva bloka kazao „7"). **Pala provera** (red `GREŠKA: …` — čitač je odbio tabelu)
 nije nalaz o podacima: ne broji se u nalaze, a naslov je kaže posebno
-(„…, neizvršene provere: N"); isto `MsgBox` posle Admin prolaza.
+(„…, neizvršene provere: N"); isto `MsgBox` posle Admin prolaza. **Pad cele revizije** (van handlera
+pojedinačnih provera) je red `INTEGRITET` sa „GREŠKA: revizija nije izvršena — …" i jedna neizvršena
+provera, nikad prazan snimak sa nulom (`S95-REV-02`).
 
 Sve provere isključuju stornirane redove (`ExcludeStornirano`), osim gde je
 stornirani dokument baš predmet nalaza (C4, KUL1/KUL2).
@@ -44,7 +46,7 @@ stornirani dokument baš predmet nalaza (C4, KUL1/KUL2).
 |---|---|---|
 | E2 | Članstvo otpremnice (`tblOtpremnicaIzvori`) ne razrešava: prazan ID, otpremnica ili otkup ne postoji tačno jednom, dupli par, otkup u dve aktivne otpremnice | `modDokumenta.ClanstvoOtpremnicaNalazi` — **isto pravilo** kao strog čitač `AktivnoOtpClanstvoPoKanonu`, samo sakupljeno red po red (`S95-ODL-01`) |
 | E3 | Članstvo zbirne (`tblZbirnaIzvori`) ne razrešava: ista pravila kao E2 (od S9-5 i u čitanju, `S95-ODL-02`) | `modDokumenta.ClanstvoZbirneNalazi` ↔ `AktivnoClanstvoPoKanonu` |
-| E4 | Aktivna prijemnica bez aktivne zbirne: `ZbirnaRoditeljID` prazan, zbirna ne postoji ili je stornirana | `modDokumenta.GetOsirocenePrijemnice` — **isto pravilo** kao lista siročadi u Oporavku (`S94-ODL-09`); popravka je „Prevezi prijemnicu" |
+| E4 | Aktivna prijemnica bez aktivne zbirne: `ZbirnaRoditeljID` prazan, zbirna ne postoji, **nije jednoznačna** (isti `ZbirnaID` u dva zaglavlja) ili je stornirana. I prijemnica **bez broja** je nalaz | `modDokumenta.PrijemnicaE4Razlog` — **jedno pravilo** za integritet, listu siročadi u Oporavku i pisca prevezivanja (`S95-ODL-07`); popravka je „Prevezi prijemnicu" |
 
 Čitač bez kolekcije **diže** na prvom kvaru (ekrani, izveštaji i jezgro grafa
 `modSledljivost` ponašaju se kao i pre); revizija isti sud **sakuplja**, pa vidi

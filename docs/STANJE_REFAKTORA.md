@@ -11341,7 +11341,14 @@
      - **NIJE izvršeno (čeka reviewer GO):** `make_fixture` (sveska od 19.11), crveno nad `6ebda5db`, FULL, `dokaz.py
        s95-` + presidrene, ručni Compile i ručna provera. Očekivano `RunAllTests` 429; BFP i `RunIzvestajTests` se čitaju
        posle prolaza (obrisan BFP test, −6 izveštajnih provera). Vreme nove provere (N13) nije mereno.
-     - **Sledeći brojevi:** test 430 · stavka 337 · KI-100 · plan §14.70.
+     - **PR `#503` otvoren** (glava `c9a51f80`). **Nezavisni pregled: HOLD** — `S95-REV-01` (P1: E4 preskače
+       prijemnicu bez broja; `ZbirnaID` iz dva zaglavlja zavisi od redosleda, a lista i pisac prevezivanja
+       gledaju različit red) i `S95-REV-02` (P2: pad cele revizije izgleda kao „0 nalaza"). Oba zatvorena:
+       odluka operatera **`S95-ODL-07`** — jedno pravilo E4 (`PrijemnicaE4Razlog`) za integritet, listu siročadi
+       i pisca; pad revizije je red GREŠKA i neizvršena provera. Testovi 430–432 prvi (`c2c19b5c`), ispravka
+       `6f5f02d3`; 432 odgovara na pitanje pregleda o istorijskom članstvu. Katalog 1553. Izvršne kapije i dalje
+       nisu puštene (očekivano `RunAllTests` 432).
+     - **Sledeći brojevi:** test 433 · stavka 337 · KI-100 · plan §14.70.
 
 ## Dug sa imenom (posle S5-5b)
 
