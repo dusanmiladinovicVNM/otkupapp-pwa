@@ -37801,6 +37801,9 @@ End Sub
 ' (prefill bi se obrisao) -- ali brojac menija mora da se osvezi. Operater je posle
 ' ispravke video "Oporavak 30" u meniju i NEDOVRSENO 32 u zoni. Promena podataka je
 ' nova ispravka na cekanju (correction context), kao posle ispravke iz Storna.
+' Polazna brojka menija se postavlja u testu (OsveziNavBrojace, isti poziv koji
+' RefreshFromData pravi posle svakog upisa): bez toga je pre predaje stajala brojka
+' nekog ranijeg testa, koja se u punoj suite slucajno poklopila sa novom.
 ' SABOTAZA: s94-predaja-meni-stoji.
 Private Sub T_S94_PredajaEkranaOsvezavaMeni()
     Dim f As frmOtkupUI, tx As clsTransaction, cid As String
@@ -37813,6 +37816,7 @@ Private Sub T_S94_PredajaEkranaOsvezavaMeni()
     tx.BeginTx
     S6K8Snimak tx
 
+    modOtkupUI.OsveziNavBrojace                         ' meni kakav je posle poslednjeg upisa
     pre = modOtkupUI.NavBrojacTest("OPORAVAK")
     cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
               FLOW_DOC_PRIJEMNICA, "PRJ-TEST-S", FX_PRIJ_STORNO, _
