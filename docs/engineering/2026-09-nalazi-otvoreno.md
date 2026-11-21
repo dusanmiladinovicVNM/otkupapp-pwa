@@ -1,6 +1,6 @@
 # Otvoreni nalazi: storno, self-update, Drive, migracija
 
-Registar nalaza koji **još stoje** protiv `main @ b552892` (29.10.2026). Nastao je
+Registar nalaza koji **još stoje** protiv `main @ c60fd9de` (21.11.2026). Nastao je
 re-verifikacijom liste od 23 nalaza (revizija avgust 2026) posle refaktora
 S3c-S5-3b, koji je identitet storna prebacio sa labele/broja na `ZbirnaID` i
 kanonsko članstvo.
@@ -10,6 +10,7 @@ kanonsko članstvo.
 | 26.09.2026 | `1095fdd` | prvi registar: 14 nalaza + 2 reziduala + 6 strukturnih |
 | 20.10.2026 | `8e970d9` | +387 commit-a (nov model ambalaže, S6 prijemnica). **Nijedna stavka registra nije zatvorena.** `#17` i Strukturno ispravljeni nadole, `#9` i `#20` preformulisani, `#6` i `R1` izoštreni |
 | 29.10.2026 | `b552892` | +96 commit-a (S6 koraci 4–8). **`#4` zatvoren** — prvi zatvoren nalaz u registru. `R1` pola zatvoreno, `#9` i `#21b` suženi, Strukturno pogoršano |
+| 21.11.2026 | `c60fd9de` | +558 commit-a (S7–S9). **`#21b` i `R1` zatvoreni, `#6` simptom zatvoren.** `#9` sužen na primitivu. Drive/self-update klaster nedirnut treći period |
 
 Čita se pre nego se otvori rez u `modStorno*`, `modSelfUpdate`, `modDrive` ili
 `modMigracija` — da se ne krpi ono što je već zatvoreno i ne preskoči ono što
@@ -20,10 +21,10 @@ brojevi koji se ne pojavljuju su verifikovano zatvoreni i namerno se ne ponavlja
 
 | | |
 |---|---|
-| Metod | statičko čitanje izvora na `main @ b552892` |
-| FAST | `python tools/vba_check.py` → čisto (191 fajl) |
-| Šema | `python tools/gen_schema_module.py --check` → u koraku (otisak `87AB4F9B`) |
-| Vlasništvo | `python tools/who_writes.py --check-ownership` → nema novih pisaca (36 tabela) |
+| Metod | statičko čitanje izvora na `main @ c60fd9de` |
+| FAST | `python tools/vba_check.py` → čisto (195 fajlova) |
+| Šema | `python tools/gen_schema_module.py --check` → u koraku (otisak `F22278A1`) |
+| Vlasništvo | `python tools/who_writes.py --check-ownership` → nema novih pisaca (38 tabela) |
 | TARGETED / FULL | **NIJE izvršeno** — `run_vba` traži Windows + Excel + `pywin32` |
 
 Nijedna tvrdnja ovde **nije bihevioralno verifikovana**. Svaka je čitanje koda sa
@@ -31,23 +32,28 @@ navedenom putanjom i linijom. Gde je zaključak izveden a ne izmeren, tako i sto
 
 ## Gde ide pažnja, a gde ne
 
-`modDrive.bas` i `modSelfUpdate.bas` **nisu dirani ni jednom u 483 commit-a**,
-kroz oba perioda:
+`modDrive.bas` i `modSelfUpdate.bas` **nisu dirani ni jednom u 1041 commit-a**,
+kroz sva tri perioda:
 
 | Period | Commit-a | `git log <opseg> -- modDrive.bas modSelfUpdate.bas` |
 |---|---|---|
 | `1095fdd..8e970d9` | 387 | prazan |
 | `8e970d9..b552892` | 96 | prazan |
+| `b552892..c60fd9de` | 558 | prazan |
 
 Svih sedam nalaza u tom klasteru — `#5`, `#7`, `#8`, `#13`, `#14`, `#19` i
 self-update polovina `#18` — zato stoje **bajt-identično**, sa istim brojevima
-linija kao 26.09. `#5` je jedan red.
+linija kao 26.09. `#5` je jedan red, i prošlo je skoro dva meseca.
 
-Storno, ambalaža i prijemnica su u istom periodu dobili nov model knjiženja i S6
-do koraka 8, i tamo se registar stvarno pomerio — uključujući prvi zatvoren
-nalaz. Nije u pitanju da su nalazi iz Drive/self-update klastera odbijeni; nisu
-bili ni pogledani. To je raspored prioriteta, i vredi ga videti kao raspored a ne
-kao ocenu.
+Storno, ambalaža, prijemnica i faktura su u istom vremenu dobili nov model
+knjiženja i refaktor do S9, i tamo se registar stvarno pomerio: **četiri od
+petnaest stavki zatvoreno, sve četiri u tom sloju.** Nije u pitanju da su nalazi
+iz Drive/self-update klastera odbijeni; nisu bili ni pogledani. To je raspored
+prioriteta, i vredi ga videti kao raspored a ne kao ocenu.
+
+> Vredi reći i obrnuto: tri revizije pokazuju da se **ono što je u putu aktivnog
+> refaktora zatvara samo od sebe**, a ono što nije ne zatvara se nikako. Nalaz
+> van putanje posla ne čeka prioritet — čeka da neko odluči da ga uzme.
 
 ---
 
@@ -62,12 +68,12 @@ Faza B više ne postoji — `grep "Faza B: paletne stavke"` nad `modStornoFlow.b
 ne vraća nijedan pogodak, a `DetachOsirocenePaletaStavke_TX` se iz kaskade više ne
 zove. Palete se sada skidaju **unutar transakcije pozivaoca**:
 
-`PonistiZbirnaChain_TX` (`modStornoFlow.bas:2170-2201`) zove `StornoPrijemnica(id,
+`PonistiZbirnaChain_TX` (`modStornoFlow.bas:2178-2205`) zove `StornoPrijemnica(id,
 tx, True, palK)` i sabira `palUkupno`, pa `res("pals") = palUkupno` i
 `res("ok") = True` stoje **posle** `tx.CommitTx`. `StornoPrijemnica`
-(`modStorno.bas:484`) prima `ByRef outPaletnihStavki` i delegira
+(`modStorno.bas:477`) prima `ByRef outPaletnihStavki` i delegira
 `modPaletniList.SkiniPaleteZaStornoPrijemnice(tx, prijemnicaID, SRC)`
-(`modPaletniList.bas:2111`).
+(`modPaletniList.bas:2032`).
 
 Ta primitiva zatvara sva tri otvora iz nalaza:
 
@@ -78,7 +84,7 @@ Ta primitiva zatvara sva tri otvora iz nalaza:
 | `expPals` se ne računa | broj dolazi **iz same mutacije** (`outPaletnihStavki`), ne iz nezavisnog prebrojavanja |
 
 Uz to je prešla na identitet: bira po `COL_PALS_PRIJEMNICA_ID`
-(`modPaletniList.bas:2132`), ne po labeli — čime je zatvorena i paletna polovina
+(`:2053`), ne po labeli — čime je zatvorena i paletna polovina
 `R1`. Review #438 je dodao i dve kapije koje ranije nisu postojale: paletna stavka
 koja pokazuje na paletu koje nema obara storno **po imenu**, a prerađena paleta se
 odbija pre dijaloga.
@@ -117,48 +123,36 @@ obrazac se prenosi.
 
 ## P1 — funkcija ne radi, ili garancija ne važi
 
-### #6 Kaskada van žurnala — koren stoji, simptom neutralisan
+### #6 Kaskada van žurnala — simptom ZATVOREN 21.11., koren stoji
 
-**Koren stoji.** `BeginStornoOp` ima **tačno jednog živog pozivaoca**:
-`modStorno.bas:150` (otkup). Zbirna, otpremnica i prijemnica kaskade ne otvaraju
-žurnal operaciju, pa kaskada nije undo-abilna kao celina.
+**Simptom je zatvoren, i to brisanjem.** S9-2 je obrisao oba mesta koja su čitala
+kolone bez pisca, i u komentarima navodi **tačno ovaj nalaz** kao razlog:
 
-> Revizija 20.10. je ovde rekla „samo dva živa pozivaoca" a navela jedan —
-> nedoslednost nastala kad je revers izašao iz žurnala a tekst nije dopunjen do
-> kraja. Prebrojano 29.10.: jedan.
+- `OtkupBlockDeadParentByID` — obrisana; `modStornoZurnal.bas:312` kaže: „čitala je
+  `Otkup.OtpremnicaID` i `Otkup.BrojZbirne`, kolone bez pisca, pa je na kanonskim
+  podacima uvek vraćala `""`".
+- `FreeOtkupBloksInline` — obrisan; `modStornoFlow.bas:2149` kaže: „brisao je staru
+  vezu `Otkup.OtpremnicaID` — kolonu koju kanonski pisac ne piše, pa je na kanonskim
+  podacima bio no-op".
 
-**Simptom je otišao za kanon, ne za zatečeno.** `OtkupBlockDeadParentByID`
-(`modStornoRecovery.bas:269`) čita `Otkup.OtpremnicaID` i `Otkup.BrojZbirne`. Te
-kolone **više niko ne piše** — jedina referenca je `FreeOtkupBloksInline`
-(`modStornoFlow.bas:1907`, prazni na `:1924`) koja ih *prazni*; row owner-i iz `WRITE_OWNERSHIP.json`
-(`modDokumenta`, `modMasterSync`, `modOtkup`) ih nemaju. Za kanonske redove oba su
-prazna → garda vraća `""` → undo prolazi.
+Zamena nije drugi čitalac nego **konstrukcija**: u kanonu to stanje ne nastaje —
+`StornoOtkup` odbija člana aktivne otpremnice, a pisac članstva odbija storniran
+otkup. Potez u lancu čuva `LancaRazlog` (`modStornoZurnal.bas:141`).
 
-Zatečeni redovi koji još nose stare linkove **i dalje se blokiraju**, sa porukom
-koja krivi stanje koje je taj storno napravio.
+Time je i „šest čitalaca, nula pisaca" iz revizije 20.10. otišlo: `COL_OTK_BROJ_ZBIRNE`
+i `COL_OTK_OTPREMNICA_ID` sada nemaju **ni jednog čitaoca ni pisca** u celom
+`src-vba/`. Ostale su u `schema/schema.json` — dve mrtve kolone u kanonu. To je
+higijena šeme, ne tiha greška, i tako je i treba tretirati.
 
-**Napomena za sledeći rez šeme (izoštreno 20.10.).** `tblOtkup.BrojZbirne` i
-`tblOtkup.OtpremnicaID` su kolone **bez pisca, ali sa živim čitaocima**:
+**Koren stoji.** Kaskada je još van žurnala: `BeginStornoOp`
+(`modStornoZurnal.bas:42`) ima **jednog živog pozivaoca**, `modStorno.bas:154`
+(otkup). Zbirna, otpremnica i prijemnica kaskade ne otvaraju žurnal operaciju, pa
+kaskada nije undo-abilna kao celina. `JournalCell` ima tri pisca:
+`modStorno.bas:155` (`tblOtkup.Stornirano`), `modNovac.bas:2410` i `:2560`.
 
-| Čitalac | Šta radi |
-|---|---|
-| `modIntegritet.bas:564`, `:1496-1497` | provera integriteta sudi po njima |
-| `modScrIzvestaji.bas:2143`, `:2243` | izveštaj grupiše po njima |
-| `modScrDokumenti.bas:2531` | mapira kolonu za ekran |
-| `modStornoDok.bas:1059` | mapira kolonu za prefill |
-| `modStornoFlow.bas:2264` | bira blokove po `OtpremnicaID` |
-| `modStornoRecovery.bas:275-276` | undo garda (gore) |
-
-Kolona koju niko ne piše, a šest mesta čita, ne vraća „nema podatka" nego
-**prazno kao da je podatak** — pa prikaz pokaže prazno polje, izveštaj grupiše u
-prazan koš, a provera integriteta i garda prođu. Ovo je sada **veći deo nalaza od
-same undo garde**: garda je jedan od šest čitaoca. Direktno čitanje za prikaz, koje je
-revizija 20.10. navela, u međuvremenu je otišlo — ali su ostala mapiranja kolone,
-pa ekran i prefill i dalje stižu do nje.
-
-Odluka je jedna od dve, i treba je doneti svesno: ili kolone odu kroz
-`schema.json` pa čitaoci padnu glasno, ili dobiju pisca. Treće stanje — koje je
-trenutno — je najgore od oba.
+Ovo je sada **jedini otvoren deo `#6`**, i on nije zakrpa nego odluka: ili kaskada
+dobije operaciju u žurnalu, ili se „Vrati storno" za lanac svesno odbija porukom
+koja to kaže.
 
 ### #7 modDrive: nema retry-ja
 
@@ -181,33 +175,29 @@ Tiho-pogrešan `expected` preživeo je **samo u LEGACY grani** (flat publisher b
 `files[]`), gde se `expected` još broji iz `dict.Keys`
 (`modSelfUpdate.bas:766-773`). Tu odsecanje i dalje tiho spušta očekivani broj.
 
-### #9 `LookupActiveID` na duplikat tiho uzima poslednji
+### #9 `LookupActiveID` na duplikat tiho uzima poslednji — sužen na primitivu
 
-Primitiva nepromenjena: `modStorno.bas:1583-1630` prolazi **sve** redove i pamti
-**poslednji** aktivan pogodak, bez detekcije duplikata.
+**Primitiva nepromenjena.** `modStorno.bas:1694` prolazi **sve** redove i pamti
+**poslednji** aktivan pogodak: petlja na `:1725-1732` prepisuje `resultId` do kraja
+tabele, bez `Exit For` i bez detekcije duplikata.
 
-Glavni ulaz je zatvoren — storno tok za zbirnu ne ulazi kroz nju: `ZbrIdPoBroju`
-(`modStornoFlow.bas:763`) diže grešku na `n <> 1`, a `PkPoIdentitetu`
-(`modStornoFlow.bas:795`) izlazi prazan kad `VlasniciPoBroju(...).count > 1`,
-**pre** poziva.
+**Komentar ZATVOREN 21.11.** Oba netačna komentara („uzima prvi pogodak") nema više
+nigde u `src-vba/` — `grep` ne vraća pogodak. Nisu ispravljeni nego uklonjeni sa
+kodom nad kojim su stajali, isto kao drugi od njih u reviziji 29.10.
 
-Nezaštićeni pozivaoci ostaju:
+**Pozivaoci po broju spali sa tri na dva** (storno tok više nije među njima):
 
-| Mesto | Tabela |
-|---|---|
-| `modDokUnos.bas:1011` | `tblPrijemnica` po `BrojZbirne` |
-| `modStorno.bas:814`, `:816` | `tblNovac` |
-| `modStornoDok.bas:416` | `tblFakture` |
+| Mesto | Tabela | Beleška |
+|---|---|---|
+| `modStorno.bas:814`, `:816` | `tblNovac` | po `BrojDokumenta`, bez kapije |
+| `modDokumentInvariant.bas:215` | prosleđena tabela | čita `IzdatoStatus` po broju |
 
-**Uz to, netačan komentar — opet na JEDNOM mestu.** `modStornoDok.bas:413` kaže
-„LookupActiveID uzima prvi pogodak". Uzima **poslednji**: petlja prepisuje
-`resultId` do kraja tabele, bez `Exit For`.
+`modDokUnos` i `modStornoDok` pozivaoci, koje su prve dve revizije navodile, otišli
+su sa S6–S9 refaktorom. Treći pozivalac (`modStornoFlow.bas:1423`) bira po
+`COL_OTP_ID`, dakle po jedinstvenom ključu — nije izložen.
 
-**Suženo 29.10.** Drugi netačan komentar, koji je revizija 20.10. našla na
-`modStornoFlow.bas:649`, **otišao je sa `PkPoIdentitetu`** — ta funkcija je
-zamenjena (`modStornoFlow.bas:772` opisuje zašto: „identitet je čitala kao
-GENERACIJU"). Nije ispravljen nego uklonjen zajedno sa kodom nad kojim je stajao.
-Ostaje jedan red, nulti rizik.
+Nalaz time pada sa P1 na **tihu primitivu sa dva izložena pozivaoca**. Vredi je
+zatvoriti kad se dira `tblNovac`, ne zbog sebe same.
 
 ### #13 `Sha256File` puca na 0 bajtova — ostala globalna degradacija
 
@@ -248,10 +238,10 @@ Brisanje je odvojena odluka; prijava je jeftina i zatvara tišinu.
 
 ### #16 `GetNedovrseno` bez batch keša
 
-`modStornoRecovery.bas:34` — više prolaza kroz tabele bez `BeginTableCache`.
+`modStornoRecovery.bas:51` — više prolaza kroz tabele bez `BeginTableCache`.
 
 Frekvencija je popravljena (`Scr_Brojac` se zove iz `RefreshFromData`, ne pri
-svakom crtanju sidebara — `modScrOporavak.bas:139`), pa je hitnost mala. Sam
+svakom crtanju sidebara — `modScrOporavak.bas:162`), pa je hitnost mala. Sam
 prolaz je još neoptimizovan.
 
 ### #17 `tblStornoVeze` i `tblStornoZurnal` bez retencije
@@ -260,7 +250,7 @@ Dve append-only tabele, nula pogodaka za retenc / arhiv / prune.
 
 **Ispravka 20.10.** Prva revizija je tvrdila da žurnal „raste najbrže od svega u
 svesci". To **nije bilo tačno** ni tada, a sada je i manje: `JournalCell` ima dva
-živa pisca — `modStorno.bas:151` (`tblOtkup.Stornirano`) i `modNovac.bas:1910`
+živa pisca — `modStorno.bas:151` (`tblOtkup.Stornirano`) i `modNovac.bas:2410`
 (`tblNovac.OtkupID`). Revers je izašao iz žurnala u `10e-2`. Dakle oko dve ćelije
 po stornu otkupa, ne „najbrže od svega".
 
@@ -293,8 +283,8 @@ broj` čuva netrimovano.
 
 **Suženo 20.10.** Revers je u `10e-2` izašao iz žurnala (storno mu je sada
 kontra-stav nad `AmbDokID`-em), pa je `BeginStornoOp` ostao sa **jednim živim
-pozivaocem**: `modStorno.bas:150`. Šalje netrimovano — `brDok =
-NzToText(LookupValue(...))` na `:149`, a `NzToText` (`modHelpers.bas:249`) ne
+pozivaocem**: `modStorno.bas:154`. Šalje netrimovano — `brDok =
+NzToText(LookupValue(...))` na `:153`, a `NzToText` (`modHelpers.bas:249`) ne
 trimuje.
 
 Od dve posledice ostaje jedna i po:
@@ -307,27 +297,27 @@ Od dve posledice ostaje jedna i po:
   praznim brojem, a `LatestOpFor(docType, broj)` je posle traži po tom istom
   praznom broju.
 
-### #21 Dva od tri dela još stoje
+### #21 Ostao samo `CanStorno`
 
-**(a) Stale snapshot — ČISTO, ne dira se.** `StornoPrijemnica` hvata `fakturaID`
-pre mutacije, a mutacija dira samo `Stornirano`; `StornoPaleta` čita `palData` pre
-`MarkRowStornirano` i petlja po stavkama filtrira `Not IsStorniranoValue`.
+**(a) Stale snapshot — ČISTO** od prve revizije; ne dira se.
 
-**(b) Filter `IsStorniranoValue` još nema — STOJI, suženo 29.10.** Potprogram je
-preimenovan u `StornoFakturaStavke` (`modStorno.bas:1641`) i `:1669` i dalje poredi
-samo `colFakID`, bez provere da je red već storniran. Već stornirane stavke se
-zato re-markiraju.
+**(b) Filter `IsStorniranoValue` — ZATVOREN 21.11., brisanjem potprograma.**
+`StornoFakturaStavke` više ne postoji. S7 rez 2 (`FAK-ODL-03`) ga je obrisao jer je
+linija aktivna **ako i samo ako je aktivna njena faktura**, pa je storno zaglavlja
+ujedno storno linija — nema upisa `Stornirano` po liniji, pa nema šta da se
+re-markira. `modStorno.bas:1750` to i kaže: „Do reza 2 je ovde stajao
+`StornoFakturaStavke`, koji je svakoj liniji pisao `Stornirano`".
 
-Posledica je prepolovljena: `ReleasePrijemnicaFromFaktura` je **izašao iz ovog
-potprograma** — S6 korak 5 je fakturu prebacio na `PrijemnicaStavkaID` a
-fakturisanost učinio izvedenom, pa nema markera koji bi se dvaput resetovao. Ostaje
-samo utovar grana: `ReleaseUtovarFromFaktura` se može ponovo pozvati nad već
-storniranom stavkom. `relUt` dikt štiti od duplog poziva **unutar jednog prolaza**,
-ne od ponovljenog storna iste fakture.
+Ostalo je samo `OslobodiUtovareFakture` (`modStorno.bas:1755`), koje **ne piše
+`Stornirano`** — oslobađa marker utovara, jer je činjenica utovara stvarna a ne
+izvedena. `relUt` dikt štiti od duplog poziva unutar prolaza, a
+`ReleaseUtovarFromFaktura` je fail-closed na dupli ID i oslobađa samo utovar koji
+tvrdi baš tu fakturu.
 
-**(c) `CanStorno` guta schema greške — STOJI.** `modStorno.bas:1561-1581`:
-`EH: ... CanStorno = False`. Schema drift, nečitljiva tabela i „nije dozvoljeno"
-izlaze kao ista vrednost. Pozivalac nema način da ih razlikuje.
+**(c) `CanStorno` guta schema greške — STOJI, nepromenjeno.**
+`modStorno.bas:1672`: `EH: ... CanStorno = False`. Schema drift, nečitljiva tabela i
+„nije dozvoljeno" izlaze kao ista vrednost. Pozivalac nema način da ih razlikuje.
+Ovo je sada jedini otvoren deo `#21`.
 
 ---
 
@@ -335,31 +325,21 @@ izlaze kao ista vrednost. Pozivalac nema način da ih razlikuje.
 
 Nisu iz originalne liste — izašli su iz nalaza koji su inače zatvoreni.
 
-### R1 Prijemnice i palete se u kaskadi još biraju PO BROJU
+### R1 Kaskada je birala PO BROJU — ZATVOREN 21.11.
 
-Otpremnice idu po identitetu (`ActiveOtpIDsByZbirna` →
-`ZbrClanoviPoStanju(zbirnaID)`), ali `ActivePrijIDsByZbirna`
-(`modStornoFlow.bas:1880`) i `DistinctActiveValues` nad `COL_PALS_BROJ_ZBIRNE`
-(`:1985`) biraju **po `BrojZbirne`**.
+Paletna polovina je zatvorena 29.10. (prelaz na `COL_PALS_PRIJEMNICA_ID`),
+prijemnička 21.11.: `ActivePrijIDsByZbirna` je zamenjena
+`ActivePrijIDsByZbirnaID` (`modStornoFlow.bas:1896`), koja bira **identitetom** i
+jeste **fail-closed** — zbirna čiji se skup prijemnica ne zna (aktivna prijemnica
+bez `PrijemnicaID`-a) diže grešku, uz obrazloženje koje vredi citirati: „skup koji
+kaskada stornira, a pregled obećava, ne sme da se pogađa".
 
-Nizvodni tok je zato zaštićen **kapijom** (`ZbirnaScopeRazlog`, fail-closed nad
-dvosmislenim brojem), ne identitetom. Kapija je tačna, ali je slabija garancija:
-odbija operaciju umesto da je suzi na svoje.
-
-**Paletna polovina ZATVORENA 29.10.** Revizija 20.10. je tvrdila da paletni motor
-nosi `PrijemnicaID` uz sebe a bira po labeli, i da je prelaz na identitet isti rez
-kao `#4`. **Tako je i ispalo**: `SkiniPaleteZaStornoPrijemnice`
-(`modPaletniList.bas:2111`) bira po `COL_PALS_PRIJEMNICA_ID` (`:2132`), i stigla je
-zajedno sa zatvaranjem `#4`.
-
-**Prijemnička polovina stoji.** `ActivePrijIDsByZbirna` (`modStornoFlow.bas:1880`)
-i dalje prima `brojZbirne` i bira po labeli; isto `CountActive` nad
-`COL_PALS_BROJ_ZBIRNE` (`:2371`). Zbirna → prijemnica veza je i dalje po broju, pa
-nizvodni tok ostaje zaštićen **kapijom** (`ZbirnaScopeRazlog`), ne identitetom.
-
-Razlika prema paletnoj polovini je u šemi: `tblPaletaStavka` nosi `PrijemnicaID`,
-a `tblPrijemnica` **ne nosi `ZbirnaID`** — veza je `BrojZbirne`. Dok se to ne
-promeni, ovo se ne može zatvoriti istim potezom; kapija je ispravan izbor do tada.
+> **Ispravka moje prognoze.** Revizija 29.10. je tvrdila: „ne može se zatvoriti
+> istim potezom — `tblPrijemnica` ne nosi `ZbirnaID`, veza je `BrojZbirne`".
+> Premisa je bila tačna (kolone i dalje nema), **zaključak pogrešan**: zatvoreno je
+> kroz **javnog kanonskog čitaoca** (`modAutoHladnjaca.AktivnePrijemniceZbirnih`,
+> ivica E4), ne kroz novu kolonu. Pretpostavio sam da identitet mora da stoji na
+> redu da bi se po njemu biralo; dovoljno je da postoji čitalac koji ga zna.
 
 ### R2 Migracija ne čisti zatečenu aktivaciju u NOVOM šablonu
 
@@ -375,41 +355,46 @@ preživi migraciju.
 |---|---|
 | `modSelfUpdateBoot` (~80 redova, frozen) | **ne postoji** — i dalje razlog zašto `#5` self-update ne može sam da isporuči |
 | `Sha256File` van frozen granice | **stoji** — verifikator lanca poverenja je u *updatable* `modDrive` |
-| `modStornoFlow` podela na tri modula | **nije** — **2513 linija** (20.10. bilo 2431, 26.09. bilo 2585; avgustovska revizija merila ~1800) |
-| Generici u `modDataAccess` | **nema ih, i ima ih više** — `CountActive` (`modStornoFlow.bas:2399`), `DistinctActiveValues` (`:2443`), `NzTx` (`:2498`) su `Private` u `modStornoFlow`, a S6 je dodao i `FindRowIndexByID` kao `Private` u `modPaletniList` (`:1386`) — četvrta privatna kopija generika |
+| `modStornoFlow` podela na tri modula | **nije** — **2435 linija** (29.10. bilo 2513, 20.10. bilo 2431, 26.09. bilo 2585) |
+| Generici u `modDataAccess` | **nema ih, i ima ih sve više** — `CountActive` (`modStornoFlow.bas:2331`), `DistinctActiveValues` (`:2370`), `NzTx` (`:2420`), `FindRowIndexByID` (`modPaletniList.bas:1348`), a S7–S9 su dodali `NzTx` i u `modDokumentInvariant.bas:156` i `modTestStorno.bas:1057`. **Šest privatnih kopija u četiri modula, nula javnih.** |
 | `modMigracija` dry-run režim | **nema** — nula pogodaka za `dryRun` |
 | `modMigracija` verzijska svesnost | **stub stoji** — `StaroImeKolone = novoIme` (`modMigracija.bas:471-472`); `APP_VERSION` starog fajla se ne čita |
 
-**Kretanje `modStornoFlow` kroz tri revizije:** 2585 (26.09.) → 2431 (20.10.) →
-**2513 (29.10.)**. Pad od −154 koji je revizija 20.10. prijavila bio je tačan, ali
-privremen: S6 koraci 4–8 su vratili +82. Neto kroz oba perioda je −72, dakle fajl
-se drži oko 2500 i **nije podeljen**.
+**Kretanje `modStornoFlow` kroz četiri revizije:** 2585 → 2431 → 2513 → **2435**.
+Fajl se već tri meseca drži oko 2500 i **nije podeljen**. Oscilacija od ±80 nije
+trend ni u jednom smeru — to je refaktor koji unosi i iznosi, nad modulom čija
+veličina stoji na mestu.
 
-Ovo je jedina metrika u registru koja se u ovoj reviziji pogoršala, i treba je
-čitati zajedno sa prethodnim redom: kad S6 doda sposobnost, ona padne u
-`modStornoFlow`, jer tri modula na koja bi se podelio ne postoje. Generici idu u
-istom smeru — `FindRowIndexByID` je četvrta privatna kopija, ne prva javna.
+Metrika koja se **jeste** pogoršala u ovoj reviziji su generici: sa četiri privatne
+kopije na šest, u četiri modula umesto dva, i dalje nijedna javna. S7–S9 su dvaput
+rešili isti problem lokalno. `NzTx` je sada u `modStornoFlow`,
+`modDokumentInvariant` i `modTestStorno` — tri identična tela.
 
 ---
 
 ## Predložen redosled
 
-**Izmenjen 29.10.** `#4` je zatvoren, pa izlazi iz redosleda. `#9` je spao na
-jedan red. Ostatak je nepromenjen jer se nad njim nije radilo.
+**Izmenjen 21.11.** `#21b` i `R1` su zatvoreni, `#6` je ostao bez simptoma, `#9` je
+spao na primitivu. Redosled se time **prevrnuo**: posle tri revizije ništa iz
+storno sloja nije na vrhu — sve što je bilo u putanji refaktora zatvorilo se samo,
+a ostalo je ono čega refaktor ne dotiče.
 
 1. **`#5`** — jedan red (`ThisWorkbook.Saved = True` pre `Exit Sub` na
-   `modSelfUpdate.bas:230`). Najjeftinija stavka u registru, i jedina koja može da
-   ostavi klijentu polomljen fajl. **Pet nedelja i 483 commit-a** stoji nedirnuta,
-   u modulu koji za to vreme nije otvoren ni jednom.
-2. **`#9` komentar** (`modStornoDok.bas:413`) — jedan red, nulti rizik.
-3. **`#21b` + `#21c`** — `IsStorniranoValue` filter i `CanStorno` koji guta schema
-   grešku. Oba mala, oba tiha.
-4. **`#6` odluka o šemi** — dve kolone bez pisca sa šest čitaoca. Odluka, ne
-   zakrpa.
-5. **`#14`** — prijava ekstra komponente u `VerifyReleaseProject`. Jedini nalaz
-   koji raste sa vremenom.
-6. **`R1` prijemnička polovina** — čeka `ZbirnaID` na `tblPrijemnica`; ne zatvara
-   se bez tog reza u šemi.
+   `modSelfUpdate.bas:230`). Najjeftinija stavka u registru, jedina koja može da
+   ostavi klijentu polomljen fajl, i **1041 commit-a nedirnuta**. Posle tri
+   revizije ovo nije više „nije stiglo na red" nego odluka da se ne radi.
+2. **`#21c`** — `CanStorno` razdvoji schema grešku od „nije dozvoljeno". Mala,
+   tiha, i jedini preostali deo `#21`.
+3. **`#14`** — prijava ekstra komponente u `VerifyReleaseProject`. Jedini nalaz
+   koji **raste sa vremenom**: svaki obrisan modul je trajan rep kod klijenta, a
+   S7–S9 su obrisali više modula.
+4. **`#6` koren** — odluka, ne zakrpa: kaskada dobije operaciju u žurnalu, ili se
+   „Vrati storno" za lanac svesno odbija porukom koja to kaže.
+5. **`#20`** — `Trim$` i non-blank na `broj` u `BeginStornoOp`; „op sa praznim
+   brojem" još stoji.
+6. **`#9`** — primitiva; zatvoriti kad se dira `tblNovac`.
+7. **Dve mrtve kolone u šemi** (`tblOtkup.BrojZbirne`, `.OtpremnicaID`) — nula
+   čitalaca, nula pisaca. Higijena kanona, uz prvi sledeći rez šeme.
 
 `#7`, `#8`, `#13`, `#19` su jedan koherentan rez u `modDrive`/`modSelfUpdate`
 (retry + paging + temp putanja + 0-bajt grana) i vrede više zajedno nego
@@ -417,30 +402,34 @@ pojedinačno.
 
 ---
 
-## Šta je naučeno zatvaranjem `#4`
+## Obrazac zatvaranja — potvrđen četiri puta
 
-Prvi zatvoren nalaz vredi pročitati kao obrazac, jer je zatvoren **drugačije od
-onoga što je nalaz predlagao**.
+Sva četiri zatvorena nalaza zatvorena su **uklanjanjem strukture, ne dodavanjem
+provere** — i ni jedan onako kako je nalaz predlagao:
 
-Nalaz je rekao „prebroj `expPals`, uporedi" — dakle dodaj proveru nad dvofaznim
-tokom. Rez je umesto toga **uklonio dvofaznost**: palete su ušle u transakciju
-pozivaoca, callee je ostao bez `On Error` grane, a broj je počeo da dolazi iz same
-mutacije. Posle toga brojač koji je nalaz tražio nije imao šta da proverava.
+| Nalaz | Predlog iz nalaza | Kako je stvarno zatvoren |
+|---|---|---|
+| `#4` | „prebroj `expPals`, uporedi" | uklonjena dvofaznost — palete u transakciju pozivaoca, brojač nepotreban |
+| `#21b` | „dodaj `IsStorniranoValue` filter" | obrisan potprogram — linija je aktivna iff je aktivna faktura, nema šta da se re-markira |
+| `R1` | „čeka `ZbirnaID` na `tblPrijemnica`" | javni kanonski čitalac (ivica E4), bez nove kolone |
+| `#6` simptom | „odluči: kolone odu ili dobiju pisca" | obrisani oba čitaoca; stanje u kanonu ne nastaje po konstrukciji |
 
-Dve stvari koje iz toga slede za ostatak registra:
+Tri stvari koje iz toga slede za ostatak registra:
 
-- **Minimalna zakrpa iz nalaza nije uvek najbolji rez.** Tamo gde nalaz predlaže
-  proveru nad lošom strukturom, pitanje je prvo može li struktura da otpadne.
-  `#21b` je isti rod: filter nad petljom koja re-markira, ili petlja koja ne može
-  da re-markira.
-- **Identitet i verifikacija dolaze zajedno.** `#4` se nije mogao zatvoriti
-  ozbiljno dok je Faza B birala po labeli — što je revizija 20.10. i predvidela.
-  Isto važi za `R1` prijemničku polovinu i `#9`: dok se bira po broju, provera ne
-  može biti stroža od izbora.
+- **Minimalna zakrpa iz nalaza je hipoteza, ne recept.** Tamo gde nalaz predlaže
+  proveru nad lošom strukturom, prvo pitanje je može li struktura da otpadne.
+  Registar je `#21b` i `#4` sam označio kao „isti rod" — i oba su zatvorena tim
+  putem, ne filterom.
+- **Moje prognoze o tome *kako* će se nešto zatvoriti promašile su dvaput**
+  (`#4` „~10 redova", `R1` „ne bez nove kolone"). Nalaz vredi kao opis kvara;
+  procena rešenja u njemu je slabiji deo i tako je treba čitati.
+- **Nalaz van putanje refaktora ne zatvara se sam.** Četiri zatvorena su sva bila
+  u sloju koji se aktivno menjao. Sedam nalaza u `modDrive`/`modSelfUpdate` nije
+  ni pogledano kroz 1041 commit, uključujući jedan koji je jedan red.
 
 ---
 
-## Obim dokaza pri zatvaranju
+## Obim dokaza pri zatvaranju## Obim dokaza pri zatvaranju
 
 Svaka stavka odavde koja menja ponašanje nosi test u `modTest` (CLAUDE.md §5), ne
 checklistu. Za `#4`, `#20` i `#21c` traži se i **dokaz u oba smera** — to su
