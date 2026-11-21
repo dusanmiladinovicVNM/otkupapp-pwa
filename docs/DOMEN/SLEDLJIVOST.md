@@ -22,6 +22,12 @@
 > `ZbirneAktivnihPrijemnica`. `Prijemnica.BrojZbirne` je labela (`SLED-ODL-08`); kapija je grupa popisa
 > `prj_broj_spoj` (prag 0). Spoj po broju je ostao samo u integritetu (S9-5).
 >
+> **Od S9-5 (plan §14.69, stavka 336)** revizija meri model: integritet ima provere **E2, E3 i E4**
+> istim sudom koji drže strogi čitači (`S95-ODL-01`: čitač bez kolekcije diže, sa kolekcijom sakuplja
+> red po red), E3 čitač drži ista pravila kao E2 (`S95-ODL-02`), a provere po koloni bez pisca ili po
+> labeli (A1, B1, B4, B5, B5b, B6, health 7 i deo 13) su obrisane. Manjak (izveštaj, ROBA (OM), A2) se
+> računa jednom, po `ZbirnaID` (`S95-ODL-03`, `KI-097`). Katalog: `docs/INTEGRITET_PROVERE.md`.
+>
 > Prvi pre-flight (PR `#461`, grana `claude/sharp-cray-iyhy1m`, mereno nad `d19c2dae` dok je S8
 > trajao) je ovde ponovo izmeren i zamenjen. Odluke iz njega važe.
 >
@@ -78,7 +84,7 @@ zapisan ID drugog čvora. Broj, datum i naziv su osobine čvora, nikad ivica.
   (`BuildOTKSheetRowForOtkup` kroz `TekucaPredajaOtkupa`).
 
 Sve ostalo što danas hoda lancem ide bar jednu kariku po broju (plan §14.64, N4; S9-3). Po koloni bez
-pisca posle S9-2 hoda samo revizija (integritet i health, S9-5).
+pisca posle S9-2 hodala je samo revizija (integritet i health); od S9-5 ni ona (plan §14.69).
 
 ## 3) Identitet
 
@@ -131,6 +137,11 @@ Nula ili dva su kvar, isto kao dva aktivna članstva.
   INTEGRITET to ne prijavljuje (B5 meri broj, ne ID; plan §14.64, N14).
 - **Vlasnik posle S9:** jezgro grafa (čvor koji ne razrešava se ne vezuje i dobija oznaku, ne
   pogađa se) i integritet (rez S9-5).
+- **Zatvoreno u S9-5 (plan §14.69):** revizija ima E2 (`ClanstvoOtpremnicaNalazi`), E3
+  (`ClanstvoZbirneNalazi`) i E4 (`GetOsirocenePrijemnice`, pravilo liste siročadi) — isti sud kao
+  strogi čitači, sakupljen red po red. E3 čitač je dobio pravila E2 (prazan ID, roditelj i dete
+  tačno jednom, dupli par); posledica nad pokvarenim podacima je ista kao kod E2: čitač odbija celu
+  tabelu (`KI-081`). E1 i E5 ostaju GREŠKA bloka (A2, A3); E6–E10 mere health i C1/C4/D1/D2.
 
 **`SLED-INV-02` — revizija meri model, ne kolone bez pisca.** Provera koja čita kolonu bez
 pisca je ili uvek tiha ili uvek glasna, i obe su laž. Izmereno nad kopijom C002 sa kodom
@@ -140,6 +151,9 @@ pisca je ili uvek tiha ili uvek glasna, i obe su laž. Izmereno nad kopijom C002
 - health 7 je uvek OK (izvedeno iz koda, nije pokretan).
 
 **Vlasnik posle S9:** rez S9-5, po §14.8 t. 11. Briše se, ne prevodi se.
+**Zatvoreno u S9-5:** A1, B1a/b, B4a/b, B5, B5b, B6, health 7 i deo 1 health 13 su obrisani; A2 i
+kontekst C4 idu po ID-u; KUL2 nema granu po broju-obliku traga (N16). Popis: `otk_brojzbirne` i
+`otp_brojzbirne` 0, `otk_veza_otp` 1, `zbr_linija` 1, `x_trace` 11 (ostatak je self-heal, S9-6).
 
 **`SLED-INV-03` — kolona bez živog pisca nema živog čitaoca.** Kad poslednji pisac kolone
 nestane, u istom slajsu nestaje i čitalac. Ako to ne može u istom slajsu, čitalac se gasi pre
@@ -150,6 +164,8 @@ S9-6 (kanon i self-heal), kapija `popis_citalaca.py --check` (prag 0 po grupi).
   bez pisca ostali su samo u reviziji (`modIntegritet`, health 7 i 13; S9-5) i u self-heal-u
   (`EnsureSledljivostSchema`, `EnsureDoradeSchema`; S9-6). Pragovi popisa: `otk_veza_otp` 2,
   `otk_brojzbirne` 2, `otp_brojzbirne` 8, `x_trace` 12.
+- **Posle S9-5 (plan §14.69):** revizija ih više ne čita; ostao je samo self-heal (S9-6). Pragovi:
+  `otk_veza_otp` 1, `otk_brojzbirne` 0, `otp_brojzbirne` 0, `zbr_linija` 1, `x_trace` 11.
 
 ## 5) Odluke — DONETE (operater: 01–08 04.11.2026, 09 11.11.2026)
 

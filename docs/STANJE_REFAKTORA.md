@@ -11330,7 +11330,18 @@
        čitač na nivo E2 (premisa 363 REV-01 se menja: odbijena tabela, ne jedan red); `S95-ODL-03` manjak po
        `ZbirnaID` za izveštaje i A2 (`KI-097`); `S95-ODL-04` jedan PR, commit po sloju. Bez pitanja: `S95-ODL-05` B8
        ostaje, `S95-ODL-06` kontekst C4 po ivicama.
-     - **Sledeći brojevi:** test 423 · stavka 337 · KI-100 · plan §14.70.
+     - **Kod (lokalno, 4 commit-a po sloju):** `6ebda5db` testovi 423–429 prvi (E3, E2, E4, kanonski lanac bez
+       nalaza, naslov INTEGRITET, manjak po `ZbirnaID`, kontekst C4) i premisa 363; `f9dcae79` manjak po `ZbirnaID`
+       (izveštaj manjka jedan red po dokumentu, ROBA (OM) po E3, A2 isti agregat; `KI-097`); `a8deb5e2` integritet E2/E3/E4
+       (isto pravilo čitača, dva izlaza), E3 čitač na nivou E2, obrisani A1/B1/B4/B5/B5b/B6 + pomoćnici, health 7 i deo
+       13, kontekst C4 po ivicama, KUL2 bez grane po broju, naslov broji nalaze i pale provere (`KI-099`). Katalog
+       sabotaža 1548 (+12 `s95-*`, −2 `s92-*`, 5 presidrenih). Popis: `otk_brojzbirne` i `otp_brojzbirne` 0.
+     - **Jeftine kapije zelene:** `vba_check` (+ self-test), `sabotaza --self-test`, `who_writes --check` i
+       `--check-ownership`, `gen_schema_module --check`, `popis_citalaca --check`, `vba_gate --popis`.
+     - **NIJE izvršeno (čeka reviewer GO):** `make_fixture` (sveska od 19.11), crveno nad `6ebda5db`, FULL, `dokaz.py
+       s95-` + presidrene, ručni Compile i ručna provera. Očekivano `RunAllTests` 429; BFP i `RunIzvestajTests` se čitaju
+       posle prolaza (obrisan BFP test, −6 izveštajnih provera). Vreme nove provere (N13) nije mereno.
+     - **Sledeći brojevi:** test 430 · stavka 337 · KI-100 · plan §14.70.
 
 ## Dug sa imenom (posle S5-5b)
 

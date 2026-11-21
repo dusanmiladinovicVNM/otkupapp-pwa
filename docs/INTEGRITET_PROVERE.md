@@ -1,92 +1,138 @@
 # Integritet provere (tabela ↔ tabela)
 
 Konsolidovana, **read-only** revizija integriteta podataka kroz ceo lanac
-dokumenata: `Otkup → Otpremnica → Zbirna → Prijemnica → Paleta → Prerada`.
-Ništa ne menja — samo izlistava neusklađene zapise.
+dokumenata: `Otkup → Otpremnica → Zbirna → Prijemnica → Paleta → Prerada`, uz
+knjigu ambalaže, doplatu, gotovinu i kulturu otkupnog lista. Ništa ne menja —
+samo izlistava neusklađene zapise. Kod: `src-vba/modIntegritet.bas`.
+
+> **Od S9-5 (plan §14.69, 21.11.2026)** revizija meri **model**: ivice grafa
+> sledljivosti E2, E3 i E4 (`docs/DOMEN/SLEDLJIVOST.md`, `SLED-INV-01`) istim
+> sudom koji drže strogi čitači, a ne kolone bez pisca ni labelu broja zbirne
+> (`SLED-INV-02`). Provere starog modela — A1, B1a/B1b, B4a/B4b, B5, B5b, B6 i
+> health 7 — su **obrisane, ne prevedene** (plan §14.8 t. 11): čitale su
+> `Otkup.BrojZbirne`, `Otkup.OtpremnicaID`, `Otpremnica.BrojZbirne` i labelu
+> `Prijemnica.BrojZbirne`, pa su bile ili uvek tihe (A1) ili uvek glasne (B5b:
+> u C002 921 nalaz = svaka aktivna otpremnica), a B5 nije video prijemnicu sa
+> labelom bez veze (C002: 6 od 905). Kodovi B2, B3 i C2 ne postoje od ranije.
 
 ## Pokretanje
 
-- **Crveni baner na startu** (`frmOtkupAPP`): klik → **in-app pregled** (ListBox
-  overlay, kolone `Provera | Detalj`, dugme „Zatvori"). Ne dira sheet.
-- **Admin panel** → grupa „Setup i provere" → **„Integritet provere (tabele)"**, ili
-- `Alt+F8 → RunIntegritetProvere` → upis u **sheet**.
+- **Oporavak → lista INTEGRITET** (ljuska `frmOtkupUI`, `modScrOporavak`):
+  mreža `Problem | Detalj`, bez radnje (nalaz je opis neslaganja; popravka ide
+  kroz svoj tok — Nedovršeno, prevezivanje, storno). Snimak se računa kad se
+  lista otvori i drži do sledećeg upisa.
+- **Admin panel** → „Integritet provere (tabele)" (`RunIntegritetProvere`) →
+  upis u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše pri svakom
+  pokretanju): svaki blok naslov + broj zapisa, pa „OK – nema" ili tabela, na
+  kraju „UKUPNO" + zbirni `MsgBox`.
 
-Baner i in-app pregled koriste `GetIntegritetRows()` (samo problemi, u memoriji).
-Admin/Alt+F8 put upisuje u sheet **`INTEGRITET_PROVERE`** (obriše se i iznova napiše
-pri svakom pokretanju): svaki blok naslov + broj problema, pa „OK – nema" ili
-tabela zapisa, na kraju „UKUPNO" + zbirni `MsgBox`. Sheet se filtrira/sortira/
-štampa u Excelu; in-app pregled je brz uvid bez izlaska iz app-a.
+**Broj u naslovu liste** je broj **nalaza** istog prolaza (`GetIntegritetRows`,
+izlaz `outUkupno`), ne broj redova snimka — snimak nosi i naslov bloka, zaglavlje
+kolona i prazan red između blokova (`KI-099`, do S9-5 je naslov za dva nalaza u
+dva bloka kazao „7"). **Pala provera** (red `GREŠKA: …` — čitač je odbio tabelu)
+nije nalaz o podacima: ne broji se u nalaze, a naslov je kaže posebno
+(„…, neizvršene provere: N"); isto `MsgBox` posle Admin prolaza.
 
-Sve provere isključuju stornirane redove (`ExcludeStornirano`) i agregiraju po
-`BrojZbirne` (Klasa I + II dele isti broj → zaseban red).
+Sve provere isključuju stornirane redove (`ExcludeStornirano`), osim gde je
+stornirani dokument baš predmet nalaza (C4, KUL1/KUL2).
 
-## Provere
+## Provere (redosled kao u `RunAllChecks`)
 
-### A — Konzervacija količine (kg)
+### E — Ivice modela (`SLED-INV-01`: svaka ivica razrešava tačno jednom)
+
+| Kod | Značenje | Sud |
+|---|---|---|
+| E2 | Članstvo otpremnice (`tblOtpremnicaIzvori`) ne razrešava: prazan ID, otpremnica ili otkup ne postoji tačno jednom, dupli par, otkup u dve aktivne otpremnice | `modDokumenta.ClanstvoOtpremnicaNalazi` — **isto pravilo** kao strog čitač `AktivnoOtpClanstvoPoKanonu`, samo sakupljeno red po red (`S95-ODL-01`) |
+| E3 | Članstvo zbirne (`tblZbirnaIzvori`) ne razrešava: ista pravila kao E2 (od S9-5 i u čitanju, `S95-ODL-02`) | `modDokumenta.ClanstvoZbirneNalazi` ↔ `AktivnoClanstvoPoKanonu` |
+| E4 | Aktivna prijemnica bez aktivne zbirne: `ZbirnaRoditeljID` prazan, zbirna ne postoji ili je stornirana | `modDokumenta.GetOsirocenePrijemnice` — **isto pravilo** kao lista siročadi u Oporavku (`S94-ODL-09`); popravka je „Prevezi prijemnicu" |
+
+Čitač bez kolekcije **diže** na prvom kvaru (ekrani, izveštaji i jezgro grafa
+`modSledljivost` ponašaju se kao i pre); revizija isti sud **sakuplja**, pa vidi
+sve pokvarene redove (obrazac `modAmbalaza.AmbKnjigaNalazi`).
+
+**Ostale ivice:** E1 (stavke otkupa) i E5 (stavke prijemnice) drže strogi čitači
+stavki — njihov kvar je **GREŠKA bloka** koji ih čita (A2, A3), ne red po red
+(`KI-081`, imenovana granica). E6 (linija fakture) meri health 3 i 4, E7 (paletna
+stavka) C1/C4, E8 (prerada) D1/D2, E9/E10 (utovar, GP faktura) health (GP pravilo).
+
+### A — Konzervacija količine (kg, sa **stavki**)
+
 | Kod | Značenje | Napomena |
 |---|---|---|
-| A1 | `Σ otpremnica.Kolicina` vs `Σ zbirna.UkupnoKolicina` po `BrojZbirne` | reuse `ValidateZbirna` (prag 0.01 kg) |
-| A2 | Manjak/višak `zbirna → prijemnica`: **VIŠAK > 5%** (prijemnica > zbirna), **NIŠTA PRIMLJENO**, **MANJAK > 10%** | pragovi `PRAG_VISAK_PCT` (5%) / `PRAG_MANJAK_PCT` (10%) |
-| A3 | `Σ paleta-stavke.NetoKg` po prijemnici vs `prijemnica.Kolicina` | samo paletizovane; tol 0.5 kg |
+| A2 | Manjak/višak `zbirna → prijemnica` **po dokumentu** (`ZbirnaID`): **VIŠAK > 5%**, **NIŠTA PRIMLJENO**, **MANJAK > 10%**, **PRIJEM NEPOZNAT** (kvar E4) | isti agregat kao izveštaj manjka i ROBA (OM): `modHelpers.BuildManjakDict` (`S95-ODL-03`, `KI-097`); `ZbirnaID` je poslednja kolona; zbirna bez broja (nacrt) se ne meri |
+| A3 | `Σ paleta-stavke.NetoKg` po stavci prijemnice vs `Kolicina` te stavke | samo paletizovane; tol 0.5 kg |
 | A4 | `paleta.NetoKg`/`BrojGajbica` (header) vs `Σ stavke` | tol 0.5 kg / 0.001 gajbe |
 | A5 | prerada `NetoUlazKg` vs `Σ stavke.NetoKg`; `NetoIzlaz ≤ NetoUlaz` | tol 0.5 kg |
 
-### B — Referencijalni integritet lanca
+### B — Identitet i dokument
+
 | Kod | Značenje |
 |---|---|
-| B1a/B1b | **Verwaist** otpremnice/prijemnice: živ dokument, `BrojZbirne` **potpuno stornirane** zbirne (reuse `GetVerwaisteDokumente`) |
-| B2 | **Otkupi bez otpremnice** (`OtpremnicaID` prazan) — reuse `GetUnlinkedOtkupi` |
-| B3 | **Izgubljeni otkup blokovi**: otkup čiji `OtpremnicaID` → stornirana/nepostojeća otpremnica (reuse `GetLostOtkupBlokovi`) |
-| B4a/B4b | Otpremnica/prijemnica sa `BrojZbirne` koji **uopšte ne postoji** u `tblZbirna` (različito od B1) |
-| B5 | Prijemnica **bez `BrojZbirne`** (obavezna veza) |
-| B5b | Otpremnica **bez `BrojZbirne`** (nije vezana za zbirnu) |
-| B6 | `BrojZbirne` se poklapa sa zbirnom **samo do velikog/malog slova** (npr. `s5/…` vs `S5/…`) — advisory za normalizaciju; skenira otpremnicu/prijemnicu/paleta-stavku/otkup |
-| B7 | **Zbirna sa 0** (ili prazan) `UkupnoKolicina` — sama po sebi anomalija (komplement A2: A2 hvata zbirne-sa-kg-bez-prijema) |
-| B8 | **`BrojZbirne` nosi više aktivnih dokumenata** — vezivanje po broju nije jednoznačno. Kandidati se traže jednim prolazom (broj sa više aktivnih redova), a presudu daje `ZbirnaIdentResolve`, pa dvoklasna zbirna (dva reda, **jedan** dokument) nije nalaz. F3 i F4 ovakvo stanje više ne prave — PWA import ga namerno **prihvata** (ingest činjenice, ne komanda), pa mora negde da se vidi. Do `v6-ui-224` B8 tu koliziju **nije video** kad su oba dokumenta imala istog vozača i kupca: import im je davao istu generaciju, pa je resolver brojao jedan dokument. V. `docs/DOMEN/ZBR_IDENTITET.md` §11b |
-| B9 | **Aktivna zbirna bez `GeneracijaID`** — identitet dokumenta nedostaje (`ZBR-IDENT-01`). Sva tri writer-a odmah zovu `ApplyGeneracijaID`, pa produkcija ovo ne pravi; ručna izmena u tabeli i starije sveske mogu |
+| B7 | Aktivna zbirna bez kilaže na stavkama (kanonski pisac je ne pravi — svaki nalaz je kvar podatka) |
+| B8 | Broj zbirne nosi **više aktivnih dokumenata** — presuda `ZbirnaIdentResolve`, pa dvoklasna zbirna nije nalaz. Čita **sopstvenu** labelu zbirne (ima pisca). Ostaje dok F4 i F8 ispravka prijemnice razrešavaju zbirnu po broju (`KI-098`, `S95-ODL-05`); posle toga je savet |
+| B9 | Aktivna zbirna bez `ZbirnaID`-a ili sa duplim (identitet dokumenta) |
+| B11 | Jedan utovar (`PredajaID`) nosi **dva** aktivna dokumenta otpremnice |
+
+### AMB — Knjiga ambalaže
+
+| Kod | Značenje |
+|---|---|
+| AMB1 | Kanonska knjiga: ugovor reda, jedinstven `AmbID`, `StornoOd` — isti sud kao čitanje knjige (`modAmbalaza.AmbKnjigaNalazi`) |
 
 ### C — Palete
+
 | Kod | Značenje |
 |---|---|
-| C1 | Paleta-stavka bez žive prijemnice (prazan/nepostojeći `PrijemnicaID`) |
-| C2 | Paleta-stavka bez ispravne zbirne (prazan/nepostojeći `BrojZbirne`) |
-| C3 | Paleta (header) bez ijedne aktivne stavke (orphan header) |
-| C4 | Paleta-stavka ka **storniranoj** prijemnici (kaskadni storno ne dira `tblPaletaStavka`) |
-| C5 | Dupli `BrojPalete` unutar iste `Godina` |
+| C1 | Paletna stavka bez žive prijemnice (prazan/nepostojeći `PrijemnicaID`) ili sa pogrešnim ključem linije (`PAL-INV-01`, isto pravilo kao pisac) |
+| C4 | Paletna stavka ka **storniranoj** prijemnici (kaskadni storno ne dira `tblPaletaStavka`). Kontekst reda **po ivicama** (`S95-ODL-06`): broj, kg i gajbe zbirne po E4; otkupno mesto iz otpremnica zbirne (E3; fallback mirror-stanica po `VozacID` zbirne); proizvođač iz izvora tih otpremnica (E2). Kontekst je **mek**: kvar čitača je tekst u koloni, ne pad bloka |
+| C3 | Paleta (header) bez ijedne aktivne stavke |
+| C5 | Dupli `BrojPalete` unutar iste godine |
 
 ### D — Prerada
-| Kod | Značenje |
-|---|---|
-| D1 | Paleta `Preradjeno=Da` bez ijedne aktivne prerada-stavke (reset flaga izostao) |
-| D2 | Prerada-stavka ka nevalidnoj paleti (nesveža/stornirana/nepostojeća) — **očekivano prazno** zbog storno guarda |
 
-### DOP — Doplata kooperantu
 | Kod | Značenje |
 |---|---|
-| DOP1 | Osnovica knjižene doplate se promenila posle knjiženja (storno, ispravka ili retro unos otkupa u periodu): plan obračuna računat ponovo nad današnjim otkupima (`modDoplata.DoplataOdstupanjaOsnovice`, isti `DoplataPlan`) daje drugu količinu po kooperantu, stanici i ključu. KO je snimak i sam se ne menja; popravka je storno KO pa nov obračun (`docs/DOMEN/DOPLATA.md`, DOP-ODL-07). |
+| D1 | Paleta `Preradjeno=Da` bez ijedne aktivne prerada-stavke |
+| D2 | Prerada-stavka ka nevalidnoj paleti (nesveža/stornirana/nepostojeća) — očekivano prazno zbog storno kapije |
+
+### DOP / GOT — Novac
+
+| Kod | Značenje |
+|---|---|
+| DOP1 | Osnovica knjižene doplate se promenila posle knjiženja (`modDoplata.DoplataOdstupanjaOsnovice`; `docs/DOMEN/DOPLATA.md`, DOP-ODL-07) |
+| GOT1 | Gotovinska isplata preko osnovice (`docs/DOMEN/ISPLATA_GOTOVINA.md`, ISP-ODL-01..03) |
+
+### KUL — Kultura otkupnog lista (`KI-092`, `KI-093`)
+
+| Kod | Značenje |
+|---|---|
+| KUL1 | Otkupni list čiji `KulturaID` nije ono što `(VrstaVoca, SortaVoca)` daje resolveru `modOtkup.RazresiKulturuIzVrsteSorte` |
+| KUL2 | Verzija otpremnice/zbirne (po `IspravkaOdID`, ID-trag) sa drugim tekstom sorte od prethodne. Rezervna grana po broju-obliku traga je obrisana u S9-5 (N16) |
 
 ## Podesive tolerancije
 
 U `modIntegritet.bas`, vrh modula:
 - `PRAG_MANJAK_PCT` (10) — manjak% iznad ovoga se prijavljuje (A2).
 - `PRAG_VISAK_PCT` (5) — višak do ovoga se **ne** prijavljuje (A2).
-- kg tolerancije (0.5) su inline u A3/A4/A5 — lako promeniti ako po-gajbi
-  zaokruživanje pravi šum.
+- kg tolerancije (0.5) su inline u A3/A4/A5.
 
-**Poređenje `BrojZbirne` je case-insensitive** (`s5/…` = `S5/…`) — u
-`AllBrojeviInZbirna` i `AggByBroj` (`CompareMode = vbTextCompare`), pa razlika u
-velikom/malom slovu ne pravi lažni „ne postoji" (B4/C2) ni razdvojenu grupu (A1/A2).
+## Health check (`RunProductionHealthCheck`) — šta je otišlo u S9-5
 
-## Odnos prema invarijantama (potvrđeno iz koda)
+- **Provera 7** (`Check_OtkupOtpremnicaCrossZbirnaLinks`) je obrisana: poredila je
+  `Otkup.BrojZbirne` sa `Otpremnica.BrojZbirne` preko `Otkup.OtpremnicaID` — tri
+  kolone bez pisca, pa je uvek javljala OK. Sa njom je obrisan i BFP
+  `Test_NoCrossZbirnaLinksAudit` (ista provera nad fixture-om).
+- **Provera 13, deo 1** (aktivan otkup → stornirana otpremnica preko
+  `Otkup.OtpremnicaID`) je obrisana iz istog razloga; deo 2 (linija fakture nad
+  storniranom prijemnicom) ostaje. Članstvo otkupa u otpremnici meri E2.
 
-- Razlika `Otkup ↔ Otpremnica` **nije** samo „verwaist": čine je **B2** (unlinked)
-  + broken FK (`Check_OtkupOtpremnicaCrossZbirnaLinks`). Verwaist se tiče
-  `otpremnica/prijemnica ↔ zbirna`.
-- `Otpremnica ↔ Zbirna`: kg = **A1**, reference = **B1** + **B4**.
-- Prijemnica: manjak/višak = **A2**, obavezna zbirna = **B5**.
-- Palete moraju imati prijemnicu = **C1**; bez zbirne = **C2**.
-- „Prerađeno bez sveže palete" = **D2** (očekivano prazno — već-prerađena paleta
-  se ne može stornirati; oporavak samo preko `StornoPrerada`).
+## Odnos prema invarijantama
 
-Storno **ne kaskadira** globalno (osim hladnjača-blok i malina putanje), pa viseći
-dokumenti i orphan stavke nastaju legitimno — zato ova revizija postoji.
+- Lanac `otkup ↔ otpremnica ↔ zbirna ↔ prijemnica` = **E2, E3, E4** (postojanje i
+  aktivnost veze); količina zbirna → prijemnica = **A2**.
+- Paleta mora imati živu prijemnicu i tačnu liniju = **C1**; paleta nad
+  storniranom prijemnicom = **C4** (popravka: „Skini palete" / prevezivanje u Oporavku).
+- „Prerađeno bez sveže palete" = **D2**.
+
+Storno **ne kaskadira** globalno, pa viseći dokumenti i orphan stavke nastaju
+legitimno — zato ova revizija postoji.

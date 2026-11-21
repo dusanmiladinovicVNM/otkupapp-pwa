@@ -12733,8 +12733,10 @@ Sveska na disku je od 19.11. (pre S9-3), pa je pred run treba regenerisati.
   s95-`); sabotaže čije sidro rez briše se povlače.
 - **Popis:** `otk_veza_otp` 2 → 1, `otk_brojzbirne` 2 → 0, `otp_brojzbirne` 8 → 0, `zbr_linija` 3 → 1, `x_trace`
   12 → 11; spisak `PRJ_BROJZBIRNE_S95` se briše (njegova mesta nestaju).
-- **Vreme (N13):** nova provera čita `tblOtpremnicaIzvori`, `tblZbirnaIzvori` i `tblPrijemnica` jednim prolazom (isti
-  čitači kao ekran); meri se u FULL prolazu kroz 426/427 (`modPerf` sekcija). E10 ostaje u health-u (N20).
+- **Vreme (N13):** nova provera čita `tblOtpremnicaIzvori`, `tblZbirnaIzvori` i `tblPrijemnica` jednim prolazom po
+  tabeli (isti čitači kao ekran; E3 sada broji i zaglavlja zbirne i otpremnice, kao E2). **Nije mereno u rezu** —
+  C002 ne prima S9 (`PAL-ODL-12`), a fixture je mali; meri ga ručna provera (Admin → Integritet, sekunde). E10
+  ostaje u health-u (N20).
 - **Ne dira:** kolone i šemu (S9-6), pisce, jezgro grafa (`modSledljivost`), `KI-081` (hardening po dokumentu),
   ugovor GAS/PWA, B7/B9/B11/C*/D*/A3-A5/AMB/KUL1.
 - **Kapije:** `vba_check` (i `--self-test`), `sabotaza.py --self-test`, `who_writes --check` i `--check-ownership`,
@@ -12743,6 +12745,47 @@ Sveska na disku je od 19.11. (pre S9-3), pa je pred run treba regenerisati.
 - **Ručna provera (operater):** Oporavak → INTEGRITET: broj u naslovu = broj nalaza (ne redova); nema B5b/B4/B6/A1
   redova za kanonske dokumente; siroče prijemnice je red E4. Izveštaj manjka nad zatečenim podacima: jedan red po
   zbirnoj. Nov ključ poruke traži zatvaranje i otvaranje fajla.
+
+#### Izvršeno (21.11.2026, lokalno, grana `claude/s9-5-integritet`)
+
+Četiri commit-a po sloju (`S95-ODL-04`): `ed8de34f` pre-flight · `6ebda5db` testovi 423–429 i premisa 363 (skela:
+`GetIntegritetRows(outUkupno, outPalih)`, ključ `OTKUI_OPO_INT_PALO`) · `f9dcae79` manjak po `ZbirnaID` · `a8deb5e2`
+integritet i health. Dokumenti u petom commit-u.
+
+- **Manjak (`KI-097`):** `BuildManjakDict` ključa `ZbirnaID|klasa` (ROBA OM), `#Z|ZbirnaID` (dokument: izveštaj manjka,
+  A2) i `#N|ZbirnaID` (kvar E4). Obrisano: `#V/#1/#O/#K/#C`, `ZbirnaVlasnikKljuc` (modHelpers), `ZbirnaStavkaKljuc`,
+  `BrojAktivneZbirneOtp`. `PrijemZaZbirnu(vezaPoznata, cnt, kg)`; `IZV_VLASNIK_NEJASAN` → `IZV_PRIJEM_NEPOZNAT`
+  („prijem nepoznat" — jedina neizvesnost je kvar E4; do S9-5 kvar E4 zbirne sa jednim vlasnikom nije menjao brojku).
+  `modIzvestajTests.T_PrijemVlasnikRazresenje` prepisan na novu semantiku (14 → 8 provera).
+- **Čitači članstva (`S95-ODL-01/02`):** `ClanstvoKvar` — jedan kvar, dva izlaza; `ClanstvoOtpremnicaNalazi`,
+  `ClanstvoZbirneNalazi`. E3 greške 1263–1267 (1260 isti tekst). Grane u `modScrDokumenti` i `modScrIzvestaji` koje
+  su hvatale članstvo na zbirnu koje nema **ostaju**: posle pojačanja su dostižne samo za ID koji se od zaglavlja
+  razlikuje u velikim slovima (čitač poredi bez obzira na velika slova, `BuildLookupDict` ne) — nisu strogo
+  nedostižne, pa se ne brišu (pravilo „neuhranjen nije nedostižan"); komentari ažurirani.
+- **Integritet:** E2, E3, E4 (ispred A2); obrisani A1, B1, B4, B5, B5b, B6 sa pomoćnicima (`ValidateZbirna`,
+  `GetOtpremniceByZbirna`, `GetVerwaiste*`, `CollectBrojZbirne`, `ZbirStavkiPoBroju`, `AllBrojeviInZbirna`,
+  `BuildZbirnaCaseMaps`, `CollectCaseMismatch`, `DanglingDocs`, `DocsBezZbirne`, `KolicinaZaAudit`,
+  `ZbirOtpremnicaMeko`, `PrijemnicaZbirnaMap`, `OtkupnoMestoByZbirna`, `ProizvodjacByZbirna`) i `IntegritetUkupno`.
+  C4 kontekst kroz `C4TokZbirne` (meko). KUL2 čita `IspravkaOdID` strogo. `WriteErr` broji pale provere.
+- **Health:** provera 7 i deo 1 provere 13 obrisani, sa njima mrtvi `CountActiveReferencesToStornirano` i
+  `GetValueByKeySafe`; BFP `Test_NoCrossZbirnaLinksAudit` obrisan (`RunBusinessFlowProAuditOnly` ostaje, sada samo
+  `Test_CoreTablesAndColumnsExist`).
+- **Sabotaže:** +12 `s95-*` (`e3-postojanje-zbirne`, `revizija-samo-prvi`, `revizija-dize-umesto-sakuplja`,
+  `e4-ne-proverava`, `naslov-broji-redove`, `naslov-bez-palih`, `pala-provera-se-ne-broji`, `manjak-red-po-broju`,
+  `a2-po-broju`, `c4-broj-iz-labele`, `c4-om-iz-otpremnica`, `c4-proizvodjac-iz-izvora`); presidrene `s6k3-manjak-dict-
+  prijem-nula`, `s6k3-manjak-izv-zbirna-nula`, `s6k3-a2-prijem-gajbe`, `s92-roba-om-cita-otp-brojzbirne`,
+  `s93-roba-om-vlasnik-prijemnice` (iste tvrdnje); povučene `s92-zbirna-koje-nema-je-poslato` i
+  `s92-detalj-zbirna-koje-nema-cuti` (premisa „kvar jednog reda" ne važi: čitač odbija tabelu, meri 363). Katalog 1548.
+- **Popis:** `otk_veza_otp` 1, `otk_brojzbirne` 0, `otp_brojzbirne` 0, `zbr_linija` 1, `x_trace` 11; `PRJ_BROJZBIRNE_S95`
+  obrisan; `prj_brojzbirne` 21 → 15 (merenje, bez praga).
+- **Jeftine kapije (zelene):** `vba_check` (i `--self-test`), `sabotaza.py --self-test`, `who_writes --check` i
+  `--check-ownership`, `gen_schema_module --check` (F22278A1), `popis_citalaca --check`, `vba_gate --popis`.
+- **NIJE pušteno — čeka reviewer GO:** `make_fixture` (sveska na disku je od 19.11, pre S9-3), crveno nad `6ebda5db`
+  (`run_vba --src`), FULL (12 suita), `dokaz.py --grupe --izbor --radnika 4 s95-` + presidrene, ručni Compile.
+  **Očekivano:** `RunAllTests` 422 → 429; BFP 3488 minus tvrdnje obrisanog `Test_NoCrossZbirnaLinksAudit` (broj se
+  čita posle prolaza); `RunIzvestajTests` −6; izvori rizika: BFP S6 „zaglavlje bez stavki" (A2 GREŠKA sada samo za
+  prijemnicu pod aktivnom zbirnom), KUL1 nad lancima testova 423–429, izveštajni testovi koji su sabirali dve zbirne
+  istog vlasnika u jedan red.
 
 ## 15) Backlog — namerno van opsega
 
